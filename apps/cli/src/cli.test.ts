@@ -234,20 +234,8 @@ describe("shell behavior", () => {
 
   it("parses flags declared only on later-milestone commands", async () => {
     const io = new MemoryIo();
-    await main(
-      [
-        "run",
-        "pack",
-        "--eval",
-        "create-issue",
-        "--count",
-        "2",
-        "--dry-run",
-        "--no-fail-on-eval"
-      ],
-      io
-    );
-    expect(io.stderrChunks[0]).toContain("oal run is not implemented");
+    await main(["replay", "run", "--request", "seq.jsonl", "--verify"], io);
+    expect(io.stderrChunks[0]).toContain("oal replay is not implemented");
   });
 
   it("uses the shared command registry by default", () => {

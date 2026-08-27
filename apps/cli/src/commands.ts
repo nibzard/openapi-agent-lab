@@ -10,6 +10,7 @@ import {
 import { inspectCommand } from "./handlers/inspect.ts";
 import { helpCommand, versionCommand } from "./handlers/misc.ts";
 import { packInitCommand, packValidateCommand } from "./handlers/pack.ts";
+import { runCommand } from "./handlers/run.ts";
 import { stubCommand } from "./handlers/stub.ts";
 import type { Io } from "./io.ts";
 
@@ -197,25 +198,28 @@ export const COMMANDS: readonly CommandSpec[] = [
     arguments: [{ name: "pack", description: "Pack directory." }],
     options: [
       value("eval", "Eval identifier to run."),
-      value("profile", "Run profile document."),
+      value(
+        "profile",
+        "Run profile document. Not loaded in this build; use flags."
+      ),
       value("scenario", "Scenario ID overriding the eval default."),
-      value("agent", "Agent adapter selector."),
+      value("agent", "Adapter selector: mock-agent or codex-cli."),
       value("model", "Model identifier."),
       value("effort", "Model effort level."),
       value("exposure", "raw-http, direct-tools, or catalog-tools."),
       value("contract-visibility", "file, discoverable, tool-only, or none."),
       value("data-plane-scope", "all or eval."),
-      value("count", "Number of trials."),
-      value("parallel", "Number of parallel trials."),
-      value("batch", "Batch identifier; must not exist."),
-      value("timeout", "Trial timeout duration."),
-      value("cohort-seed", "Cohort seed."),
+      value("count", "Number of trials; the ceiling is 100."),
+      value("parallel", "Parallel trials; the ceiling is 10."),
+      value("batch", "Batch identifier; defaults to a UTC timestamp."),
+      value("timeout", "Trial timeout, for example 30s or 10m."),
+      value("cohort-seed", "Cohort seed overriding the derived default."),
       value("sandbox", "Sandbox mode."),
       flag("yes", "Confirm paid runs without a prompt."),
       flag("dry-run", "Run preflight only; start no agent."),
       flag("no-fail-on-eval", "Map evaluation threshold failure to exit 0.")
     ],
-    handler: stubCommand("run")
+    handler: runCommand
   },
   {
     name: "evaluate",

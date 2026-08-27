@@ -11,9 +11,15 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@oal/agent-adapter": "workspace:*",
+    "@oal/agent-codex": "workspace:*",
+    "@oal/agent-generic": "workspace:*",
     "@oal/config": "workspace:*",
     "@oal/core": "workspace:*",
     "@oal/evaluator": "workspace:*",
-    "@oal/pack": "workspace:*"
+    "@oal/evidence": "workspace:*",
+    "@oal/mock-adapter": "workspace:*",
+    "@oal/pack": "workspace:*",
+    "@oal/runner": "workspace:*"
   }
 }
