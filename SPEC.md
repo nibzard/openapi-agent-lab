@@ -17,7 +17,11 @@ This document is normative. The terms MUST, MUST NOT, SHOULD, SHOULD NOT, and MA
 
 ## 1. Executive summary
 
-OpenAPI Agent Lab turns an OpenAPI document into a deterministic environment where an AI agent can discover, call, and be evaluated against an API without contacting the production service.
+The project exists to answer one product question:
+
+> Can an agent discover and understand our product through the API server itself?
+
+The lab measures how agent-friendly an API design is, so that the design can be improved on evidence instead of opinion. To make the measurement safe and repeatable, OpenAPI Agent Lab turns an OpenAPI document into a deterministic environment where an AI agent can discover, call, and be evaluated against an API without contacting the production service.
 
 The product has two fidelity layers:
 

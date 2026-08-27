@@ -2,6 +2,12 @@
 
 OpenAPI Agent Lab turns an OpenAPI document into a deterministic environment. An AI agent can discover, call, and be evaluated against an API. The production service is not contacted.
 
+The lab exists to answer one question:
+
+> **Can an agent discover and understand our product through the API server itself?**
+
+The lab measures how agent-friendly an API design is. The measurements drive a better design. See [Refine your API design from agent sessions](#refine-your-api-design-from-agent-sessions).
+
 > Supply a local OpenAPI 3.0 or 3.1 document. Get a safe deterministic mock that an agent can use. Optionally attach a pack that turns interactions into a reproducible evaluation.
 
 ## Status
@@ -67,7 +73,7 @@ One engine serves every treatment. The compiler turns the document into a single
                                         └─────────────────────────┘
 ```
 
-The lab is not only a test harness. It is also a design tool. You do not need a production service to learn how an API behaves in the hands of an agent. Use the loop above to flesh out the final API design before you write the server. Start with [examples/quickstart.json](examples/quickstart.json) if you want to try the loop before you write your own document:
+The lab is not only a test harness. It is also a design tool. You do not need a production service to learn how an API behaves in the hands of an agent. The loop below is how the driving question at the top gets answered in practice: the session shows what the agent could discover, what it misunderstood, and what it never found. Use the loop to flesh out the final API design before you write the server. Start with [examples/quickstart.json](examples/quickstart.json) if you want to try the loop before you write your own document:
 
 1. Write a draft OpenAPI document.
 2. Start the mock: `oal serve ./openapi.json`.
