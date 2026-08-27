@@ -13,7 +13,13 @@ import {
   type Server,
   type ServerResponse
 } from "node:http";
-import { diagnostic, type Diagnostic } from "@oal/core";
+import {
+  diagnostic,
+  DiagnosticCode,
+  unsupported,
+  type Diagnostic
+} from "@oal/core";
+import { CONTRACT_IR_SCHEMA_VERSION } from "@oal/contract-ir";
 import { FRAMEWORK_ERRORS, problemDocument } from "./problem.ts";
 import {
   handleGatewayRequest,
@@ -82,6 +88,18 @@ const CLIENT_DISCONNECTED = "client_disconnected";
 export async function startGatewayListener(
   options: ListenerOptions
 ): Promise<GatewayListener> {
+  // The contract schema version is checked before the socket binds, so
+  // an unsupported contract refuses at startup (section 42.2, AC-012).
+  // Widen the field before the check: the producer types it narrowly,
+  // but a contract read from disk carries no runtime guarantee.
+  const version: number = options.gateway.contract.schema_version;
+  if (version !== CONTRACT_IR_SCHEMA_VERSION) {
+    throw unsupported(
+      DiagnosticCode.UnsupportedSchemaVersion,
+      `Contract schema version ${String(version)} is not supported; this build serves version ${String(CONTRACT_IR_SCHEMA_VERSION)}.`,
+      { contract_schema_version: version }
+    );
+  }
   let sequence = 0;
   const events: GatewayTraceEvent[] = [];
   const diagnostics: Diagnostic[] = [];

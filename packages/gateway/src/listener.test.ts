@@ -516,3 +516,22 @@ describe("state on the serving path", () => {
     });
   });
 });
+
+describe("contract schema version gate", () => {
+  it("refuses to start for an unsupported contract schema version", async () => {
+    const future = contract({ operations: [operation({})] });
+    (future as { schema_version: number }).schema_version = 2;
+    await expect(
+      startGatewayListener({
+        gateway: {
+          contract: future,
+          limits: LIMIT_DEFAULTS,
+          runSeed: "listener_seed_1"
+        }
+      })
+    ).rejects.toMatchObject({
+      code: "OAL-SCHEMA-VERSION-UNSUPPORTED",
+      exitCode: 4
+    });
+  });
+});

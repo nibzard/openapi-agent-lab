@@ -7,7 +7,7 @@
  */
 
 import { canonicalJson, type Json } from "@oal/core";
-import type { ContractIR } from "@oal/contract-ir";
+import { CONTRACT_IR_SCHEMA_VERSION, type ContractIR } from "@oal/contract-ir";
 import type { LimitTable } from "@oal/config";
 import { evaluateSecurity, mintRunCredentials } from "./auth.ts";
 import { parseMultipart, type MultipartPart } from "./multipart.ts";
@@ -80,6 +80,15 @@ export function handleGatewayRequest(
 ): GatewayResponse {
   const { contract, limits } = options;
   const requestId = `req_${sequence.toString(10).padStart(8, "0")}`;
+
+  // Step 1: the contract schema version gates every serve path
+  // (section 42.2, AC-012). A mismatch refuses before any parsing. The
+  // producer types the field narrowly, so widen it before the check: a
+  // contract read from disk carries no type guarantee at runtime.
+  const contractVersion: number = contract.schema_version;
+  if (contractVersion !== CONTRACT_IR_SCHEMA_VERSION) {
+    return framework(FRAMEWORK_ERRORS.contractVersionUnsupported, requestId);
+  }
 
   // Step 2: target and header limits.
   if (raw.target.length > limits.maxRequestTargetBytes) {

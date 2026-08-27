@@ -81,6 +81,11 @@ export const FRAMEWORK_ERRORS = {
     code: "mock_response_invalid",
     title: "The backend result violates the contract."
   },
+  contractVersionUnsupported: {
+    status: 500,
+    code: "contract_schema_version_unsupported",
+    title: "The contract schema version is not supported."
+  },
   internalError: {
     status: 500,
     code: "internal_error",

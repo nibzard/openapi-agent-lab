@@ -891,3 +891,17 @@ describe("multipart limits", () => {
     expect(result.frameworkCode).toBe("request_malformed");
   });
 });
+
+describe("contract schema version gate", () => {
+  it("refuses an unsupported contract schema version per request", () => {
+    const future = contract({ operations: [operation({})] });
+    (future as { schema_version: number }).schema_version = 99;
+    const result = handleGatewayRequest(
+      options({ contract: future }),
+      1,
+      request({})
+    );
+    expect(result.status).toBe(500);
+    expect(result.frameworkCode).toBe("contract_schema_version_unsupported");
+  });
+});
