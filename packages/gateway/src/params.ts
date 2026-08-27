@@ -6,7 +6,11 @@
  */
 
 import type { Json } from "@oal/core";
-import type { ParameterIR, ParameterLocation, ParameterStyle } from "@oal/contract-ir";
+import type {
+  ParameterIR,
+  ParameterLocation,
+  ParameterStyle
+} from "@oal/contract-ir";
 
 /** Style defaults by location (OpenAPI 3.x table). */
 export function defaultStyleFor(location: ParameterLocation): ParameterStyle {
@@ -47,17 +51,30 @@ export type ParseOutcome =
 export function deserializeParameter(
   parameter: ParameterIR,
   wire: string | string[],
+  typeHint: "object" | "array" | null = null
 ): ParseOutcome {
   const style = parameter.style;
   switch (parameter.location) {
     case "path":
-      return parsePath(parameter.name, style, parameter.explode, single(wire));
+      return parsePath(
+        parameter.name,
+        style,
+        parameter.explode,
+        single(wire),
+        typeHint
+      );
     case "header":
-      return parseSimple(single(wire));
+      return parseSimple(single(wire), typeHint);
     case "query":
-      return parseQuery(parameter.name, style, parameter.explode, many(wire));
+      return parseQuery(
+        parameter.name,
+        style,
+        parameter.explode,
+        many(wire),
+        typeHint
+      );
     case "cookie":
-      return parseFormCookie(parameter.name, style, parameter.explode, single(wire));
+      return parseFormCookie(style, parameter.explode, single(wire), typeHint);
   }
 }
 
@@ -74,45 +91,99 @@ function parsePath(
   style: ParameterStyle,
   explode: boolean,
   segment: string,
+  typeHint: "object" | "array" | null
 ): ParseOutcome {
   if (style === "label") {
     if (!segment.startsWith(".")) {
-      return { ok: false, code: "style", message: "Label style requires a leading dot." };
+      return {
+        ok: false,
+        code: "style",
+        message: "Label style requires a leading dot."
+      };
     }
-    return parsePairsSimple(segment.slice(1), ".", explode);
+    return parsePairsSimple(segment.slice(1), ".", explode, typeHint);
   }
   if (style === "matrix") {
-    if (!segment.startsWith(`;${name}=`)) {
-      return { ok: false, code: "style", message: "Matrix style requires ;name= prefix." };
+    if (!segment.startsWith(";")) {
+      return {
+        ok: false,
+        code: "style",
+        message: "Matrix style requires a leading semicolon."
+      };
     }
-    const body = segment.slice(name.length + 2);
+    // Split the whole segment so repeated names keep their prefix
+    // intact: ;id=3;id=4 -> ["id=3", "id=4"].
+    const parts = segment
+      .slice(1)
+      .split(";")
+      .filter((part) => part.length > 0);
     if (explode) {
-      // ;name=a;name=b or ;k=v;k2=v2 for objects.
-      const parts = body.split(";");
-      if (parts.every((part) => part.includes("=")) && !parts.every((part) => part.startsWith(`${name}=`))) {
-        return okValue(objectFromPairs(parts.map((part) => splitFirst(part, "="))));
+      // Exploded matrix repeats the name for arrays: ;name=a;name=b.
+      // Objects carry distinct keys: ;k=v;k2=v2 with no name prefix.
+      if (parts.every((part) => part.startsWith(`${name}=`))) {
+        const values = parts.map((part) => part.slice(name.length + 1));
+        return values.length === 1
+          ? okValue(parseScalar(values[0] as string))
+          : okValue(values.map(parseScalar));
       }
-      const values = parts.map((part) => splitFirst(part, "=")[1]);
-      return values.length === 1 ? okValue(parseScalar(values[0] as string)) : okValue(values.map(parseScalar));
+      if (parts.every((part) => part.includes("="))) {
+        return okValue(
+          objectFromPairs(parts.map((part) => splitFirst(part, "=")))
+        );
+      }
+      return {
+        ok: false,
+        code: "style",
+        message: "Exploded matrix segment is malformed."
+      };
     }
-    return parsePairsSimple(body, ",", false);
+    // Non-exploded form carries one serialized value: ;name=3,4.
+    const first = parts[0];
+    if (first === undefined || !first.startsWith(`${name}=`)) {
+      return {
+        ok: false,
+        code: "style",
+        message: "Matrix style requires ;name= prefix."
+      };
+    }
+    return parsePairsSimple(first.slice(name.length + 1), ",", false, typeHint);
   }
   // simple
-  return parsePairsSimple(segment, ",", explode);
+  return parsePairsSimple(segment, ",", explode, typeHint);
 }
 
-function parseSimple(segment: string): ParseOutcome {
-  return parsePairsSimple(segment, ",", false);
+function parseSimple(
+  segment: string,
+  typeHint: "object" | "array" | null
+): ParseOutcome {
+  return parsePairsSimple(segment, ",", false, typeHint);
 }
 
 function parsePairsSimple(
   text: string,
   delimiter: string,
   explode: boolean,
+  typeHint: "object" | "array" | null
 ): ParseOutcome {
   const parts = text.length === 0 ? [] : text.split(delimiter);
   if (explode && parts.every((part) => part.includes("="))) {
     return okValue(objectFromPairs(parts.map((part) => splitFirst(part, "="))));
+  }
+  if (
+    !explode &&
+    typeHint === "object" &&
+    parts.length % 2 === 0 &&
+    parts.length > 0
+  ) {
+    // Non-exploded objects serialize positionally: k1,v1,k2,v2.
+    const pairs: Array<[string, string]> = [];
+    for (let i = 0; i < parts.length; i += 2) {
+      pairs.push([parts[i] as string, parts[i + 1] as string]);
+    }
+    return okValue(objectFromPairs(pairs));
+  }
+  if (typeHint === "array" && parts.length > 0) {
+    return okValue(parts.map(parseScalar));
   }
   if (parts.length === 1) {
     return okValue(parseScalar(parts[0] as string));
@@ -125,6 +196,7 @@ function parseQuery(
   style: ParameterStyle,
   explode: boolean,
   values: string[],
+  typeHint: "object" | "array" | null
 ): ParseOutcome {
   switch (style) {
     case "form": {
@@ -144,12 +216,14 @@ function parseQuery(
       const only = values[0] as string;
       if (only.includes(",")) {
         const items = only.split(",");
-        if (items.every((item) => item.includes("="))) {
-          return okValue(objectFromPairs(items.map((item) => splitFirst(item, "="))));
+        if (typeHint !== "array" && items.every((item) => item.includes("="))) {
+          return okValue(
+            objectFromPairs(items.map((item) => splitFirst(item, "=")))
+          );
         }
         return okValue(items.map(parseScalar));
       }
-      if (only.includes("=") && !only.startsWith("=")) {
+      if (typeHint !== "array" && only.includes("=") && !only.startsWith("=")) {
         return okValue(objectFromPairs([splitFirst(only, "=")]));
       }
       return okValue(parseScalar(only));
@@ -157,10 +231,10 @@ function parseQuery(
     case "spaceDelimited": {
       const joined = values.join("%20");
       const only = values.length === 1 ? (values[0] as string) : joined;
-      return okValue(splitList(only, " "));
+      return okValue(splitList(only, " ", typeHint));
     }
     case "pipeDelimited":
-      return okValue(splitList(values.join("|"), "|"));
+      return okValue(splitList(values.join("|"), "|", typeHint));
     case "deepObject": {
       // Values arrive as name[prop]=value entries already split by the
       // query parser; rebuild the object.
@@ -168,47 +242,75 @@ function parseQuery(
       for (const entry of values) {
         const match = /^([^=[\]]+)\[([^=[\]]+)\]=(.*)$/s.exec(entry);
         if (match === null) {
-          return { ok: false, code: "style", message: "Deep object entry is malformed." };
+          return {
+            ok: false,
+            code: "style",
+            message: "Deep object entry is malformed."
+          };
         }
         if (match[1] !== name) {
-          return { ok: false, code: "style", message: "Deep object entry names a different parameter." };
+          return {
+            ok: false,
+            code: "style",
+            message: "Deep object entry names a different parameter."
+          };
         }
         object[match[2] as string] = parseScalar(match[3] as string);
       }
       return okValue(object);
     }
     default:
-      return { ok: false, code: "style", message: `Style ${style} is not valid in query.` };
+      return {
+        ok: false,
+        code: "style",
+        message: `Style ${style} is not valid in query.`
+      };
   }
 }
 
 function parseFormCookie(
-  name: string,
   style: ParameterStyle,
   explode: boolean,
   value: string,
+  typeHint: "object" | "array" | null
 ): ParseOutcome {
   if (style !== "form") {
-    return { ok: false, code: "style", message: `Style ${style} is not valid in cookie.` };
+    return {
+      ok: false,
+      code: "style",
+      message: `Style ${style} is not valid in cookie.`
+    };
   }
   if (explode) {
     return okValue(parseScalar(value));
   }
   if (value.includes(",")) {
     const items = value.split(",");
-    if (items.every((item) => item.includes("="))) {
-      return okValue(objectFromPairs(items.map((item) => splitFirst(item, "="))));
+    if (typeHint !== "array" && items.every((item) => item.includes("="))) {
+      return okValue(
+        objectFromPairs(items.map((item) => splitFirst(item, "=")))
+      );
     }
     return okValue(items.map(parseScalar));
+  }
+  if (typeHint !== "array" && value.includes("=") && !value.startsWith("=")) {
+    return okValue(objectFromPairs([splitFirst(value, "=")]));
   }
   return okValue(parseScalar(value));
 }
 
-function splitList(text: string, delimiter: string): Json {
+function splitList(
+  text: string,
+  delimiter: string,
+  typeHint: "object" | "array" | null
+): Json {
   if (text === "") {
     return [];
   }
   const parts = text.split(delimiter);
+  if (typeHint === "array") {
+    return parts.map(parseScalar);
+  }
   return parts.length === 1 ? parseScalar(text) : parts.map(parseScalar);
 }
 
@@ -243,7 +345,7 @@ export function parseScalar(text: string): Json {
   if (text === "null") {
     return null;
   }
-  if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(text)) {
+  if (/^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?$/.test(text)) {
     const number = Number(text);
     if (Number.isFinite(number)) {
       return number;

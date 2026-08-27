@@ -8,7 +8,11 @@
 import type { Json } from "@oal/core";
 import { isJsonObject } from "@oal/core";
 import { SchemaValidator } from "@oal/core";
-import type { MediaContentIR, OperationIR, ParameterIR } from "@oal/contract-ir";
+import type {
+  MediaContentIR,
+  OperationIR,
+  ParameterIR
+} from "@oal/contract-ir";
 import type { RequestViolation } from "./problem.ts";
 import { deserializeParameter } from "./params.ts";
 
@@ -34,7 +38,7 @@ export interface ValidationResult {
 export function validateParameters(
   operation: OperationIR,
   request: ParsedRequest,
-  schemaLookup: (ref: string) => Json | undefined,
+  schemaLookup: (ref: string) => Json | undefined
 ): ValidationResult {
   const parameters: Record<string, Json> = {};
   const violations: RequestViolation[] = [];
@@ -46,18 +50,22 @@ export function validateParameters(
           location: parameter.location,
           pointer: parameter.name,
           code: "required",
-          message: `Required parameter ${parameter.name} is missing.`,
+          message: `Required parameter ${parameter.name} is missing.`
         });
       }
       continue;
     }
-    const parsed = deserializeParameter(parameter, outcome);
+    const parsed = deserializeParameter(
+      parameter,
+      outcome,
+      typeHint(parameter, schemaLookup)
+    );
     if (!parsed.ok) {
       violations.push({
         location: parameter.location,
         pointer: parameter.name,
         code: parsed.code,
-        message: parsed.message,
+        message: parsed.message
       });
       continue;
     }
@@ -70,7 +78,7 @@ export function validateParameters(
           location: parameter.location,
           pointer: `${parameter.name}${violation.pointer}`,
           code: violation.code,
-          message: violation.message,
+          message: violation.message
         });
       }
     }
@@ -79,9 +87,28 @@ export function validateParameters(
   return { parameters, violations };
 }
 
+/** Schema-derived disambiguation for object-versus-array parsing. */
+function typeHint(
+  parameter: ParameterIR,
+  schemaLookup: (ref: string) => Json | undefined
+): "object" | "array" | null {
+  const schema = resolveParameterSchema(parameter, schemaLookup);
+  if (schema === undefined || !isJsonObject(schema)) {
+    return null;
+  }
+  const type = schema["type"];
+  if (type === "object") {
+    return "object";
+  }
+  if (type === "array") {
+    return "array";
+  }
+  return null;
+}
+
 function collectWire(
   parameter: ParameterIR,
-  request: ParsedRequest,
+  request: ParsedRequest
 ): string | string[] | undefined {
   switch (parameter.location) {
     case "path":
@@ -99,7 +126,7 @@ function collectWire(
 
 function resolveParameterSchema(
   parameter: ParameterIR,
-  schemaLookup: (ref: string) => Json | undefined,
+  schemaLookup: (ref: string) => Json | undefined
 ): Json | undefined {
   if (parameter.schema_ref !== null) {
     return schemaLookup(parameter.schema_ref);
@@ -123,7 +150,7 @@ export interface BodyValidationResult {
 export function validateBody(
   operation: OperationIR,
   request: ParsedRequest,
-  schemaLookup: (ref: string) => Json | undefined,
+  schemaLookup: (ref: string) => Json | undefined
 ): BodyValidationResult {
   const violations: RequestViolation[] = [];
   const body = operation.request_body;
@@ -133,7 +160,7 @@ export function validateBody(
         location: "body",
         pointer: "",
         code: "body_forbidden",
-        message: "The operation declares no request body.",
+        message: "The operation declares no request body."
       });
     }
     return { content: null, violations };
@@ -144,18 +171,19 @@ export function validateBody(
         location: "body",
         pointer: "",
         code: "required",
-        message: "A request body is required.",
+        message: "A request body is required."
       });
     }
     return { content: null, violations };
   }
-  const contentType = (request.contentType ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
+  const contentType =
+    (request.contentType ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
   if (contentType.length === 0) {
     violations.push({
       location: "body",
       pointer: "",
       code: "media_type_missing",
-      message: "A Content-Type is required with a request body.",
+      message: "A Content-Type is required with a request body."
     });
     return { content: null, violations };
   }
@@ -165,7 +193,7 @@ export function validateBody(
       location: "body",
       pointer: "",
       code: "media_type_unsupported",
-      message: `Content-Type ${contentType} is not declared.`,
+      message: `Content-Type ${contentType} is not declared.`
     });
     return { content: null, violations };
   }
@@ -179,7 +207,7 @@ export function validateBody(
           location: "body",
           pointer: violation.pointer,
           code: violation.code,
-          message: violation.message,
+          message: violation.message
         });
       }
     }
@@ -190,7 +218,7 @@ export function validateBody(
 /** Pick the declared media content for a concrete Content-Type. */
 export function pickContent(
   content: readonly MediaContentIR[],
-  contentType: string,
+  contentType: string
 ): MediaContentIR | null {
   const base = contentType.split(";")[0]?.trim().toLowerCase() ?? contentType;
   for (const entry of content) {
@@ -207,7 +235,10 @@ export function pickContent(
  * schema so request and response sides validate their own half. The
  * input schema is never mutated.
  */
-export function stripProperties(schema: Json, flag: "readOnly" | "writeOnly"): Json {
+export function stripProperties(
+  schema: Json,
+  flag: "readOnly" | "writeOnly"
+): Json {
   if (!isJsonObject(schema)) {
     return schema;
   }
@@ -234,13 +265,18 @@ export function stripProperties(schema: Json, flag: "readOnly" | "writeOnly"): J
   }
   // Recurse into nested object schemas.
   for (const [key, value] of Object.entries(clone)) {
-    if (isJsonObject(value) && (key === "items" || key === "additionalProperties")) {
+    if (
+      isJsonObject(value) &&
+      (key === "items" || key === "additionalProperties")
+    ) {
       clone[key] = stripProperties(value, flag);
     }
   }
   const prefixItems = clone["prefixItems"];
   if (Array.isArray(prefixItems)) {
-    clone["prefixItems"] = prefixItems.map((item) => stripProperties(item, flag));
+    clone["prefixItems"] = prefixItems.map((item) =>
+      stripProperties(item, flag)
+    );
   }
   return clone;
 }

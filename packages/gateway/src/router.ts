@@ -29,27 +29,42 @@ export interface RouteResult {
 export function matchRoute(
   operations: readonly OperationIR[],
   method: string,
-  path: string,
+  path: string
 ): RouteResult {
   const segments = splitPath(path);
-  let pathExists = false;
-  const allowedMethods: string[] = [];
-  for (const operation of operations) {
-    const extracted = extractSegments(operation, segments);
-    if (extracted === null) {
-      continue;
+  // Pass 1 matches routes whose segments are all literal; pass 2 allows
+  // parameters. Literal routes win: a literal path match with a wrong
+  // method stays a 405 and never falls through to a parameter route.
+  for (const group of [literalRoutes(operations), operations] as const) {
+    let pathExists = false;
+    const allowedMethods: string[] = [];
+    for (const operation of group) {
+      const extracted = extractSegments(operation, segments);
+      if (extracted === null) {
+        continue;
+      }
+      pathExists = true;
+      allowedMethods.push(operation.method);
+      if (operation.method === method.toUpperCase()) {
+        return {
+          match: { operation, pathParameters: extracted },
+          allowedMethods,
+          pathExists
+        };
+      }
     }
-    pathExists = true;
-    allowedMethods.push(operation.method);
-    if (operation.method === method.toUpperCase()) {
-      return {
-        match: { operation, pathParameters: extracted },
-        allowedMethods,
-        pathExists,
-      };
+    if (pathExists) {
+      return { match: null, allowedMethods, pathExists };
     }
   }
-  return { match: null, allowedMethods, pathExists };
+  return { match: null, allowedMethods: [], pathExists: false };
+}
+
+/** Operations whose route contains no parameter segments. */
+function literalRoutes(operations: readonly OperationIR[]): OperationIR[] {
+  return operations.filter((operation) =>
+    operation.route_segments.every((segment) => segment.kind === "literal")
+  );
 }
 
 function splitPath(path: string): string[] {
@@ -59,7 +74,7 @@ function splitPath(path: string): string[] {
 
 function extractSegments(
   operation: OperationIR,
-  segments: readonly string[],
+  segments: readonly string[]
 ): Record<string, string> | null {
   const template = operation.route_segments;
   if (template.length !== segments.length) {

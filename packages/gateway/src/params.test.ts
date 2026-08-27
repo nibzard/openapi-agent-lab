@@ -1,10 +1,20 @@
 import { describe, expect, it } from "vitest";
+import type { Json } from "@oal/core";
 
 import type { ParameterIR } from "@oal/contract-ir";
-import { defaultExplodeFor, defaultStyleFor, deserializeParameter, parseScalar } from "./params.ts";
+import {
+  defaultExplodeFor,
+  defaultStyleFor,
+  deserializeParameter,
+  parseScalar
+} from "./params.ts";
 import { FRAMEWORK_ERRORS, problemDocument } from "./problem.ts";
 import { matchRoute } from "./router.ts";
-import { stripProperties, validateBody, validateParameters } from "./validate.ts";
+import {
+  stripProperties,
+  validateBody,
+  validateParameters
+} from "./validate.ts";
 import type { OperationIR } from "@oal/contract-ir";
 
 function parameter(init: Partial<ParameterIR>): ParameterIR {
@@ -23,8 +33,20 @@ function parameter(init: Partial<ParameterIR>): ParameterIR {
     default_value: undefined,
     support: "supported",
     support_reason_codes: [],
-    source_pointer: "",
+    source_pointer: ""
   };
+}
+
+function parseOk(
+  parameter: ParameterIR,
+  wire: string | string[],
+  typeHint?: "object" | "array" | null
+): Json {
+  const outcome = deserializeParameter(parameter, wire, typeHint);
+  if (!outcome.ok) {
+    throw new Error(`parse failed: ${outcome.message}`);
+  }
+  return outcome.value;
 }
 
 describe("style defaults", () => {
@@ -40,102 +62,93 @@ describe("style defaults", () => {
 
 describe("path parameter deserialization", () => {
   it("parses simple primitives, arrays, and exploded objects", () => {
-    expect(deserializeParameter(parameter({}), "5").value).toBe(5);
-    const array = deserializeParameter(parameter({}), "3,4,5");
-    expect(array.value).toEqual([3, 4, 5]);
-    const object = deserializeParameter(
-      parameter({ explode: true }),
-      "id=3,name=alex",
-    );
-    expect(object.value).toEqual({ id: 3, name: "alex" });
-    const objectFlat = deserializeParameter(parameter({}), "id,3,name,alex");
-    expect(objectFlat.value).toEqual({ id: 3, name: "alex" });
+    expect(parseOk(parameter({}), "5")).toBe(5);
+    expect(parseOk(parameter({}), "3,4,5")).toEqual([3, 4, 5]);
+    expect(parseOk(parameter({ explode: true }), "id=3,name=alex")).toEqual({
+      id: 3,
+      name: "alex"
+    });
+    expect(parseOk(parameter({}), "id,3,name,alex", "object")).toEqual({
+      id: 3,
+      name: "alex"
+    });
+    expect(parseOk(parameter({}), "id,3,name,alex", "array")).toEqual([
+      "id",
+      3,
+      "name",
+      "alex"
+    ]);
   });
 
   it("parses label style", () => {
-    expect(deserializeParameter(parameter({ style: "label" }), ".5").value).toBe(5);
+    expect(parseOk(parameter({ style: "label" }), ".5")).toBe(5);
+    expect(parseOk(parameter({ style: "label" }), ".3.4.5")).toEqual([3, 4, 5]);
     expect(
-      deserializeParameter(parameter({ style: "label" }), ".3.4.5").value,
-    ).toEqual([3, 4, 5]);
-    expect(
-      deserializeParameter(parameter({ style: "label", explode: true }), ".id=3.name=x").value,
+      parseOk(parameter({ style: "label", explode: true }), ".id=3.name=x")
     ).toEqual({ id: 3, name: "x" });
   });
 
   it("parses matrix style", () => {
-    expect(deserializeParameter(parameter({ style: "matrix" }), ";id=5").value).toBe(5);
+    expect(parseOk(parameter({ style: "matrix" }), ";id=5")).toBe(5);
+    expect(parseOk(parameter({ style: "matrix" }), ";id=3,4")).toEqual([3, 4]);
     expect(
-      deserializeParameter(parameter({ style: "matrix" }), ";id=3,4").value,
+      parseOk(parameter({ style: "matrix", explode: true }), ";id=3;id=4")
     ).toEqual([3, 4]);
     expect(
-      deserializeParameter(
+      parseOk(
         parameter({ style: "matrix", explode: true }),
-        ";id=3;id=4",
-      ).value,
-    ).toEqual([3, 4]);
-    expect(
-      deserializeParameter(
-        parameter({ style: "matrix", explode: true }),
-        ";role=admin;name=x",
-      ).value,
+        ";role=admin;name=x"
+      )
     ).toEqual({ role: "admin", name: "x" });
   });
 
   it("rejects malformed label and matrix segments", () => {
-    expect(deserializeParameter(parameter({ style: "label" }), "5").ok).toBe(false);
-    expect(deserializeParameter(parameter({ style: "matrix" }), ";other=1").ok).toBe(false);
+    expect(deserializeParameter(parameter({ style: "label" }), "5").ok).toBe(
+      false
+    );
+    expect(
+      deserializeParameter(parameter({ style: "matrix" }), ";other=1").ok
+    ).toBe(false);
   });
 });
 
 describe("query parameter deserialization", () => {
   it("parses form arrays and objects", () => {
+    expect(parseOk(parameter({ location: "query" }), ["3", "4"])).toEqual([
+      3, 4
+    ]);
     expect(
-      deserializeParameter(parameter({ location: "query" }), ["3", "4"]).value,
-    ).toEqual([3, 4]);
-    expect(
-      deserializeParameter(
-        parameter({ location: "query", explode: false }),
-        "id=3,name=x",
-      ).value,
+      parseOk(parameter({ location: "query", explode: false }), "id=3,name=x")
     ).toEqual({ id: 3, name: "x" });
     expect(
-      deserializeParameter(parameter({ location: "query", explode: false }), "3,4").value,
+      parseOk(parameter({ location: "query", explode: false }), "3,4", "array")
     ).toEqual([3, 4]);
-    expect(
-      deserializeParameter(parameter({ location: "query" }), "hello").value,
-    ).toBe("hello");
+    expect(parseOk(parameter({ location: "query" }), "hello")).toBe("hello");
   });
 
   it("parses delimited and deep-object styles", () => {
     expect(
-      deserializeParameter(
-        parameter({ location: "query", style: "spaceDelimited" }),
-        ["a b"],
-      ).value,
+      parseOk(parameter({ location: "query", style: "spaceDelimited" }), [
+        "a b"
+      ])
     ).toEqual(["a", "b"]);
     expect(
-      deserializeParameter(
-        parameter({ location: "query", style: "pipeDelimited" }),
-        ["a|b"],
-      ).value,
+      parseOk(parameter({ location: "query", style: "pipeDelimited" }), ["a|b"])
     ).toEqual(["a", "b"]);
     expect(
-      deserializeParameter(
+      parseOk(
         parameter({ location: "query", style: "deepObject", name: "obj" }),
-        ["obj[id]=3", "obj[name]=x"],
-      ).value,
+        ["obj[id]=3", "obj[name]=x"]
+      )
     ).toEqual({ id: 3, name: "x" });
   });
 
   it("parses cookie form values", () => {
+    expect(parseOk(parameter({ location: "cookie" }), "session1")).toBe(
+      "session1"
+    );
     expect(
-      deserializeParameter(parameter({ location: "cookie" }), "session1").value,
-    ).toBe("session1");
-    expect(
-      deserializeParameter(
-        parameter({ location: "cookie", explode: false }),
-        "id=3,name=x",
-      ).value,
+      parseOk(parameter({ location: "cookie", explode: false }), "id=3,name=x")
     ).toEqual({ id: 3, name: "x" });
   });
 
@@ -168,7 +181,7 @@ describe("framework errors", () => {
     const document = problemDocument(
       FRAMEWORK_ERRORS.routeNotFound,
       "req_00000001",
-      "No route.",
+      "No route."
     );
     expect(document.code).toBe("route_not_found");
     expect(document.request_id).toBe("req_00000001");
@@ -186,7 +199,7 @@ function operation(init: Partial<OperationIR>): OperationIR {
     path_template: init.path_template ?? "/things/{id}",
     route_segments: init.route_segments ?? [
       { kind: "literal", value: "things" },
-      { kind: "parameter", value: "id" },
+      { kind: "parameter", value: "id" }
     ],
     operation_id: null,
     tool_name: "get_thing",
@@ -202,7 +215,7 @@ function operation(init: Partial<OperationIR>): OperationIR {
     callbacks: [],
     extensions: {},
     source_pointer: "",
-    support: { level: "supported", diagnostic_codes: [] },
+    support: { level: "supported", diagnostic_codes: [] }
   };
 }
 
@@ -211,14 +224,17 @@ describe("route matching", () => {
     operation({ method: "GET" }),
     operation({
       method: "DELETE",
-      key: "path:DELETE /things/{id}",
+      key: "path:DELETE /things/{id}"
     }),
     operation({
       key: "path:GET /things/all",
       path_template: "/things/all",
-      route_segments: [{ kind: "literal", value: "things" }, { kind: "literal", value: "all" }],
-      method: "GET",
-    }),
+      route_segments: [
+        { kind: "literal", value: "things" },
+        { kind: "literal", value: "all" }
+      ],
+      method: "GET"
+    })
   ];
 
   it("matches literal and parameter segments", () => {
@@ -255,45 +271,57 @@ describe("request validation", () => {
       required: ["name"],
       properties: {
         name: { type: "string" },
-        owner: { type: "string", readOnly: true },
+        owner: { type: "string", readOnly: true }
       },
-      additionalProperties: false,
-    },
+      additionalProperties: false
+    }
   };
   const lookup = (ref: string): Json | undefined => schemas[ref];
 
   it("reports missing required parameters and schema violations", () => {
     const op = operation({
-      parameters: [parameter({ name: "id", schema_ref: "sch_id" })],
+      parameters: [parameter({ name: "id", schema_ref: "sch_id" })]
     });
-    const result = validateParameters(op, {
-      pathParameters: {},
-      query: {},
-      headers: {},
-      cookies: {},
-      body: undefined,
-      contentType: null,
-    }, lookup);
+    const result = validateParameters(
+      op,
+      {
+        pathParameters: {},
+        query: {},
+        headers: {},
+        cookies: {},
+        body: undefined,
+        contentType: null
+      },
+      lookup
+    );
     expect(result.violations.map((v) => v.code)).toContain("required");
 
-    const invalid = validateParameters(op, {
-      pathParameters: { id: "0" },
-      query: {},
-      headers: {},
-      cookies: {},
-      body: undefined,
-      contentType: null,
-    }, lookup);
+    const invalid = validateParameters(
+      op,
+      {
+        pathParameters: { id: "0" },
+        query: {},
+        headers: {},
+        cookies: {},
+        body: undefined,
+        contentType: null
+      },
+      lookup
+    );
     expect(invalid.violations[0]?.code).toBe("minimum");
 
-    const valid = validateParameters(op, {
-      pathParameters: { id: "7" },
-      query: {},
-      headers: {},
-      cookies: {},
-      body: undefined,
-      contentType: null,
-    }, lookup);
+    const valid = validateParameters(
+      op,
+      {
+        pathParameters: { id: "7" },
+        query: {},
+        headers: {},
+        cookies: {},
+        body: undefined,
+        contentType: null
+      },
+      lookup
+    );
     expect(valid.violations).toHaveLength(0);
     expect(valid.parameters["id"]).toBe(7);
   });
@@ -304,49 +332,73 @@ describe("request validation", () => {
         required: true,
         description: null,
         content: [
-          { media_type: "application/json", schema_ref: "sch_body", examples: [], support: "supported", support_reason_codes: [] },
+          {
+            media_type: "application/json",
+            schema_ref: "sch_body",
+            examples: [],
+            support: "supported",
+            support_reason_codes: []
+          }
         ],
-        source_pointer: "",
-      },
+        source_pointer: ""
+      }
     });
-    const good = validateBody(op, {
-      pathParameters: {},
-      query: {},
-      headers: {},
-      cookies: {},
-      body: { name: "x" },
-      contentType: "application/json",
-    }, lookup);
+    const good = validateBody(
+      op,
+      {
+        pathParameters: {},
+        query: {},
+        headers: {},
+        cookies: {},
+        body: { name: "x" },
+        contentType: "application/json"
+      },
+      lookup
+    );
     expect(good.violations).toHaveLength(0);
 
-    const withOwner = validateBody(op, {
-      pathParameters: {},
-      query: {},
-      headers: {},
-      cookies: {},
-      body: { name: "x", owner: "me" },
-      contentType: "application/json; charset=utf-8",
-    }, lookup);
-    expect(withOwner.violations.map((v) => v.code)).toContain("additionalProperties");
+    const withOwner = validateBody(
+      op,
+      {
+        pathParameters: {},
+        query: {},
+        headers: {},
+        cookies: {},
+        body: { name: "x", owner: "me" },
+        contentType: "application/json; charset=utf-8"
+      },
+      lookup
+    );
+    expect(withOwner.violations.map((v) => v.code)).toContain(
+      "additionalProperties"
+    );
 
-    const missing = validateBody(op, {
-      pathParameters: {},
-      query: {},
-      headers: {},
-      cookies: {},
-      body: {},
-      contentType: "application/json",
-    }, lookup);
+    const missing = validateBody(
+      op,
+      {
+        pathParameters: {},
+        query: {},
+        headers: {},
+        cookies: {},
+        body: {},
+        contentType: "application/json"
+      },
+      lookup
+    );
     expect(missing.violations.map((v) => v.code)).toContain("required");
 
-    const wrongType = validateBody(op, {
-      pathParameters: {},
-      query: {},
-      headers: {},
-      cookies: {},
-      body: { name: "x" },
-      contentType: "text/plain",
-    }, lookup);
+    const wrongType = validateBody(
+      op,
+      {
+        pathParameters: {},
+        query: {},
+        headers: {},
+        cookies: {},
+        body: { name: "x" },
+        contentType: "text/plain"
+      },
+      lookup
+    );
     expect(wrongType.violations[0]?.code).toBe("media_type_unsupported");
   });
 
@@ -356,15 +408,15 @@ describe("request validation", () => {
       required: ["name", "owner"],
       properties: {
         name: { type: "string" },
-        owner: { type: "string", readOnly: true },
-      },
+        owner: { type: "string", readOnly: true }
+      }
     };
     const stripped = stripProperties(schema, "readOnly");
     expect(stripped).not.toBe(schema);
     expect(stripped).toEqual({
       type: "object",
       required: ["name"],
-      properties: { name: { type: "string" } },
+      properties: { name: { type: "string" } }
     });
     expect(schema.required).toEqual(["name", "owner"]);
   });
