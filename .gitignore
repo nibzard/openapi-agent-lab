@@ -40,3 +40,6 @@ Thumbs.db
 runs/
 workspaces/
 results/
+
+# Local agent session state
+.claude/
