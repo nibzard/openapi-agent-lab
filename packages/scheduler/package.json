@@ -6,5 +6,11 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@oal/contract-ir": "workspace:*",
+    "@oal/core": "workspace:*",
+    "@oal/state-store": "workspace:*",
+    "@oal/study-ir": "workspace:*"
   }
 }
