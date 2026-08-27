@@ -44,21 +44,48 @@ importers:
       '@oal/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@oal/contract-variant':
+        specifier: workspace:*
+        version: link:../../packages/contract-variant
       '@oal/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@oal/evaluator':
         specifier: workspace:*
         version: link:../../packages/evaluator
+      '@oal/evidence':
+        specifier: workspace:*
+        version: link:../../packages/evidence
+      '@oal/gateway':
+        specifier: workspace:*
+        version: link:../../packages/gateway
       '@oal/mock-adapter':
         specifier: workspace:*
         version: link:../../packages/mock-adapter
       '@oal/pack':
         specifier: workspace:*
         version: link:../../packages/pack
+      '@oal/report':
+        specifier: workspace:*
+        version: link:../../packages/report
       '@oal/runner':
         specifier: workspace:*
         version: link:../../packages/runner
+      '@oal/scheduler':
+        specifier: workspace:*
+        version: link:../../packages/scheduler
+      '@oal/state-store':
+        specifier: workspace:*
+        version: link:../../packages/state-store
+      '@oal/statistics':
+        specifier: workspace:*
+        version: link:../../packages/statistics
+      '@oal/study':
+        specifier: workspace:*
+        version: link:../../packages/study
+      '@oal/study-ir':
+        specifier: workspace:*
+        version: link:../../packages/study-ir
 
   packages/agent-adapter:
     dependencies:
@@ -311,6 +338,9 @@ importers:
       '@oal/state-store':
         specifier: workspace:*
         version: link:../state-store
+      '@oal/study-ir':
+        specifier: workspace:*
+        version: link:../study-ir
       '@oal/testkit':
         specifier: workspace:*
         version: link:../testkit
@@ -343,12 +373,39 @@ importers:
 
   packages/study:
     dependencies:
+      '@oal/arazzo':
+        specifier: workspace:*
+        version: link:../arazzo
+      '@oal/config':
+        specifier: workspace:*
+        version: link:../config
       '@oal/contract-ir':
         specifier: workspace:*
         version: link:../contract-ir
       '@oal/core':
         specifier: workspace:*
         version: link:../core
+      '@oal/evaluator':
+        specifier: workspace:*
+        version: link:../evaluator
+      '@oal/evidence':
+        specifier: workspace:*
+        version: link:../evidence
+      '@oal/pack':
+        specifier: workspace:*
+        version: link:../pack
+      '@oal/report':
+        specifier: workspace:*
+        version: link:../report
+      '@oal/scheduler':
+        specifier: workspace:*
+        version: link:../scheduler
+      '@oal/state-store':
+        specifier: workspace:*
+        version: link:../state-store
+      '@oal/statistics':
+        specifier: workspace:*
+        version: link:../statistics
       '@oal/study-ir':
         specifier: workspace:*
         version: link:../study-ir

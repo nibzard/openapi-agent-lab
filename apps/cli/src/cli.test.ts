@@ -208,7 +208,7 @@ describe("shell behavior", () => {
 
   it("emits stub diagnostics as one JSON line under --format json", async () => {
     const io = new MemoryIo();
-    await main(["doctor", "--format", "json"], io);
+    await main(["evaluate", "runs/missing", "--format", "json"], io);
     expect(io.stderrChunks.length).toBe(1);
     const record = JSON.parse(io.stderrChunks[0] ?? "") as Record<
       string,
@@ -234,8 +234,8 @@ describe("shell behavior", () => {
 
   it("parses flags declared only on later-milestone commands", async () => {
     const io = new MemoryIo();
-    await main(["replay", "run", "--request", "seq.jsonl", "--verify"], io);
-    expect(io.stderrChunks[0]).toContain("oal replay is not implemented");
+    await main(["study", "run", ".", "--agent", "codex-cli", "--dry-run"], io);
+    expect(io.stderrChunks[0]).toContain("oal study run is not implemented");
   });
 
   it("uses the shared command registry by default", () => {

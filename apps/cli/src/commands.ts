@@ -7,9 +7,11 @@ import {
   evalListCommand,
   evalValidateCommand
 } from "./handlers/eval.ts";
+import { doctorCommand } from "./handlers/doctor.ts";
 import { inspectCommand } from "./handlers/inspect.ts";
 import { helpCommand, versionCommand } from "./handlers/misc.ts";
 import { packInitCommand, packValidateCommand } from "./handlers/pack.ts";
+import { replayCommand } from "./handlers/replay.ts";
 import { runCommand } from "./handlers/run.ts";
 import { stubCommand } from "./handlers/stub.ts";
 import type { Io } from "./io.ts";
@@ -252,19 +254,32 @@ export const COMMANDS: readonly CommandSpec[] = [
   {
     name: "replay",
     summary: "Replay a recorded run without an agent.",
-    arguments: [{ name: "run", description: "Run directory." }],
-    options: [
-      value("request", "Request sequence to replay."),
-      flag("verify", "Verify deterministic replay equality.")
+    arguments: [
+      {
+        name: "run",
+        description: "Run directory below .oal/runs/<batch>/trials/<run-id>."
+      }
     ],
-    handler: stubCommand("replay")
+    options: [
+      value(
+        "request",
+        "Ingress sequence to replay; the default replays every request."
+      ),
+      flag(
+        "verify",
+        "Treat a difference from the record as an error; exit status 2."
+      )
+    ],
+    handler: replayCommand
   },
   {
     name: "doctor",
     summary: "Check local tool prerequisites without a paid call.",
     arguments: [],
-    options: [value("agent", "Adapter executable to probe.")],
-    handler: stubCommand("doctor")
+    options: [
+      value("agent", "Adapter selector to probe; the default is mock-agent.")
+    ],
+    handler: doctorCommand
   },
   {
     name: "workflow run",
