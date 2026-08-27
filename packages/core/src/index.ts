@@ -35,6 +35,21 @@ export type {
   DiagnosticSeverity
 } from "./diagnostic.ts";
 export {
+  FAILURE_REGISTRY,
+  HTTP_BEHAVIOR_CODES,
+  failureClassOf,
+  failuresByCategory,
+  invalidatesEvidence,
+  isHarnessFailure,
+  retryPolicyOf
+} from "./failure.ts";
+export type {
+  FailureClass,
+  FailureEffect,
+  RetryPolicy,
+  TaxonomyCategory
+} from "./failure.ts";
+export {
   EXIT_EVAL_THRESHOLD,
   EXIT_INFRASTRUCTURE,
   EXIT_INVALID,
