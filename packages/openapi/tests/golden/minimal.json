@@ -31,7 +31,7 @@
             {
               "examples": [],
               "media_type": "application/json",
-              "schema_ref": "sch_982ec883bece",
+              "schema_ref": "sch_f4924d5850d0",
               "support": "supported",
               "support_reason_codes": ["media:supported"]
             }
@@ -69,7 +69,7 @@
   ],
   "schema_version": 1,
   "schemas": {
-    "sch_982ec883bece": {
+    "sch_f4924d5850d0": {
       "document_uri": "openapi/minimal.json",
       "schema": {
         "properties": {
@@ -78,7 +78,7 @@
             "type": "string"
           },
           "status": {
-            "enum": ["ok", "degraded"],
+            "enum": ["degraded", "ok"],
             "type": "string"
           }
         },
@@ -86,7 +86,7 @@
         "type": "object"
       },
       "source_pointer": "#/components/schemas/Health",
-      "uid": "sch_982ec883bece"
+      "uid": "sch_f4924d5850d0"
     }
   },
   "security_schemes": {},
@@ -98,10 +98,10 @@
       }
     ],
     "entrypoint": "openapi/minimal.json",
-    "execution_sha256": "5521c09dc5a1bdb1c5a1c633e905419f630800b2bd9d5b2d34d3f7829e2a5b69",
+    "execution_sha256": "f56913ded4b0043e76dcf06f596e4ea5017f65bae0547943064141e6f03764cb",
     "media_type": "application/json",
     "openapi_version": "3.1.0",
-    "semantic_sha256": "0be8b1bb523647b4f70448cdbd6cb2dd7179817782174e7a911a3137386146a0",
+    "semantic_sha256": "a29d7e839beb416e1dbf83e793201acde82e21e488177dfe1070e9bc9c50b312",
     "sha256": "299c3b04e97e73ea85d8b2f863c174a11a3c7ac242ece274dfa29040c521b2de"
   },
   "webhooks": []

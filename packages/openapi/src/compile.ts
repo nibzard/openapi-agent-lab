@@ -39,7 +39,11 @@ import {
 } from "@oal/contract-ir";
 import type { CapabilityReport } from "@oal/capability";
 
-import { buildCapabilityReport, type CapabilityOptions } from "./capability.ts";
+import {
+  buildCapabilityReport,
+  CAP_LINK_DESCRIBED,
+  type CapabilityOptions
+} from "./capability.ts";
 import { resolveCompilerLimits, type CompilerLimits } from "./limits.ts";
 import { documentSetFromRecord, type DocumentSet } from "./loader.ts";
 import {
@@ -516,10 +520,13 @@ export class OpenApiCompiler {
             continue;
           }
           variables[name] = {
+            // A server variable enumerates an unordered set of allowed
+            // values, so members are sorted to keep the digests stable
+            // when equivalent documents declare them in a different order.
             enum: Array.isArray(variable.enum)
-              ? variable.enum.filter(
-                  (item): item is string => typeof item === "string"
-                )
+              ? variable.enum
+                  .filter((item): item is string => typeof item === "string")
+                  .sort()
               : [],
             default: asString(variable.default) ?? "",
             description: asString(variable.description)
@@ -1199,6 +1206,13 @@ export class OpenApiCompiler {
         responseSupport,
         emitFor
       );
+      this.compileLinks(
+        response.links,
+        entryResolved.uri,
+        `${entryResolved.pointer}/links`,
+        responseSupport,
+        emitFor
+      );
       out.push({
         selector,
         selector_kind: selectorKindOf(selector),
@@ -1454,6 +1468,73 @@ export class OpenApiCompiler {
       out.push({ name, expressions, source_pointer: callbackResolved.pointer });
     }
     return out;
+  }
+
+  /**
+   * Compile one response `links` map. ContractIR dedicates no field to
+   * links, so every link is preserved as data inside a described-only
+   * capability diagnostic, mirroring how callbacks are kept as data with an
+   * approximated outcome (acceptance criterion AC-011). Links never cause
+   * follow-up requests.
+   */
+  private compileLinks(
+    node: Json | undefined,
+    uri: string,
+    pointer: string,
+    support: SupportAccumulator,
+    emitFor: (diagnostic: Diagnostic) => void
+  ): void {
+    if (node === undefined) {
+      return;
+    }
+    if (!isObject(node)) {
+      this.fail(structure("`links` must be a mapping.", uri, pointer));
+    }
+    for (const name of Object.keys(node).sort()) {
+      const entry = node[name];
+      if (entry === undefined) {
+        continue;
+      }
+      const resolved = this.deref(
+        entry,
+        uri,
+        `${pointer}/${escapeToken(name)}`
+      );
+      const link = this.requireObject(
+        resolved.value,
+        resolved.uri,
+        resolved.pointer,
+        `Link '${name}' must be a mapping.`
+      );
+      const server = isObject(link.server) ? link.server : null;
+      const parameters = isObject(link.parameters) ? link.parameters : null;
+      const reasonCode = `link:${name}`;
+      support.add("approximated", [reasonCode]);
+      emitFor({
+        severity: "info",
+        phase: "compile",
+        code: CAP_LINK_DESCRIBED,
+        message: `Link '${name}' is preserved as a description and never followed.`,
+        document_uri: resolved.uri,
+        json_pointer: resolved.pointer,
+        operation_key: null,
+        retryable: false,
+        related: [],
+        details: {
+          reason_codes: [reasonCode],
+          level: "approximated",
+          link: {
+            name,
+            operation_ref: asString(link.operationRef),
+            operation_id: asString(link.operationId),
+            description: asString(link.description),
+            parameters,
+            request_body: link.requestBody ?? null,
+            server
+          }
+        }
+      });
+    }
   }
 
   private compileSecurity(

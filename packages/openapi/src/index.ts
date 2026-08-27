@@ -93,6 +93,7 @@ export {
 export {
   buildCapabilityReport,
   capabilityReportJson,
+  CAP_LINK_DESCRIBED,
   DIRECT_TOOL_MAX_OPERATIONS,
   DIRECT_TOOL_MAX_SCHEMA_BYTES,
   preferredToolName,

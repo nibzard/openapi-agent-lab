@@ -2,6 +2,7 @@ import {
   DiagnosticCode,
   invalidInput,
   isJsonObject,
+  OalError,
   type Diagnostic,
   type Json,
   type JsonObject,
@@ -153,6 +154,16 @@ export function discoverExternalRefs(baseUri: string, text: string): string[] {
     if (filePart === "") {
       continue;
     }
+    // Targets that reference resolution rejects as out-of-root never load,
+    // so discovery must not chase them either; compilation reports them
+    // with the pointer of the declaring node.
+    if (
+      filePart.startsWith("/") ||
+      filePart.includes("\\") ||
+      filePart.includes("\0")
+    ) {
+      continue;
+    }
     try {
       found.add(normalizeRelativePath(baseUri, filePart));
     } catch {
@@ -199,7 +210,7 @@ export class ReferenceResolver {
       if (this.policy.remote_refs === "deny" && SCHEME_PATTERN.test(ref)) {
         this.fail(remoteDisabled(ref, currentUri, currentPointer));
       }
-      const target = splitRef(currentUri, ref);
+      const target = this.splitLocated(ref, currentUri, currentPointer);
       const key = `${target.uri}${target.pointer}`;
       if (stack.includes(key)) {
         this.fail(
@@ -226,23 +237,42 @@ export class ReferenceResolver {
     }
   }
 
-  /** Resolve a reference explicitly and return the target node. */
-  resolve(uri: string, ref: string): ResolvedNode {
-    const target = splitRef(uri, ref);
+  /**
+   * Resolve a reference explicitly and return the target node. `pointer`
+   * locates the declaring node, so rejections name it instead of the
+   * document root.
+   */
+  resolve(uri: string, ref: string, pointer = "#"): ResolvedNode {
     if (this.policy.remote_refs === "deny" && SCHEME_PATTERN.test(ref)) {
-      this.fail(remoteDisabled(ref, uri, "#"));
+      this.fail(remoteDisabled(ref, uri, pointer));
     }
+    const target = this.splitLocated(ref, uri, pointer);
     const key = `${target.uri}${target.pointer}`;
-    this.remember(key, uri, "#");
+    this.remember(key, uri, pointer);
     const document = this.documents.get(target.uri);
     if (document === undefined) {
-      this.fail(missing(ref, target, uri, "#"));
+      this.fail(missing(ref, target, uri, pointer));
     }
     const resolved = resolvePointer(document, target.pointer);
     if (resolved === undefined) {
-      this.fail(missing(ref, target, uri, "#"));
+      this.fail(missing(ref, target, uri, pointer));
     }
     return { uri: target.uri, pointer: target.pointer, value: resolved };
+  }
+
+  /**
+   * Split one `$ref` value, converting rejections that `splitRef` raises as
+   * a bare error into a diagnostic that carries the declaring node pointer.
+   */
+  private splitLocated(ref: string, uri: string, pointer: string): RefTarget {
+    try {
+      return splitRef(uri, ref);
+    } catch (error) {
+      if (!(error instanceof OalError)) {
+        throw error;
+      }
+      this.fail(refValueRejected(error, uri, pointer));
+    }
   }
 
   /**
@@ -308,6 +338,15 @@ function remoteDisabled(ref: string, uri: string, pointer: string) {
     pointer,
     { ref }
   );
+}
+
+/**
+ * Diagnostic for a `$ref` value that `splitRef` rejects, such as a target
+ * outside the reference root. The pointer names the node that declares the
+ * reference, per acceptance criterion AC-006.
+ */
+function refValueRejected(error: OalError, uri: string, pointer: string) {
+  return diagnosticOf(error.code, error.message, uri, pointer, error.details);
 }
 
 function cycle(ref: string, uri: string, pointer: string, chain: string[]) {

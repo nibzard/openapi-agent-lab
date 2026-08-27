@@ -1,5 +1,6 @@
 import {
   canonicalJson,
+  isJsonObject,
   isToolName,
   type Diagnostic,
   type Json
@@ -29,6 +30,13 @@ import { responseSelectorSupport, worstOf } from "./support.ts";
 /** Default direct-tools thresholds from specification section 9.3. */
 export const DIRECT_TOOL_MAX_OPERATIONS = 50;
 export const DIRECT_TOOL_MAX_SCHEMA_BYTES = 256 * 1024;
+
+/**
+ * Diagnostic code for a response link that ContractIR keeps as described
+ * data. Links never cause follow-up requests, so the outcome is
+ * approximated rather than executable (specification section 15.10).
+ */
+export const CAP_LINK_DESCRIBED = "OAL-CAP-LINK-DESCRIBED";
 
 export interface CapabilityOptions {
   /** Exposure thresholds for direct tool generation. */
@@ -138,7 +146,21 @@ function requirementFor(code: string): string {
   if (code.startsWith("callback:")) {
     return `Exercise the '${code.slice(9)}' callback through an outbound stand-in.`;
   }
+  if (code.startsWith("link:")) {
+    return `Exercise the '${code.slice(5)}' link through an explicit scenario step.`;
+  }
   return `Cover '${code}' with an explicit scenario requirement.`;
+}
+
+/** Name of the link a described-only diagnostic preserved as data. */
+function linkNameOf(details: Json): string {
+  if (isJsonObject(details) && isJsonObject(details.link)) {
+    const name = details.link.name;
+    if (typeof name === "string" && name.length > 0) {
+      return name;
+    }
+  }
+  return "unnamed";
 }
 
 interface FeatureAccumulator {
@@ -198,6 +220,21 @@ export function buildCapabilityReport(
         (idOccurrences.get(operation.operation_id) ?? 0) + 1
       );
     }
+  }
+
+  // Links live in diagnostics rather than a dedicated ContractIR field, so
+  // the report reads them back by their declaring diagnostic.
+  const linksByOperation = new Map<string, string[]>();
+  for (const diagnostic of contract.diagnostics) {
+    if (
+      diagnostic.code !== CAP_LINK_DESCRIBED ||
+      diagnostic.operation_key === null
+    ) {
+      continue;
+    }
+    const names = linksByOperation.get(diagnostic.operation_key) ?? [];
+    names.push(linkNameOf(diagnostic.details));
+    linksByOperation.set(diagnostic.operation_key, names);
   }
   for (const { operation, webhook } of operations) {
     operationCounts[operation.support.level] += 1;
@@ -302,6 +339,10 @@ export function buildCapabilityReport(
         operation.key
       );
       reasonCodes.add(`callback:${callback.name}`);
+    }
+    for (const name of linksByOperation.get(operation.key) ?? []) {
+      record("link", name, "approximated", [`link:${name}`], operation.key);
+      reasonCodes.add(`link:${name}`);
     }
     const security = operation.security;
     if (security !== null) {

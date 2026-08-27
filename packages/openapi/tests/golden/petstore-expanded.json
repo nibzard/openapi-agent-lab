@@ -10,7 +10,7 @@
           "region": {
             "default": "us-east",
             "description": "Deployment region",
-            "enum": ["us-east", "eu-west"]
+            "enum": ["eu-west", "us-east"]
           }
         }
       }
@@ -187,7 +187,7 @@
             "region": {
               "default": "us-east",
               "description": "Deployment region",
-              "enum": ["us-east", "eu-west"]
+              "enum": ["eu-west", "us-east"]
             }
           }
         }
@@ -444,7 +444,7 @@
             "region": {
               "default": "us-east",
               "description": "Deployment region",
-              "enum": ["us-east", "eu-west"]
+              "enum": ["eu-west", "us-east"]
             }
           }
         }
@@ -542,7 +542,7 @@
             "region": {
               "default": "us-east",
               "description": "Deployment region",
-              "enum": ["us-east", "eu-west"]
+              "enum": ["eu-west", "us-east"]
             }
           }
         }
@@ -640,7 +640,7 @@
             "region": {
               "default": "us-east",
               "description": "Deployment region",
-              "enum": ["us-east", "eu-west"]
+              "enum": ["eu-west", "us-east"]
             }
           }
         }
@@ -751,7 +751,7 @@
             "region": {
               "default": "us-east",
               "description": "Deployment region",
-              "enum": ["us-east", "eu-west"]
+              "enum": ["eu-west", "us-east"]
             }
           }
         }
@@ -828,7 +828,7 @@
             "region": {
               "default": "us-east",
               "description": "Deployment region",
-              "enum": ["us-east", "eu-west"]
+              "enum": ["eu-west", "us-east"]
             }
           }
         }
@@ -974,7 +974,7 @@
             "region": {
               "default": "us-east",
               "description": "Deployment region",
-              "enum": ["us-east", "eu-west"]
+              "enum": ["eu-west", "us-east"]
             }
           }
         }
@@ -1329,7 +1329,7 @@
     "execution_sha256": "f12421bb648af2c375e966dc816e7faad6fb3996be0699e6a25f9e9a02575190",
     "media_type": "application/yaml",
     "openapi_version": "3.0.3",
-    "semantic_sha256": "f67db55c3d1c0504d1df9ded260f108015e5bca3652c3b1a9966ffb3e222e347",
+    "semantic_sha256": "feb75f36394a3edf46677ae55d8e759bde2324936f62081398aa1103bec2b9f3",
     "sha256": "3ec2622eb1d11b06b2e4f21b8b3c14bd76c2e525c4994c5a0ce031b6a7ea975b"
   },
   "webhooks": []

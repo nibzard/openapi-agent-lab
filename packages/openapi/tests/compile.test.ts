@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { OalError } from "@oal/core";
 
-import { compileOpenApi } from "../src/index.ts";
+import { CAP_LINK_DESCRIBED, compileOpenApi } from "../src/index.ts";
 
 const fixtures = fileURLToPath(
   new URL("../../../tests/fixtures/", import.meta.url)
@@ -178,6 +178,118 @@ describe("compiling a rich contract", () => {
     expect(
       create?.support.diagnostic_codes.includes("OAL-CAP-CALLBACK-UNSUPPORTED")
     ).toBe(true);
+  });
+
+  it("preserves response links as described-only data with an outcome", () => {
+    const documents = {
+      "links.json": JSON.stringify({
+        openapi: "3.1.0",
+        info: { title: "Links", version: "1.0.0" },
+        paths: {
+          "/pets": {
+            get: {
+              operationId: "listPets",
+              responses: {
+                "200": {
+                  description: "ok",
+                  content: {
+                    "application/json": {
+                      schema: { $ref: "#/components/schemas/Pet" }
+                    }
+                  },
+                  links: {
+                    addressed: {
+                      operationId: "showPetById",
+                      description: "Address one pet of the page.",
+                      parameters: { petId: "$response.body#/items/0/id" },
+                      requestBody: "Pet fields"
+                    },
+                    packed: { $ref: "#/components/links/packed" }
+                  }
+                }
+              }
+            }
+          },
+          "/pets/{petId}": {
+            get: {
+              operationId: "showPetById",
+              parameters: [
+                {
+                  name: "petId",
+                  in: "path",
+                  required: true,
+                  schema: { type: "string" }
+                }
+              ],
+              responses: { "200": { description: "ok" } }
+            }
+          }
+        },
+        components: {
+          schemas: {
+            Pet: { type: "object", properties: { id: { type: "string" } } }
+          },
+          links: {
+            packed: {
+              operationRef: "#/paths/~1pets~1{petId}/get",
+              description: "Follow one pet by reference."
+            }
+          }
+        }
+      })
+    };
+    const { contract, report } = compile(documents, "links.json");
+    const list = contract.operations.find(
+      (operation) => operation.key === "path:GET /pets"
+    );
+    expect(list?.support.level).toBe("approximated");
+    expect(list?.support.diagnostic_codes).toContain(CAP_LINK_DESCRIBED);
+
+    const described = contract.diagnostics.filter(
+      (entry) => entry.code === CAP_LINK_DESCRIBED
+    );
+    expect(described.map((entry) => entry.json_pointer)).toEqual([
+      "#/components/links/packed",
+      "#/paths/~1pets/get/responses/200/links/addressed"
+    ]);
+    const addressed = described.find((entry) =>
+      entry.json_pointer?.endsWith("/links/addressed")
+    );
+    expect(addressed?.operation_key).toBe("path:GET /pets");
+    const preserved = addressed?.details as {
+      link?: {
+        name?: string;
+        operation_id?: string | null;
+        parameters?: Record<string, unknown>;
+        request_body?: unknown;
+      };
+    };
+    expect(preserved.link).toMatchObject({
+      name: "addressed",
+      operation_id: "showPetById",
+      parameters: { petId: "$response.body#/items/0/id" },
+      request_body: "Pet fields"
+    });
+
+    const feature = report.features.find(
+      (entry) => entry.kind === "link" && entry.name === "addressed"
+    );
+    expect(feature).toMatchObject({
+      level: "approximated",
+      reason_codes: ["link:addressed"],
+      operation_keys: ["path:GET /pets"]
+    });
+    expect(
+      report.recommendations.scenario_requirements.some((requirement) =>
+        requirement.includes("'addressed' link")
+      )
+    ).toBe(true);
+
+    const show = contract.operations.find(
+      (operation) => operation.key === "path:GET /pets/{petId}"
+    );
+    expect(show?.support.level).toBe("supported");
+    expect(show?.support.diagnostic_codes).toEqual([]);
   });
 
   it("derives tool names and breaks collisions", () => {

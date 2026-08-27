@@ -1,5 +1,6 @@
 import {
   appendPointer,
+  canonicalJson,
   DiagnosticCode,
   isJsonObject,
   type Diagnostic,
@@ -97,17 +98,16 @@ function walk(
   }
   const ref = value.$ref;
   if (typeof ref === "string") {
-    const target = splitRef(uri, ref);
-    const key = `${target.uri}${target.pointer}`;
     const siblings = { ...value };
     delete siblings.$ref;
+    const resolved = ctx.resolver.resolve(uri, ref, pointer);
+    const key = `${resolved.uri}${resolved.pointer}`;
     if (stack.has(key)) {
       return {
         ...to31(siblings, uri, pointer, ctx),
         $ref: canonicalRef(uri, ref, ctx.rootUri)
       };
     }
-    const resolved = ctx.resolver.resolve(uri, ref);
     const nextStack = new Set(stack);
     nextStack.add(key);
     const mergedTarget = walk(
@@ -147,17 +147,18 @@ function to31(
   pointer: string,
   ctx: WalkContext
 ): JsonObject {
+  const source = canonicalEnumOrder(schema);
   if (ctx.dialect !== "3.0") {
-    const discriminator = schema.discriminator;
+    const discriminator = source.discriminator;
     if (isJsonObject(discriminator)) {
-      const out = { ...schema };
+      const out = { ...source };
       delete out.discriminator;
       out["x-oal-discriminator"] = discriminator;
       return out;
     }
-    return schema;
+    return source;
   }
-  const out: JsonObject = { ...schema };
+  const out: JsonObject = { ...source };
   const nullable = out.nullable;
   delete out.nullable;
   if (nullable === true && typeof out.type === "string") {
@@ -195,6 +196,36 @@ function to31(
     delete out.discriminator;
   }
   return out;
+}
+
+/**
+ * Canonicalize the one schema keyword whose member order carries no
+ * validation meaning: `enum` selects a set of allowed values, so members
+ * are sorted by canonical form. This keeps schema identity digests stable
+ * when equivalent documents declare the members in a different order
+ * (acceptance criterion AC-097). Every ordering-sensitive keyword, such as
+ * `required`, `allOf`, or `examples`, keeps its declared order.
+ */
+function canonicalEnumOrder(schema: JsonObject): JsonObject {
+  const enumValues = schema.enum;
+  if (!Array.isArray(enumValues) || enumValues.length < 2) {
+    return schema;
+  }
+  const sorted = [...enumValues].sort((a, b) => compareByCanonicalForm(a, b));
+  let changed = false;
+  for (let index = 0; index < enumValues.length; index += 1) {
+    if (sorted[index] !== enumValues[index]) {
+      changed = true;
+      break;
+    }
+  }
+  return changed ? { ...schema, enum: sorted } : schema;
+}
+
+function compareByCanonicalForm(a: Json, b: Json): number {
+  const left = canonicalJson(a);
+  const right = canonicalJson(b);
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function lossy(uri: string, pointer: string, message: string): Diagnostic {
