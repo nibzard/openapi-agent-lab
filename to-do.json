@@ -383,7 +383,7 @@
       "id": "T023",
       "title": "Build the runner preflight",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Validate contract, pack, eval, adapter, prompt, workflow, rubric, limits, and run profile before an agent process starts.",
       "steps": [
         "Resolve all run inputs.",
@@ -393,13 +393,14 @@
       ],
       "tags": ["runner", "validation"],
       "files": ["SPEC.md"],
-      "depends_on": ["T015", "T022"]
+      "depends_on": ["T015", "T022"],
+      "updated_at": "2026-08-27T19:20:05.516Z"
     },
     {
       "id": "T024",
       "title": "Implement trial setup and lifecycle",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Create isolated trial workspaces, per-run mock servers, credentials, state, lifecycle stages, timeout handling, and terminal finalization.",
       "steps": [
         "Create trial workspace construction.",
@@ -409,13 +410,14 @@
       ],
       "tags": ["runner", "lifecycle"],
       "files": ["SPEC.md"],
-      "depends_on": ["T010", "T014", "T023"]
+      "depends_on": ["T010", "T014", "T023"],
+      "updated_at": "2026-08-27T19:20:05.536Z"
     },
     {
       "id": "T025",
       "title": "Implement participant material and prompts",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Generate participant workspaces, prompt roles, template variables, prompt sets, documentation visibility, and structured final-output instructions.",
       "steps": [
         "Implement prompt template rendering.",
@@ -425,13 +427,14 @@
       ],
       "tags": ["prompts", "runner"],
       "files": ["SPEC.md"],
-      "depends_on": ["T015", "T024"]
+      "depends_on": ["T015", "T024"],
+      "updated_at": "2026-08-27T17:52:18.425Z"
     },
     {
       "id": "T026",
       "title": "Implement agent adapter API",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Define the normalized adapter interface and implement adapter conformance behavior for launching, monitoring, cancelling, and collecting outputs.",
       "steps": [
         "Create adapter TypeScript interfaces.",
@@ -441,13 +444,14 @@
       ],
       "tags": ["adapters", "runner"],
       "files": ["SPEC.md"],
-      "depends_on": ["T024"]
+      "depends_on": ["T024"],
+      "updated_at": "2026-08-27T17:22:33.655Z"
     },
     {
       "id": "T027",
       "title": "Implement the generic command adapter",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Ship the argv-based adapter for arbitrary local agent commands using the shared adapter API.",
       "steps": [
         "Map run context to environment variables and arguments.",
@@ -457,13 +461,14 @@
       ],
       "tags": ["adapters"],
       "files": ["SPEC.md"],
-      "depends_on": ["T026"]
+      "depends_on": ["T026"],
+      "updated_at": "2026-08-27T17:22:33.680Z"
     },
     {
       "id": "T028",
       "title": "Implement the Codex CLI adapter",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Ship the reference adapter for Codex CLI with model, effort, sandbox, environment, output, and cancellation handling.",
       "steps": [
         "Map run profile fields to Codex CLI flags.",
@@ -473,13 +478,14 @@
       ],
       "tags": ["adapters", "codex"],
       "files": ["SPEC.md"],
-      "depends_on": ["T026"]
+      "depends_on": ["T026"],
+      "updated_at": "2026-08-27T17:22:33.702Z"
     },
     {
       "id": "T029",
       "title": "Implement oal run for trials and cohorts",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Run one trial or a homogeneous cohort with pinned run inputs, parallelism limits, durable evidence, and visible non-success outcomes.",
       "steps": [
         "Implement count and parallel execution.",
@@ -489,13 +495,14 @@
       ],
       "tags": ["cli", "runner"],
       "files": ["SPEC.md"],
-      "depends_on": ["T024", "T026"]
+      "depends_on": ["T024", "T026"],
+      "updated_at": "2026-08-27T19:20:05.556Z"
     },
     {
       "id": "T030",
       "title": "Implement raw HTTP exposure",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Expose a trial mock over raw HTTP with independent contract visibility modes and documentation-plane handling.",
       "steps": [
         "Serve the selected contract endpoint set.",
@@ -505,7 +512,8 @@
       ],
       "tags": ["exposure", "http"],
       "files": ["SPEC.md"],
-      "depends_on": ["T010", "T025"]
+      "depends_on": ["T010", "T025"],
+      "updated_at": "2026-08-27T19:41:26.771Z"
     },
     {
       "id": "T031",
@@ -545,7 +553,7 @@
       "id": "T033",
       "title": "Implement Arazzo workflow support",
       "priority": 3,
-      "status": "todo",
+      "status": "done",
       "details": "Validate hidden and participant-visible Arazzo workflows, align them with traces, and support control execution.",
       "steps": [
         "Parse workflow documents.",
@@ -555,7 +563,8 @@
       ],
       "tags": ["workflows", "arazzo"],
       "files": ["SPEC.md"],
-      "depends_on": ["T015", "T020"]
+      "depends_on": ["T015", "T020"],
+      "updated_at": "2026-08-27T18:03:58.012Z"
     },
     {
       "id": "T034",
@@ -578,7 +587,7 @@
       "id": "T035",
       "title": "Implement eval authoring commands",
       "priority": 2,
-      "status": "todo",
+      "status": "done",
       "details": "Add oal eval init, oal eval validate, and oal evaluate for task authors and offline evaluation.",
       "steps": [
         "Create eval scaffolding templates.",
@@ -588,13 +597,14 @@
       ],
       "tags": ["cli", "evaluator"],
       "files": ["SPEC.md"],
-      "depends_on": ["T016", "T034"]
+      "depends_on": ["T016", "T034"],
+      "updated_at": "2026-08-27T17:52:18.455Z"
     },
     {
       "id": "T036",
       "title": "Implement reports and comparisons",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Generate canonical JSON, terminal, and Markdown reports plus descriptive comparisons that preserve all trial outcomes and compatibility warnings.",
       "steps": [
         "Aggregate trial outcomes and scores.",
@@ -604,13 +614,14 @@
       ],
       "tags": ["reports", "analysis"],
       "files": ["SPEC.md"],
-      "depends_on": ["T029", "T034"]
+      "depends_on": ["T029", "T034"],
+      "updated_at": "2026-08-27T18:03:58.043Z"
     },
     {
       "id": "T037",
       "title": "Implement replay and doctor commands",
       "priority": 3,
-      "status": "todo",
+      "status": "done",
       "details": "Add oal replay for evidence replay and oal doctor for environment, dependency, version, and system checks.",
       "steps": [
         "Replay recorded traces against configured backends.",
@@ -620,13 +631,14 @@
       ],
       "tags": ["cli", "diagnostics"],
       "files": ["SPEC.md"],
-      "depends_on": ["T022", "T036"]
+      "depends_on": ["T022", "T036"],
+      "updated_at": "2026-08-27T19:41:26.800Z"
     },
     {
       "id": "T038",
       "title": "Implement resource limits and failure taxonomy",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Enforce parsing, runtime, process, network, filesystem, and denial-of-service controls with normalized failure categories and retry policy.",
       "steps": [
         "Define default limits and ceilings.",
@@ -636,7 +648,8 @@
       ],
       "tags": ["limits", "failures", "security"],
       "files": ["SPEC.md"],
-      "depends_on": ["T004", "T024"]
+      "depends_on": ["T004", "T024"],
+      "updated_at": "2026-08-27T20:19:02.288Z"
     },
     {
       "id": "T039",
@@ -676,7 +689,7 @@
       "id": "T041",
       "title": "Add compiler and gateway test suites",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Create unit, golden, black-box mock conformance, fuzz, and property tests for compiler and contract gateway behavior.",
       "steps": [
         "Add compiler unit tests.",
@@ -686,13 +699,14 @@
       ],
       "tags": ["testing", "compiler", "gateway"],
       "files": ["SPEC.md"],
-      "depends_on": ["T007", "T010", "T040"]
+      "depends_on": ["T007", "T010", "T040"],
+      "updated_at": "2026-08-27T17:32:46.000Z"
     },
     {
       "id": "T042",
       "title": "Add runner and evaluator test suites",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Create integration, security, adversarial, conformance, real-agent dry-run, and study protocol tests for the runner and evaluator.",
       "steps": [
         "Add runner integration tests without paid model calls.",
@@ -702,13 +716,14 @@
       ],
       "tags": ["testing", "runner", "evaluator"],
       "files": ["SPEC.md"],
-      "depends_on": ["T029", "T034", "T040"]
+      "depends_on": ["T029", "T034", "T040"],
+      "updated_at": "2026-08-27T20:18:40.575Z"
     },
     {
       "id": "T043",
       "title": "Migrate the Steel Computer pack",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Move Steel into the first built-in high-fidelity pack while preserving historical behavior before any semantic corrections.",
       "steps": [
         "Import the Steel source contract and prototype data.",
@@ -718,13 +733,14 @@
       ],
       "tags": ["steel", "packs", "migration"],
       "files": ["SPEC.md"],
-      "depends_on": ["T017", "T034"]
+      "depends_on": ["T017", "T034"],
+      "updated_at": "2026-08-27T17:52:18.489Z"
     },
     {
       "id": "T044",
       "title": "Validate Steel parity",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Create the required Steel reference study profile and parity tests for existing behavior, traces, outcomes, and reports.",
       "steps": [
         "Create Steel golden traces and fixtures.",
@@ -734,13 +750,14 @@
       ],
       "tags": ["steel", "testing"],
       "files": ["SPEC.md"],
-      "depends_on": ["T036", "T043"]
+      "depends_on": ["T036", "T043"],
+      "updated_at": "2026-08-27T18:39:50.732Z"
     },
     {
       "id": "T045",
       "title": "Implement StudyProtocol validation and locking",
       "priority": 2,
-      "status": "todo",
+      "status": "done",
       "details": "Support optional preregistered research protocols with frozen questions, factors, phases, participant surfaces, estimands, analysis, and interpretation limits.",
       "steps": [
         "Parse StudyProtocol and PhasePlan documents.",
@@ -750,13 +767,14 @@
       ],
       "tags": ["study", "research"],
       "files": ["SPEC.md"],
-      "depends_on": ["T002", "T015", "T036"]
+      "depends_on": ["T002", "T015", "T036"],
+      "updated_at": "2026-08-27T18:05:08.228Z"
     },
     {
       "id": "T046",
       "title": "Implement study scheduling and assignment",
       "priority": 2,
-      "status": "todo",
+      "status": "done",
       "details": "Create deterministic StudyRun scheduling with balanced cells, primary assignments, held replacements, paid-call ceilings, and immutable assignment files.",
       "steps": [
         "Generate assignments from locked PhasePlan inputs.",
@@ -766,13 +784,14 @@
       ],
       "tags": ["study", "scheduler"],
       "files": ["SPEC.md"],
-      "depends_on": ["T045"]
+      "depends_on": ["T045"],
+      "updated_at": "2026-08-27T18:49:37.631Z"
     },
     {
       "id": "T047",
       "title": "Implement study runs and analysis",
       "priority": 2,
-      "status": "todo",
+      "status": "done",
       "details": "Run multi-cell studies as parent StudyRuns with homogeneous child batches, compatibility keys, replacement policy, immutable analysis, and statistical outputs.",
       "steps": [
         "Create StudyRun artifact layout.",
@@ -782,13 +801,14 @@
       ],
       "tags": ["study", "analysis"],
       "files": ["SPEC.md"],
-      "depends_on": ["T029", "T046"]
+      "depends_on": ["T029", "T046"],
+      "updated_at": "2026-08-27T19:54:04.483Z"
     },
     {
       "id": "T048",
       "title": "Implement counterfactual contract variants",
       "priority": 3,
-      "status": "todo",
+      "status": "done",
       "details": "Support locked research artifacts derived from pinned base contracts by allowlisted deterministic transformations.",
       "steps": [
         "Define ContractVariant set schemas.",
@@ -798,13 +818,14 @@
       ],
       "tags": ["study", "contracts"],
       "files": ["SPEC.md"],
-      "depends_on": ["T045"]
+      "depends_on": ["T045"],
+      "updated_at": "2026-08-27T18:49:37.661Z"
     },
     {
       "id": "T049",
       "title": "Implement participant-surface checks",
       "priority": 2,
-      "status": "todo",
+      "status": "done",
       "details": "Detect accidental differences in bytes, names, routes, metadata, credentials shapes, errors, and tools across compatible cells.",
       "steps": [
         "Capture participant-surface manifests.",
@@ -814,13 +835,14 @@
       ],
       "tags": ["study", "blinding"],
       "files": ["SPEC.md"],
-      "depends_on": ["T025", "T045"]
+      "depends_on": ["T025", "T045"],
+      "updated_at": "2026-08-27T19:41:26.740Z"
     },
     {
       "id": "T050",
       "title": "Add continuous integration and release gates",
       "priority": 2,
-      "status": "todo",
+      "status": "done",
       "details": "Implement pull-request, nightly, release, coverage, compatibility, and performance gates described by the specification.",
       "steps": [
         "Add pull-request test gates.",
@@ -830,7 +852,8 @@
       ],
       "tags": ["ci", "release"],
       "files": ["SPEC.md"],
-      "depends_on": ["T041", "T042", "T044"]
+      "depends_on": ["T041", "T042", "T044"],
+      "updated_at": "2026-08-27T20:18:40.554Z"
     },
     {
       "id": "T051",
@@ -853,7 +876,7 @@
       "id": "T052",
       "title": "Document local product usage",
       "priority": 3,
-      "status": "todo",
+      "status": "done",
       "details": "Write user documentation for local CLI workflows, pack authoring, eval authoring, cohort runs, reports, and limits.",
       "steps": [
         "Document inspect and serve workflows.",
@@ -863,13 +886,14 @@
       ],
       "tags": ["docs"],
       "files": ["README.md", "SPEC.md"],
-      "depends_on": ["T036", "T037"]
+      "depends_on": ["T036", "T037"],
+      "updated_at": "2026-08-27T20:18:50.262Z"
     },
     {
       "id": "T053",
       "title": "Complete MVP acceptance criteria",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Verify all automated acceptance criteria for compiler, gateway, state, trace, runner, redaction, evaluator, tools, Steel migration, release completeness, workflows, and study features.",
       "steps": [
         "Map acceptance criteria to automated tests.",
@@ -879,7 +903,8 @@
       ],
       "tags": ["acceptance", "mvp"],
       "files": ["SPEC.md"],
-      "depends_on": ["T030", "T032", "T033", "T044", "T047", "T050"]
+      "depends_on": ["T030", "T032", "T033", "T044", "T047", "T050"],
+      "updated_at": "2026-08-27T21:21:19.379Z"
     }
   ]
 }
