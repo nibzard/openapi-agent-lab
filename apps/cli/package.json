@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@oal/config": "workspace:*",
-    "@oal/core": "workspace:*"
+    "@oal/core": "workspace:*",
+    "@oal/pack": "workspace:*"
   }
 }

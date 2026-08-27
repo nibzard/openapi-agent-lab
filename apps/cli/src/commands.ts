@@ -4,6 +4,7 @@ import type { FlagView, OptionSpec } from "./argv.ts";
 import type { RunContext } from "./context.ts";
 import { inspectCommand } from "./handlers/inspect.ts";
 import { helpCommand, versionCommand } from "./handlers/misc.ts";
+import { packInitCommand, packValidateCommand } from "./handlers/pack.ts";
 import { stubCommand } from "./handlers/stub.ts";
 import type { Io } from "./io.ts";
 
@@ -151,14 +152,14 @@ export const COMMANDS: readonly CommandSpec[] = [
       { name: "directory", description: "Target directory; must be empty." }
     ],
     options: [value("openapi", "OpenAPI document copied into the pack.")],
-    handler: stubCommand("pack init")
+    handler: packInitCommand
   },
   {
     name: "pack validate",
     summary: "Validate one pack directory.",
     arguments: [{ name: "pack", description: "Pack directory." }],
     options: [flag("strict", "Treat warnings as failures.")],
-    handler: stubCommand("pack validate")
+    handler: packValidateCommand
   },
   {
     name: "eval init",

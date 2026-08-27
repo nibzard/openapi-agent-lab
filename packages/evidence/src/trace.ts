@@ -14,7 +14,8 @@ import {
   isJsonObject,
   sequenceId,
   sha256HexBytes,
-  type Json
+  type Json,
+  type JsonObject
 } from "@oal/core";
 import type { Redactor } from "./redaction.ts";
 

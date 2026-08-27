@@ -51,11 +51,11 @@ export interface RedactorOptions {
 }
 
 /** Structured replacement shape from section 30.4. */
-export interface RedactedValue {
+export type RedactedValue = {
   redacted: true;
   kind: string;
   fingerprint: string;
-}
+};
 
 /** Collapse separators so x-api-key, x_api_key, and x api key unify. */
 function normalizeKey(key: string): string {
@@ -81,6 +81,32 @@ const PROVIDER_KEY_PREFIXES: readonly string[] = [
   "xoxp-",
   "AKIA"
 ];
+
+/** Whether a value matches a known credential shape (section 30.3). */
+export function isCredentialShape(value: string): boolean {
+  return credentialShape(value) !== null;
+}
+
+function credentialShape(value: string): ShapeKind | null {
+  if (value.startsWith("Bearer ")) {
+    return "bearer_token";
+  }
+  if (value.startsWith("Basic ")) {
+    return "basic_credential";
+  }
+  if (value.includes("-----BEGIN") && value.includes("PRIVATE KEY-----")) {
+    return "private_key";
+  }
+  if (value.length >= 24 && JWT_PATTERN.test(value)) {
+    return "jwt";
+  }
+  for (const prefix of PROVIDER_KEY_PREFIXES) {
+    if (value.startsWith(prefix) && value.length >= prefix.length + 8) {
+      return "provider_key";
+    }
+  }
+  return null;
+}
 
 export class Redactor {
   private readonly hmacKey: Uint8Array;
@@ -160,24 +186,7 @@ export class Redactor {
 
   /** Defensive recognition of credential shapes (section 30.3). */
   credentialKind(value: string): ShapeKind | null {
-    if (value.startsWith("Bearer ")) {
-      return "bearer_token";
-    }
-    if (value.startsWith("Basic ")) {
-      return "basic_credential";
-    }
-    if (value.includes("-----BEGIN") && value.includes("PRIVATE KEY-----")) {
-      return "private_key";
-    }
-    if (value.length >= 24 && JWT_PATTERN.test(value)) {
-      return "jwt";
-    }
-    for (const prefix of PROVIDER_KEY_PREFIXES) {
-      if (value.startsWith(prefix) && value.length >= prefix.length + 8) {
-        return "provider_key";
-      }
-    }
-    return null;
+    return credentialShape(value);
   }
 
   /** Structured replacement for a sensitive value (section 30.4). */

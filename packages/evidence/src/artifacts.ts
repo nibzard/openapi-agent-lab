@@ -144,7 +144,7 @@ export class ArtifactStore {
   }
 
   resolve(relativePath: string): string {
-    assertSafeRelativePath(relativePath);
+    assertSafeRelativePath(relativePath, "artifact path");
     return join(this.root, relativePath);
   }
 

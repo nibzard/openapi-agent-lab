@@ -38,12 +38,33 @@ importers:
       '@oal/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@oal/pack':
+        specifier: workspace:*
+        version: link:../../packages/pack
 
-  packages/agent-adapter: {}
+  packages/agent-adapter:
+    dependencies:
+      '@oal/core':
+        specifier: workspace:*
+        version: link:../core
 
-  packages/agent-codex: {}
+  packages/agent-codex:
+    dependencies:
+      '@oal/agent-adapter':
+        specifier: workspace:*
+        version: link:../agent-adapter
+      '@oal/core':
+        specifier: workspace:*
+        version: link:../core
 
-  packages/agent-generic: {}
+  packages/agent-generic:
+    dependencies:
+      '@oal/agent-adapter':
+        specifier: workspace:*
+        version: link:../agent-adapter
+      '@oal/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/behavior-api:
     dependencies:
@@ -90,9 +111,23 @@ importers:
 
   packages/core: {}
 
-  packages/documentation-facade: {}
+  packages/documentation-facade:
+    dependencies:
+      '@oal/core':
+        specifier: workspace:*
+        version: link:../core
+      '@oal/evidence':
+        specifier: workspace:*
+        version: link:../evidence
 
-  packages/evaluator: {}
+  packages/evaluator:
+    dependencies:
+      '@oal/core':
+        specifier: workspace:*
+        version: link:../core
+      '@oal/evidence':
+        specifier: workspace:*
+        version: link:../evidence
 
   packages/evidence:
     dependencies:
@@ -118,9 +153,26 @@ importers:
         specifier: workspace:*
         version: link:../core
 
-  packages/mock-adapter: {}
+  packages/mock-adapter:
+    dependencies:
+      '@oal/agent-adapter':
+        specifier: workspace:*
+        version: link:../agent-adapter
+      '@oal/core':
+        specifier: workspace:*
+        version: link:../core
 
-  packages/mock-contract: {}
+  packages/mock-contract:
+    dependencies:
+      '@oal/contract-ir':
+        specifier: workspace:*
+        version: link:../contract-ir
+      '@oal/core':
+        specifier: workspace:*
+        version: link:../core
+      '@oal/gateway':
+        specifier: workspace:*
+        version: link:../gateway
 
   packages/openapi:
     dependencies:
@@ -134,7 +186,17 @@ importers:
         specifier: workspace:*
         version: link:../core
 
-  packages/pack: {}
+  packages/pack:
+    dependencies:
+      '@oal/config':
+        specifier: workspace:*
+        version: link:../config
+      '@oal/contract-ir':
+        specifier: workspace:*
+        version: link:../contract-ir
+      '@oal/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/pack-ir: {}
 
@@ -158,7 +220,17 @@ importers:
 
   packages/testkit: {}
 
-  packages/tools: {}
+  packages/tools:
+    dependencies:
+      '@oal/capability':
+        specifier: workspace:*
+        version: link:../capability
+      '@oal/contract-ir':
+        specifier: workspace:*
+        version: link:../contract-ir
+      '@oal/core':
+        specifier: workspace:*
+        version: link:../core
 
 packages:
 
