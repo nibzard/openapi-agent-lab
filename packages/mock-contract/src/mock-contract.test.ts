@@ -52,6 +52,7 @@ function response(init: Partial<ResponseIR>): ResponseIR {
         examples: [
           {
             name: "default",
+            summary: null,
             value: { id: "computer_0001", template: "system/chrome" }
           }
         ],
