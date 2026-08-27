@@ -113,6 +113,19 @@ describe("manifest discovery", () => {
     expect(violation?.json_pointer).toBe("/metadata/version");
   });
 
+  it("rejects an unsupported manifest api version before load completes", async () => {
+    const manifest = baseManifest();
+    manifest["apiVersion"] = "agentlab.dev/v2";
+    const root = await writePack(baseFiles(manifest));
+    const loaded = await loadPack(root);
+    expect(loaded.diagnostics).toContainEqual(
+      containing({
+        code: DiagnosticCode.PackSchemaInvalid,
+        json_pointer: "/apiVersion"
+      })
+    );
+  });
+
   it("reports an unparsable manifest as a diagnostic, not a throw", async () => {
     const root = await writePack({ "pack.yaml": "metadata:\n  broken\n" });
     const loaded = await loadPack(root);
