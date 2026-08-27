@@ -14,16 +14,18 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import {
   canonicalJsonSha256,
+  DiagnosticCode,
   errorDiagnostics,
   formatRfc3339,
   isJsonObject,
   sequenceId,
   sha256HexBytes,
+  unsupported,
   type Diagnostic,
   type Json,
   type JsonObject
 } from "@oal/core";
-import type { ContractIR } from "@oal/contract-ir";
+import { CONTRACT_IR_SCHEMA_VERSION, type ContractIR } from "@oal/contract-ir";
 import type { LimitTable } from "@oal/config";
 import {
   Redactor,
@@ -418,6 +420,18 @@ async function startRawHttpExposure(
   request: ExposureRequest,
   options: RawHttpExposureOptions
 ): Promise<ExposureHandle> {
+  // The contract schema version is checked before the listener binds,
+  // so an unsupported contract fails the trial at startup (section
+  // 42.2, AC-012). The producer types the field narrowly; a contract
+  // read from disk carries no runtime guarantee, so widen it first.
+  const version: number = request.contract.schema_version;
+  if (version !== CONTRACT_IR_SCHEMA_VERSION) {
+    throw unsupported(
+      DiagnosticCode.UnsupportedSchemaVersion,
+      `Contract schema version ${String(version)} is not supported; this build serves version ${String(CONTRACT_IR_SCHEMA_VERSION)}.`,
+      { contract_schema_version: version }
+    );
+  }
   const visibility: ContractVisibility = options.visibility ?? "file";
   const documentation = options.documentation;
   const candidates = conventionalCandidates(

@@ -960,6 +960,13 @@ async function readTraceEvents(
         parsed !== null &&
         (parsed as { type?: unknown }).type === "api.exchange"
       ) {
+        // A trace written under another schema version belongs to a
+        // different build; reading it as evidence would silently mix
+        // incompatible records (section 42.2, AC-012).
+        const record = parsed as { schema_version?: unknown };
+        if (record.schema_version !== 1) {
+          return { events, corrupt: true };
+        }
         events.push(parsed as unknown as TraceEvent);
       }
     } catch {

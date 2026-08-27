@@ -540,6 +540,17 @@ describe("createLoopbackExposure", () => {
     await server.handle.close();
     await expect(exchange(server.handle, "GET", "/things")).rejects.toThrow();
   });
+
+  it("refuses to start for an unsupported contract schema version", async () => {
+    // Section 42.2, AC-012: the check fires before the listener binds,
+    // so no socket is allocated for a contract this build cannot serve.
+    const future = contract({});
+    (future as { schema_version: number }).schema_version = 2;
+    await expect(startServer({ contract: future })).rejects.toMatchObject({
+      code: "OAL-SCHEMA-VERSION-UNSUPPORTED",
+      exitCode: 4
+    });
+  });
 });
 
 describe("contract visibility", () => {

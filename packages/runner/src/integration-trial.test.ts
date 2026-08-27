@@ -419,6 +419,74 @@ describe("runner integration: fake-agent trials through the loopback exposure", 
   );
 
   it(
+    "marks a foreign-schema trace as corrupt evidence",
+    { timeout: 30000 },
+    async () => {
+      // Section 42.2, AC-012: a trace written under another schema
+      // version is never read as evidence. The trial still finishes,
+      // but the api_trace requirement fails and censors the run.
+      const adapter = smokeAdapter();
+      const scratch = await mkdtemp(path.join(tmpdir(), "oal-it-tracever-"));
+      const packDir = await writeSmokePack(scratch);
+      const harness = await prepareTrial({
+        label: "oal-it-tracever-",
+        packDir,
+        evalId: "smoke",
+        batchId: "it-trace-foreign-version",
+        adapter
+      });
+      try {
+        // The store layer rewrites every trace event to version 2 as it
+        // is read back, exactly like evidence from another build.
+        const foreignVersion = new Proxy(harness.store, {
+          get(target, property) {
+            const value: unknown = Reflect.get(target, property, target);
+            if (property !== "read") {
+              if (typeof value !== "function") {
+                return value;
+              }
+              return value.bind(target) as unknown;
+            }
+            return async (relative: string): Promise<string> => {
+              const text = await target.read(relative);
+              if (!relative.endsWith("/trace.jsonl")) {
+                return text;
+              }
+              return text.replaceAll(
+                '"schema_version":1',
+                '"schema_version":2'
+              );
+            };
+          }
+        });
+        const outcome = await runTrial({
+          store: foreignVersion,
+          plan: harness.plan,
+          pack: harness.pack,
+          adapter,
+          index: 0,
+          exposure: createLoopbackExposure,
+          now: fixedClock()
+        });
+
+        // The one foreign event is refused, not counted as a request.
+        expect(outcome.apiRequests).toBe(0);
+        expect(outcome.evidenceIntegrity).toBe("corrupt");
+        expect(outcome.censorClass).toBe("instrumentation_censor");
+        const root = trialRootOf(harness.plan.batchId, outcome.runId);
+        const completed = await readJsonObject(
+          harness.store,
+          `${root}/run.completed.json`
+        );
+        expect(completed["evidence_integrity"]).toBe("corrupt");
+        expect(completed["failed_requirement_ids"]).toContain("api_trace");
+      } finally {
+        await harness.clean();
+      }
+    }
+  );
+
+  it(
     "re-executes a trial into a fresh store with the same evidence",
     { timeout: 30000 },
     async () => {
