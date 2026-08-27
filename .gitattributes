@@ -1,0 +1,19 @@
+# Normalize line endings: LF in the repository and in the working tree.
+* text=auto eol=lf
+
+# Explicit text types
+*.md   text
+*.json text
+*.yaml text
+*.yml  text
+*.ts   text
+*.js   text
+*.mjs  text
+*.cjs  text
+
+# Binary assets
+*.png  binary
+*.jpg  binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
