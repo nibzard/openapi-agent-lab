@@ -1,0 +1,14 @@
+{
+  "name": "@oal/arazzo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Arazzo 1.1 workflow compiler subset.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@oal/contract-ir": "workspace:*",
+    "@oal/core": "workspace:*"
+  }
+}

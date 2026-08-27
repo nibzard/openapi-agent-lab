@@ -1,0 +1,207 @@
+{
+  "arazzo": "1.1.0",
+  "info": {
+    "title": "Steel checkpoint recovery",
+    "summary": "Create, checkpoint, change, restore, and verify one computer",
+    "description": "Hidden control workflow for the Steel Computer API. The final criterion asserts that the downloaded bytes match the checkpointed state through the recorded sha256 outputs.",
+    "version": "1.0.0"
+  },
+  "sourceDescriptions": [
+    {
+      "name": "steel-contract",
+      "url": "../contract/openapi.yaml",
+      "type": "openapi"
+    }
+  ],
+  "workflows": [
+    {
+      "workflowId": "checkpoint-recovery",
+      "summary": "Return one computer to its verified clean bytes",
+      "dependsOn": [],
+      "parameters": [],
+      "inputs": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "default": "recovery-run"
+          },
+          "initial_bytes": {
+            "type": "string",
+            "contentEncoding": "base64"
+          },
+          "changed_bytes": {
+            "type": "string",
+            "contentEncoding": "base64"
+          }
+        },
+        "required": ["initial_bytes", "changed_bytes"]
+      },
+      "steps": [
+        {
+          "stepId": "create-computer",
+          "description": "Create one Chrome computer.",
+          "operationId": "createComputer",
+          "requestBody": {
+            "contentType": "application/json",
+            "payload": {
+              "template": "system/chrome",
+              "label": "{$inputs.label}"
+            }
+          },
+          "successCriteria": [
+            {
+              "type": "simple",
+              "condition": "$statusCode == 201 && $response.body#/template == \"system/chrome\""
+            }
+          ],
+          "outputs": {
+            "computer_id": "$response.body#/id"
+          },
+          "dependsOn": []
+        },
+        {
+          "stepId": "upload-initial-file",
+          "description": "Upload the initial file bytes.",
+          "operationPath": "{$sourceDescriptions.steel-contract.url}#/paths/~1v1~1computers~1{computer_id}~1files/post",
+          "parameters": [
+            {
+              "name": "computer_id",
+              "in": "path",
+              "value": "{$steps.create-computer.outputs.computer_id}"
+            }
+          ],
+          "requestBody": {
+            "contentType": "application/octet-stream",
+            "payload": "{$inputs.initial_bytes}"
+          },
+          "successCriteria": [
+            {
+              "condition": "$statusCode == 201"
+            }
+          ],
+          "outputs": {
+            "file_id": "$response.body#/file_id",
+            "clean_sha256": "$response.body#/sha256"
+          },
+          "dependsOn": ["create-computer"]
+        },
+        {
+          "stepId": "upload-changed-file",
+          "description": "Overwrite the file with changed bytes after the checkpoint.",
+          "operationId": "$sourceDescriptions.steel-contract.uploadFile",
+          "parameters": [
+            {
+              "name": "computer_id",
+              "in": "path",
+              "value": "{$steps.create-computer.outputs.computer_id}"
+            }
+          ],
+          "requestBody": {
+            "contentType": "application/octet-stream",
+            "payload": "{$inputs.changed_bytes}"
+          },
+          "successCriteria": [
+            {
+              "condition": "$statusCode == 201 && $response.body#/sha256 != $steps.upload-initial-file.outputs.clean_sha256"
+            }
+          ],
+          "outputs": {
+            "changed_sha256": "$response.body#/sha256"
+          },
+          "dependsOn": ["create-checkpoint"]
+        },
+        {
+          "stepId": "create-checkpoint",
+          "description": "Checkpoint the clean file state.",
+          "operationId": "createCheckpoint",
+          "parameters": [
+            {
+              "name": "computer_id",
+              "in": "path",
+              "value": "{$steps.create-computer.outputs.computer_id}"
+            }
+          ],
+          "requestBody": {
+            "contentType": "application/json",
+            "payload": {
+              "file_id": "{$steps.upload-initial-file.outputs.file_id}"
+            }
+          },
+          "successCriteria": [
+            {
+              "condition": "$statusCode == 201 && $response.body#/sha256 == $steps.upload-initial-file.outputs.clean_sha256"
+            }
+          ],
+          "outputs": {
+            "checkpoint_id": "$response.body#/checkpoint_id",
+            "checkpoint_sha256": "$response.body#/sha256"
+          },
+          "dependsOn": ["upload-initial-file"]
+        },
+        {
+          "stepId": "restore-computer",
+          "description": "Restore the checkpointed state.",
+          "operationId": "restoreComputer",
+          "parameters": [
+            {
+              "name": "computer_id",
+              "in": "path",
+              "value": "{$steps.create-computer.outputs.computer_id}"
+            },
+            {
+              "name": "checkpoint_id",
+              "in": "path",
+              "value": "{$steps.create-checkpoint.outputs.checkpoint_id}"
+            }
+          ],
+          "requestBody": {
+            "contentType": "application/json",
+            "payload": {
+              "checkpoint_id": "{$steps.create-checkpoint.outputs.checkpoint_id}"
+            }
+          },
+          "successCriteria": [
+            {
+              "condition": "$statusCode == 200 && $response.body#/sha256 == $steps.create-checkpoint.outputs.checkpoint_sha256"
+            }
+          ],
+          "outputs": {
+            "restored_sha256": "$response.body#/sha256"
+          },
+          "dependsOn": ["upload-changed-file", "create-checkpoint"]
+        },
+        {
+          "stepId": "download-file",
+          "description": "Read the file back and compare it with the checkpoint.",
+          "operationId": "downloadFile",
+          "parameters": [
+            {
+              "name": "computer_id",
+              "in": "path",
+              "value": "{$steps.create-computer.outputs.computer_id}"
+            },
+            {
+              "name": "file_id",
+              "in": "path",
+              "value": "{$steps.upload-initial-file.outputs.file_id}"
+            }
+          ],
+          "successCriteria": [
+            {
+              "condition": "{$response.body#/sha256} == {$steps.upload-initial-file.outputs.clean_sha256}"
+            }
+          ],
+          "outputs": {
+            "recovered_sha256": "$response.body#/sha256"
+          },
+          "dependsOn": ["restore-computer"]
+        }
+      ],
+      "outputs": {
+        "computer_id": "$steps.create-computer.outputs.computer_id",
+        "recovered_sha256": "$steps.download-file.outputs.recovered_sha256"
+      }
+    }
+  ]
+}
