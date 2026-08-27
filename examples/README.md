@@ -27,6 +27,19 @@ Selection rules for any file added to this directory:
 2. The set must cover both JSON and YAML, and more than one OpenAPI minor version.
 3. The set must contain at least one imperfect document. `oal inspect` must diagnose defects with stable reasons, so it needs defective inputs.
 
+## Evaluated and not shipped
+
+More vendor contracts were evaluated before this directory was fixed. They are not shipped, for these reasons:
+
+| Reason | Cases |
+| --- | --- |
+| No stated license | Eleven production contracts published only as documentation endpoints. Redistribution rights are not granted, so they do not enter this repository. |
+| Not an OpenAPI document | The AWS Bedrock AgentCore models are Smithy-derived Botocore service files, not OpenAPI. The compiler accepts OpenAPI 3.0.x and 3.1.x only. |
+| Wrong version | One Swagger 2.0 contract. The compiler accepts OpenAPI 3.0.x and 3.1.x only. |
+| Licensed but too large | The Cloudflare monolith is published under BSD-3-Clause, but it is a 24 MB document with more than 3,000 operations. It is not a starter example. Fetch it at test time when large-contract coverage is needed. |
+
+An unlicensed contract can still be useful as a local test input. The rule is: fetch it at test time into an ignored directory, or point the lab at a local path outside this repository. Never commit it.
+
 ## Provenance and licenses
 
 - **`quickstart.json`** was written for this repository. It is licensed under the [Apache License 2.0](../LICENSE), the same as the rest of this repository.
