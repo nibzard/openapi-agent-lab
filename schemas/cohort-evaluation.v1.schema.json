@@ -1,0 +1,372 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/cohort-evaluation.v1.json",
+  "title": "CohortEvaluation",
+  "description": "Batch-level aggregate over trial evaluations with every required denominator, outcome axis, and per-run link. Encodes SPEC sections 27.3 and 27.4.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "batch_id",
+    "created_at",
+    "denominators",
+    "dispositions",
+    "evidence_integrity",
+    "censor_classes",
+    "task_outcomes",
+    "checks",
+    "signals",
+    "per_run",
+    "warnings",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "CohortEvaluation"
+    },
+    "batch_id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "created_at": {
+      "$ref": "#/$defs/rfc3339"
+    },
+    "denominators": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary_assignment_count",
+        "activated_replacement_count",
+        "operational_assignment_count",
+        "launched_trial_count",
+        "not_started_count",
+        "participant_control_started_count",
+        "primary_agent_outcome_count",
+        "api_behavior_count",
+        "task_evaluation_count",
+        "report_agreement_count",
+        "usage_observed_count",
+        "valid_evaluation_count"
+      ],
+      "properties": {
+        "primary_assignment_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "activated_replacement_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "operational_assignment_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "launched_trial_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "not_started_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "participant_control_started_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "primary_agent_outcome_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "api_behavior_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "task_evaluation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "report_agreement_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "usage_observed_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "valid_evaluation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "held_unused_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "dispositions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/disposition"
+      }
+    },
+    "evidence_integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["intact", "corrupt", "missing"],
+      "properties": {
+        "intact": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "corrupt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "censor_classes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "none",
+        "pre_control_nonparticipant",
+        "administrative_censor",
+        "instrumentation_censor"
+      ],
+      "properties": {
+        "none": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pre_control_nonparticipant": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "administrative_censor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "instrumentation_censor": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "task_outcomes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "passed",
+        "failed",
+        "partial",
+        "indeterminate",
+        "not_evaluated"
+      ],
+      "properties": {
+        "passed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "partial": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "indeterminate": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "not_evaluated": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "participant_report_status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "absent",
+        "malformed",
+        "schema_invalid",
+        "valid",
+        "unavailable_due_to_infrastructure"
+      ],
+      "properties": {
+        "absent": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "malformed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "schema_invalid": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "valid": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unavailable_due_to_infrastructure": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "passed",
+          "failed",
+          "error",
+          "skipped",
+          "numerator",
+          "denominator"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "passed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "error": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "skipped": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "numerator": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "denominator": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "signals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "true_count", "false_count"],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "true_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "false_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "per_run": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "run_id",
+          "status",
+          "score",
+          "disposition",
+          "evidence_integrity"
+        ],
+        "properties": {
+          "run_id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["passed", "failed", "error", "skipped"]
+          },
+          "score": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "maximum": 1
+          },
+          "disposition": {
+            "$ref": "#/$defs/disposition"
+          },
+          "evidence_integrity": {
+            "type": "string",
+            "enum": ["intact", "corrupt", "missing"]
+          }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "rfc3339": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    },
+    "disposition": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "agent_incomplete",
+        "agent_failed",
+        "timed_out",
+        "budget_exhausted",
+        "operator_interrupted",
+        "provider_failed_pre_control",
+        "provider_failed_post_control",
+        "infrastructure_failed_pre_control",
+        "infrastructure_failed_post_control",
+        "harness_aborted",
+        "not_started",
+        "invalid_setup"
+      ]
+    }
+  }
+}

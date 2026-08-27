@@ -1,0 +1,38 @@
+{
+  "apiVersion": "agentlab.dev/v1",
+  "kind": "RunProfile",
+  "metadata": {
+    "id": "cohort-2026-01"
+  },
+  "agent": {
+    "adapter": "codex-cli",
+    "model": "gpt-5.3",
+    "effort": "medium",
+    "sandbox": "workspace-write"
+  },
+  "exposure": {
+    "mode": "direct-tools",
+    "contract_visibility": "discoverable",
+    "data_plane_scope": "all",
+    "documentation_profile": null
+  },
+  "execution": {
+    "count": 1,
+    "parallel": 1,
+    "timeout_ms": 600000,
+    "cohort_seed": "cohort-2026-01",
+    "confirm_paid_calls": true
+  },
+  "evaluation": {
+    "model_judge": "disabled",
+    "fail_on": {
+      "required_check": true,
+      "infrastructure": true
+    }
+  },
+  "limits": {
+    "max_agent_tool_calls": 500,
+    "max_api_requests": 2000,
+    "max_artifact_bytes": 10485760
+  }
+}

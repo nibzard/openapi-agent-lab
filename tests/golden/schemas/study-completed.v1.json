@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "study_run_id": "example",
+  "status": "completed",
+  "finished_at": "2026-01-15T09:30:00.000Z",
+  "artifact_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "counts": {
+    "primary_assignments": 1,
+    "activated_replacements": 1,
+    "held_unused": 1,
+    "not_started": 1,
+    "child_batches": 1
+  },
+  "reason": null,
+  "extensions": {}
+}

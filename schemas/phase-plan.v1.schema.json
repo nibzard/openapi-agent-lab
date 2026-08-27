@@ -1,0 +1,436 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/phase-plan.v1.json",
+  "title": "PhasePlan",
+  "description": "Freezes one smoke, pilot, confirmatory, or other named phase: design, replacements, runtime lock, eligibility, stopping, analysis, and paid calls. Encodes SPEC section 12.9.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "purpose",
+    "analytical",
+    "design",
+    "runtime_lock",
+    "eligibility",
+    "stopping",
+    "analysis",
+    "paid_calls"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "agentlab.dev/v1"
+    },
+    "kind": {
+      "const": "PhasePlan"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/safeId"
+        }
+      }
+    },
+    "purpose": {
+      "type": "string",
+      "enum": ["smoke", "pilot", "confirmatory", "exploratory", "operational"]
+    },
+    "analytical": {
+      "type": "boolean"
+    },
+    "design": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "primary_assignments", "ordering"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["complete-balanced-blocks"]
+        },
+        "primary_assignments": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "explicit_seed_required": {
+          "type": "boolean"
+        },
+        "block": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cells", "repetitions"],
+          "properties": {
+            "cells": {
+              "type": "string",
+              "enum": ["all"]
+            },
+            "repetitions": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "ordering": {
+          "type": "string",
+          "enum": ["canonical-sha256-sort-v1"]
+        }
+      }
+    },
+    "replacements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "slots_per_cell",
+        "activation_timing",
+        "activate_on",
+        "maximum_activated_per_cell"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["none", "held-same-cell"]
+        },
+        "slots_per_cell": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "activation_timing": {
+          "type": "string",
+          "enum": ["immediate_after_terminal", "after_primary_schedule"]
+        },
+        "activate_on": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {
+              "disposition": {
+                "$ref": "#/$defs/disposition"
+              },
+              "evidence_integrity": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "enum": ["corrupt", "missing"]
+                }
+              }
+            }
+          }
+        },
+        "maximum_activated_per_cell": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "runtime_lock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_fields"],
+      "properties": {
+        "required_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+          }
+        }
+      }
+    },
+    "eligibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary_agent_outcome", "api_behavior"],
+      "properties": {
+        "primary_agent_outcome": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["require"],
+          "properties": {
+            "require": {
+              "type": "string",
+              "enum": ["participant_control_started"]
+            },
+            "exclude": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "minProperties": 1,
+                "properties": {
+                  "censor_class": {
+                    "type": "string",
+                    "enum": [
+                      "pre_control_nonparticipant",
+                      "administrative_censor",
+                      "instrumentation_censor"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "api_behavior": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["require"],
+          "properties": {
+            "require": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "enum": ["participant_control_started", "trace_intact"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "stopping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "batch_wide_pre_control_failure",
+        "second_unreplaced_failure_in_cell",
+        "operator_interruption",
+        "data_dependent_success_stop"
+      ],
+      "properties": {
+        "batch_wide_pre_control_failure": {
+          "type": "string",
+          "enum": ["abort", "incomplete"]
+        },
+        "second_unreplaced_failure_in_cell": {
+          "type": "string",
+          "enum": ["incomplete", "abort"]
+        },
+        "operator_interruption": {
+          "type": "string",
+          "enum": ["abort"]
+        },
+        "data_dependent_success_stop": {
+          "type": "string",
+          "enum": ["forbidden"]
+        }
+      }
+    },
+    "analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contrasts",
+        "primary_estimand",
+        "comparison_families",
+        "methods",
+        "sensitivity",
+        "marginal_weighting",
+        "floor_ceiling",
+        "small_sample_label"
+      ],
+      "properties": {
+        "contrasts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "metric", "factor", "levels", "direction"],
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/safeId"
+              },
+              "metric": {
+                "$ref": "#/$defs/safeId"
+              },
+              "factor": {
+                "$ref": "#/$defs/safeId"
+              },
+              "levels": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "$ref": "#/$defs/safeId"
+                }
+              },
+              "direction": {
+                "type": "string",
+                "enum": ["first_minus_second", "second_minus_first"]
+              },
+              "within": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "$ref": "#/$defs/safeId"
+                },
+                "propertyNames": {
+                  "$ref": "#/$defs/safeId"
+                }
+              },
+              "population": {
+                "$ref": "#/$defs/safeId"
+              }
+            }
+          }
+        },
+        "primary_estimand": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "outcome", "population", "contrast", "measure"],
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/safeId"
+            },
+            "outcome": {
+              "$ref": "#/$defs/safeId"
+            },
+            "population": {
+              "$ref": "#/$defs/safeId"
+            },
+            "contrast": {
+              "$ref": "#/$defs/safeId"
+            },
+            "measure": {
+              "type": "string",
+              "enum": ["risk_difference", "risk_ratio", "difference"]
+            }
+          }
+        },
+        "comparison_families": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "contrasts", "alpha", "multiplicity"],
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/safeId"
+              },
+              "contrasts": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/$defs/safeId"
+                }
+              },
+              "alpha": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1
+              },
+              "multiplicity": {
+                "type": "string",
+                "enum": ["holm", "none"]
+              }
+            }
+          }
+        },
+        "methods": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "binary_interval",
+            "risk_difference_interval",
+            "exact_test"
+          ],
+          "properties": {
+            "binary_interval": {
+              "type": "string",
+              "enum": ["wilson", "wald"]
+            },
+            "risk_difference_interval": {
+              "type": "string",
+              "enum": ["newcombe", "wald"]
+            },
+            "exact_test": {
+              "type": "string",
+              "enum": ["fisher_two_sided"]
+            }
+          }
+        },
+        "sensitivity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["participant_control_started_censors_as_failure"],
+          "properties": {
+            "participant_control_started_censors_as_failure": {
+              "type": "boolean"
+            }
+          }
+        },
+        "marginal_weighting": {
+          "type": "string",
+          "enum": ["none", "equal_cells", "equal_assignments"]
+        },
+        "floor_ceiling": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["apply_by_factor_level"],
+          "properties": {
+            "apply_by_factor_level": {
+              "type": ["string", "null"]
+            }
+          }
+        },
+        "small_sample_label": {
+          "type": "string",
+          "enum": ["directional", "confirmatory"]
+        }
+      }
+    },
+    "paid_calls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary", "maximum_with_replacements"],
+      "properties": {
+        "primary": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_with_replacements": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "disposition": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "agent_incomplete",
+        "agent_failed",
+        "timed_out",
+        "budget_exhausted",
+        "operator_interrupted",
+        "provider_failed_pre_control",
+        "provider_failed_post_control",
+        "infrastructure_failed_pre_control",
+        "infrastructure_failed_post_control",
+        "harness_aborted",
+        "not_started",
+        "invalid_setup"
+      ]
+    }
+  }
+}

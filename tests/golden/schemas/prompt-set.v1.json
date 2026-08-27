@@ -1,0 +1,14 @@
+{
+  "id": "example",
+  "purpose_disclosure": "diagnostic",
+  "instructions": {
+    "source": "example",
+    "engine": "literal",
+    "delivery": "file",
+    "target": "example"
+  },
+  "launch": {
+    "source": "example",
+    "engine": "literal"
+  }
+}

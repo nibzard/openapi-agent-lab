@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "kind": "ParticipantSurfaceManifest",
+  "cell_id": "example",
+  "template": true,
+  "entries": [
+    {
+      "id": "example",
+      "source": "example",
+      "target": "example",
+      "channel": "file",
+      "media_type": null,
+      "max_bytes": 1,
+      "provenance_class": "secret"
+    }
+  ],
+  "extensions": {}
+}

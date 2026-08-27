@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "kind": "AnalysisPlan",
+  "phase_id": "example",
+  "metrics": [
+    {
+      "id": "example",
+      "type": "binary",
+      "primary": true,
+      "missingness": "observed"
+    }
+  ],
+  "contrasts": [
+    {
+      "id": "example",
+      "metric": "example",
+      "factor": "example",
+      "levels": ["example", "example"],
+      "direction": "first_minus_second"
+    }
+  ],
+  "primary_estimand": {
+    "id": "example",
+    "outcome": "example",
+    "population": "example",
+    "contrast": "example",
+    "measure": "risk_difference"
+  },
+  "comparison_families": [
+    {
+      "id": "example",
+      "contrasts": ["example"],
+      "alpha": 1,
+      "multiplicity": "holm"
+    }
+  ],
+  "methods": {
+    "binary_interval": "wilson",
+    "risk_difference_interval": "newcombe",
+    "exact_test": "fisher_two_sided"
+  },
+  "eligibility": {
+    "populations": [
+      {
+        "id": "example",
+        "require": "participant_control_started"
+      }
+    ]
+  },
+  "censoring": {
+    "derivation": "finalization_v1"
+  },
+  "replacement": {
+    "kind": "none"
+  },
+  "stopping": {
+    "batch_wide_pre_control_failure": "abort",
+    "data_dependent_success_stop": "forbidden"
+  },
+  "worst_case_sensitivity": {
+    "participant_control_started_censors_as_failure": true
+  },
+  "max_claim": "example",
+  "small_sample_label": "directional",
+  "extensions": {}
+}

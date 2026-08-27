@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "kind": "PackIR",
+  "pack": {
+    "id": "example",
+    "name": "example",
+    "version": "1.0.0",
+    "requires": {
+      "agentlab": "example",
+      "backend_api": 1,
+      "rubric_api": 1
+    }
+  },
+  "contract": {
+    "entrypoint": "example",
+    "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "semantic_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "execution_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "contract_ir_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "capability_report_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "documents": [
+      {
+        "uri": "example",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ]
+  },
+  "behavior": {
+    "mode": "contract",
+    "completeness": "exact",
+    "fallback": "none"
+  },
+  "scenarios": [
+    {
+      "id": "example",
+      "fixtures": [
+        {
+          "path": "example",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    }
+  ],
+  "prompt_sets": [
+    {
+      "id": "example",
+      "purpose_disclosure": "diagnostic",
+      "instructions_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "launch_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "participant_files": [
+    {
+      "source": "example",
+      "target": "example",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "bytes": 1,
+      "visibility": "participant"
+    }
+  ],
+  "credentials": [
+    {
+      "id": "example",
+      "scheme": "example",
+      "provider_kind": "generated",
+      "expose_environment": "OAL_AUTH_EXAMPLE"
+    }
+  ],
+  "evals": [
+    {
+      "id": "example",
+      "prompt_set": "example",
+      "task_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "result_schema_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "rubric_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "scenario": "example",
+      "operation_scope": ["path:GET /things"]
+    }
+  ],
+  "limits": {
+    "max_agent_tool_calls": 1,
+    "max_api_requests": 1,
+    "max_artifact_bytes": 1
+  },
+  "trust": {
+    "execution_profile": "contract-safe",
+    "isolation": "hard"
+  },
+  "warnings": [
+    {
+      "severity": "info",
+      "phase": "ingest",
+      "code": "USD",
+      "message": "example",
+      "document_uri": null,
+      "json_pointer": null,
+      "operation_key": null,
+      "retryable": true,
+      "related": [
+        {
+          "document_uri": "example",
+          "json_pointer": "example"
+        }
+      ],
+      "details": {}
+    }
+  ],
+  "extensions": {}
+}

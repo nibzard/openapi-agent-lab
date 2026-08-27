@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "kind": "Report",
+  "scope": {
+    "level": "batch",
+    "id": "example"
+  },
+  "counts": {
+    "primary_assignments": 1,
+    "activated_replacements": 1,
+    "operational_assignments": 1,
+    "launched_trials": 1,
+    "held_unused": 1,
+    "not_started": 1,
+    "dispositions": {},
+    "evidence_integrity": {
+      "intact": 1,
+      "corrupt": 1,
+      "missing": 1
+    },
+    "censor_classes": {
+      "none": 1,
+      "pre_control_nonparticipant": 1,
+      "administrative_censor": 1,
+      "instrumentation_censor": 1
+    },
+    "task_outcomes": {
+      "passed": 1,
+      "failed": 1,
+      "partial": 1,
+      "indeterminate": 1,
+      "not_evaluated": 1
+    }
+  },
+  "metrics": [
+    {
+      "id": "example",
+      "numerator": 1,
+      "denominator": 1,
+      "availability": {
+        "observed": 1,
+        "unknown": 1,
+        "not_applicable": 1,
+        "unavailable_due_to_evidence": 1
+      }
+    }
+  ],
+  "estimates": [
+    {
+      "contrast_id": "example",
+      "estimate": null,
+      "interval": null,
+      "sensitivity": [
+        {
+          "id": "example",
+          "kind": "worst_case",
+          "estimate": null
+        }
+      ]
+    }
+  ],
+  "behavior": {
+    "api": {
+      "request_total": 1,
+      "status_distribution": {},
+      "operation_frequency": {}
+    },
+    "documentation": {
+      "request_total": 1,
+      "outcome_distribution": {}
+    }
+  },
+  "surfaces": {
+    "participant_reports": {
+      "absent": 1,
+      "malformed": 1,
+      "schema_invalid": 1,
+      "valid": 1,
+      "agreement": null
+    }
+  },
+  "provenance": {
+    "cells": [
+      {
+        "cell_id": "example",
+        "factor_levels": {
+          "example": "example"
+        },
+        "compatibility_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "implementation": {}
+  },
+  "warnings": [
+    {
+      "kind": "trace_truncation",
+      "message": "example"
+    }
+  ],
+  "extensions": {},
+  "verdict": "no-issues-observed"
+}

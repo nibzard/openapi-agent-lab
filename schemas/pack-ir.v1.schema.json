@@ -1,0 +1,560 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/pack-ir.v1.json",
+  "title": "PackIR",
+  "description": "Immutable result of strict pack validation. Contains resolved defaults, digests, inventories, plans, and warnings. Encodes SPEC section 12.5.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "pack",
+    "contract",
+    "behavior",
+    "scenarios",
+    "prompt_sets",
+    "participant_files",
+    "credentials",
+    "evals",
+    "limits",
+    "trust",
+    "warnings",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "PackIR"
+    },
+    "pack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "version", "requires"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "requires": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["agentlab", "backend_api", "rubric_api"],
+          "properties": {
+            "agentlab": {
+              "type": "string",
+              "minLength": 1
+            },
+            "backend_api": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rubric_api": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entrypoint",
+        "source_sha256",
+        "semantic_sha256",
+        "execution_sha256",
+        "contract_ir_sha256",
+        "capability_report_sha256",
+        "documents"
+      ],
+      "properties": {
+        "entrypoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "semantic_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "execution_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "contract_ir_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "capability_report_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "documents": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["uri", "sha256"],
+            "properties": {
+              "uri": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            }
+          }
+        }
+      }
+    },
+    "behavior": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "completeness", "fallback"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["contract", "scenario"]
+        },
+        "completeness": {
+          "type": "string",
+          "enum": ["exact", "partial"]
+        },
+        "fallback": {
+          "type": "string",
+          "enum": ["none", "contract"]
+        },
+        "state_schema_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "state_schema_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "clock": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["virtual", "wall"]
+            },
+            "initial": {
+              "$ref": "#/$defs/rfc3339"
+            },
+            "tick_ms": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "random": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["seed"],
+          "properties": {
+            "seed": {
+              "type": "string",
+              "enum": ["run", "fixed"]
+            }
+          }
+        },
+        "bundle": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "bundle_path",
+            "bundle_sha256",
+            "source_inventory",
+            "bundler"
+          ],
+          "properties": {
+            "bundle_path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "bundle_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "source_inventory": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["path", "sha256", "bytes"],
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sha256": {
+                    "$ref": "#/$defs/sha256"
+                  },
+                  "bytes": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            },
+            "bundler": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "version"],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "source_map_policy": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "fixtures"],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "fixtures": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["path", "sha256"],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "sha256": {
+                  "$ref": "#/$defs/sha256"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "prompt_sets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "purpose_disclosure",
+          "instructions_sha256",
+          "launch_sha256"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "purpose_disclosure": {
+            "type": "string",
+            "enum": ["diagnostic", "naturalistic"]
+          },
+          "instructions_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "launch_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "participant_files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "target", "sha256", "bytes", "visibility"],
+        "properties": {
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "target": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "media_type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "visibility": {
+            "type": "string",
+            "enum": ["participant", "hidden"]
+          }
+        }
+      }
+    },
+    "credentials": {
+      "type": "array",
+      "description": "Credential declarations without values.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "scheme", "provider_kind", "expose_environment"],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "scheme": {
+            "type": "string",
+            "minLength": 1
+          },
+          "provider_kind": {
+            "type": "string",
+            "enum": ["generated", "fixed"]
+          },
+          "expose_environment": {
+            "type": "string",
+            "pattern": "^[A-Z_][A-Z0-9_]*$"
+          }
+        }
+      }
+    },
+    "evals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "prompt_set",
+          "task_sha256",
+          "result_schema_sha256",
+          "rubric_sha256",
+          "scenario",
+          "operation_scope"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "prompt_set": {
+            "$ref": "#/$defs/safeId"
+          },
+          "task_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "result_schema_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "rubric_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "workflow_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "scenario": {
+            "$ref": "#/$defs/safeId"
+          },
+          "operation_scope": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^path:[A-Z]+ [^ ]+$"
+            }
+          },
+          "data_plane_scope": {
+            "type": "string",
+            "enum": ["all", "task"]
+          }
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_agent_tool_calls",
+        "max_api_requests",
+        "max_artifact_bytes"
+      ],
+      "properties": {
+        "max_agent_tool_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_api_requests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_artifact_bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "trust": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["execution_profile", "isolation"],
+      "properties": {
+        "execution_profile": {
+          "type": "string",
+          "enum": [
+            "contract-safe",
+            "trusted-local",
+            "isolated-extension",
+            "live-proxy"
+          ]
+        },
+        "isolation": {
+          "type": "string",
+          "enum": ["hard", "partial", "advisory"]
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/diagnostic"
+      }
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "rfc3339": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "severity",
+        "phase",
+        "code",
+        "message",
+        "document_uri",
+        "json_pointer",
+        "operation_key",
+        "retryable",
+        "related",
+        "details"
+      ],
+      "properties": {
+        "severity": {
+          "type": "string",
+          "enum": ["info", "warning", "error"]
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "ingest",
+            "compile",
+            "preflight",
+            "serve",
+            "run",
+            "evaluate",
+            "report"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9-]*$",
+          "minLength": 3
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "document_uri": {
+          "type": ["string", "null"]
+        },
+        "json_pointer": {
+          "type": ["string", "null"]
+        },
+        "operation_key": {
+          "type": ["string", "null"],
+          "pattern": "^path:[A-Z]+ [^ ]+$"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "related": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["document_uri", "json_pointer"],
+            "properties": {
+              "document_uri": {
+                "type": "string",
+                "minLength": 1
+              },
+              "json_pointer": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "details": {
+          "description": "Free-form machine-readable detail values."
+        }
+      }
+    }
+  }
+}

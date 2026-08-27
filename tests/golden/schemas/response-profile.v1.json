@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "kind": "ResponseProfile",
+  "id": "example",
+  "version": "1.0.0",
+  "errors": {
+    "unknown_route": {
+      "status": 400,
+      "body": null,
+      "headers": {}
+    },
+    "wrong_method": {
+      "status": 400,
+      "body": null,
+      "headers": {}
+    },
+    "authentication": {
+      "status": 400,
+      "body": null,
+      "headers": {}
+    },
+    "authorization": {
+      "status": 400,
+      "body": null,
+      "headers": {}
+    },
+    "parse": {
+      "status": 400,
+      "body": null,
+      "headers": {}
+    },
+    "validation": {
+      "status": 400,
+      "body": null,
+      "headers": {}
+    },
+    "limit": {
+      "status": 400,
+      "body": null,
+      "headers": {}
+    },
+    "timeout": {
+      "status": 400,
+      "body": null,
+      "headers": {}
+    },
+    "internal_error": {
+      "status": 400,
+      "body": null,
+      "headers": {}
+    }
+  },
+  "identifiers": {
+    "rules": [
+      {
+        "kind": "resource_id",
+        "pattern": "example"
+      }
+    ]
+  },
+  "renderable_request_facts": ["method"],
+  "escaping": {
+    "policy": "json",
+    "max_bytes": 1
+  },
+  "content_type": "example",
+  "max_bytes": 1,
+  "localization_version": "example",
+  "compatibility_header": null,
+  "extensions": {}
+}

@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/protocol-lock.v1.json",
+  "title": "ProtocolLock",
+  "description": "Explicitly created lock over a StudyProtocol and its members. Never contains its own digest. Encodes SPEC section 12.10.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "protocol_id",
+    "protocol_version",
+    "protocol_source_sha256",
+    "members",
+    "effective_contracts",
+    "pack"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "protocol_id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "protocol_version": {
+      "$ref": "#/$defs/semver"
+    },
+    "protocol_source_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "members": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/sha256"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/protocolRootPath"
+      }
+    },
+    "effective_contracts": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/sha256"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/safeId"
+      }
+    },
+    "pack": {
+      "$ref": "#/$defs/packRef"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "protocolRootPath": {
+      "type": "string",
+      "pattern": "^[^/][^\\u0000]*$",
+      "not": {
+        "anyOf": [{ "pattern": "\\.\\./" }, { "pattern": "^/" }]
+      }
+    },
+    "packRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "sha256"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

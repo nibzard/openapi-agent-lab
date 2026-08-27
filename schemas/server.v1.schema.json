@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/server.v1.json",
+  "title": "Server",
+  "description": "Per-trial mock server record: listener identity, mode, contract identity, and credential scheme names without values. Encodes SPEC sections 23.4 and 24.1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "run_id",
+    "mode",
+    "host",
+    "port",
+    "started_at",
+    "stopped_at",
+    "credential_schemes",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "Server"
+    },
+    "run_id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["contract", "scenario"]
+    },
+    "scenario_id": {
+      "$ref": "#/$defs/safeIdOrNull"
+    },
+    "host": {
+      "type": "string",
+      "pattern": "^127\\.0\\.0\\.1$|^\\[::1\\]$|^localhost$"
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "base_url": {
+      "type": "string",
+      "pattern": "^https?://[^/]+$"
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "original_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "semantic_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "execution_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "operation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "supported_operation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "capabilities_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "documentation_facade": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["base_url", "profile"],
+      "properties": {
+        "base_url": {
+          "type": "string",
+          "pattern": "^https?://[^/]+$"
+        },
+        "profile": {
+          "type": ["string", "null"]
+        },
+        "candidates_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "mcp": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["transport"],
+      "properties": {
+        "transport": {
+          "type": "string",
+          "enum": ["stdio", "http"]
+        },
+        "catalog": {
+          "type": "string",
+          "enum": ["flat", "nested"]
+        },
+        "tool_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "run_seed": {
+      "type": ["string", "null"]
+    },
+    "started_at": {
+      "$ref": "#/$defs/rfc3339"
+    },
+    "stopped_at": {
+      "$ref": "#/$defs/rfc3339OrNull"
+    },
+    "request_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "credential_schemes": {
+      "type": "array",
+      "description": "Scheme names only; credential values never appear in evidence.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["scheme", "type"],
+        "properties": {
+          "scheme": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "enum": ["apiKey", "http", "oauth2", "openIdConnect", "mutualTLS"]
+          },
+          "location": {
+            "type": ["string", "null"],
+            "enum": [null, "query", "header", "cookie"]
+          },
+          "wire_name": {
+            "type": ["string", "null"]
+          },
+          "environment": {
+            "type": ["string", "null"],
+            "pattern": "^[A-Z_][A-Z0-9_]*$"
+          }
+        }
+      }
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "safeIdOrNull": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "rfc3339": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    },
+    "rfc3339OrNull": {
+      "type": ["string", "null"],
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    }
+  }
+}

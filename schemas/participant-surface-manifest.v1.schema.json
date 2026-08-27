@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/participant-surface-manifest.v1.json",
+  "title": "ParticipantSurfaceManifest",
+  "description": "Exhaustive inventory of participant-observable information: files, routes, environment names, credentials, tools, and framework messages. Encodes SPEC section 9.6.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "cell_id",
+    "template",
+    "entries",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "ParticipantSurfaceManifest"
+    },
+    "cell_id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "run_id": {
+      "$ref": "#/$defs/safeIdOrNull"
+    },
+    "template": {
+      "type": "boolean",
+      "description": "True for the pre-localization template; false for a rendered per-trial manifest."
+    },
+    "rendered_sha256": {
+      "$ref": "#/$defs/sha256OrNull"
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "source",
+          "target",
+          "channel",
+          "media_type",
+          "max_bytes",
+          "provenance_class"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "target": {
+            "type": "string",
+            "minLength": 1
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "file",
+              "http-route",
+              "environment",
+              "credential",
+              "tool",
+              "message",
+              "workspace"
+            ]
+          },
+          "media_type": {
+            "type": ["string", "null"]
+          },
+          "bytes": {
+            "type": ["integer", "null"],
+            "minimum": 0
+          },
+          "catalog_sha256": {
+            "$ref": "#/$defs/sha256OrNull"
+          },
+          "max_bytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "transformation": {
+            "type": ["string", "null"]
+          },
+          "provenance_class": {
+            "type": "string",
+            "enum": [
+              "contractual",
+              "task_essential",
+              "treatment",
+              "framework_incidental"
+            ]
+          }
+        }
+      }
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "safeIdOrNull": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "sha256OrNull": {
+      "type": ["string", "null"],
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "apiVersion": "agentlab.dev/v1",
+  "kind": "StudyProtocol",
+  "metadata": {
+    "id": "example",
+    "version": "1.0.0",
+    "title": "example"
+  },
+  "objective": "example",
+  "evaluation": {
+    "pack": {
+      "id": "example",
+      "version": "1.0.0",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "eval": "example",
+    "scenario": "example"
+  },
+  "factors": [
+    {
+      "id": "example",
+      "role": "treatment",
+      "levels": [
+        {
+          "id": "example"
+        }
+      ]
+    }
+  ],
+  "constants": {
+    "run_profile": "example"
+  },
+  "metrics": {
+    "primary": [
+      {
+        "id": "example",
+        "type": "binary",
+        "source": {
+          "kind": "rubric_check",
+          "check_id": "example"
+        }
+      }
+    ]
+  },
+  "blinding": {
+    "mode": "none"
+  },
+  "phases": {
+    "example": "example"
+  },
+  "interpretation_limits": ["example"],
+  "extensions": {}
+}

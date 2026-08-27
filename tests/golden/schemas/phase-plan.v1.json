@@ -1,0 +1,74 @@
+{
+  "apiVersion": "agentlab.dev/v1",
+  "kind": "PhasePlan",
+  "metadata": {
+    "id": "example"
+  },
+  "purpose": "smoke",
+  "analytical": true,
+  "design": {
+    "kind": "complete-balanced-blocks",
+    "primary_assignments": 1,
+    "ordering": "canonical-sha256-sort-v1"
+  },
+  "runtime_lock": {
+    "required_fields": ["petstore.yaml"]
+  },
+  "eligibility": {
+    "primary_agent_outcome": {
+      "require": "participant_control_started"
+    },
+    "api_behavior": {
+      "require": ["participant_control_started"]
+    }
+  },
+  "stopping": {
+    "batch_wide_pre_control_failure": "abort",
+    "second_unreplaced_failure_in_cell": "incomplete",
+    "operator_interruption": "abort",
+    "data_dependent_success_stop": "forbidden"
+  },
+  "analysis": {
+    "contrasts": [
+      {
+        "id": "example",
+        "metric": "example",
+        "factor": "example",
+        "levels": ["example", "example"],
+        "direction": "first_minus_second"
+      }
+    ],
+    "primary_estimand": {
+      "id": "example",
+      "outcome": "example",
+      "population": "example",
+      "contrast": "example",
+      "measure": "risk_difference"
+    },
+    "comparison_families": [
+      {
+        "id": "example",
+        "contrasts": ["example"],
+        "alpha": 1,
+        "multiplicity": "holm"
+      }
+    ],
+    "methods": {
+      "binary_interval": "wilson",
+      "risk_difference_interval": "newcombe",
+      "exact_test": "fisher_two_sided"
+    },
+    "sensitivity": {
+      "participant_control_started_censors_as_failure": true
+    },
+    "marginal_weighting": "none",
+    "floor_ceiling": {
+      "apply_by_factor_level": null
+    },
+    "small_sample_label": "directional"
+  },
+  "paid_calls": {
+    "primary": 1,
+    "maximum_with_replacements": 1
+  }
+}

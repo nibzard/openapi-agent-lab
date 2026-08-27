@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/semantic-event.v1.json",
+  "title": "SemanticEvent",
+  "description": "One committed domain fact in semantic-events.redacted.jsonl, emitted transactionally with its parent exchange. Encodes SPEC section 25.7.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "type",
+    "event_id",
+    "semantic_sequence",
+    "run_id",
+    "pack_id",
+    "name",
+    "event_version",
+    "logical_time",
+    "caused_by_api_event_id",
+    "actor",
+    "state_revision_before",
+    "state_revision_after",
+    "payload_schema",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "type": {
+      "const": "semantic.event"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^sem_[a-zA-Z0-9_]+$"
+    },
+    "semantic_sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "pack_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)+$",
+      "description": "Namespaced event name independent of HTTP identity."
+    },
+    "event_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "logical_time": {
+      "$ref": "#/$defs/rfc3339"
+    },
+    "caused_by_api_event_id": {
+      "type": ["string", "null"],
+      "pattern": "^evt_[a-zA-Z0-9_]+$"
+    },
+    "actor": {
+      "type": "string",
+      "enum": ["participant", "system", "control"]
+    },
+    "state_revision_before": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "state_revision_after": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "payload_schema": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)+@\\d+$"
+    },
+    "payload": {
+      "type": "object",
+      "description": "Redacted validated payload."
+    }
+  },
+  "$defs": {
+    "rfc3339": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    }
+  }
+}

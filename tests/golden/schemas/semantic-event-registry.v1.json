@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "kind": "SemanticEventRegistry",
+  "pack_id": "example",
+  "events": [
+    {
+      "name": "petstore.yaml",
+      "event_version": 1,
+      "payload_schema": "example",
+      "payload_schema_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "extensions": {}
+}

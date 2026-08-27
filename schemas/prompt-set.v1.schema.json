@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/prompt-set.v1.json",
+  "title": "PromptSet",
+  "description": "One named prompt set in a pack. Encodes SPEC sections 12.2 and 19.4.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "purpose_disclosure", "instructions", "launch"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "purpose_disclosure": {
+      "type": "string",
+      "enum": ["diagnostic", "naturalistic"]
+    },
+    "instructions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "engine", "delivery", "target"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "engine": {
+          "type": "string",
+          "enum": ["literal", "mustache-strict"]
+        },
+        "delivery": {
+          "type": "string",
+          "enum": ["file", "inline"]
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "launch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "engine"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "engine": {
+          "type": "string",
+          "enum": ["literal", "mustache-strict"]
+        }
+      }
+    }
+  }
+}

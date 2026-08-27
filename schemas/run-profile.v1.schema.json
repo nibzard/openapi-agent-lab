@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/run-profile.v1.json",
+  "title": "RunProfile",
+  "description": "How one homogeneous experiment cell is executed. Field-for-field mirror of the RunProfile type in @oal/config.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "agent",
+    "exposure",
+    "execution",
+    "evaluation",
+    "limits"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "agentlab.dev/v1"
+    },
+    "kind": {
+      "const": "RunProfile"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter", "model", "effort", "sandbox"],
+      "properties": {
+        "adapter": {
+          "type": "string",
+          "enum": ["codex-cli", "generic"]
+        },
+        "model": {
+          "type": ["string", "null"]
+        },
+        "effort": {
+          "type": ["string", "null"],
+          "enum": ["low", "medium", "high", "xhigh", null]
+        },
+        "sandbox": {
+          "type": ["string", "null"],
+          "enum": ["danger-full-access", "workspace-write", "read-only", null]
+        }
+      }
+    },
+    "exposure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "contract_visibility",
+        "data_plane_scope",
+        "documentation_profile"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["raw-http", "direct-tools", "catalog-tools"]
+        },
+        "contract_visibility": {
+          "type": "string",
+          "enum": ["none", "file", "discoverable"]
+        },
+        "data_plane_scope": {
+          "type": "string",
+          "enum": ["all", "task"]
+        },
+        "documentation_profile": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "count",
+        "parallel",
+        "timeout_ms",
+        "cohort_seed",
+        "confirm_paid_calls"
+      ],
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "parallel": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cohort_seed": {
+          "type": "string"
+        },
+        "confirm_paid_calls": {
+          "type": "boolean"
+        }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model_judge", "fail_on"],
+      "properties": {
+        "model_judge": {
+          "type": "string",
+          "enum": ["disabled", "enabled"]
+        },
+        "fail_on": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["required_check", "infrastructure"],
+          "properties": {
+            "required_check": {
+              "type": "boolean"
+            },
+            "infrastructure": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_agent_tool_calls",
+        "max_api_requests",
+        "max_artifact_bytes"
+      ],
+      "properties": {
+        "max_agent_tool_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_api_requests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_artifact_bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

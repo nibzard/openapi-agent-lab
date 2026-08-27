@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/cue-audit.v1.json",
+  "title": "CueAudit",
+  "description": "Private audit of rendered participant surfaces against the cue policy, plus pairwise cell comparison. Never participant-visible. Encodes SPEC section 9.6.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "cell_id",
+    "policy_sha256",
+    "scanned",
+    "findings",
+    "pairwise",
+    "result",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "CueAudit"
+    },
+    "cell_id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "policy_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "scanned": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["surface_entry", "bytes_sha256"],
+        "properties": {
+          "surface_entry": {
+            "$ref": "#/$defs/safeId"
+          },
+          "bytes_sha256": {
+            "$ref": "#/$defs/sha256"
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "surface_entry", "allowed_exception"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["literal", "pattern"]
+          },
+          "match": {
+            "type": "string",
+            "minLength": 1
+          },
+          "surface_entry": {
+            "$ref": "#/$defs/safeId"
+          },
+          "allowed_exception": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "pairwise": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["cell_a", "cell_b", "differences"],
+        "properties": {
+          "cell_a": {
+            "$ref": "#/$defs/safeId"
+          },
+          "cell_b": {
+            "$ref": "#/$defs/safeId"
+          },
+          "differences": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["surface_entry", "kind", "allowed"],
+              "properties": {
+                "surface_entry": {
+                  "$ref": "#/$defs/safeId"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": ["bytes", "name", "route", "catalog"]
+                },
+                "allowed": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "result": {
+      "type": "string",
+      "enum": ["pass", "fail"]
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

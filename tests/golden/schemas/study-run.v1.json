@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "study_run_id": "example",
+  "created_at": "2026-01-15T09:30:00.000Z",
+  "protocol": {
+    "id": "example",
+    "version": "1.0.0",
+    "protocol_lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "phase": {
+    "id": "example",
+    "kind": "smoke",
+    "analytical": true,
+    "phase_plan_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "phase_lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "assignment_schedule": {
+    "algorithm": "canonical-sha256-sort-v1",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "primary_count": 1,
+    "held_replacement_count": 1,
+    "maximum_agent_launches": 1
+  },
+  "study_compatibility_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "implementation_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "analysis_plan_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "child_batches": [
+    {
+      "cell_id": "example",
+      "batch_id": "example",
+      "relative_path": "batches/bat-01",
+      "factor_levels": {
+        "example": "example"
+      },
+      "cell_compatibility_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "extensions": {}
+}

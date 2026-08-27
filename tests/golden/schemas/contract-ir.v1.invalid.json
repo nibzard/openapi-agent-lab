@@ -1,0 +1,376 @@
+{
+  "$schema": "https://agentlab.dev/schemas/contract-ir.v1.json",
+  "schema_version": 2,
+  "kind": "ContractIR",
+  "compiler": {
+    "name": "example",
+    "version": "example"
+  },
+  "source": {
+    "entrypoint": "example",
+    "media_type": "application/json",
+    "openapi_version": "3.0.3",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "semantic_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "execution_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "documents": [
+      {
+        "uri": "example",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ]
+  },
+  "api": {
+    "title": null,
+    "version": null,
+    "description": null,
+    "servers": [
+      {
+        "url": "example",
+        "description": null,
+        "variables": {}
+      }
+    ]
+  },
+  "security_schemes": {},
+  "schemas": {},
+  "operations": [
+    {
+      "key": "path:GET /things",
+      "uid": "example",
+      "surface": "path",
+      "method": "USD",
+      "path_template": "example",
+      "route_segments": [
+        {
+          "kind": "literal",
+          "value": "example"
+        }
+      ],
+      "operation_id": null,
+      "tool_name": "example",
+      "summary": null,
+      "description": null,
+      "tags": ["example"],
+      "deprecated": true,
+      "servers": [
+        {
+          "url": "example",
+          "description": null,
+          "variables": {}
+        }
+      ],
+      "parameters": [
+        {
+          "name": "example",
+          "location": "path",
+          "style": "simple",
+          "explode": true,
+          "allow_reserved": true,
+          "required": true,
+          "deprecated": true,
+          "description": null,
+          "schema_ref": null,
+          "content": null,
+          "examples": [
+            {
+              "name": null,
+              "value": {}
+            }
+          ],
+          "support": "supported",
+          "support_reason_codes": ["example"],
+          "source_pointer": "example"
+        }
+      ],
+      "request_body": null,
+      "responses": [
+        {
+          "selector": "default",
+          "selector_kind": "exact",
+          "status": null,
+          "description": null,
+          "headers": [
+            {
+              "name": "example",
+              "required": true,
+              "deprecated": true,
+              "description": null,
+              "schema_ref": null,
+              "content": null,
+              "examples": [
+                {
+                  "name": null,
+                  "value": {}
+                }
+              ],
+              "support": "supported",
+              "support_reason_codes": ["example"]
+            }
+          ],
+          "content": [
+            {
+              "media_type": "example",
+              "schema_ref": null,
+              "examples": [
+                {
+                  "name": null,
+                  "value": {},
+                  "summary": null
+                }
+              ],
+              "support": "supported",
+              "support_reason_codes": ["example"]
+            }
+          ],
+          "source_pointer": "example"
+        }
+      ],
+      "security": null,
+      "callbacks": [
+        {
+          "name": "example",
+          "expressions": [
+            {
+              "method": "USD",
+              "path_template": "example",
+              "request_body": null,
+              "responses": [
+                {
+                  "selector": "default",
+                  "selector_kind": "exact",
+                  "status": null,
+                  "description": null,
+                  "headers": [
+                    {
+                      "name": "example",
+                      "required": true,
+                      "deprecated": true,
+                      "description": null,
+                      "schema_ref": null,
+                      "content": null,
+                      "examples": [
+                        {
+                          "name": null,
+                          "value": {}
+                        }
+                      ],
+                      "support": "supported",
+                      "support_reason_codes": ["example"]
+                    }
+                  ],
+                  "content": [
+                    {
+                      "media_type": "example",
+                      "schema_ref": null,
+                      "examples": [
+                        {
+                          "name": null,
+                          "value": {},
+                          "summary": null
+                        }
+                      ],
+                      "support": "supported",
+                      "support_reason_codes": ["example"]
+                    }
+                  ],
+                  "source_pointer": "example"
+                }
+              ]
+            }
+          ],
+          "source_pointer": "example"
+        }
+      ],
+      "extensions": {},
+      "source_pointer": "example",
+      "support": {
+        "level": "supported",
+        "diagnostic_codes": ["example"]
+      }
+    }
+  ],
+  "webhooks": [
+    {
+      "name": "example",
+      "description": null,
+      "operations": [
+        {
+          "key": "path:GET /things",
+          "uid": "example",
+          "surface": "path",
+          "method": "USD",
+          "path_template": "example",
+          "route_segments": [
+            {
+              "kind": "literal",
+              "value": "example"
+            }
+          ],
+          "operation_id": null,
+          "tool_name": "example",
+          "summary": null,
+          "description": null,
+          "tags": ["example"],
+          "deprecated": true,
+          "servers": [
+            {
+              "url": "example",
+              "description": null,
+              "variables": {}
+            }
+          ],
+          "parameters": [
+            {
+              "name": "example",
+              "location": "path",
+              "style": "simple",
+              "explode": true,
+              "allow_reserved": true,
+              "required": true,
+              "deprecated": true,
+              "description": null,
+              "schema_ref": null,
+              "content": null,
+              "examples": [
+                {
+                  "name": null,
+                  "value": {}
+                }
+              ],
+              "support": "supported",
+              "support_reason_codes": ["example"],
+              "source_pointer": "example"
+            }
+          ],
+          "request_body": null,
+          "responses": [
+            {
+              "selector": "default",
+              "selector_kind": "exact",
+              "status": null,
+              "description": null,
+              "headers": [
+                {
+                  "name": "example",
+                  "required": true,
+                  "deprecated": true,
+                  "description": null,
+                  "schema_ref": null,
+                  "content": null,
+                  "examples": [
+                    {
+                      "name": null,
+                      "value": {}
+                    }
+                  ],
+                  "support": "supported",
+                  "support_reason_codes": ["example"]
+                }
+              ],
+              "content": [
+                {
+                  "media_type": "example",
+                  "schema_ref": null,
+                  "examples": [
+                    {
+                      "name": null,
+                      "value": {},
+                      "summary": null
+                    }
+                  ],
+                  "support": "supported",
+                  "support_reason_codes": ["example"]
+                }
+              ],
+              "source_pointer": "example"
+            }
+          ],
+          "security": null,
+          "callbacks": [
+            {
+              "name": "example",
+              "expressions": [
+                {
+                  "method": "USD",
+                  "path_template": "example",
+                  "request_body": null,
+                  "responses": [
+                    {
+                      "selector": "default",
+                      "selector_kind": "exact",
+                      "status": null,
+                      "description": null,
+                      "headers": [
+                        {
+                          "name": "example",
+                          "required": true,
+                          "deprecated": true,
+                          "description": null,
+                          "schema_ref": null,
+                          "content": null,
+                          "examples": [
+                            {
+                              "name": null,
+                              "value": {}
+                            }
+                          ],
+                          "support": "supported",
+                          "support_reason_codes": ["example"]
+                        }
+                      ],
+                      "content": [
+                        {
+                          "media_type": "example",
+                          "schema_ref": null,
+                          "examples": [
+                            {
+                              "name": null,
+                              "value": {},
+                              "summary": null
+                            }
+                          ],
+                          "support": "supported",
+                          "support_reason_codes": ["example"]
+                        }
+                      ],
+                      "source_pointer": "example"
+                    }
+                  ]
+                }
+              ],
+              "source_pointer": "example"
+            }
+          ],
+          "extensions": {},
+          "source_pointer": "example",
+          "support": {
+            "level": "supported",
+            "diagnostic_codes": ["example"]
+          }
+        }
+      ],
+      "source_pointer": "example"
+    }
+  ],
+  "diagnostics": [
+    {
+      "severity": "info",
+      "phase": "ingest",
+      "code": "USD",
+      "message": "example",
+      "document_uri": null,
+      "json_pointer": null,
+      "operation_key": null,
+      "retryable": true,
+      "related": [
+        {
+          "document_uri": "example",
+          "json_pointer": "example"
+        }
+      ],
+      "details": {}
+    }
+  ],
+  "extensions": {}
+}

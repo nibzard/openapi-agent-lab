@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/contract-variant-diff.v1.json",
+  "title": "ContractVariantDiff",
+  "description": "Structural difference inventory between base and one effective variant, classified against the declared allowlist. Encodes SPEC section 12.12.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "variant_id",
+    "base_sha256",
+    "effective_sha256",
+    "differences",
+    "violations",
+    "operation_inventory",
+    "verified",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "variant_id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "base_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "effective_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "differences": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pointer", "layer", "op", "allowlisted"],
+        "properties": {
+          "pointer": {
+            "type": "string",
+            "pattern": "^(/([^/~]|~[01])*)*$"
+          },
+          "layer": {
+            "type": "string",
+            "enum": ["common-projection", "variant", "unrelated"]
+          },
+          "op": {
+            "type": "string",
+            "enum": ["add", "remove", "replace"]
+          },
+          "before": {
+            "description": "Base value at the pointer."
+          },
+          "after": {
+            "description": "Effective value at the pointer."
+          },
+          "allowlisted": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "violations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pointer", "reason"],
+        "properties": {
+          "pointer": {
+            "type": "string",
+            "pattern": "^(/([^/~]|~[01])*)*$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "operation_inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["added", "removed", "unchanged_count"],
+      "properties": {
+        "added": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^path:[A-Z]+ [^ ]+$"
+          }
+        },
+        "removed": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^path:[A-Z]+ [^ ]+$"
+          }
+        },
+        "unchanged_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "verified": {
+      "type": "boolean"
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

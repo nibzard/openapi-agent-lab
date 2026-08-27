@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "kind": "ResourceUsage",
+  "run_id": "run-01",
+  "usage_observed": true,
+  "duration_ms": 184223,
+  "input_tokens": 48102,
+  "output_tokens": 2214,
+  "total_tokens": 50316,
+  "tool_calls": 31,
+  "api_requests": 27,
+  "provider_cost": 0.42,
+  "currency": "USD",
+  "adapter_reported": {
+    "available": true,
+    "fields": ["input_tokens", "output_tokens", "total_tokens"]
+  },
+  "extensions": {}
+}

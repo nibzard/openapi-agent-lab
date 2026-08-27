@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/eval-case.v1.json",
+  "title": "EvalCase",
+  "description": "One non-empty JSONL case line for a task case source. Case IDs are unique safe IDs; inputs are synthetic non-secret values. Encodes SPEC section 12.6.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "input"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "input": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "Synthetic non-secret task inputs referenced explicitly by templates."
+    },
+    "description": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/lifecycle-event.v1.json",
+  "title": "LifecycleEvent",
+  "description": "Append-only record in a trial's lifecycle.jsonl with a monotonically increasing sequence, stage, timestamp, evidence source, and bounded details. Encodes SPEC section 22.3.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "sequence",
+    "stage",
+    "recorded_at",
+    "evidence_source",
+    "details"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "scheduled",
+        "workspace_prepared",
+        "server_ready",
+        "participant_spawned",
+        "model_started",
+        "participant_control_started",
+        "api_started",
+        "turn_completed",
+        "report_present",
+        "report_valid",
+        "operator_signal_received",
+        "finalization_started",
+        "evidence_finalized"
+      ]
+    },
+    "recorded_at": {
+      "$ref": "#/$defs/rfc3339"
+    },
+    "evidence_source": {
+      "type": "string",
+      "enum": [
+        "runner",
+        "adapter",
+        "gateway",
+        "evaluator",
+        "filesystem",
+        "operator",
+        "state_store"
+      ]
+    },
+    "details": {
+      "type": "object",
+      "maxProperties": 32,
+      "additionalProperties": {
+        "type": ["string", "integer", "boolean", "null"]
+      }
+    }
+  },
+  "$defs": {
+    "rfc3339": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    }
+  }
+}

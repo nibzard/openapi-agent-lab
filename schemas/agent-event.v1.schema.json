@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/agent-event.v1.json",
+  "title": "AgentEvent",
+  "description": "One redacted agent session record in session/events.redacted.jsonl: agent.started, agent.session_event, or agent.exited. Encodes SPEC sections 22.3 and 33.1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "type",
+    "event_id",
+    "sequence",
+    "observed_at",
+    "run_id",
+    "adapter",
+    "payload",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "type": {
+      "type": "string",
+      "enum": ["agent.started", "agent.session_event", "agent.exited"]
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^ag_[a-zA-Z0-9_]+$"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "observed_at": {
+      "$ref": "#/$defs/rfc3339"
+    },
+    "run_id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "adapter": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "payload": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model"],
+          "properties": {
+            "model": {
+              "type": ["string", "null"]
+            },
+            "cli_version": {
+              "type": ["string", "null"]
+            },
+            "effort": {
+              "type": ["string", "null"]
+            },
+            "sandbox": {
+              "type": ["string", "null"]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["channel", "redacted"],
+          "properties": {
+            "channel": {
+              "type": "string",
+              "enum": ["stdout", "stderr", "jsonrpc", "adapter"]
+            },
+            "redacted": {
+              "type": "boolean"
+            },
+            "bytes": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256OrNull"
+            },
+            "preview": {
+              "type": ["string", "null"]
+            },
+            "kind": {
+              "type": ["string", "null"],
+              "description": "Adapter-declared machine-readable session event kind."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["exit_code", "signal"],
+          "properties": {
+            "exit_code": {
+              "type": ["integer", "null"]
+            },
+            "signal": {
+              "type": ["string", "null"]
+            },
+            "graceful": {
+              "type": "boolean"
+            }
+          }
+        }
+      ]
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "sha256OrNull": {
+      "type": ["string", "null"],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "rfc3339": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    }
+  }
+}

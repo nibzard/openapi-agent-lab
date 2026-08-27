@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/response-profile.v1.json",
+  "title": "ResponseProfile",
+  "description": "Framework-controlled participant-facing error and identifier behavior as data. Encodes SPEC section 15.11.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "id",
+    "version",
+    "errors",
+    "identifiers",
+    "renderable_request_facts",
+    "escaping",
+    "content_type",
+    "max_bytes",
+    "localization_version",
+    "compatibility_header",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "ResponseProfile"
+    },
+    "id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "version": {
+      "$ref": "#/$defs/semver"
+    },
+    "errors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unknown_route",
+        "wrong_method",
+        "authentication",
+        "authorization",
+        "parse",
+        "validation",
+        "limit",
+        "timeout",
+        "internal_error"
+      ],
+      "properties": {
+        "unknown_route": {
+          "$ref": "#/$defs/errorCatalogEntry"
+        },
+        "wrong_method": {
+          "$ref": "#/$defs/errorCatalogEntry"
+        },
+        "authentication": {
+          "$ref": "#/$defs/errorCatalogEntry"
+        },
+        "authorization": {
+          "$ref": "#/$defs/errorCatalogEntry"
+        },
+        "parse": {
+          "$ref": "#/$defs/errorCatalogEntry"
+        },
+        "validation": {
+          "$ref": "#/$defs/errorCatalogEntry"
+        },
+        "limit": {
+          "$ref": "#/$defs/errorCatalogEntry"
+        },
+        "timeout": {
+          "$ref": "#/$defs/errorCatalogEntry"
+        },
+        "internal_error": {
+          "$ref": "#/$defs/errorCatalogEntry"
+        }
+      }
+    },
+    "identifiers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rules"],
+      "properties": {
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "pattern"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["resource_id", "base_url", "credential"]
+              },
+              "pattern": {
+                "type": "string",
+                "minLength": 1
+              },
+              "prefix": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "renderable_request_facts": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["method", "path", "query", "header_names", "media_type"]
+      }
+    },
+    "escaping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "max_bytes"],
+      "properties": {
+        "policy": {
+          "type": "string",
+          "enum": ["json", "html", "none"]
+        },
+        "max_bytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "content_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "max_bytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "localization_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "compatibility_header": {
+      "type": ["string", "null"],
+      "description": "Any intentionally visible compatibility header; null when none is exposed."
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "errorCatalogEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "body", "headers"],
+      "properties": {
+        "status": {
+          "type": "integer",
+          "minimum": 400,
+          "maximum": 599
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "template"],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": ["json", "text"]
+                },
+                "template": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          ]
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

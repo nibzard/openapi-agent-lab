@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "kind": "BlindingReview",
+  "id": "example",
+  "reviewers": [
+    {
+      "name": "example",
+      "role": "example"
+    }
+  ],
+  "reviewed_surfaces": [
+    {
+      "cell_id": "example",
+      "manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "cue_audit_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "findings": [
+    {
+      "severity": "info",
+      "description": "example"
+    }
+  ],
+  "approved": true,
+  "extensions": {}
+}

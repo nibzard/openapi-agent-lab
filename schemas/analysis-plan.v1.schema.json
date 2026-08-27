@@ -1,0 +1,350 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/analysis-plan.v1.json",
+  "title": "AnalysisPlan",
+  "description": "Frozen analysis-plan.frozen.json: resolved metrics, contrasts, estimands, families, methods, and policies before analytical paid data. Encodes SPEC sections 12.9 and 27.6.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "phase_id",
+    "metrics",
+    "contrasts",
+    "primary_estimand",
+    "comparison_families",
+    "methods",
+    "eligibility",
+    "censoring",
+    "replacement",
+    "stopping",
+    "worst_case_sensitivity",
+    "max_claim",
+    "small_sample_label",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "AnalysisPlan"
+    },
+    "phase_id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "confirmatory": {
+      "type": "boolean"
+    },
+    "metrics": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "primary", "missingness"],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["binary", "integer", "continuous"]
+          },
+          "primary": {
+            "type": "boolean"
+          },
+          "missingness": {
+            "type": "string",
+            "enum": [
+              "observed",
+              "unknown",
+              "not_applicable",
+              "unavailable_due_to_evidence"
+            ]
+          },
+          "source": {
+            "type": "object",
+            "minProperties": 1
+          }
+        }
+      }
+    },
+    "contrasts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "metric", "factor", "levels", "direction"],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "metric": {
+            "$ref": "#/$defs/safeId"
+          },
+          "factor": {
+            "$ref": "#/$defs/safeId"
+          },
+          "levels": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "$ref": "#/$defs/safeId"
+            }
+          },
+          "direction": {
+            "type": "string",
+            "enum": ["first_minus_second", "second_minus_first"]
+          },
+          "within": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {
+              "$ref": "#/$defs/safeId"
+            },
+            "propertyNames": {
+              "$ref": "#/$defs/safeId"
+            }
+          },
+          "population": {
+            "$ref": "#/$defs/safeId"
+          }
+        }
+      }
+    },
+    "primary_estimand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "outcome", "population", "contrast", "measure"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "outcome": {
+          "$ref": "#/$defs/safeId"
+        },
+        "population": {
+          "$ref": "#/$defs/safeId"
+        },
+        "contrast": {
+          "$ref": "#/$defs/safeId"
+        },
+        "measure": {
+          "type": "string",
+          "enum": ["risk_difference", "risk_ratio", "difference"]
+        }
+      }
+    },
+    "comparison_families": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "contrasts", "alpha", "multiplicity"],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "contrasts": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/$defs/safeId"
+            }
+          },
+          "alpha": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1
+          },
+          "multiplicity": {
+            "type": "string",
+            "enum": ["holm", "none"]
+          }
+        }
+      }
+    },
+    "methods": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binary_interval", "risk_difference_interval", "exact_test"],
+      "properties": {
+        "binary_interval": {
+          "type": "string",
+          "enum": ["wilson", "wald"]
+        },
+        "risk_difference_interval": {
+          "type": "string",
+          "enum": ["newcombe", "wald"]
+        },
+        "exact_test": {
+          "type": "string",
+          "enum": ["fisher_two_sided"]
+        }
+      }
+    },
+    "eligibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["populations"],
+      "properties": {
+        "populations": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "require"],
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/safeId"
+              },
+              "require": {
+                "type": "string",
+                "enum": ["participant_control_started"]
+              },
+              "exclude": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "pre_control_nonparticipant",
+                    "administrative_censor",
+                    "instrumentation_censor"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "censoring": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["derivation"],
+      "properties": {
+        "derivation": {
+          "type": "string",
+          "enum": ["finalization_v1"]
+        }
+      }
+    },
+    "replacement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["none", "held-same-cell"]
+        },
+        "activation_timing": {
+          "type": "string",
+          "enum": ["immediate_after_terminal", "after_primary_schedule"]
+        },
+        "maximum_activated_per_cell": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "stopping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "batch_wide_pre_control_failure",
+        "data_dependent_success_stop"
+      ],
+      "properties": {
+        "batch_wide_pre_control_failure": {
+          "type": "string",
+          "enum": ["abort", "incomplete"]
+        },
+        "second_unreplaced_failure_in_cell": {
+          "type": "string",
+          "enum": ["incomplete", "abort"]
+        },
+        "operator_interruption": {
+          "type": "string",
+          "enum": ["abort"]
+        },
+        "data_dependent_success_stop": {
+          "type": "string",
+          "enum": ["forbidden"]
+        }
+      }
+    },
+    "worst_case_sensitivity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["participant_control_started_censors_as_failure"],
+      "properties": {
+        "participant_control_started_censors_as_failure": {
+          "type": "boolean"
+        }
+      }
+    },
+    "marginal_weighting": {
+      "type": "string",
+      "enum": ["none", "equal_cells", "equal_assignments"]
+    },
+    "floor_ceiling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["apply_by_factor_level"],
+      "properties": {
+        "apply_by_factor_level": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "power": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rationale"],
+      "properties": {
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sample_size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "minimum_important_effect": {
+          "type": "number"
+        }
+      }
+    },
+    "max_claim": {
+      "type": "string",
+      "minLength": 1
+    },
+    "small_sample_label": {
+      "type": "string",
+      "enum": ["directional", "confirmatory"]
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

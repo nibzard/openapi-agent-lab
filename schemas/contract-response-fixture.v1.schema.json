@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/contract-response-fixture.v1.json",
+  "title": "ContractResponseFixture",
+  "description": "Unconditional contract response fixture for one operation. Encodes SPEC section 15.5.1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "operation", "status", "media_type", "headers", "body"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "operation": {
+      "type": "string",
+      "pattern": "^path:[A-Z]+ [^ ]+$"
+    },
+    "status": {
+      "type": "integer",
+      "minimum": 200,
+      "maximum": 599
+    },
+    "media_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "default": {
+      "type": "boolean",
+      "description": "Marks the single default fixture permitted per operation in version 1."
+    },
+    "body": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": {
+              "const": "none"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": {
+              "const": "json_inline"
+            },
+            "value": {
+              "description": "Literal JSON response value."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "source"],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["json_file", "text_file", "binary_file"]
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    }
+  }
+}

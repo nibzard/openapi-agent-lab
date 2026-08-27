@@ -1,0 +1,99 @@
+{
+  "apiVersion": "agentlab.dev/v1",
+  "kind": "Pack",
+  "metadata": {
+    "id": "example",
+    "name": "example",
+    "version": "1.0.0"
+  },
+  "requires": {
+    "agentlab": ">=1.0.0",
+    "backend_api": 1,
+    "rubric_api": 1
+  },
+  "contract": {
+    "entrypoint": "example"
+  },
+  "server": {
+    "host": "example",
+    "port": 1,
+    "request_body_limit_bytes": 1,
+    "request_timeout_ms": 1,
+    "response_validation": "error",
+    "request_validation": "error",
+    "concurrency": "serial"
+  },
+  "behavior": {
+    "mode": "contract"
+  },
+  "security": {
+    "enforce": true,
+    "credentials": [
+      {
+        "id": "example",
+        "scheme": "example",
+        "provider": {
+          "kind": "generated"
+        },
+        "expose": {
+          "environment": "OAL_AUTH_EXAMPLE"
+        }
+      }
+    ],
+    "base_url_environment": "OAL_AUTH_EXAMPLE"
+  },
+  "redaction": {
+    "header_names": ["example"],
+    "key_patterns": ["example"],
+    "capture_binary_blobs": true,
+    "max_text_capture_bytes": 1
+  },
+  "participant": {
+    "environment": {
+      "inherit": "none",
+      "allow": ["OAL_AUTH_EXAMPLE"]
+    }
+  },
+  "prompt_sets": [
+    {
+      "id": "example",
+      "purpose_disclosure": "diagnostic",
+      "instructions": {
+        "source": "example",
+        "engine": "literal",
+        "delivery": "file",
+        "target": "example"
+      },
+      "launch": {
+        "source": "example",
+        "engine": "literal"
+      }
+    }
+  ],
+  "evals": [
+    {
+      "id": "example",
+      "prompt_set": "example",
+      "task": {
+        "source": "example",
+        "engine": "literal"
+      },
+      "operation_scope": {
+        "mode": "all"
+      },
+      "result": {
+        "source": "adapter_final",
+        "schema": "example",
+        "required": true
+      },
+      "rubric": "example",
+      "scenario": "example"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "example"
+    }
+  ],
+  "extensions": {}
+}

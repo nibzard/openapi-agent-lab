@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "kind": "ParticipantSurfacePolicy",
+  "id": "example",
+  "version": "1.0.0",
+  "forbidden_literals": [
+    {
+      "literal": "example",
+      "case_insensitive": true
+    }
+  ],
+  "forbidden_patterns": ["example"],
+  "allowed_exceptions": [
+    {
+      "surface_entry": "example",
+      "literal": "example"
+    }
+  ],
+  "treatment_owned": {
+    "paths": ["example"],
+    "routes": ["example"],
+    "fields": ["example"],
+    "catalogs": ["example"]
+  },
+  "neutral_profiles": {
+    "response_profile": "example",
+    "credential_profile": "example",
+    "server_profile": "example"
+  },
+  "pairwise_surface_diff_allowlist": [
+    {
+      "cell_a": "example",
+      "cell_b": "example",
+      "allowed_differences": ["example"]
+    }
+  ],
+  "required_reviews": {
+    "equivalence": true,
+    "blinding": true
+  },
+  "extensions": {}
+}

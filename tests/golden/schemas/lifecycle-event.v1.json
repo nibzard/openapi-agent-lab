@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "sequence": 1,
+  "stage": "workspace_prepared",
+  "recorded_at": "2026-01-15T09:30:01.004Z",
+  "evidence_source": "runner",
+  "details": {
+    "workspace_bytes": 0,
+    "synthetic_home": true
+  }
+}

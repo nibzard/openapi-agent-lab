@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "variant_id": "example",
+  "base_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "effective_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "differences": [
+    {
+      "pointer": "/things",
+      "layer": "common-projection",
+      "op": "add",
+      "allowlisted": true
+    }
+  ],
+  "violations": [
+    {
+      "pointer": "/things",
+      "reason": "example"
+    }
+  ],
+  "operation_inventory": {
+    "added": ["path:GET /things"],
+    "removed": ["path:GET /things"],
+    "unchanged_count": 1
+  },
+  "verified": true,
+  "extensions": {}
+}

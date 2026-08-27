@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "kind": "ParticipantSurfaceVerification",
+  "run_id": "example",
+  "manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "verified": true,
+  "discovered": [
+    {
+      "target": "example",
+      "channel": "file",
+      "status": "declared"
+    }
+  ],
+  "mismatches": [
+    {
+      "entry_id": "example",
+      "kind": "hash"
+    }
+  ],
+  "extensions": {}
+}

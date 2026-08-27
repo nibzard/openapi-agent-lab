@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "kind": "Server",
+  "run_id": "example",
+  "mode": "contract",
+  "host": "127.0.0.1",
+  "port": 1,
+  "started_at": "2026-01-15T09:30:00.000Z",
+  "stopped_at": null,
+  "credential_schemes": [
+    {
+      "scheme": "example",
+      "type": "apiKey"
+    }
+  ],
+  "extensions": {}
+}

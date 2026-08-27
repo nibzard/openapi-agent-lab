@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "kind": "CapabilityReport",
+  "contract_semantic_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "source": {
+    "openapi_version": "example",
+    "media_type": "example",
+    "entrypoint": "example"
+  },
+  "counts": {
+    "operations": {
+      "supported": 1,
+      "approximated": 1,
+      "requires_scenario": 1,
+      "unsupported": 1
+    },
+    "security_schemes": {
+      "supported": 1,
+      "approximated": 1,
+      "requires_scenario": 1,
+      "unsupported": 1
+    }
+  },
+  "operations": [
+    {
+      "key": "path:GET /things",
+      "uid": "example",
+      "operation_id": null,
+      "method": "USD",
+      "path_template": "example",
+      "level": "supported",
+      "reason_codes": ["example"],
+      "surfaces": [
+        {
+          "kind": "parameter",
+          "name": null
+        }
+      ]
+    }
+  ],
+  "features": [
+    {
+      "kind": "serialization",
+      "name": "example",
+      "level": "supported",
+      "reason_codes": ["example"],
+      "operation_keys": ["path:GET /things"]
+    }
+  ],
+  "missing_operation_ids": 1,
+  "duplicate_operation_ids": ["example"],
+  "tool_name_collisions": ["example"],
+  "recommendations": {
+    "contract_mode_viability": "viable",
+    "scenario_requirements": ["example"],
+    "direct_tools": {
+      "viable": true,
+      "operation_count": 1,
+      "serialized_schema_bytes": null,
+      "max_operations": 1,
+      "max_schema_bytes": 1,
+      "reason_codes": ["example"]
+    },
+    "catalog_tools": {
+      "viable": true,
+      "reason_codes": ["example"]
+    },
+    "recommended_exposure": "raw-http",
+    "strict_blockers": ["example"]
+  },
+  "diagnostics": [
+    {
+      "severity": "info",
+      "phase": "ingest",
+      "code": "USD",
+      "message": "example",
+      "document_uri": null,
+      "json_pointer": null,
+      "operation_key": null,
+      "retryable": true,
+      "related": [
+        {
+          "document_uri": "example",
+          "json_pointer": "example"
+        }
+      ],
+      "details": {}
+    }
+  ]
+}

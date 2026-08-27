@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/state-summary.v1.json",
+  "title": "StateSummary",
+  "description": "Redacted evaluator-facing summary of final backend state in state.summary.json. Encodes SPEC sections 24.1 and 25.7.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "run_id",
+    "state_schema_version",
+    "revision",
+    "state_sha256",
+    "projections",
+    "counts",
+    "redacted",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "StateSummary"
+    },
+    "run_id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "state_schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "state_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "projections": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "description": "Redacted deterministic projection value."
+      },
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*$"
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*$"
+      }
+    },
+    "redacted": {
+      "type": "boolean"
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

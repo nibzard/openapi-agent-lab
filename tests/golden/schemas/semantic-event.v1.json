@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "type": "semantic.event",
+  "event_id": "sem_1",
+  "semantic_sequence": 1,
+  "run_id": "example",
+  "pack_id": "example",
+  "name": "petstore.yaml",
+  "event_version": 1,
+  "logical_time": "2026-01-15T09:30:00.000Z",
+  "caused_by_api_event_id": null,
+  "actor": "participant",
+  "state_revision_before": 1,
+  "state_revision_after": 1,
+  "payload_schema": "computer.created@1",
+  "payload": {}
+}

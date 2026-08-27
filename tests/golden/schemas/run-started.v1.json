@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "kind": "RunStarted",
+  "run_id": "example",
+  "batch_id": "example",
+  "started_at": "2026-01-15T09:30:00.000Z",
+  "server": {
+    "base_url": "http://127.0.0.1:4010",
+    "mode": "contract"
+  },
+  "inputs": {},
+  "extensions": {}
+}

@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "kind": "ContractVariantSet",
+  "id": "example",
+  "base": {
+    "source": "example",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "variants": [
+    {
+      "id": "example",
+      "transform": {
+        "kind": "patch",
+        "patch": [
+          {
+            "op": "add",
+            "path": "/things"
+          }
+        ]
+      },
+      "allowlist": ["/things"],
+      "expected_operations": ["path:GET /things"],
+      "effective_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "behavior_adapters": [
+        {
+          "operation": "path:GET /things",
+          "adapter_id": "example",
+          "adapter_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "documentation": {
+        "fact_ids": ["example"],
+        "placement_classes": ["example"],
+        "examples": [
+          {
+            "id": "example",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      },
+      "semantic": {
+        "action_ids": ["example"],
+        "schemas": [
+          {
+            "id": "example",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      }
+    }
+  ],
+  "surfaces": {
+    "expected_constant": ["example"],
+    "expected_variable": ["example"]
+  },
+  "extensions": {}
+}

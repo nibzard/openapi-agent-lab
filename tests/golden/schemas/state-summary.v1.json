@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "kind": "StateSummary",
+  "run_id": "run-01",
+  "state_schema_version": 1,
+  "revision": 14,
+  "state_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "projections": {
+    "computer": {
+      "id": "comp_0001",
+      "state": "running",
+      "file_count": 0,
+      "env_keys": ["EXPERIMENT_MODE"]
+    }
+  },
+  "counts": {
+    "computers": 1
+  },
+  "redacted": true,
+  "extensions": {}
+}

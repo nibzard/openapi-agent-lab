@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "kind": "DocumentationProfile",
+  "id": "example",
+  "version": "1.0.0",
+  "candidates": [
+    {
+      "route_id": "example",
+      "method": "GET",
+      "path": "/things",
+      "role": "contract",
+      "enabled": true
+    }
+  ],
+  "authentication": "none",
+  "content_type": "example",
+  "headers": {},
+  "index_link_ordering": "canonical",
+  "disabled_candidate_outcome": "neutral_unknown_route",
+  "max_bytes": 1,
+  "response_profile": "example",
+  "extensions": {}
+}

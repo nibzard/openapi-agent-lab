@@ -1,0 +1,36 @@
+{
+  "rubric_version": 1,
+  "id": "checkout-success",
+  "description": "The participant completes a paid checkout and reports the order identifier.",
+  "scoring": {
+    "method": "weighted_binary",
+    "pass_threshold": 0.8
+  },
+  "checks": [
+    {
+      "id": "creates-order",
+      "weight": 2,
+      "required": true,
+      "evidence_class": "participant_observable",
+      "match": "existential",
+      "where": "type == 'api.exchange' and operation.operation_id == 'createOrder'",
+      "on_missing": "fail"
+    },
+    {
+      "id": "order-visible-in-report",
+      "kind": "artifact",
+      "weight": 1,
+      "required": true,
+      "path": "participant-report.json",
+      "exists": true,
+      "media_type": "application/json"
+    }
+  ],
+  "signals": [
+    {
+      "id": "used-documentation-index",
+      "kind": "predicate",
+      "expression": "any(d in documentation, d.outcome == 'index_served')"
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/resource-usage.v1.json",
+  "title": "ResourceUsage",
+  "description": "Per-run adapter-reported resource usage. Unknown values are null, never zero. Encodes SPEC sections 22.4 and 27.3.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "run_id",
+    "usage_observed",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "ResourceUsage"
+    },
+    "run_id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "usage_observed": {
+      "type": "boolean",
+      "description": "True only when the adapter reported usage data."
+    },
+    "duration_ms": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "input_tokens": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "output_tokens": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "reasoning_tokens": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "cached_input_tokens": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "total_tokens": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "tool_calls": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "api_requests": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "provider_cost": {
+      "type": ["number", "null"],
+      "minimum": 0
+    },
+    "currency": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Z]{3}$"
+    },
+    "adapter_reported": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["available"],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": ["string", "null"]
+        },
+        "fields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    }
+  }
+}

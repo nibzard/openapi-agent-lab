@@ -1,0 +1,488 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/rubric.v1.json",
+  "title": "Rubric",
+  "description": "Hidden deterministic rubric: scoring method, typed checks, and non-scoring signals. Encodes SPEC sections 26.3 through 26.7.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rubric_version", "id", "scoring", "checks", "signals"],
+  "properties": {
+    "rubric_version": {
+      "const": 1
+    },
+    "id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "description": {
+      "type": "string"
+    },
+    "scoring": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "pass_threshold"],
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["weighted_binary"]
+        },
+        "pass_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/check"
+      }
+    },
+    "signals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "expression"],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "kind": {
+            "const": "predicate"
+          },
+          "description": {
+            "type": "string"
+          },
+          "expression": {
+            "type": "string",
+            "minLength": 1
+          },
+          "on_missing": {
+            "$ref": "#/$defs/onMissing"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "onMissing": {
+      "type": "string",
+      "enum": ["fail", "skip", "error"]
+    },
+    "evidenceClass": {
+      "type": "string",
+      "enum": ["participant_observable", "private_domain", "mixed"]
+    },
+    "check": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "kind", "weight", "required", "expression"],
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/safeId"
+            },
+            "description": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "predicate"
+            },
+            "weight": {
+              "type": "number",
+              "minimum": 0
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "evidence_class": {
+              "$ref": "#/$defs/evidenceClass"
+            },
+            "expression": {
+              "type": "string",
+              "minLength": 1
+            },
+            "on_missing": {
+              "$ref": "#/$defs/onMissing"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "kind", "weight", "required", "match", "where"],
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/safeId"
+            },
+            "description": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "event"
+            },
+            "weight": {
+              "type": "number",
+              "minimum": 0
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "evidence_class": {
+              "$ref": "#/$defs/evidenceClass"
+            },
+            "match": {
+              "type": "string",
+              "enum": ["existential", "universal", "counted"]
+            },
+            "where": {
+              "type": "string",
+              "minLength": 1
+            },
+            "min_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "max_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "on_missing": {
+              "$ref": "#/$defs/onMissing"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "kind", "weight", "required", "match", "steps"],
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/safeId"
+            },
+            "description": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "sequence"
+            },
+            "weight": {
+              "type": "number",
+              "minimum": 0
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "evidence_class": {
+              "$ref": "#/$defs/evidenceClass"
+            },
+            "match": {
+              "type": "string",
+              "enum": ["any", "all"]
+            },
+            "max_candidates": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "steps": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "where"],
+                "properties": {
+                  "id": {
+                    "$ref": "#/$defs/safeId"
+                  },
+                  "where": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "capture": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "additionalProperties": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "propertyNames": {
+                      "$ref": "#/$defs/safeId"
+                    }
+                  }
+                }
+              }
+            },
+            "postconditions": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "expression"],
+                "properties": {
+                  "id": {
+                    "$ref": "#/$defs/safeId"
+                  },
+                  "expression": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            },
+            "on_missing": {
+              "$ref": "#/$defs/onMissing"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "kind", "weight", "required", "value", "schema"],
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/safeId"
+            },
+            "description": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "json_schema"
+            },
+            "weight": {
+              "type": "number",
+              "minimum": 0
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "evidence_class": {
+              "$ref": "#/$defs/evidenceClass"
+            },
+            "value": {
+              "type": "string",
+              "enum": ["report", "state", "response"]
+            },
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "on_missing": {
+              "$ref": "#/$defs/onMissing"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "kind", "weight", "required", "path"],
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/safeId"
+            },
+            "description": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "artifact"
+            },
+            "weight": {
+              "type": "number",
+              "minimum": 0
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "evidence_class": {
+              "$ref": "#/$defs/evidenceClass"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "exists": {
+              "type": "boolean"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "media_type": {
+              "type": "string",
+              "minLength": 1
+            },
+            "max_bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "on_missing": {
+              "$ref": "#/$defs/onMissing"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "kind", "weight", "required", "match", "where"],
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/safeId"
+            },
+            "description": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "documentation_event"
+            },
+            "weight": {
+              "type": "number",
+              "minimum": 0
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "evidence_class": {
+              "$ref": "#/$defs/evidenceClass"
+            },
+            "match": {
+              "type": "string",
+              "enum": ["existential", "universal", "counted"]
+            },
+            "where": {
+              "type": "string",
+              "minLength": 1
+            },
+            "min_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "max_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ordered": {
+              "type": "boolean"
+            },
+            "steps": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "where"],
+                "properties": {
+                  "id": {
+                    "$ref": "#/$defs/safeId"
+                  },
+                  "where": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "capture": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "additionalProperties": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "propertyNames": {
+                      "$ref": "#/$defs/safeId"
+                    }
+                  }
+                }
+              }
+            },
+            "on_missing": {
+              "$ref": "#/$defs/onMissing"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "kind", "weight", "required", "match", "where"],
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/safeId"
+            },
+            "description": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "semantic_event"
+            },
+            "weight": {
+              "type": "number",
+              "minimum": 0
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "evidence_class": {
+              "$ref": "#/$defs/evidenceClass"
+            },
+            "match": {
+              "type": "string",
+              "enum": ["existential", "universal", "counted"]
+            },
+            "where": {
+              "type": "string",
+              "minLength": 1
+            },
+            "min_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "max_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ordered": {
+              "type": "boolean"
+            },
+            "steps": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "where"],
+                "properties": {
+                  "id": {
+                    "$ref": "#/$defs/safeId"
+                  },
+                  "where": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "capture": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "additionalProperties": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "propertyNames": {
+                      "$ref": "#/$defs/safeId"
+                    }
+                  }
+                }
+              }
+            },
+            "on_missing": {
+              "$ref": "#/$defs/onMissing"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

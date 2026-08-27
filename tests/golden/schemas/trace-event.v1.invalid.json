@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "type": "api.exchange",
+  "event_id": "evt1",
+  "sequence": 1,
+  "participant_ingress_sequence": null,
+  "observed_at": "2026-01-15T09:30:00.000Z",
+  "logical_time": null,
+  "batch_id": null,
+  "run_id": null,
+  "eval_id": null,
+  "actor": "participant",
+  "transport": {
+    "kind": "http",
+    "request_id": null,
+    "connection_id": null
+  },
+  "operation": {
+    "matched": true,
+    "key": null,
+    "uid": null,
+    "operation_id": null,
+    "method": null,
+    "path_template": null,
+    "support": "supported"
+  },
+  "request": null,
+  "authentication": {
+    "status": "authenticated",
+    "alternative_index": null,
+    "schemes": ["example"],
+    "principal_ref": null
+  },
+  "validation": {
+    "request": {
+      "status": "valid",
+      "violations": [
+        {
+          "pointer": "example",
+          "code": "example",
+          "message": "example"
+        }
+      ]
+    },
+    "response": {
+      "status": "valid",
+      "violations": [
+        {
+          "pointer": "example",
+          "code": "example",
+          "message": "example"
+        }
+      ]
+    }
+  },
+  "backend": null,
+  "response": null,
+  "state": null,
+  "idempotency": {
+    "status": "not_requested"
+  },
+  "replay": {
+    "classification": "full",
+    "reason_code": null
+  },
+  "error": null,
+  "duration_ms": 1,
+  "resource_usage": null,
+  "extensions": {}
+}

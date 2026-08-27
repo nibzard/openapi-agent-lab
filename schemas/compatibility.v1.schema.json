@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/compatibility.v1.json",
+  "title": "Compatibility",
+  "description": "Study and cell compatibility keys calculated before any registered aggregation, plus detected drift. Encodes SPEC section 27.5.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "study_compatibility_sha256",
+    "compatible",
+    "cells",
+    "drift",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "Compatibility"
+    },
+    "study_run_id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "study_compatibility_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "compatible": {
+      "type": "boolean"
+    },
+    "cells": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cell_id",
+          "cell_compatibility_sha256",
+          "factor_levels",
+          "effective"
+        ],
+        "properties": {
+          "cell_id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "cell_compatibility_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "factor_levels": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {
+              "$ref": "#/$defs/safeId"
+            },
+            "propertyNames": {
+              "$ref": "#/$defs/safeId"
+            }
+          },
+          "effective": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "run_profile_sha256",
+              "contract_execution_sha256",
+              "scenario_sha256",
+              "participant_surface_template_sha256"
+            ],
+            "properties": {
+              "run_profile_sha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "contract_execution_sha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "scenario_sha256": {
+                "$ref": "#/$defs/sha256"
+              },
+              "participant_surface_template_sha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            }
+          }
+        }
+      }
+    },
+    "drift": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["cell_id", "field"],
+        "properties": {
+          "cell_id": {
+            "$ref": "#/$defs/safeIdOrNull"
+          },
+          "field": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expected": {
+            "description": "Registered compatibility value."
+          },
+          "actual": {
+            "description": "Observed effective value."
+          }
+        }
+      }
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "safeIdOrNull": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

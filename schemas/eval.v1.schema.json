@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/eval.v1.json",
+  "title": "Eval",
+  "description": "One eval in a pack: task, participant files, operation scope, result contract, rubric, and scenario. Encodes SPEC sections 12.2, 12.6, and 19.5.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "prompt_set",
+    "task",
+    "operation_scope",
+    "result",
+    "rubric",
+    "scenario"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "prompt_set": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "engine"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "engine": {
+          "type": "string",
+          "enum": ["literal", "mustache-strict"]
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "participant_files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "target"],
+        "properties": {
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "target": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "operation_scope": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": {
+            "mode": {
+              "const": "all"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "operations"],
+          "properties": {
+            "mode": {
+              "const": "list"
+            },
+            "operations": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^path:[A-Z]+ [^ ]+$"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "selector"],
+          "properties": {
+            "mode": {
+              "const": "selector"
+            },
+            "selector": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind"],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": ["tags", "methods"]
+                },
+                "tags": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "methods": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[A-Z]+$"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "cases": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "schema", "id_pointer"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "schema": {
+          "type": "string",
+          "minLength": 1
+        },
+        "id_pointer": {
+          "type": "string",
+          "pattern": "^(/[^/~]*(~[01])?)*$"
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "schema", "required"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": ["adapter_final", "workspace_file"]
+        },
+        "schema": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "filename": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "rubric": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scenario": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    }
+  }
+}

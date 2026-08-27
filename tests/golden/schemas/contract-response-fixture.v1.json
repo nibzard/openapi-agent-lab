@@ -1,0 +1,10 @@
+{
+  "id": "example",
+  "operation": "path:GET /things",
+  "status": 200,
+  "media_type": "example",
+  "headers": {},
+  "body": {
+    "kind": "none"
+  }
+}

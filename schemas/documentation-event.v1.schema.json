@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/documentation-event.v1.json",
+  "title": "DocumentationEvent",
+  "description": "One documentation.exchange record in documentation.jsonl for every request matching the frozen documentation-candidate inventory. Encodes SPEC section 25.6.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "type",
+    "event_id",
+    "sequence",
+    "participant_ingress_sequence",
+    "observed_at",
+    "batch_id",
+    "run_id",
+    "actor",
+    "request",
+    "candidate",
+    "authentication",
+    "visibility",
+    "outcome",
+    "response",
+    "duration_ms",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "type": {
+      "const": "documentation.exchange"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^doc_[a-zA-Z0-9_]+$"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "participant_ingress_sequence": {
+      "type": ["integer", "null"],
+      "minimum": 1
+    },
+    "observed_at": {
+      "$ref": "#/$defs/rfc3339"
+    },
+    "batch_id": {
+      "$ref": "#/$defs/safeIdOrNull"
+    },
+    "run_id": {
+      "$ref": "#/$defs/safeIdOrNull"
+    },
+    "actor": {
+      "type": "string",
+      "enum": ["participant", "control"]
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "path"],
+      "properties": {
+        "method": {
+          "type": "string",
+          "pattern": "^[A-Z]+$"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "candidate": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["profile", "route_id"],
+          "properties": {
+            "profile": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            },
+            "route_id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            }
+          }
+        }
+      ]
+    },
+    "authentication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "authenticated",
+            "unauthenticated",
+            "not_required",
+            "rejected"
+          ]
+        }
+      }
+    },
+    "visibility": {
+      "type": "string",
+      "enum": ["none", "file", "discoverable", "tool-only"]
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "contract_served",
+        "index_served",
+        "rejected_authentication",
+        "neutral_unknown_route",
+        "disabled"
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "content_type", "bytes", "body_sha256"],
+          "properties": {
+            "status": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 599
+            },
+            "content_type": {
+              "type": ["string", "null"]
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "body_sha256": {
+              "$ref": "#/$defs/sha256OrNull"
+            }
+          }
+        }
+      ]
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeIdOrNull": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "sha256OrNull": {
+      "type": ["string", "null"],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "rfc3339": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    }
+  }
+}

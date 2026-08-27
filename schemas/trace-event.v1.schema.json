@@ -1,0 +1,711 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/trace-event.v1.json",
+  "title": "TraceEvent",
+  "description": "One api.exchange record in trace.jsonl: every request that reaches the data plane produces exactly one. Encodes SPEC sections 25.1 through 25.5.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "type",
+    "event_id",
+    "sequence",
+    "participant_ingress_sequence",
+    "observed_at",
+    "logical_time",
+    "batch_id",
+    "run_id",
+    "eval_id",
+    "actor",
+    "transport",
+    "operation",
+    "request",
+    "authentication",
+    "validation",
+    "backend",
+    "response",
+    "state",
+    "idempotency",
+    "replay",
+    "error",
+    "duration_ms",
+    "resource_usage",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "type": {
+      "const": "api.exchange"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^evt_[a-zA-Z0-9_]+$"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "participant_ingress_sequence": {
+      "type": ["integer", "null"],
+      "minimum": 1
+    },
+    "observed_at": {
+      "$ref": "#/$defs/rfc3339"
+    },
+    "logical_time": {
+      "$ref": "#/$defs/rfc3339OrNull"
+    },
+    "batch_id": {
+      "$ref": "#/$defs/safeIdOrNull"
+    },
+    "run_id": {
+      "$ref": "#/$defs/safeIdOrNull"
+    },
+    "eval_id": {
+      "$ref": "#/$defs/safeIdOrNull"
+    },
+    "actor": {
+      "type": "string",
+      "enum": ["participant", "control"]
+    },
+    "transport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "request_id", "connection_id"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["http", "mcp-direct", "mcp-catalog"]
+        },
+        "request_id": {
+          "type": ["string", "null"]
+        },
+        "connection_id": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "matched",
+        "key",
+        "uid",
+        "operation_id",
+        "method",
+        "path_template",
+        "support"
+      ],
+      "properties": {
+        "matched": {
+          "type": "boolean"
+        },
+        "key": {
+          "$ref": "#/$defs/operationKeyOrNull"
+        },
+        "uid": {
+          "$ref": "#/$defs/safeIdOrNull"
+        },
+        "operation_id": {
+          "type": ["string", "null"]
+        },
+        "method": {
+          "type": ["string", "null"]
+        },
+        "path_template": {
+          "type": ["string", "null"]
+        },
+        "support": {
+          "type": ["string", "null"],
+          "enum": [
+            "supported",
+            "approximated",
+            "requires_scenario",
+            "unsupported",
+            null
+          ]
+        }
+      }
+    },
+    "request": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "received_at",
+            "method",
+            "path",
+            "query_string",
+            "query",
+            "path_parameters",
+            "headers",
+            "credential_present",
+            "content_type",
+            "body"
+          ],
+          "properties": {
+            "received_at": {
+              "$ref": "#/$defs/rfc3339"
+            },
+            "method": {
+              "type": "string",
+              "pattern": "^[A-Z]+$"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "query_string": {
+              "type": "string"
+            },
+            "query": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/queryParameter"
+              }
+            },
+            "path_parameters": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "headers": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/header"
+              }
+            },
+            "credential_present": {
+              "type": "boolean"
+            },
+            "content_type": {
+              "type": ["string", "null"]
+            },
+            "body": {
+              "$ref": "#/$defs/body"
+            }
+          }
+        }
+      ]
+    },
+    "authentication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "alternative_index", "schemes", "principal_ref"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "authenticated",
+            "unauthenticated",
+            "not_required",
+            "rejected"
+          ]
+        },
+        "alternative_index": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "schemes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "principal_ref": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request", "response"],
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/validationOutcome"
+        },
+        "response": {
+          "$ref": "#/$defs/validationOutcome"
+        }
+      }
+    },
+    "backend": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "name",
+            "outcome",
+            "duration_ms",
+            "response_provenance",
+            "effects",
+            "observations"
+          ],
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["contract", "scenario"]
+            },
+            "name": {
+              "type": ["string", "null"]
+            },
+            "outcome": {
+              "type": "string",
+              "enum": [
+                "handled",
+                "domain_error",
+                "crashed",
+                "timeout",
+                "skipped"
+              ]
+            },
+            "duration_ms": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "response_provenance": {
+              "type": "string",
+              "enum": ["fixture", "behavior", "example", "generated"]
+            },
+            "effects": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "observations": {
+              "type": "object"
+            }
+          }
+        }
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "completed_at",
+            "status",
+            "headers",
+            "content_type",
+            "body"
+          ],
+          "properties": {
+            "completed_at": {
+              "$ref": "#/$defs/rfc3339"
+            },
+            "status": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 599
+            },
+            "headers": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/header"
+              }
+            },
+            "content_type": {
+              "type": ["string", "null"]
+            },
+            "body": {
+              "$ref": "#/$defs/body"
+            }
+          }
+        }
+      ]
+    },
+    "state": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "revision_before",
+            "revision_after",
+            "digest_before",
+            "digest_after",
+            "projections"
+          ],
+          "properties": {
+            "revision_before": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "revision_after": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "digest_before": {
+              "$ref": "#/$defs/sha256OrNull"
+            },
+            "digest_after": {
+              "$ref": "#/$defs/sha256OrNull"
+            },
+            "projections": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["before", "after"],
+              "properties": {
+                "before": {
+                  "description": "Redacted projection before the exchange."
+                },
+                "after": {
+                  "description": "Redacted projection after the exchange."
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "idempotency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "not_requested",
+            "stored",
+            "replayed",
+            "conflict",
+            "rejected"
+          ]
+        },
+        "record_ref": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "replay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification", "reason_code"],
+      "properties": {
+        "classification": {
+          "type": "string",
+          "enum": ["full", "substitutable", "unavailable"]
+        },
+        "reason_code": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "error": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/error"
+        }
+      ]
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "resource_usage": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["request_bytes", "response_bytes"],
+          "properties": {
+            "request_bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "response_bytes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      ]
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeIdOrNull": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "sha256OrNull": {
+      "type": ["string", "null"],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "rfc3339": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    },
+    "rfc3339OrNull": {
+      "type": ["string", "null"],
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    },
+    "operationKeyOrNull": {
+      "type": ["string", "null"],
+      "pattern": "^path:[A-Z]+ [^ ]+$"
+    },
+    "header": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "values", "redacted"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9!#$%&'*+.^_`|~-]+$"
+        },
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "redacted": {
+          "type": "boolean"
+        }
+      }
+    },
+    "queryParameter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "values"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "body": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": {
+              "const": "none"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "size_bytes", "value", "truncated"],
+          "properties": {
+            "kind": {
+              "const": "json"
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "value": {
+              "description": "Parsed redacted JSON value."
+            },
+            "truncated": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "size_bytes", "sha256", "text", "truncated"],
+          "properties": {
+            "kind": {
+              "const": "text"
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256OrNull"
+            },
+            "text": {
+              "type": "string"
+            },
+            "truncated": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "size_bytes", "sha256", "blob_ref"],
+          "properties": {
+            "kind": {
+              "const": "binary"
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256OrNull"
+            },
+            "blob_ref": {
+              "type": ["string", "null"],
+              "pattern": "^blobs/sha256/[a-f0-9]{64}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "size_bytes", "parts"],
+          "properties": {
+            "kind": {
+              "const": "multipart"
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "parts": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "filename", "headers", "body"],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "filename": {
+                    "type": ["string", "null"]
+                  },
+                  "headers": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/header"
+                    }
+                  },
+                  "body": {
+                    "$ref": "#/$defs/body"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "validationOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "violations"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["valid", "invalid", "not_evaluated"]
+        },
+        "violations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["pointer", "code", "message"],
+            "properties": {
+              "pointer": {
+                "type": "string",
+                "minLength": 1
+              },
+              "code": {
+                "type": "string",
+                "minLength": 1
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["layer", "code", "message", "retryable", "details"],
+      "properties": {
+        "layer": {
+          "type": "string",
+          "enum": [
+            "routing",
+            "authentication",
+            "parsing",
+            "validation",
+            "behavior",
+            "timeout",
+            "transport",
+            "persistence",
+            "internal"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "details": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

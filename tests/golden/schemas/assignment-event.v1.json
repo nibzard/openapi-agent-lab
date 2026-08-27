@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "sequence": 1,
+  "event_id": "asg_aaaaaaaaaaaaaaaaaaaaaaaa",
+  "recorded_at": "2026-01-15T09:30:00.000Z",
+  "study_run_id": "example",
+  "assignment_id": "asg_aaaaaaaaaaaaaaaaaaaaaaaa",
+  "kind": "planned",
+  "extensions": {}
+}

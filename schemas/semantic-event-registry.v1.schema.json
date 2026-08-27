@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/semantic-event-registry.v1.json",
+  "title": "SemanticEventRegistry",
+  "description": "Pack-owned registry of namespaced semantic event names, integer versions, and Draft 2020-12 payload schemas. Encodes SPEC section 25.7.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "pack_id", "events", "extensions"],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "SemanticEventRegistry"
+    },
+    "pack_id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "events": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "event_version",
+          "payload_schema",
+          "payload_schema_sha256"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)+$"
+          },
+          "event_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "description": {
+            "type": "string"
+          },
+          "payload_schema": {
+            "type": "string",
+            "minLength": 1
+          },
+          "payload_schema_sha256": {
+            "$ref": "#/$defs/sha256"
+          }
+        }
+      }
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

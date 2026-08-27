@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/study-completed.v1.json",
+  "title": "StudyCompleted",
+  "description": "Completion pointer for a StudyRun. Points to the finalized StudyRun manifest digest and carries no mutable progress state. Encodes SPEC sections 22.4 and 24.3.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "study_run_id",
+    "status",
+    "finished_at",
+    "artifact_manifest_sha256",
+    "counts",
+    "reason",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "study_run_id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["completed", "aborted"]
+    },
+    "finished_at": {
+      "$ref": "#/$defs/rfc3339"
+    },
+    "artifact_manifest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary_assignments",
+        "activated_replacements",
+        "held_unused",
+        "not_started",
+        "child_batches"
+      ],
+      "properties": {
+        "primary_assignments": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "activated_replacements": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "held_unused": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "not_started": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "child_batches": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "reason": {
+      "type": ["string", "null"],
+      "description": "Abort reason code; null for a completed StudyRun."
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "rfc3339": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    }
+  }
+}

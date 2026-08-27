@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/participant-surface-policy.v1.json",
+  "title": "ParticipantSurfacePolicy",
+  "description": "Strict-blinding cue policy: forbidden literals and patterns, allowed exceptions, treatment-owned differences, neutral profiles, and required reviews. Encodes SPEC section 9.6.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "id",
+    "version",
+    "forbidden_literals",
+    "forbidden_patterns",
+    "allowed_exceptions",
+    "treatment_owned",
+    "neutral_profiles",
+    "pairwise_surface_diff_allowlist",
+    "required_reviews",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "ParticipantSurfacePolicy"
+    },
+    "id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "version": {
+      "$ref": "#/$defs/semver"
+    },
+    "forbidden_literals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["literal", "case_insensitive"],
+        "properties": {
+          "literal": {
+            "type": "string",
+            "minLength": 1
+          },
+          "case_insensitive": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "forbidden_patterns": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "allowed_exceptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["surface_entry", "literal"],
+        "properties": {
+          "surface_entry": {
+            "$ref": "#/$defs/safeId"
+          },
+          "factor_level": {
+            "$ref": "#/$defs/safeId"
+          },
+          "literal": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "treatment_owned": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paths", "routes", "fields", "catalogs"],
+      "properties": {
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "routes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "catalogs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "neutral_profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["response_profile", "credential_profile", "server_profile"],
+      "properties": {
+        "response_profile": {
+          "$ref": "#/$defs/safeId"
+        },
+        "credential_profile": {
+          "$ref": "#/$defs/safeId"
+        },
+        "server_profile": {
+          "$ref": "#/$defs/safeId"
+        }
+      }
+    },
+    "pairwise_surface_diff_allowlist": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["cell_a", "cell_b", "allowed_differences"],
+        "properties": {
+          "cell_a": {
+            "$ref": "#/$defs/safeId"
+          },
+          "cell_b": {
+            "$ref": "#/$defs/safeId"
+          },
+          "allowed_differences": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "required_reviews": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["equivalence", "blinding"],
+      "properties": {
+        "equivalence": {
+          "type": "boolean"
+        },
+        "blinding": {
+          "type": "boolean"
+        }
+      }
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    }
+  }
+}

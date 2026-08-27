@@ -1,0 +1,18 @@
+{
+  "id": "example",
+  "prompt_set": "example",
+  "task": {
+    "source": "example",
+    "engine": "literal"
+  },
+  "operation_scope": {
+    "mode": "all"
+  },
+  "result": {
+    "source": "adapter_final",
+    "schema": "example",
+    "required": true
+  },
+  "rubric": "example",
+  "scenario": "example"
+}

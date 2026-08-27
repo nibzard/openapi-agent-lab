@@ -1,0 +1,294 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/phase-lock.v1.json",
+  "title": "PhaseLock",
+  "description": "Frozen runtime values, digests, cell inventory, and assignment-to-run bindings created before the first assignment starts. Omits its own digest. Encodes SPEC section 12.10.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "phase_id",
+    "created_at",
+    "protocol_lock_sha256",
+    "phase_plan_sha256",
+    "runtime",
+    "implementation_sha256",
+    "components",
+    "assignment_schedule_sha256",
+    "schedule_code_sha256",
+    "cells",
+    "assignment_bindings",
+    "evidence_requirements_sha256",
+    "metric_missingness_sha256",
+    "censoring_policy_sha256",
+    "worst_case_policy_sha256",
+    "provenance",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "phase_id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "created_at": {
+      "$ref": "#/$defs/rfc3339"
+    },
+    "protocol_lock_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "phase_plan_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agent",
+        "node",
+        "os",
+        "arch",
+        "timeout_ms",
+        "parallel",
+        "limits"
+      ],
+      "properties": {
+        "agent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["adapter", "version", "cli_probe_sha256", "help_sha256"],
+          "properties": {
+            "adapter": {
+              "type": "string",
+              "minLength": 1
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "model": {
+              "type": ["string", "null"]
+            },
+            "effort": {
+              "type": ["string", "null"]
+            },
+            "inference_settings": {
+              "type": "object"
+            },
+            "cli_probe_sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "help_sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "sandbox": {
+          "type": "string",
+          "minLength": 1
+        },
+        "node": {
+          "type": "string",
+          "minLength": 1
+        },
+        "os": {
+          "type": "string",
+          "minLength": 1
+        },
+        "arch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "parallel": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "max_agent_tool_calls",
+            "max_api_requests",
+            "max_artifact_bytes"
+          ],
+          "properties": {
+            "max_agent_tool_calls": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "max_api_requests": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "max_artifact_bytes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "implementation_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "components": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/sha256"
+      },
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]*$"
+      }
+    },
+    "assignment_schedule_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "schedule_code_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "cells": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cell_id",
+          "contract_sha256",
+          "participant_surface_sha256",
+          "behavior_sha256",
+          "eval_sha256",
+          "rubric_sha256",
+          "run_profile_sha256"
+        ],
+        "properties": {
+          "cell_id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "contract_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "participant_surface_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "behavior_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "eval_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "rubric_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "run_profile_sha256": {
+            "$ref": "#/$defs/sha256"
+          }
+        }
+      }
+    },
+    "assignment_bindings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["assignment_id", "run_id", "run_seed", "child_batch_id"],
+        "properties": {
+          "assignment_id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "run_id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "run_seed": {
+            "$ref": "#/$defs/sha256"
+          },
+          "child_batch_id": {
+            "$ref": "#/$defs/safeId"
+          }
+        }
+      }
+    },
+    "evidence_requirements_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "metric_missingness_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "censoring_policy_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "worst_case_policy_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "content-addressed-release",
+            "clean-worktree",
+            "dirty-override"
+          ]
+        },
+        "commit": {
+          "type": ["string", "null"]
+        },
+        "status": {
+          "type": ["string", "null"]
+        },
+        "diff_sha256": {
+          "$ref": "#/$defs/sha256OrNull"
+        },
+        "source_inventory": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "sha256"],
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            }
+          }
+        }
+      }
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "sha256OrNull": {
+      "type": ["string", "null"],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "rfc3339": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    }
+  }
+}

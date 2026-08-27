@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "kind": "StudyAnalysis",
+  "analysis_id": "example",
+  "study_run_id": "example",
+  "lineage": {
+    "kind": "preregistered"
+  },
+  "verified": [
+    {
+      "artifact": "example",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "verified": true
+    }
+  ],
+  "inputs": {
+    "protocol_lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "phase_plan_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "phase_lock_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schedule_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "compatibility_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "implementation_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "evidence_requirements_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "analysis_plan_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "populations": [
+    {
+      "id": "example",
+      "numerator": 1,
+      "denominator": 1
+    }
+  ],
+  "estimates": [
+    {
+      "contrast_id": "example",
+      "metric": "example",
+      "population": "example",
+      "cells": [
+        {
+          "cell_id": "example",
+          "numerator": 1,
+          "denominator": 1,
+          "rate": 1
+        },
+        {
+          "cell_id": "example",
+          "numerator": 1,
+          "denominator": 1,
+          "rate": 1
+        }
+      ],
+      "estimate": 1
+    }
+  ],
+  "warnings": ["example"],
+  "extensions": {}
+}

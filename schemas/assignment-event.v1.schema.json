@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/assignment-event.v1.json",
+  "title": "AssignmentEvent",
+  "description": "Append-only record in assignment-events.jsonl. Sole mutable owner of held-slot activation and assignment launch/terminal transitions. Encodes SPEC sections 12.11, 22.3, and 24.3.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "sequence",
+    "event_id",
+    "recorded_at",
+    "study_run_id",
+    "assignment_id",
+    "kind",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^[a-z]+_[a-f0-9]{8,32}$"
+    },
+    "recorded_at": {
+      "$ref": "#/$defs/rfc3339"
+    },
+    "study_run_id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "batch_id": {
+      "$ref": "#/$defs/safeIdOrNull"
+    },
+    "assignment_id": {
+      "$ref": "#/$defs/controlId"
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["planned", "activated", "launched", "terminal", "not_started"]
+    },
+    "replacement_target": {
+      "$ref": "#/$defs/controlIdOrNull"
+    },
+    "inherited_block_id": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "inherited_repetition_index": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "launch_order": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "run_id": {
+      "$ref": "#/$defs/controlIdOrNull"
+    },
+    "disposition": {
+      "$ref": "#/$defs/dispositionOrNull"
+    },
+    "censor_class": {
+      "type": ["string", "null"],
+      "enum": [
+        "none",
+        "pre_control_nonparticipant",
+        "administrative_censor",
+        "instrumentation_censor",
+        null
+      ]
+    },
+    "evidence_integrity": {
+      "type": ["string", "null"],
+      "enum": ["intact", "corrupt", "missing", null]
+    },
+    "reason_code": {
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "safeIdOrNull": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "controlId": {
+      "type": "string",
+      "pattern": "^(asg|bat|run)_[a-f0-9]{24,32}$"
+    },
+    "controlIdOrNull": {
+      "type": ["string", "null"],
+      "pattern": "^(asg|bat|run)_[a-f0-9]{24,32}$"
+    },
+    "rfc3339": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    },
+    "dispositionOrNull": {
+      "type": ["string", "null"],
+      "enum": [
+        "completed",
+        "agent_incomplete",
+        "agent_failed",
+        "timed_out",
+        "budget_exhausted",
+        "operator_interrupted",
+        "provider_failed_pre_control",
+        "provider_failed_post_control",
+        "infrastructure_failed_pre_control",
+        "infrastructure_failed_post_control",
+        "harness_aborted",
+        "not_started",
+        "invalid_setup",
+        null
+      ]
+    }
+  }
+}

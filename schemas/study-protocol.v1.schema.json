@@ -1,0 +1,338 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/study-protocol.v1.json",
+  "title": "StudyProtocol",
+  "description": "Preregistered relationship among cells, phases, assignments, estimands, and analyses. Encodes SPEC sections 12.7 and 12.8.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "objective",
+    "evaluation",
+    "factors",
+    "constants",
+    "metrics",
+    "blinding",
+    "phases",
+    "interpretation_limits",
+    "extensions"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "agentlab.dev/v1"
+    },
+    "kind": {
+      "const": "StudyProtocol"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "title"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pack", "eval", "scenario"],
+      "properties": {
+        "pack": {
+          "$ref": "#/$defs/packRef"
+        },
+        "eval": {
+          "$ref": "#/$defs/safeId"
+        },
+        "scenario": {
+          "$ref": "#/$defs/safeId"
+        },
+        "contract_variant_set": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "factors": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "role", "levels"],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "role": {
+            "type": "string",
+            "enum": ["treatment", "exposure", "blocking", "nuisance"]
+          },
+          "levels": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id"],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/safeId"
+                },
+                "contract_variant": {
+                  "$ref": "#/$defs/safeId"
+                },
+                "run_profile_patch": {
+                  "type": "object",
+                  "minProperties": 1,
+                  "description": "Schema-checked mapping over an explicit allowlist of treatment fields."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "constants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_profile"],
+      "properties": {
+        "run_profile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required_parallel": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "data_plane_scope": {
+          "type": "string",
+          "enum": ["all", "task"]
+        },
+        "response_profile": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary"],
+      "properties": {
+        "primary": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/metric"
+          }
+        },
+        "secondary": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/metric"
+          }
+        }
+      }
+    },
+    "blinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["none", "declared", "strict"]
+        },
+        "participant_surface_policy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "require_pairwise_surface_diff_review": {
+          "type": "boolean"
+        }
+      }
+    },
+    "phases": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/safeId"
+      }
+    },
+    "interpretation_limits": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "packRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "sha256"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "source"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["binary", "integer", "continuous"]
+        },
+        "missingness": {
+          "type": "string",
+          "enum": [
+            "observed",
+            "unknown",
+            "not_applicable",
+            "unavailable_due_to_evidence"
+          ]
+        },
+        "source": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "check_id"],
+              "properties": {
+                "kind": {
+                  "const": "rubric_check"
+                },
+                "check_id": {
+                  "$ref": "#/$defs/safeId"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "signal_id"],
+              "properties": {
+                "kind": {
+                  "const": "rubric_signal"
+                },
+                "signal_id": {
+                  "$ref": "#/$defs/safeId"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "aggregate"],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "trace_aggregate",
+                    "documentation_aggregate",
+                    "semantic_aggregate"
+                  ]
+                },
+                "aggregate": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "projection"],
+              "properties": {
+                "kind": {
+                  "const": "state_projection"
+                },
+                "projection": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "field"],
+              "properties": {
+                "kind": {
+                  "const": "participant_report"
+                },
+                "field": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "expression"],
+              "properties": {
+                "kind": {
+                  "const": "derived_expression"
+                },
+                "expression": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

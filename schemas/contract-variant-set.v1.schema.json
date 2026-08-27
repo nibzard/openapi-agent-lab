@@ -1,0 +1,313 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/contract-variant-set.v1.json",
+  "title": "ContractVariantSet",
+  "description": "Declarative counterfactual contract variants pinned by digest. Contains no executable code. Encodes SPEC section 12.12.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "id",
+    "base",
+    "variants",
+    "surfaces",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "ContractVariantSet"
+    },
+    "id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "base": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "sha256"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "common_projection": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["patch", "allowlist"],
+          "properties": {
+            "patch": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/jsonPatchOperation"
+              }
+            },
+            "allowlist": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^(/([^/~]|~[01])*)*$"
+              }
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        }
+      ]
+    },
+    "variants": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "transform",
+          "allowlist",
+          "expected_operations",
+          "effective_sha256",
+          "behavior_adapters",
+          "documentation",
+          "semantic"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "transform": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "patch"],
+                "properties": {
+                  "kind": {
+                    "const": "patch"
+                  },
+                  "patch": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "$ref": "#/$defs/jsonPatchOperation"
+                    }
+                  },
+                  "sha256": {
+                    "$ref": "#/$defs/sha256"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind", "source", "sha256"],
+                "properties": {
+                  "kind": {
+                    "const": "static"
+                  },
+                  "source": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sha256": {
+                    "$ref": "#/$defs/sha256"
+                  }
+                }
+              }
+            ]
+          },
+          "allowlist": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^(/([^/~]|~[01])*)*$"
+            }
+          },
+          "expected_operations": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^path:[A-Z]+ [^ ]+$"
+            }
+          },
+          "effective_sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "behavior_adapters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["operation", "adapter_id", "adapter_sha256"],
+              "properties": {
+                "operation": {
+                  "type": "string",
+                  "pattern": "^path:[A-Z]+ [^ ]+$"
+                },
+                "adapter_id": {
+                  "$ref": "#/$defs/safeId"
+                },
+                "adapter_sha256": {
+                  "$ref": "#/$defs/sha256"
+                }
+              }
+            }
+          },
+          "documentation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["fact_ids", "placement_classes", "examples"],
+            "properties": {
+              "fact_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "placement_classes": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "examples": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["id", "sha256"],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "sha256": {
+                      "$ref": "#/$defs/sha256"
+                    }
+                  }
+                }
+              },
+              "facts_sha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            }
+          },
+          "semantic": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["action_ids", "schemas"],
+            "properties": {
+              "action_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "schemas": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["id", "sha256"],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "sha256": {
+                      "$ref": "#/$defs/sha256"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "surfaces": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_constant", "expected_variable"],
+      "properties": {
+        "expected_constant": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "expected_variable": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "jsonPatchOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "path"],
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": ["add", "remove", "replace", "move", "copy", "test"]
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^(/([^/~]|~[01])*)*$"
+        },
+        "from": {
+          "type": "string",
+          "pattern": "^(/([^/~]|~[01])*)*$"
+        },
+        "value": {
+          "description": "RFC 6902 operation value."
+        }
+      }
+    }
+  }
+}

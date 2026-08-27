@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "type": "documentation.exchange",
+  "event_id": "doc_1",
+  "sequence": 1,
+  "participant_ingress_sequence": null,
+  "observed_at": "2026-01-15T09:30:00.000Z",
+  "batch_id": null,
+  "run_id": null,
+  "actor": "participant",
+  "request": {
+    "method": "USD",
+    "path": "example"
+  },
+  "candidate": null,
+  "authentication": {
+    "status": "authenticated"
+  },
+  "visibility": "none",
+  "outcome": "contract_served",
+  "response": null,
+  "duration_ms": 1,
+  "extensions": {}
+}

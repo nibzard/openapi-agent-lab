@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "kind": "CueAudit",
+  "cell_id": "example",
+  "policy_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "scanned": [
+    {
+      "surface_entry": "example",
+      "bytes_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "findings": [
+    {
+      "kind": "literal",
+      "surface_entry": "example",
+      "allowed_exception": true
+    }
+  ],
+  "pairwise": [
+    {
+      "cell_a": "example",
+      "cell_b": "example",
+      "differences": [
+        {
+          "surface_entry": "example",
+          "kind": "bytes",
+          "allowed": true
+        }
+      ]
+    }
+  ],
+  "result": "pass",
+  "extensions": {}
+}

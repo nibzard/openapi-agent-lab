@@ -88,12 +88,7 @@
     },
     "supportLevel": {
       "type": "string",
-      "enum": [
-        "supported",
-        "approximated",
-        "requires_scenario",
-        "unsupported"
-      ]
+      "enum": ["supported", "approximated", "requires_scenario", "unsupported"]
     },
     "compiler": {
       "type": "object",
@@ -620,7 +615,12 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["method", "path_template", "request_body", "responses"],
+            "required": [
+              "method",
+              "path_template",
+              "request_body",
+              "responses"
+            ],
             "properties": {
               "method": {
                 "type": "string",
@@ -815,12 +815,7 @@
     "oAuthFlow": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "authorization_url",
-        "token_url",
-        "refresh_url",
-        "scopes"
-      ],
+      "required": ["authorization_url", "token_url", "refresh_url", "scopes"],
       "properties": {
         "authorization_url": {
           "type": ["string", "null"]
@@ -863,13 +858,7 @@
         },
         "type": {
           "type": "string",
-          "enum": [
-            "apiKey",
-            "http",
-            "oauth2",
-            "openIdConnect",
-            "mutualTLS"
-          ]
+          "enum": ["apiKey", "http", "oauth2", "openIdConnect", "mutualTLS"]
         },
         "description": {
           "type": ["string", "null"]

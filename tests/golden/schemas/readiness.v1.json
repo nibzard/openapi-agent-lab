@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "status": "ready",
+  "mode": "contract",
+  "baseUrl": "http://127.0.0.1:4010",
+  "runId": "manual-01",
+  "contractSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "operationCount": 84,
+  "supportedOperationCount": 82,
+  "capabilitiesPath": "/home/lab/.oal/runs/manual-01/inputs/capability-report.json",
+  "credentialsPath": "/home/lab/.oal/runs/manual-01/control/credentials.json"
+}

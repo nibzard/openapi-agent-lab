@@ -1,0 +1,20 @@
+{
+  "severity": "fatal",
+  "phase": "compile",
+  "code": "OPENAPI-SCHEMA-CYCLE",
+  "message": "Schema '#/components/schemas/Pet' references itself without a mid-cycle object boundary.",
+  "document_uri": "inputs/contract.original",
+  "json_pointer": "/components/schemas/Pet",
+  "operation_key": null,
+  "retryable": false,
+  "related": [
+    {
+      "document_uri": "inputs/contract.original",
+      "json_pointer": "/components/schemas/Pet/properties/friends"
+    }
+  ],
+  "details": {
+    "cycle_length": 1,
+    "resolution": "approximated"
+  }
+}

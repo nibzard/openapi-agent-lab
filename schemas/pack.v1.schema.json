@@ -1,0 +1,825 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/pack.v1.json",
+  "title": "Pack",
+  "description": "Pack manifest declaring which contract, behavior, participant materials, eval, and rubric are available. Encodes the pack manifest example in SPEC section 12.2.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "requires",
+    "contract",
+    "server",
+    "behavior",
+    "security",
+    "redaction",
+    "participant",
+    "prompt_sets",
+    "evals",
+    "scenarios",
+    "extensions"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "agentlab.dev/v1"
+    },
+    "kind": {
+      "const": "Pack"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "version"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "requires": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agentlab", "backend_api", "rubric_api"],
+      "properties": {
+        "agentlab": {
+          "type": "string",
+          "pattern": "^(?:>=?|<=?|=|\\^|~)\\s?\\d+\\.\\d+\\.\\d+(?:\\s(?:>=?|<=?|<)\\s?\\d+\\.\\d+\\.\\d+)?$"
+        },
+        "backend_api": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "rubric_api": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entrypoint"],
+      "properties": {
+        "entrypoint": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "compile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "remote_refs",
+            "unsupported_features",
+            "warnings_as_errors"
+          ],
+          "properties": {
+            "remote_refs": {
+              "type": "string",
+              "enum": ["deny", "allow"]
+            },
+            "unsupported_features": {
+              "type": "string",
+              "enum": ["error", "warn"]
+            },
+            "warnings_as_errors": {
+              "type": "boolean"
+            }
+          }
+        },
+        "participant_copy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "filename",
+            "bundle_refs",
+            "replace_servers",
+            "external_docs"
+          ],
+          "properties": {
+            "filename": {
+              "type": "string",
+              "minLength": 1
+            },
+            "bundle_refs": {
+              "type": "boolean"
+            },
+            "replace_servers": {
+              "type": "boolean"
+            },
+            "external_docs": {
+              "type": "string",
+              "enum": ["strip", "keep"]
+            }
+          }
+        },
+        "response_fixtures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/responseFixture"
+          }
+        }
+      }
+    },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host",
+        "port",
+        "request_body_limit_bytes",
+        "request_timeout_ms",
+        "response_validation",
+        "request_validation",
+        "concurrency"
+      ],
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "request_body_limit_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "request_timeout_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "response_validation": {
+          "type": "string",
+          "enum": ["error", "warn", "off"]
+        },
+        "request_validation": {
+          "type": "string",
+          "enum": ["error", "warn", "off"]
+        },
+        "concurrency": {
+          "type": "string",
+          "enum": ["serial", "parallel"]
+        }
+      }
+    },
+    "behavior": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["contract", "scenario"]
+        },
+        "backend": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "entrypoint", "export"],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["module"]
+            },
+            "entrypoint": {
+              "$ref": "#/$defs/relativePath"
+            },
+            "export": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "completeness": {
+          "type": "string",
+          "enum": ["exact", "partial"]
+        },
+        "fallback": {
+          "type": "string",
+          "enum": ["none", "contract"]
+        },
+        "state_schema_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "state_schema": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "clock": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "initial", "tick_ms"],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["virtual", "wall"]
+            },
+            "initial": {
+              "$ref": "#/$defs/rfc3339"
+            },
+            "tick_ms": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "random": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["seed"],
+          "properties": {
+            "seed": {
+              "type": "string",
+              "enum": ["run", "fixed"]
+            },
+            "value": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "fixtures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/relativePath"
+          }
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enforce", "credentials", "base_url_environment"],
+      "properties": {
+        "enforce": {
+          "type": "boolean"
+        },
+        "credentials": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "scheme", "provider", "expose"],
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/safeId"
+              },
+              "scheme": {
+                "type": "string",
+                "minLength": 1
+              },
+              "provider": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind"],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": ["generated", "fixed"]
+                  },
+                  "bytes": {
+                    "type": "integer",
+                    "minimum": 8,
+                    "maximum": 256
+                  }
+                }
+              },
+              "expose": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["environment"],
+                "properties": {
+                  "environment": {
+                    "type": "string",
+                    "pattern": "^[A-Z_][A-Z0-9_]*$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "base_url_environment": {
+          "type": "string",
+          "pattern": "^[A-Z_][A-Z0-9_]*$"
+        }
+      }
+    },
+    "idempotency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policies"],
+      "properties": {
+        "policies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "operations",
+              "key",
+              "principal_scope",
+              "cache_statuses",
+              "cache_failures",
+              "ttl",
+              "max_entries",
+              "conflict_status"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/safeId"
+              },
+              "operations": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "$ref": "#/$defs/operationKey"
+                }
+              },
+              "key": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["location", "name"],
+                "properties": {
+                  "location": {
+                    "type": "string",
+                    "enum": ["header", "query"]
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "principal_scope": {
+                "type": "string",
+                "enum": ["authenticated_principal", "global", "api_key"]
+              },
+              "cache_statuses": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[1-5][0-9][0-9X]$"
+                }
+              },
+              "cache_failures": {
+                "type": "boolean"
+              },
+              "ttl": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kind"],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": ["none", "duration"]
+                  },
+                  "ms": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              },
+              "max_entries": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "conflict_status": {
+                "type": "integer",
+                "minimum": 400,
+                "maximum": 599
+              }
+            }
+          }
+        }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "header_names",
+        "key_patterns",
+        "capture_binary_blobs",
+        "max_text_capture_bytes"
+      ],
+      "properties": {
+        "header_names": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "key_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "capture_binary_blobs": {
+          "type": "boolean"
+        },
+        "max_text_capture_bytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "participant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["environment"],
+      "properties": {
+        "environment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["inherit", "allow"],
+          "properties": {
+            "inherit": {
+              "type": "string",
+              "enum": ["none", "all"]
+            },
+            "allow": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Z_][A-Z0-9_]*$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "prompt_sets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/promptSet"
+      }
+    },
+    "evals": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/eval"
+      }
+    },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id"],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "fixtures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/relativePath"
+            }
+          }
+        }
+      }
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "relativePath": {
+      "type": "string",
+      "pattern": "^[^/][^\\u0000]*$",
+      "description": "POSIX path relative to the pack root without parent traversal.",
+      "not": {
+        "anyOf": [{ "pattern": "\\.\\./" }, { "pattern": "^/" }]
+      }
+    },
+    "rfc3339": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    },
+    "operationKey": {
+      "type": "string",
+      "pattern": "^path:[A-Z]+ [^ ]+$"
+    },
+    "promptSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "purpose_disclosure", "instructions", "launch"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "purpose_disclosure": {
+          "type": "string",
+          "enum": ["diagnostic", "naturalistic"]
+        },
+        "instructions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "engine", "delivery", "target"],
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/relativePath"
+            },
+            "engine": {
+              "type": "string",
+              "enum": ["literal", "mustache-strict"]
+            },
+            "delivery": {
+              "type": "string",
+              "enum": ["file", "inline"]
+            },
+            "target": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "launch": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "engine"],
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/relativePath"
+            },
+            "engine": {
+              "type": "string",
+              "enum": ["literal", "mustache-strict"]
+            }
+          }
+        }
+      }
+    },
+    "eval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "prompt_set",
+        "task",
+        "operation_scope",
+        "result",
+        "rubric",
+        "scenario"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "prompt_set": {
+          "$ref": "#/$defs/safeId"
+        },
+        "task": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "engine"],
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/relativePath"
+            },
+            "engine": {
+              "type": "string",
+              "enum": ["literal", "mustache-strict"]
+            },
+            "target": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "participant_files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source", "target"],
+            "properties": {
+              "source": {
+                "$ref": "#/$defs/relativePath"
+              },
+              "target": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "operation_scope": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["mode"],
+              "properties": {
+                "mode": {
+                  "const": "all"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["mode", "operations"],
+              "properties": {
+                "mode": {
+                  "const": "list"
+                },
+                "operations": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "$ref": "#/$defs/operationKey"
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["mode", "selector"],
+              "properties": {
+                "mode": {
+                  "const": "selector"
+                },
+                "selector": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["kind"],
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": ["tags", "methods"]
+                    },
+                    "tags": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "methods": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[A-Z]+$"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "cases": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "schema", "id_pointer"],
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/relativePath"
+            },
+            "schema": {
+              "$ref": "#/$defs/relativePath"
+            },
+            "id_pointer": {
+              "type": "string",
+              "pattern": "^(/[^/~]*(~[01])?)*$"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "schema", "required"],
+          "properties": {
+            "source": {
+              "type": "string",
+              "enum": ["adapter_final", "workspace_file"]
+            },
+            "schema": {
+              "$ref": "#/$defs/relativePath"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "filename": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "rubric": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "scenario": {
+          "$ref": "#/$defs/safeId"
+        }
+      }
+    },
+    "responseFixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "operation",
+        "status",
+        "media_type",
+        "headers",
+        "body"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "operation": {
+          "$ref": "#/$defs/operationKey"
+        },
+        "status": {
+          "type": "integer",
+          "minimum": 200,
+          "maximum": 599
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "default": {
+          "type": "boolean"
+        },
+        "body": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind"],
+              "properties": {
+                "kind": {
+                  "const": "none"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "value"],
+              "properties": {
+                "kind": {
+                  "const": "json_inline"
+                },
+                "value": {
+                  "description": "Literal JSON response value."
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "source"],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": ["json_file", "text_file", "binary_file"]
+                },
+                "source": {
+                  "$ref": "#/$defs/relativePath"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

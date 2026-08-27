@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "kind": "EvidenceRequirements",
+  "requirements": [
+    {
+      "metric_id": "example",
+      "primary": true,
+      "streams": ["api"],
+      "missingness": "observed"
+    }
+  ],
+  "extensions": {}
+}

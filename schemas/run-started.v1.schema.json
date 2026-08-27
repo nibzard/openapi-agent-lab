@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/run-started.v1.json",
+  "title": "RunStarted",
+  "description": "Write-once trial start record written after setup and before the participant is invoked. Encodes SPEC sections 22.2 and 24.3.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "run_id",
+    "batch_id",
+    "started_at",
+    "server",
+    "inputs",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "RunStarted"
+    },
+    "run_id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "batch_id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "study_run_id": {
+      "$ref": "#/$defs/safeIdOrNull"
+    },
+    "assignment_id": {
+      "$ref": "#/$defs/controlIdOrNull"
+    },
+    "cell_id": {
+      "$ref": "#/$defs/safeIdOrNull"
+    },
+    "replacement_target": {
+      "$ref": "#/$defs/controlIdOrNull"
+    },
+    "repetition_index": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "started_at": {
+      "$ref": "#/$defs/rfc3339"
+    },
+    "run_seed": {
+      "type": ["string", "null"]
+    },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_url", "mode"],
+      "properties": {
+        "base_url": {
+          "type": "string",
+          "pattern": "^http://127\\.0\\.0\\.1:[0-9]+$"
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["contract", "scenario"]
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "documentation_base_url": {
+          "type": ["string", "null"]
+        },
+        "mcp": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/sha256"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/safeId"
+      }
+    },
+    "participant_files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^[^/].*$",
+            "minLength": 1
+          },
+          "sha256": {
+            "$ref": "#/$defs/sha256"
+          }
+        }
+      }
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "safeIdOrNull": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "controlIdOrNull": {
+      "type": ["string", "null"],
+      "pattern": "^(asg|bat|run)_[a-f0-9]{24,32}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "rfc3339": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    }
+  }
+}

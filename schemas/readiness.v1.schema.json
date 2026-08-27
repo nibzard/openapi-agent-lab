@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/readiness.v1.json",
+  "title": "Readiness",
+  "description": "The single JSON record a long-running server writes to stdout when ready. Encodes SPEC sections 23.2 and 23.4.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "mode",
+    "baseUrl",
+    "runId",
+    "contractSha256",
+    "operationCount",
+    "supportedOperationCount",
+    "capabilitiesPath",
+    "credentialsPath"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": ["ready", "failed"]
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["contract", "scenario"]
+    },
+    "baseUrl": {
+      "type": "string",
+      "pattern": "^https?://[^/]+$"
+    },
+    "runId": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "contractSha256": {
+      "type": "string",
+      "minLength": 16
+    },
+    "operationCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "supportedOperationCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "capabilitiesPath": {
+      "type": "string",
+      "pattern": "^/.*$",
+      "minLength": 1
+    },
+    "credentialsPath": {
+      "type": ["string", "null"],
+      "description": "Null when the mock serves no authenticated routes.",
+      "pattern": "^/.*$"
+    },
+    "documentationBaseUrl": {
+      "type": ["string", "null"],
+      "pattern": "^https?://[^/]+$"
+    },
+    "mcpCommand": {
+      "type": ["string", "null"]
+    },
+    "pid": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "error": {
+      "type": ["string", "null"]
+    }
+  }
+}

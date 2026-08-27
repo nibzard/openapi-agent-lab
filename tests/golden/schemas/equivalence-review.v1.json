@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "kind": "EquivalenceReview",
+  "id": "example",
+  "reviewers": [
+    {
+      "name": "example",
+      "role": "example"
+    },
+    {
+      "name": "example",
+      "role": "example"
+    }
+  ],
+  "reviewed": [
+    {
+      "artifact": "example",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "info",
+      "description": "example"
+    }
+  ],
+  "approved": true,
+  "extensions": {}
+}

@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/evidence-requirements.v1.json",
+  "title": "EvidenceRequirements",
+  "description": "Frozen manifest mapping each metric or estimand to the normalized streams, state projections, verification, and conditional report or artifact facts it requires. Encodes SPEC sections 12.9 and 27.1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "requirements", "extensions"],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "EvidenceRequirements"
+    },
+    "eval_id": {
+      "$ref": "#/$defs/safeIdOrNull"
+    },
+    "phase_id": {
+      "$ref": "#/$defs/safeIdOrNull"
+    },
+    "requirements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["metric_id", "primary", "streams", "missingness"],
+        "properties": {
+          "metric_id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "estimand_id": {
+            "$ref": "#/$defs/safeIdOrNull"
+          },
+          "primary": {
+            "type": "boolean"
+          },
+          "streams": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "api",
+                "documentation",
+                "semantic",
+                "state",
+                "lifecycle",
+                "participant_surface",
+                "result_status",
+                "artifacts"
+              ]
+            }
+          },
+          "state_projections": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "artifact_facts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["path"],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "condition": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "missingness": {
+            "type": "string",
+            "enum": [
+              "observed",
+              "unknown",
+              "not_applicable",
+              "unavailable_due_to_evidence"
+            ]
+          }
+        }
+      }
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "safeIdOrNull": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    }
+  }
+}

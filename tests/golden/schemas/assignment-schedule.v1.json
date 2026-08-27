@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "kind": "AssignmentSchedule",
+  "study_run_id": "example",
+  "phase_id": "example",
+  "algorithm": "canonical-sha256-sort-v1",
+  "schedule_seed": "example",
+  "assignments": [
+    {
+      "assignment_id": "asg_aaaaaaaaaaaaaaaaaaaaaaaa",
+      "kind": "primary",
+      "status": "planned",
+      "study_run_id": "example",
+      "phase_id": "example",
+      "cell_id": "example",
+      "child_batch_id": "asg_aaaaaaaaaaaaaaaaaaaaaaaa",
+      "slot": 1,
+      "factor_levels": {
+        "example": "example"
+      },
+      "factor_level_digests": {
+        "example": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "sort_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ]
+}
