@@ -12,6 +12,7 @@ import {
   EXIT_INVALID,
   EXIT_OK,
   EXIT_UNSUPPORTED,
+  OalError,
   canonicalJsonSha256,
   diagnostic,
   invalidInput,
@@ -29,6 +30,12 @@ import { mintRunCredentials } from "@oal/gateway";
 import { compileOpenApi } from "@oal/openapi";
 import { loadPack, type LoadedPack } from "@oal/pack";
 import {
+  RUN_IDENTITY_MISMATCH_CODE,
+  SCHEMA_VERSION,
+  StateStore,
+  type RunMetaInput
+} from "@oal/state-store";
+import {
   createLoopbackExposure,
   credentialEnvironmentName,
   DEFAULT_EXPOSURE_HOST,
@@ -44,6 +51,10 @@ import { missingArgument, tooManyArguments } from "../usage.ts";
 export const ServeCliCode = {
   ModeUnsupported: "OAL-SERVE-MODE-UNSUPPORTED",
   ResumeUnsupported: "OAL-SERVE-RESUME-UNSUPPORTED",
+  ResumeAbsent: "OAL-SERVE-RESUME-ABSENT",
+  ResumeFinalized: "OAL-SERVE-RESUME-FINALIZED",
+  ResumeInUse: "OAL-SERVE-RESUME-IN-USE",
+  ResumeMismatch: "OAL-SERVE-RESUME-MISMATCH",
   HostRefused: "OAL-SERVE-HOST-REFUSED",
   RunIdUnsafe: "OAL-SERVE-RUN-ID-UNSAFE",
   ReadyStale: "OAL-SERVE-READY-STALE",
@@ -301,6 +312,107 @@ const DISCARD_TRACE = {
   complete: (): Promise<void> => Promise.resolve()
 };
 
+/** Marker files of the private serve control directory (section 23.4). */
+const RUN_ID_FILE = "RUN_ID";
+const SERVER_PID_FILE = "SERVER.pid";
+const FINALIZED_FILE = "FINALIZED";
+
+/** The persisted run record a later `--resume` verifies against. */
+export interface ServeRunRecord {
+  readonly schema_version: 1;
+  readonly run_id: string;
+  readonly run_seed: string;
+  readonly created_at: string;
+}
+
+/**
+ * The run identity of one manual serve, exactly as the state store
+ * records it (section 16.3): contract digests, the sorted source
+ * inventory, the contract-backend and implementation bundles, the
+ * seed, and the state schema version.
+ */
+export function serveRunIdentity(
+  contract: ContractIR,
+  runSeed: string
+): RunMetaInput {
+  const inventory = [...contract.source.documents].sort((left, right) =>
+    left.uri < right.uri ? -1 : left.uri > right.uri ? 1 : 0
+  );
+  return {
+    batchId: "manual",
+    contractSemanticSha256: contract.source.semantic_sha256,
+    contractExecutionSha256: contract.source.execution_sha256,
+    sourceInventorySha256: canonicalJsonSha256(inventory as unknown as Json),
+    packSha256: null,
+    scenarioSha256: null,
+    contractVariantSha256: null,
+    backendSha256: sha256Hex(
+      `contract-backend:${contract.source.semantic_sha256}`
+    ),
+    implementationSha256: sha256Hex("oal-serve:1"),
+    seed: runSeed,
+    stateSchemaVersion: SCHEMA_VERSION,
+    createdAt: new Date().toISOString()
+  };
+}
+
+/**
+ * Read the persisted run record of one control directory. Returns null
+ * when no readable record exists; a resume of such a tree is refused.
+ */
+export async function readServeRunRecord(
+  controlDir: string
+): Promise<ServeRunRecord | null> {
+  const text = await readFile(path.join(controlDir, RUN_ID_FILE), "utf8").catch(
+    () => null
+  );
+  if (text === null) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(text) as Partial<ServeRunRecord>;
+    if (
+      parsed.schema_version !== 1 ||
+      typeof parsed.run_id !== "string" ||
+      typeof parsed.run_seed !== "string" ||
+      typeof parsed.created_at !== "string"
+    ) {
+      return null;
+    }
+    return {
+      schema_version: 1,
+      run_id: parsed.run_id,
+      run_seed: parsed.run_seed,
+      created_at: parsed.created_at
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether one process id still names a live process. A permission
+ * error still proves the process exists, so it counts as live.
+ */
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+/** Write one private control marker, replacing any earlier content. */
+async function writeMarker(target: string, text: string): Promise<void> {
+  const handle = await open(target, "w", 0o600);
+  try {
+    await handle.writeFile(text, "utf8");
+  } finally {
+    await handle.close();
+  }
+}
+
 /** Everything `startServe` produced, for reuse by tests. */
 export interface ServeSession {
   readonly handle: ExposureHandle;
@@ -308,11 +420,17 @@ export interface ServeSession {
   readonly credentialsPath: string | null;
   readonly capabilitiesPath: string;
   readonly readiness: JsonObject;
+  /** The private state store of this control directory. */
+  readonly store: StateStore;
+  /** Absolute control directory the markers and state live in. */
+  readonly controlDir: string;
 }
 
 /**
  * Bring one compiled contract up on loopback HTTP, write the private
- * control files, and return the readiness record.
+ * control files, and return the readiness record. A fresh serve
+ * initializes the run identity; a resumed serve verifies it first and
+ * refuses when any recorded digest moved.
  */
 export async function startServe(options: {
   readonly contract: ContractIR;
@@ -323,8 +441,26 @@ export async function startServe(options: {
   readonly runSeed: string;
   readonly controlDir: string;
   readonly credentialsOut: string | null;
+  /** Run identity of the serve; reused verbatim on resume. */
+  readonly identity: RunMetaInput;
+  /** True when this call resumes an interrupted serve. */
+  readonly resumed: boolean;
 }): Promise<ServeSession> {
   await mkdir(options.controlDir, { recursive: true });
+  const store = StateStore.open({
+    path: path.join(options.controlDir, "state.sqlite"),
+    runId: options.runId
+  });
+  if (options.resumed) {
+    try {
+      store.verifyRunIdentity(options.identity);
+    } catch (error) {
+      store.close();
+      throw error;
+    }
+  } else {
+    store.initializeRun(options.identity);
+  }
   const handle = await createLoopbackExposure({
     batchId: "manual",
     runId: options.runId,
@@ -351,6 +487,11 @@ export async function startServe(options: {
   );
   const credentialsPath = options.credentialsOut ?? defaultCredentialsPath;
   if (credentials.alternatives.length > 0) {
+    // A resumed serve rewrites its credentials: the port may differ, so
+    // the values change even though the seed does not.
+    if (options.resumed) {
+      await rm(credentialsPath, { force: true }).catch(() => undefined);
+    }
     await writePrivateFile(
       credentialsPath,
       `${stableJsonStringify(credentials as unknown as Json)}\n`
@@ -363,6 +504,20 @@ export async function startServe(options: {
   await writeFile(
     capabilitiesPath,
     `${stableJsonStringify(options.capabilityReport)}\n`
+  );
+  const record: ServeRunRecord = {
+    schema_version: 1,
+    run_id: options.runId,
+    run_seed: options.runSeed,
+    created_at: options.identity.createdAt
+  };
+  await writeMarker(
+    path.join(options.controlDir, RUN_ID_FILE),
+    `${stableJsonStringify(record as unknown as Json)}\n`
+  );
+  await writeMarker(
+    path.join(options.controlDir, SERVER_PID_FILE),
+    `${process.pid.toString(10)}\n`
   );
   const supported = options.contract.operations.filter(
     (operation) => operation.support.level === "supported"
@@ -386,8 +541,28 @@ export async function startServe(options: {
     credentialsPath:
       credentials.alternatives.length > 0 ? credentialsPath : null,
     capabilitiesPath,
-    readiness
+    readiness,
+    store,
+    controlDir: options.controlDir
   };
+}
+
+/**
+ * Write the terminal marker of one control directory and clear the
+ * live-server marker, so a later resume is correctly refused.
+ */
+export async function finalizeServeControl(controlDir: string): Promise<void> {
+  await writeMarker(
+    path.join(controlDir, FINALIZED_FILE),
+    `${stableJsonStringify({
+      schema_version: 1,
+      finished_at: new Date().toISOString(),
+      pid: process.pid
+    } as Json)}\n`
+  );
+  await rm(path.join(controlDir, SERVER_PID_FILE), { force: true }).catch(
+    () => undefined
+  );
 }
 
 /** `oal serve <source>` (specification section 23.4). */
@@ -429,18 +604,6 @@ export const serveCommand: CommandHandler = async (args, io) => {
       })
     );
   }
-  if (resume !== undefined) {
-    unsupportedFindings.push(
-      diagnostic({
-        severity: "error",
-        phase: "preflight",
-        code: ServeCliCode.ResumeUnsupported,
-        message:
-          "--resume needs SQLite state verification, which this build does " +
-          "not expose. Start a new serve instead."
-      })
-    );
-  }
   if (unsupportedFindings.length > 0) {
     emitDiagnostics(io, args.context, unsupportedFindings);
     return EXIT_UNSUPPORTED;
@@ -465,8 +628,67 @@ export const serveCommand: CommandHandler = async (args, io) => {
     return EXIT_INVALID;
   }
 
+  // A resume targets one control directory. The persisted run record
+  // supplies the run id, the seed, and the creation time; a finalized
+  // or still-live serve is refused before any contract work happens.
+  const resumeDir =
+    resume === undefined ? null : path.resolve(args.context.cwd, resume);
+  const resumed =
+    resumeDir === null ? null : await readServeRunRecord(resumeDir);
+  if (resumeDir !== null && resumed === null) {
+    emitDiagnostics(io, args.context, [
+      diagnostic({
+        severity: "error",
+        phase: "preflight",
+        code: ServeCliCode.ResumeAbsent,
+        message:
+          `No readable run record under ${resumeDir}. A resume needs the ` +
+          "private control state of an interrupted serve."
+      })
+    ]);
+    return EXIT_UNSUPPORTED;
+  }
+  if (resumeDir !== null) {
+    if (
+      (await stat(path.join(resumeDir, FINALIZED_FILE)).catch(() => null)) !==
+      null
+    ) {
+      emitDiagnostics(io, args.context, [
+        diagnostic({
+          severity: "error",
+          phase: "preflight",
+          code: ServeCliCode.ResumeFinalized,
+          message:
+            `The serve under ${resumeDir} finalized cleanly. Start a new ` +
+            "serve instead of resuming a finished run."
+        })
+      ]);
+      return EXIT_UNSUPPORTED;
+    }
+    const pidText = await readFile(
+      path.join(resumeDir, SERVER_PID_FILE),
+      "utf8"
+    ).catch(() => null);
+    const pid =
+      pidText === null ? Number.NaN : Number.parseInt(pidText.trim(), 10);
+    if (Number.isInteger(pid) && pid > 0 && processAlive(pid)) {
+      emitDiagnostics(io, args.context, [
+        diagnostic({
+          severity: "error",
+          phase: "preflight",
+          code: ServeCliCode.ResumeInUse,
+          message:
+            `The serve under ${resumeDir} still runs as process ` +
+            `${pid.toString(10)}. Stop it before resuming.`,
+          details: { pid }
+        })
+      ]);
+      return EXIT_UNSUPPORTED;
+    }
+  }
+
   const runIdFlag = args.flags.string("run-id");
-  const runId = runIdFlag ?? defaultServeRunId(new Date());
+  const runId = resumed?.run_id ?? runIdFlag ?? defaultServeRunId(new Date());
   if (!isSafeId(runId)) {
     emitDiagnostics(io, args.context, [
       diagnostic({
@@ -526,14 +748,18 @@ export const serveCommand: CommandHandler = async (args, io) => {
     return EXIT_UNSUPPORTED;
   }
   const runSeed =
-    args.flags.string("run-seed") ?? deriveServeRunSeed(contract, runId);
+    resumed?.run_seed ??
+    args.flags.string("run-seed") ??
+    deriveServeRunSeed(contract, runId);
 
   const runDirFlag = args.flags.string("run-dir");
   const controlDir =
-    runDirFlag === undefined
+    resumeDir ??
+    (runDirFlag === undefined
       ? path.resolve(args.context.cwd, ".oal", "serve", runId)
-      : path.resolve(args.context.cwd, runDirFlag);
+      : path.resolve(args.context.cwd, runDirFlag));
   if (
+    resumeDir === null &&
     runDirFlag !== undefined &&
     (await stat(controlDir).catch(() => null)) !== null
   ) {
@@ -543,16 +769,41 @@ export const serveCommand: CommandHandler = async (args, io) => {
     );
   }
 
-  const session = await startServe({
-    contract,
-    capabilityReport: compiledSource.capabilityReport,
-    host,
-    port,
-    runId,
-    runSeed,
-    controlDir,
-    credentialsOut
-  });
+  const identity = serveRunIdentity(contract, runSeed);
+  let session: ServeSession;
+  try {
+    session = await startServe({
+      contract,
+      capabilityReport: compiledSource.capabilityReport,
+      host,
+      port,
+      runId,
+      runSeed,
+      controlDir,
+      credentialsOut,
+      identity,
+      resumed: resumed !== null
+    });
+  } catch (error) {
+    if (
+      error instanceof OalError &&
+      error.code === RUN_IDENTITY_MISMATCH_CODE
+    ) {
+      emitDiagnostics(io, args.context, [
+        diagnostic({
+          severity: "error",
+          phase: "preflight",
+          code: ServeCliCode.ResumeMismatch,
+          message:
+            `The contract or seed under ${controlDir} no longer matches ` +
+            "the recorded run identity. Start a new serve instead.",
+          details: error.details
+        })
+      ]);
+      return EXIT_UNSUPPORTED;
+    }
+    throw error;
+  }
   io.stdout(stableJsonStringify(session.readiness));
   for (const line of credentialInstructionsOf(session.credentials)) {
     io.stderr(line);
@@ -564,9 +815,11 @@ export const serveCommand: CommandHandler = async (args, io) => {
     );
   }
   await awaitInterruption(args.context.abortSignal);
+  await finalizeServeControl(controlDir);
   if (session.credentialsPath !== null) {
     await rm(session.credentialsPath, { force: true }).catch(() => undefined);
   }
   await session.handle.close();
+  session.store.close();
   return EXIT_OK;
 };

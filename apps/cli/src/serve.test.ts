@@ -6,6 +6,7 @@ import {
   stat,
   writeFile
 } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -25,7 +26,10 @@ import {
   DEFAULT_SERVE_PORT,
   defaultServeRunId,
   deriveServeRunSeed,
-  ServeCliCode
+  finalizeServeControl,
+  serveRunIdentity,
+  ServeCliCode,
+  startServe
 } from "./handlers/serve.ts";
 import { MemoryIo } from "./io.ts";
 import { TerminationGuard } from "./signals.ts";
@@ -206,7 +210,7 @@ describe("oal serve", () => {
     expect(io.stderrText()).toContain(ServeCliCode.ModeUnsupported);
   });
 
-  it("refuses --resume with exit 4", async () => {
+  it("refuses a resume of a directory with no control state", async () => {
     const cwd = await newWorkspace();
     const io = new MemoryIo();
     const code = await main(
@@ -215,7 +219,7 @@ describe("oal serve", () => {
       { cwd }
     );
     expect(code).toBe(EXIT_UNSUPPORTED);
-    expect(io.stderrText()).toContain(ServeCliCode.ResumeUnsupported);
+    expect(io.stderrText()).toContain(ServeCliCode.ResumeAbsent);
   });
 
   it("refuses --resume combined with --run-id", async () => {
@@ -424,5 +428,152 @@ describe("oal serve", () => {
     const code = await main(["serve", document, "--ready", ready], io, { cwd });
     expect(code).not.toBe(EXIT_OK);
     expect(io.stderrText()).toContain(ServeCliCode.ReadyStale);
+  });
+});
+
+describe("oal serve --resume", () => {
+  /**
+   * Build the control state of one interrupted serve with the real
+   * production path, then simulate the crash: the listener and the
+   * state store close without the terminal marker, and the recorded
+   * server pid names a process that already exited.
+   */
+  async function crashedServe(
+    cwd: string,
+    contract: unknown,
+    runId: string
+  ): Promise<{ readonly controlDir: string; readonly runSeed: string }> {
+    const document = path.join(cwd, "openapi.json");
+    await writeFile(document, JSON.stringify(contract));
+    const compiled = await compileServeSource(document, cwd, 10 * 1024 * 1024);
+    const runSeed = "d".repeat(64);
+    const controlDir = path.join(cwd, ".oal", "serve", runId);
+    const session = await startServe({
+      contract: compiled.contract,
+      capabilityReport: compiled.capabilityReport,
+      host: "127.0.0.1",
+      port: 0,
+      runId,
+      runSeed,
+      controlDir,
+      credentialsOut: null,
+      identity: serveRunIdentity(compiled.contract, runSeed),
+      resumed: false
+    });
+    await session.handle.close();
+    session.store.close();
+    const dead = spawn(process.execPath, ["-e", "process.exit(0)"]);
+    const deadPid = dead.pid;
+    await new Promise<void>((resolve) => {
+      dead.on("exit", () => {
+        resolve();
+      });
+    });
+    await writeFile(
+      path.join(controlDir, "SERVER.pid"),
+      `${deadPid?.toString(10) ?? "1"}\n`
+    );
+    return { controlDir, runSeed };
+  }
+
+  it("resumes an interrupted serve with the same identity", async () => {
+    const cwd = await newWorkspace();
+    const { controlDir } = await crashedServe(cwd, BARE_CONTRACT, "resume-ok");
+    const document = path.join(cwd, "openapi.json");
+    const io = new MemoryIo();
+    const guard = new TerminationGuard();
+    const pending: Promise<ExitCode> = main(
+      ["serve", document, "--resume", controlDir, "--port", "0"],
+      io,
+      { cwd, guard }
+    );
+    try {
+      const readiness = await awaitReadiness(io);
+      expect(readiness.runId).toBe("resume-ok");
+      const response = await fetch(`${readiness.baseUrl}/things`);
+      expect(response.status).toBe(200);
+    } finally {
+      guard.handle("SIGINT");
+    }
+    expect(await pending).toBe(130);
+    expect(await exists(path.join(controlDir, "FINALIZED"))).toBe(true);
+    expect(await exists(path.join(controlDir, "SERVER.pid"))).toBe(false);
+  });
+
+  it("refuses a resume after the contract changed", async () => {
+    const cwd = await newWorkspace();
+    const { controlDir } = await crashedServe(cwd, BARE_CONTRACT, "resume-mm");
+    const document = path.join(cwd, "openapi.json");
+    await writeFile(document, JSON.stringify(SECURED_CONTRACT));
+    const io = new MemoryIo();
+    const code = await main(["serve", document, "--resume", controlDir], io, {
+      cwd
+    });
+    expect(code).toBe(EXIT_UNSUPPORTED);
+    expect(io.stderrText()).toContain(ServeCliCode.ResumeMismatch);
+  });
+
+  it("refuses a resume of a finalized serve", async () => {
+    const cwd = await newWorkspace();
+    const { controlDir } = await crashedServe(cwd, BARE_CONTRACT, "resume-fin");
+    await finalizeServeControl(controlDir);
+    const document = path.join(cwd, "openapi.json");
+    const io = new MemoryIo();
+    const code = await main(["serve", document, "--resume", controlDir], io, {
+      cwd
+    });
+    expect(code).toBe(EXIT_UNSUPPORTED);
+    expect(io.stderrText()).toContain(ServeCliCode.ResumeFinalized);
+  });
+
+  it("refuses a resume while the recorded server still runs", async () => {
+    const cwd = await newWorkspace();
+    const { controlDir } = await crashedServe(cwd, BARE_CONTRACT, "resume-use");
+    await writeFile(
+      path.join(controlDir, "SERVER.pid"),
+      `${process.pid.toString(10)}\n`
+    );
+    const document = path.join(cwd, "openapi.json");
+    const io = new MemoryIo();
+    const code = await main(["serve", document, "--resume", controlDir], io, {
+      cwd
+    });
+    expect(code).toBe(EXIT_UNSUPPORTED);
+    expect(io.stderrText()).toContain(ServeCliCode.ResumeInUse);
+  });
+
+  it("writes the private control files with mode 0600", async () => {
+    const cwd = await newWorkspace();
+    const document = path.join(cwd, "openapi.json");
+    await writeFile(document, JSON.stringify(SECURED_CONTRACT));
+    const compiled = await compileServeSource(document, cwd, 10 * 1024 * 1024);
+    const runSeed = "e".repeat(64);
+    const controlDir = path.join(cwd, ".oal", "serve", "resume-mode");
+    const session = await startServe({
+      contract: compiled.contract,
+      capabilityReport: compiled.capabilityReport,
+      host: "127.0.0.1",
+      port: 0,
+      runId: "resume-mode",
+      runSeed,
+      controlDir,
+      credentialsOut: null,
+      identity: serveRunIdentity(compiled.contract, runSeed),
+      resumed: false
+    });
+    try {
+      const mode = (await stat(session.credentialsPath as string)).mode;
+      expect(mode & 0o777).toBe(0o600);
+      for (const marker of ["RUN_ID", "SERVER.pid"]) {
+        const markerMode = (await stat(path.join(controlDir, marker))).mode;
+        expect(markerMode & 0o777).toBe(0o600);
+      }
+    } finally {
+      await rm(session.credentialsPath as string, { force: true }).catch(
+        () => undefined
+      );
+      await session.handle.close();
+      session.store.close();
+    }
   });
 });
