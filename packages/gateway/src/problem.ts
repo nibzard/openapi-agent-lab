@@ -46,6 +46,11 @@ export const FRAMEWORK_ERRORS = {
     code: "request_body_too_large",
     title: "The request body exceeds the size limit."
   },
+  multipartPartsTooMany: {
+    status: 413,
+    code: "multipart_parts_too_many",
+    title: "The multipart body exceeds the parts limit."
+  },
   mediaTypeUnsupported: {
     status: 415,
     code: "media_type_unsupported",

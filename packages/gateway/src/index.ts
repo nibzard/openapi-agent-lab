@@ -44,6 +44,38 @@ export {
 export { generateValue, type GenerationOptions } from "./generate.ts";
 
 export {
+  validateResponse,
+  type ResponseValidationResult,
+  type ResponseViolation
+} from "./response.ts";
+
+export { createGatewayState, type GatewayState } from "./state.ts";
+
+export {
+  parseMultipart,
+  type MultipartPart,
+  type MultipartResult
+} from "./multipart.ts";
+
+export {
+  captureBodyEvidence,
+  MemoryBlobStore,
+  traceHeaders,
+  traceQueryParameters,
+  type BlobStore,
+  type BodyEvidence,
+  type TraceHeader,
+  type TraceQueryParameter
+} from "./trace.ts";
+
+export {
+  startGatewayListener,
+  type GatewayListener,
+  type GatewayTraceEvent,
+  type ListenerOptions
+} from "./listener.ts";
+
+export {
   defaultExplodeFor,
   defaultStyleFor,
   deserializeParameter,

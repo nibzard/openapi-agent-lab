@@ -4,6 +4,8 @@ import type { Json } from "@oal/core";
 import { LIMIT_DEFAULTS } from "@oal/config";
 import type {
   ContractIR,
+  MediaContentIR,
+  MediaExampleIR,
   OperationIR,
   ParameterIR,
   ResponseIR,
@@ -16,6 +18,7 @@ import {
   negotiateResponseMedia,
   parseAccept
 } from "./negotiate.ts";
+import { createGatewayState } from "./state.ts";
 import {
   handleGatewayRequest,
   type GatewayOptions,
@@ -49,9 +52,44 @@ function response(init: Partial<ResponseIR>): ResponseIR {
     selector_kind: init.selector_kind ?? "exact",
     status: init.status ?? 200,
     description: null,
-    headers: [],
+    headers: init.headers ?? [],
     content: init.content ?? [],
     source_pointer: ""
+  };
+}
+
+function requiredHeader(name: string): ResponseIR["headers"][number] {
+  return {
+    name,
+    required: true,
+    deprecated: false,
+    description: null,
+    schema_ref: null,
+    content: null,
+    examples: [],
+    support: "supported",
+    support_reason_codes: []
+  };
+}
+
+function jsonContent(
+  schemaRef: string | null,
+  examples: MediaExampleIR[] = []
+): MediaContentIR {
+  return contentEntry("application/json", schemaRef, examples);
+}
+
+function contentEntry(
+  mediaType: string,
+  schemaRef: string | null,
+  examples: MediaExampleIR[] = []
+): MediaContentIR {
+  return {
+    media_type: mediaType,
+    schema_ref: schemaRef,
+    examples,
+    support: "supported",
+    support_reason_codes: []
   };
 }
 
@@ -160,7 +198,8 @@ function options(init: Partial<GatewayOptions>): GatewayOptions {
     contract: init.contract ?? contract({ operations: [operation({})] }),
     limits: init.limits ?? LIMIT_DEFAULTS,
     fixtures: init.fixtures ?? [],
-    runSeed: init.runSeed ?? "run_seed_1"
+    runSeed: init.runSeed ?? "run_seed_1",
+    ...(init.state === undefined ? {} : { state: init.state })
   };
 }
 
@@ -582,5 +621,273 @@ describe("gateway pipeline", () => {
       request({ target: "/things?q=%20space" })
     );
     expect(echoed.status).toBe(200);
+  });
+});
+
+describe("response validation before commit", () => {
+  it("rejects a produced body that violates the declared schema", () => {
+    const op = operation({
+      responses: [
+        response({
+          content: [
+            jsonContent("sch_thing", [
+              { name: null, value: { wrong: true }, summary: null }
+            ])
+          ]
+        })
+      ]
+    });
+    const result = handleGatewayRequest(
+      options({ contract: contract({ operations: [op] }) }),
+      12,
+      request({})
+    );
+    expect(result.status).toBe(500);
+    expect(result.frameworkCode).toBe("mock_response_invalid");
+    expect(result.headers["content-type"]).toBe("application/problem+json");
+    const document = JSON.parse(result.body ?? "{}") as {
+      code?: string;
+      request_id?: string;
+    };
+    expect(document.code).toBe("mock_response_invalid");
+    expect(document.request_id).toBe("req_00000012");
+  });
+
+  it("rejects a fixture status that matches no declared response", () => {
+    const result = handleGatewayRequest(
+      options({
+        fixtures: [
+          {
+            id: "fx_status",
+            operation: "path:GET /things",
+            status: 299,
+            body: { kind: "json_inline", value: { id: "thing_1" } }
+          }
+        ]
+      }),
+      13,
+      request({})
+    );
+    expect(result.status).toBe(500);
+    expect(result.frameworkCode).toBe("mock_response_invalid");
+  });
+
+  it("rejects a produced response missing a required header", () => {
+    const op = operation({
+      responses: [response({ headers: [requiredHeader("x-request-id")] })]
+    });
+    const result = handleGatewayRequest(
+      options({ contract: contract({ operations: [op] }) }),
+      14,
+      request({})
+    );
+    expect(result.status).toBe(500);
+    expect(result.frameworkCode).toBe("mock_response_invalid");
+  });
+
+  it("serves a fixture that satisfies every declared check", () => {
+    const op = operation({
+      responses: [
+        response({
+          headers: [requiredHeader("x-request-id")],
+          content: [jsonContent("sch_thing")]
+        })
+      ]
+    });
+    const result = handleGatewayRequest(
+      options({
+        contract: contract({ operations: [op] }),
+        fixtures: [
+          {
+            id: "fx_ok",
+            operation: "path:GET /things",
+            status: 200,
+            headers: { "x-request-id": "req_1" },
+            body: { kind: "json_inline", value: { id: "thing_1" } }
+          }
+        ]
+      }),
+      15,
+      request({})
+    );
+    expect(result.status).toBe(200);
+    expect(result.headers["x-request-id"]).toBe("req_1");
+    expect(result.frameworkCode).toBeNull();
+  });
+
+  it("serves a fixture body as frozen pack data while enforcing the declared checks", () => {
+    // The pack validates fixture bodies before startup (section 15.5.1),
+    // so a fixture shape that differs from the schema stays serveable;
+    // status, headers, and media type are still enforced above.
+    const op = operation({
+      responses: [
+        response({
+          content: [contentEntry("application/json", "sch_thing_list")]
+        })
+      ]
+    });
+    const result = handleGatewayRequest(
+      options({
+        contract: contract({
+          operations: [op],
+          schemas: {
+            sch_thing_list: schema("sch_thing_list", {
+              type: "array",
+              items: { $ref: "sch_thing" }
+            }),
+            sch_thing: schema("sch_thing", {
+              type: "object",
+              required: ["id"],
+              properties: { id: { type: "string" } }
+            })
+          }
+        }),
+        fixtures: [
+          {
+            id: "fx_frozen",
+            operation: "path:GET /things",
+            status: 200,
+            media_type: "application/json",
+            body: { kind: "json_inline", value: { id: "thing_1" } }
+          }
+        ]
+      }),
+      18,
+      request({})
+    );
+    expect(result.status).toBe(200);
+    expect(result.provenance).toBe("fixture:fx_frozen");
+    expect(result.frameworkCode).toBeNull();
+    expect(result.headers["content-type"]).toBe(
+      "application/json; charset=utf-8"
+    );
+  });
+});
+
+describe("state transactions", () => {
+  const invalidExample = (): OperationIR => {
+    return operation({
+      responses: [
+        response({
+          content: [
+            jsonContent("sch_thing", [
+              { name: null, value: { wrong: true }, summary: null }
+            ])
+          ]
+        })
+      ]
+    });
+  };
+
+  it("rolls back the pending mutation when validation fails", () => {
+    const state = createGatewayState();
+    const result = handleGatewayRequest(
+      options({
+        contract: contract({ operations: [invalidExample()] }),
+        state
+      }),
+      16,
+      request({})
+    );
+    expect(result.frameworkCode).toBe("mock_response_invalid");
+    expect(state.revision).toBe(0);
+    expect(state.appliedEffects).toEqual([]);
+    expect(state.pendingEffects).toEqual([]);
+    expect(state.rollbacks).toBe(1);
+  });
+
+  it("commits the pending mutation when validation passes", () => {
+    const state = createGatewayState();
+    const result = handleGatewayRequest(options({ state }), 17, request({}));
+    expect(result.status).toBe(200);
+    expect(state.revision).toBe(1);
+    expect(state.appliedEffects).toEqual(["path:GET /things"]);
+    expect(state.rollbacks).toBe(0);
+  });
+});
+
+describe("multipart limits", () => {
+  function multipartBody(boundary: string, parts: string[]): Uint8Array {
+    const wire =
+      parts.map((part) => `--${boundary}\r\n${part}\r\n`).join("") +
+      `--${boundary}--\r\n`;
+    return new TextEncoder().encode(wire);
+  }
+
+  const part = (name: string, value: string): string => {
+    return `Content-Disposition: form-data; name="${name}"\r\n\r\n${value}`;
+  };
+
+  const uploadOperation = (): OperationIR => {
+    return operation({
+      method: "POST",
+      key: "path:POST /things",
+      request_body: {
+        required: true,
+        description: null,
+        content: [contentEntry("multipart/form-data", null)],
+        source_pointer: ""
+      }
+    });
+  };
+
+  it("answers 413 when the parts limit is exceeded", () => {
+    const result = handleGatewayRequest(
+      options({
+        contract: contract({ operations: [uploadOperation()] }),
+        limits: { ...LIMIT_DEFAULTS, maxMultipartParts: 2 }
+      }),
+      18,
+      request({
+        method: "POST",
+        headers: {
+          "content-type": "multipart/form-data; boundary=oal_boundary"
+        },
+        body: multipartBody("oal_boundary", [
+          part("first", "one"),
+          part("second", "two"),
+          part("third", "three")
+        ])
+      })
+    );
+    expect(result.status).toBe(413);
+    expect(result.frameworkCode).toBe("multipart_parts_too_many");
+  });
+
+  it("accepts a multipart body within the parts limit", () => {
+    const result = handleGatewayRequest(
+      options({
+        contract: contract({ operations: [uploadOperation()] })
+      }),
+      19,
+      request({
+        method: "POST",
+        headers: {
+          "content-type": "multipart/form-data; boundary=oal_boundary"
+        },
+        body: multipartBody("oal_boundary", [
+          part("first", "one"),
+          part("second", "two")
+        ])
+      })
+    );
+    expect(result.status).toBe(200);
+    expect(result.frameworkCode).toBeNull();
+  });
+
+  it("answers 400 when the boundary parameter is missing", () => {
+    const result = handleGatewayRequest(
+      options({
+        contract: contract({ operations: [uploadOperation()] })
+      }),
+      20,
+      request({
+        method: "POST",
+        headers: { "content-type": "multipart/form-data" },
+        body: multipartBody("oal_boundary", [part("first", "one")])
+      })
+    );
+    expect(result.status).toBe(400);
+    expect(result.frameworkCode).toBe("request_malformed");
   });
 });

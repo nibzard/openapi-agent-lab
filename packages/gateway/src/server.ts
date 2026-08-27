@@ -10,10 +10,13 @@ import { canonicalJson, type Json } from "@oal/core";
 import type { ContractIR } from "@oal/contract-ir";
 import type { LimitTable } from "@oal/config";
 import { evaluateSecurity, mintRunCredentials } from "./auth.ts";
+import { parseMultipart, type MultipartPart } from "./multipart.ts";
 import { FRAMEWORK_ERRORS, problemDocument } from "./problem.ts";
+import { validateResponse } from "./response.ts";
 import { matchRoute } from "./router.ts";
 import { matchRequestMedia } from "./negotiate.ts";
 import { selectResponse, type ContractFixture } from "./select.ts";
+import type { GatewayState } from "./state.ts";
 import {
   validateBody,
   validateParameters,
@@ -50,6 +53,8 @@ export interface GatewayOptions {
   fixtures?: ContractFixture[];
   /** Run seed for credentials and deterministic generation. */
   runSeed: string;
+  /** Transactional state; committed only after response validation. */
+  state?: GatewayState;
 }
 
 const HOP_BY_HOP = new Set([
@@ -117,6 +122,22 @@ export function handleGatewayRequest(
       }
     } else if (baseType === "application/x-www-form-urlencoded") {
       body = parseUrlEncoded(new TextDecoder().decode(raw.body));
+    } else if (baseType.startsWith("multipart/")) {
+      // The parts limit default is LIMIT_DEFAULTS.maxMultipartParts;
+      // parseMultipart enforces it while the parts are counted.
+      const multipart = parseMultipart(
+        raw.body,
+        contentType,
+        limits.maxMultipartParts
+      );
+      if (!multipart.ok) {
+        const error =
+          multipart.code === "parts_limit_exceeded"
+            ? FRAMEWORK_ERRORS.multipartPartsTooMany
+            : FRAMEWORK_ERRORS.requestMalformed;
+        return framework(error, requestId);
+      }
+      body = multipartJsonValue(multipart.parts);
     } else if (raw.body.length > 0) {
       body = new TextDecoder().decode(raw.body);
     }
@@ -190,6 +211,9 @@ export function handleGatewayRequest(
 
   // Steps 10 to 12: contract backend selection. The Accept header joins
   // selection so the value comes from the media type that is served.
+  // The backend runs inside a state transaction: the staged mutation
+  // stays invisible until response validation commits it.
+  options.state?.stage(operation.key);
   const selected = selectResponse(
     operation.key,
     operation.responses,
@@ -201,6 +225,7 @@ export function handleGatewayRequest(
     headerValue(raw.headers, "accept")
   );
   if (selected === null) {
+    options.state?.rollback();
     return framework(FRAMEWORK_ERRORS.mockBehaviorUnavailable, requestId);
   }
 
@@ -209,7 +234,21 @@ export function handleGatewayRequest(
     selected.response?.content.map((entry) => entry.media_type) ?? [];
   const media = selected.mediaType;
   if (declared.length > 0 && media === null) {
+    options.state?.rollback();
     return framework(FRAMEWORK_ERRORS.responseMediaTypeUnacceptable, requestId);
+  }
+
+  // Step 12: response validation before commit. Status, required
+  // headers, media type, and body are checked against the declared
+  // response; an invalid backend result never mutates state.
+  const responseViolations = validateResponse(
+    operation.responses,
+    selected,
+    schemaLookup
+  );
+  if (responseViolations.violations.length > 0) {
+    options.state?.rollback();
+    return framework(FRAMEWORK_ERRORS.mockResponseInvalid, requestId);
   }
 
   // Step 14: serialization. HEAD, 204, and 304 never carry body bytes;
@@ -230,10 +269,12 @@ export function handleGatewayRequest(
       : media;
   }
   if (representation !== undefined) {
-    headers["content-length"] = Buffer.byteLength(
-      representation,
-      "utf8"
-    ).toString(10);
+    const representationBytes = Buffer.byteLength(representation, "utf8");
+    headers["content-length"] = representationBytes.toString(10);
+    if (representationBytes > limits.maxGeneratedResponseBodyBytes) {
+      options.state?.rollback();
+      return framework(FRAMEWORK_ERRORS.mockResponseInvalid, requestId);
+    }
   }
   const safeHeaders: Record<string, string> = {};
   for (const [name, value] of Object.entries(headers)) {
@@ -241,6 +282,9 @@ export function handleGatewayRequest(
       safeHeaders[name] = value;
     }
   }
+  // Step 13 for the contract backend: the transaction commits only
+  // after every check above passed.
+  options.state?.commit();
   return {
     status: selected.status,
     headers: safeHeaders,
@@ -249,6 +293,17 @@ export function handleGatewayRequest(
     provenance: selected.provenance,
     frameworkCode: null
   };
+}
+
+/** Bounded JSON view of parsed multipart parts for request validation. */
+function multipartJsonValue(parts: readonly MultipartPart[]): Json {
+  const decoder = new TextDecoder();
+  return parts.map((part) => ({
+    name: part.name,
+    filename: part.filename,
+    headers: part.headers,
+    body: decoder.decode(part.body)
+  }));
 }
 
 function isJsonType(media: string): boolean {
