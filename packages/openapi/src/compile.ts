@@ -738,7 +738,10 @@ export class OpenApiCompiler {
       resolved.pointer,
       `Path item '${template}' must be a mapping.`
     );
-    const segments =
+    // A webhook names a non-routable surface, so it carries no template
+    // parsing. ContractIR still requires at least one route segment, so the
+    // webhook name is recorded as one literal segment.
+    const segments: RouteSegment[] =
       surface === "path"
         ? parsePathTemplateOrFail(
             template,
@@ -746,7 +749,7 @@ export class OpenApiCompiler {
             resolved.pointer,
             (diagnostic) => this.fail(diagnostic)
           )
-        : [];
+        : [{ kind: "literal", value: template }];
     const pathServers = this.compileServers(item.servers);
     const effectiveServers =
       pathServers.length > 0 ? pathServers : inheritedServers;
@@ -1160,6 +1163,18 @@ export class OpenApiCompiler {
       const entry = responses[selector];
       if (entry === undefined) {
         continue;
+      }
+      // A selector must be `default`, a `[1-5]XX` range, or a concrete
+      // status code. Anything else would parse to NaN and corrupt the
+      // canonical digests, so it fails as a structure error.
+      if (!isResponseSelector(selector)) {
+        this.fail(
+          structure(
+            `Response selector '${selector}' must be a status code, a 1XX to 5XX range, or 'default'.`,
+            resolved.uri,
+            `${resolved.pointer}/${escapeToken(selector)}`
+          )
+        );
       }
       const entryResolved = this.deref(
         entry,
@@ -1851,6 +1866,11 @@ function selectorKindOf(selector: string): ResponseSelectorKind {
     return "range";
   }
   return "exact";
+}
+
+/** OpenAPI allows `default`, `[1-5]XX` ranges, and concrete status codes. */
+function isResponseSelector(selector: string): boolean {
+  return selector === "default" || /^[1-5]([0-9]|X){2}$/.test(selector);
 }
 
 function compareOperations(a: OperationIR, b: OperationIR): number {

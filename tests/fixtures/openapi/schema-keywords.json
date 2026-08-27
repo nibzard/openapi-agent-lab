@@ -1,0 +1,195 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Schema keyword API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/gadgets": {
+      "get": {
+        "operationId": "listGadgets",
+        "summary": "Composition keywords in a response schema",
+        "responses": {
+          "200": {
+            "description": "One gadget of the discriminated union",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/Clock" },
+                    { "$ref": "#/components/schemas/Thermometer" }
+                  ],
+                  "discriminator": {
+                    "propertyName": "kind",
+                    "mapping": {
+                      "clock": "#/components/schemas/Clock",
+                      "thermometer": "#/components/schemas/Thermometer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createGadget",
+        "summary": "readOnly and writeOnly halves of one object",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/GadgetInput" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The stored gadget",
+            "headers": {
+              "x-gadget-kind": {
+                "description": "The discriminator value",
+                "schema": { "type": "string", "enum": ["clock", "thermometer"] }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Gadget" }
+              }
+            }
+          },
+          "4XX": {
+            "description": "A rejected input",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Failure" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readings": {
+      "post": {
+        "operationId": "addReading",
+        "summary": "Tuple and set constraints",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Reading" }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "The accepted reading",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["received"],
+                  "properties": {
+                    "received": { "type": "boolean", "const": true }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "GadgetInput": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Named" },
+          {
+            "type": "object",
+            "required": ["label"],
+            "properties": {
+              "label": { "type": "string", "minLength": 1, "maxLength": 32 },
+              "grade": { "type": "string", "enum": ["alpha", "beta"] }
+            }
+          }
+        ]
+      },
+      "Gadget": {
+        "type": "object",
+        "required": ["id", "label"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "readOnly": true,
+            "default": "gadget_0001"
+          },
+          "label": { "type": "string" },
+          "ownerNote": {
+            "type": "string",
+            "writeOnly": true,
+            "default": "internal only"
+          }
+        }
+      },
+      "Named": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+        }
+      },
+      "Clock": {
+        "type": "object",
+        "required": ["kind", "hands"],
+        "properties": {
+          "kind": { "const": "clock" },
+          "hands": { "type": "integer", "minimum": 0, "maximum": 4 }
+        }
+      },
+      "Thermometer": {
+        "type": "object",
+        "required": ["kind", "celsius"],
+        "properties": {
+          "kind": { "const": "thermometer" },
+          "celsius": { "type": "number", "exclusiveMinimum": -100 },
+          "scale": { "type": "string", "default": "celsius" }
+        }
+      },
+      "Reading": {
+        "type": "object",
+        "required": ["samples"],
+        "properties": {
+          "samples": {
+            "prefixItems": [
+              { "type": "string" },
+              { "type": "integer" }
+            ],
+            "items": false,
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "flags": {
+            "type": "array",
+            "uniqueItems": true,
+            "maxItems": 3,
+            "items": { "type": "string" }
+          },
+          "extra": {
+            "type": "object",
+            "additionalProperties": { "type": "number" },
+            "minProperties": 1
+          }
+        }
+      },
+      "Failure": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "type": "integer", "format": "int32" },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  }
+}

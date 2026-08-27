@@ -1,0 +1,50 @@
+# OpenAPI 3.0 dialect: `nullable: true` plus boolean `exclusiveMinimum`.
+openapi: 3.0.3
+info:
+  title: Nullable 3.0
+  version: 1.0.0
+paths:
+  /items:
+    get:
+      operationId: listItems
+      parameters:
+        - name: since
+          in: query
+          schema:
+            type: string
+            nullable: true
+      responses:
+        "200":
+          description: Items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemPage"
+components:
+  schemas:
+    ItemPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Item"
+    Item:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          exclusiveMinimum: false
+        label:
+          type: string
+          nullable: true
+        score:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+        releasedAt:
+          type: string
+          nullable: true

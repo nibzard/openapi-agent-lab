@@ -1,0 +1,17 @@
+# A percent-encoded parent traversal. Reference targets are never
+# percent-decoded, so this names a literal "%2e%2e" directory inside the
+# pack root rather than escaping it; the missing document is rejected.
+openapi: 3.1.0
+info:
+  title: Encoded traversal
+  version: 1.0.0
+paths:
+  /owners:
+    get:
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "%2e%2e/encoded-escape.json"

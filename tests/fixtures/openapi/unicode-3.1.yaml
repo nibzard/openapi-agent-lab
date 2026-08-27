@@ -1,0 +1,57 @@
+# Unicode text and identifiers (specification section 35.2).
+openapi: 3.1.0
+info:
+  title: Café et méteo — API de démonstration
+  version: 1.0.0
+  description: >
+    Non-ASCII descriptions, property names, enum values, and examples
+    survive compilation unchanged.
+tags:
+  - name: mesures
+    description: Mesures météorologiques
+paths:
+  /stations/{identifiant}:
+    get:
+      operationId: readStation
+      summary: Lire une station
+      parameters:
+        - name: identifiant
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: La station demandée
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Station"
+components:
+  schemas:
+    Station:
+      type: object
+      required: [nom, ville]
+      properties:
+        nom:
+          type: string
+          example: Gare du Nord
+        ville:
+          type: string
+          enum:
+            - Montréal
+            - Québec
+            - Zürich
+        météo:
+          type: string
+          description: État du ciel
+          enum:
+            - ensoleillé
+            - nuageux
+            - pluvieux
+        taille:
+          type: string
+          enum:
+            - klein
+            - groß

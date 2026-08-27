@@ -1,0 +1,190 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Security alternatives API",
+    "version": "1.0.0"
+  },
+  "security": [
+    {
+      "header_key": []
+    }
+  ],
+  "paths": {
+    "/open": {
+      "get": {
+        "operationId": "getOpen",
+        "summary": "An empty requirement permits anonymous access",
+        "security": [],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    },
+    "/key/header": {
+      "get": {
+        "operationId": "getKeyHeader",
+        "summary": "Inherits the root api key requirement",
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    },
+    "/key/query": {
+      "get": {
+        "operationId": "getKeyQuery",
+        "summary": "An api key carried in the query string",
+        "security": [
+          {
+            "query_key": []
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    },
+    "/key/cookie": {
+      "get": {
+        "operationId": "getKeyCookie",
+        "summary": "An api key carried in a cookie",
+        "security": [
+          {
+            "cookie_key": []
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    },
+    "/basic": {
+      "get": {
+        "operationId": "getBasic",
+        "summary": "HTTP Basic credentials",
+        "security": [
+          {
+            "basic_auth": []
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    },
+    "/bearer": {
+      "get": {
+        "operationId": "getBearer",
+        "summary": "An HTTP bearer token",
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    },
+    "/both": {
+      "get": {
+        "operationId": "getBoth",
+        "summary": "Two schemes inside one requirement are ANDed",
+        "security": [
+          {
+            "header_key": [],
+            "bearer_auth": []
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    },
+    "/either": {
+      "get": {
+        "operationId": "getEither",
+        "summary": "Two requirements are ORed",
+        "security": [
+          {
+            "bearer_auth": []
+          },
+          {
+            "basic_auth": []
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    },
+    "/scope": {
+      "get": {
+        "operationId": "getScoped",
+        "summary": "A scope the dummy grant never issues",
+        "security": [
+          {
+            "oauth": ["admin"]
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "header_key": {
+        "type": "apiKey",
+        "name": "x-api-key",
+        "in": "header"
+      },
+      "query_key": {
+        "type": "apiKey",
+        "name": "api_key",
+        "in": "query"
+      },
+      "cookie_key": {
+        "type": "apiKey",
+        "name": "session_key",
+        "in": "cookie"
+      },
+      "basic_auth": {
+        "type": "http",
+        "scheme": "basic"
+      },
+      "bearer_auth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "oauth": {
+        "type": "oauth2",
+        "flows": {
+          "clientCredentials": {
+            "tokenUrl": "https://auth.example.invalid/token",
+            "scopes": {
+              "read": "Read access"
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "Ack": {
+        "description": "The request was accepted",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": ["status"],
+              "properties": {
+                "status": { "type": "string", "enum": ["ok"] }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

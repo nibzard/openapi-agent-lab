@@ -5,7 +5,7 @@
  * OpenAPI parameter objects declare.
  */
 
-import type { Json } from "@oal/core";
+import { parseJsonStrict, type Json } from "@oal/core";
 import type {
   ParameterIR,
   ParameterLocation,
@@ -53,6 +53,11 @@ export function deserializeParameter(
   wire: string | string[],
   typeHint: "object" | "array" | null = null
 ): ParseOutcome {
+  // A parameter declared through `content` carries a serialized media
+  // type instead of a style; version 0.1 supports application/json.
+  if (parameter.content !== null) {
+    return parseContentParameter(single(wire), parameter.content.media_type);
+  }
   const style = parameter.style;
   switch (parameter.location) {
     case "path":
@@ -169,18 +174,12 @@ function parsePairsSimple(
   if (explode && parts.every((part) => part.includes("="))) {
     return okValue(objectFromPairs(parts.map((part) => splitFirst(part, "="))));
   }
-  if (
-    !explode &&
-    typeHint === "object" &&
-    parts.length % 2 === 0 &&
-    parts.length > 0
-  ) {
+  if (!explode && typeHint === "object") {
     // Non-exploded objects serialize positionally: k1,v1,k2,v2.
-    const pairs: Array<[string, string]> = [];
-    for (let i = 0; i < parts.length; i += 2) {
-      pairs.push([parts[i] as string, parts[i + 1] as string]);
+    const positional = positionalObject(parts);
+    if (positional !== null) {
+      return okValue(positional);
     }
-    return okValue(objectFromPairs(pairs));
   }
   if (typeHint === "array" && parts.length > 0) {
     return okValue(parts.map(parseScalar));
@@ -189,6 +188,29 @@ function parsePairsSimple(
     return okValue(parseScalar(parts[0] as string));
   }
   return okValue(parts.map(parseScalar));
+}
+
+/**
+ * Parse a parameter declared through `content`. The wire value is the
+ * serialized document for the declared media type.
+ */
+function parseContentParameter(wire: string, mediaType: string): ParseOutcome {
+  if (mediaType.toLowerCase() !== "application/json") {
+    return {
+      ok: false,
+      code: "style",
+      message: `Parameter content media type ${mediaType} is not supported.`
+    };
+  }
+  try {
+    return okValue(parseJsonStrict(wire));
+  } catch {
+    return {
+      ok: false,
+      code: "style",
+      message: "Parameter content is not valid JSON."
+    };
+  }
 }
 
 function parseQuery(
@@ -203,6 +225,12 @@ function parseQuery(
       if (explode) {
         if (values.length === 1) {
           const only = values[0] as string;
+          // A one-element exploded array is indistinguishable from a
+          // primitive on the wire; only the schema type hint separates
+          // them.
+          if (typeHint === "array") {
+            return okValue([parseScalar(only)]);
+          }
           if (only.includes("=") && !only.includes(",")) {
             // A single exploded object flattened as k=v pairs joined by
             // commas cannot be distinguished from a plain value; treat a
@@ -220,6 +248,12 @@ function parseQuery(
           return okValue(
             objectFromPairs(items.map((item) => splitFirst(item, "=")))
           );
+        }
+        if (typeHint === "object") {
+          const positional = positionalObject(items);
+          if (positional !== null) {
+            return okValue(positional);
+          }
         }
         return okValue(items.map(parseScalar));
       }
@@ -291,6 +325,12 @@ function parseFormCookie(
         objectFromPairs(items.map((item) => splitFirst(item, "=")))
       );
     }
+    if (typeHint === "object") {
+      const positional = positionalObject(items);
+      if (positional !== null) {
+        return okValue(positional);
+      }
+    }
     return okValue(items.map(parseScalar));
   }
   if (typeHint !== "array" && value.includes("=") && !value.startsWith("=")) {
@@ -320,6 +360,21 @@ function objectFromPairs(pairs: Array<[string, string]>): Json {
     object[key] = parseScalar(value);
   }
   return object;
+}
+
+/**
+ * Rebuild a non-exploded object from positional items. Returns null when
+ * the item count cannot form key-value pairs.
+ */
+function positionalObject(items: string[]): Json | null {
+  if (items.length === 0 || items.length % 2 !== 0) {
+    return null;
+  }
+  const pairs: Array<[string, string]> = [];
+  for (let index = 0; index < items.length; index += 2) {
+    pairs.push([items[index] as string, items[index + 1] as string]);
+  }
+  return objectFromPairs(pairs);
 }
 
 function splitFirst(text: string, separator: string): [string, string] {

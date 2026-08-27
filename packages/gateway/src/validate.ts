@@ -114,6 +114,11 @@ function collectWire(
     case "path":
       return request.pathParameters[parameter.name];
     case "query":
+      // deepObject parameters arrive as name[prop]=value entries, so the
+      // parser sees distinct keys rather than one value per name.
+      if (parameter.style === "deepObject") {
+        return deepObjectWire(parameter.name, request.query);
+      }
       return request.query[parameter.name];
     case "header": {
       const header = request.headers[parameter.name.toLowerCase()];
@@ -122,6 +127,24 @@ function collectWire(
     case "cookie":
       return request.cookies[parameter.name];
   }
+}
+
+/** Gather every `name[prop]=value` entry of a deepObject parameter. */
+function deepObjectWire(
+  name: string,
+  query: Record<string, string | string[]>
+): string[] | undefined {
+  const prefix = `${name}[`;
+  const entries: string[] = [];
+  for (const [key, value] of Object.entries(query)) {
+    if (!key.startsWith(prefix)) {
+      continue;
+    }
+    for (const item of Array.isArray(value) ? value : [value]) {
+      entries.push(`${key}=${item}`);
+    }
+  }
+  return entries.length === 0 ? undefined : entries;
 }
 
 function resolveParameterSchema(

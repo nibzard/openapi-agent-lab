@@ -11,6 +11,7 @@ import {
   GenerationUnsupportedError,
   type GenerationOptions
 } from "./generate.ts";
+import { negotiateResponseMedia } from "./negotiate.ts";
 
 export interface ContractFixture {
   id: string;
@@ -34,13 +35,15 @@ export interface SelectedResponse {
 /**
  * Select the contract response for an operation. Fixtures win over
  * example and schema generation, exactly as the precedence table
- * requires.
+ * requires. When an Accept header is supplied, the value is taken from
+ * the negotiated media type, not the declared preference order.
  */
 export function selectResponse(
   operationKey: string,
   responses: readonly ResponseIR[],
   fixtures: readonly ContractFixture[],
-  generationOptions: GenerationOptions
+  generationOptions: GenerationOptions,
+  acceptHeader?: string | null
 ): SelectedResponse | null {
   const fixture = fixtures.find(
     (entry) =>
@@ -67,7 +70,7 @@ export function selectResponse(
   if (chosen === null) {
     return null;
   }
-  return synthesizeResponse(chosen, generationOptions);
+  return synthesizeResponse(chosen, generationOptions, acceptHeader);
 }
 
 /**
@@ -137,9 +140,16 @@ export function findResponseForStatus(
 
 function synthesizeResponse(
   response: ResponseIR,
-  generationOptions: GenerationOptions
+  generationOptions: GenerationOptions,
+  acceptHeader?: string | null
 ): SelectedResponse | null {
-  const mediaType = pickMediaType(response);
+  const declared = response.content.map((entry) => entry.media_type);
+  // The body must come from the media type that is actually served.
+  // Without an Accept header the declared preference order stands.
+  const mediaType =
+    acceptHeader === undefined
+      ? pickMediaType(response)
+      : negotiateResponseMedia(declared, acceptHeader);
   let body: Json | undefined;
   let provenance = "none";
   let approximation: string | null = null;

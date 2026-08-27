@@ -44,12 +44,17 @@ function listFiles(dir: string): string[] {
 describe("conformance corpus", () => {
   it("ships every expected fixture", () => {
     expect(listFiles("openapi")).toEqual([
+      "openapi/methods-eight.json",
       "openapi/minimal.json",
       "openapi/nullable-3.0.yaml",
       "openapi/nullable-3.1.json",
+      "openapi/parameters-matrix.json",
       "openapi/petstore-expanded.yaml",
       "openapi/refs/entry.yaml",
       "openapi/refs/shared.yaml",
+      "openapi/schema-keywords.json",
+      "openapi/security-alternatives.json",
+      "openapi/unicode-3.1.yaml",
       "openapi/webhooks.json"
     ]);
     expect(listFiles("adversarial")).toEqual([
@@ -57,10 +62,15 @@ describe("conformance corpus", () => {
       "adversarial/bad-version.json",
       "adversarial/billion-laughs.yaml",
       "adversarial/cyclic-refs.yaml",
+      "adversarial/deep-ref-chain.yaml",
       "adversarial/duplicate-keys.yaml",
+      "adversarial/encoded-traversal.yaml",
+      "adversarial/escaping-ref.yaml",
       "adversarial/high-confidence-secret.json",
+      "adversarial/malformed-json.json",
       "adversarial/oversized-example.json",
       "adversarial/path-param-mismatch.json",
+      "adversarial/regex-bomb.json",
       "adversarial/remote-ref.yaml",
       "adversarial/tab-indent.yaml"
     ]);
@@ -85,6 +95,95 @@ describe("conformance corpus", () => {
       { path: "openapi/nullable-3.0.yaml", operations: 1, level: "viable" },
       { path: "openapi/nullable-3.1.json", operations: 1, level: "viable" },
       { path: "openapi/webhooks.json", operations: 2, level: "viable" }
+    ]);
+  });
+
+  it("compiles the section 35 fixture additions with clean support", () => {
+    const results = [
+      "openapi/methods-eight.json",
+      "openapi/parameters-matrix.json",
+      "openapi/schema-keywords.json",
+      "openapi/security-alternatives.json",
+      "openapi/unicode-3.1.yaml"
+    ].map((path) => {
+      const { contract, report } = compileEntry(path);
+      return {
+        path,
+        operations: contract.operations.length + contract.webhooks.length,
+        levels: report.counts.operations
+      };
+    });
+    expect(results).toEqual([
+      {
+        path: "openapi/methods-eight.json",
+        operations: 8,
+        levels: {
+          supported: 8,
+          approximated: 0,
+          requires_scenario: 0,
+          unsupported: 0
+        }
+      },
+      {
+        path: "openapi/parameters-matrix.json",
+        operations: 13,
+        levels: {
+          supported: 13,
+          approximated: 0,
+          requires_scenario: 0,
+          unsupported: 0
+        }
+      },
+      {
+        path: "openapi/schema-keywords.json",
+        operations: 3,
+        levels: {
+          supported: 3,
+          approximated: 0,
+          requires_scenario: 0,
+          unsupported: 0
+        }
+      },
+      {
+        path: "openapi/security-alternatives.json",
+        operations: 9,
+        levels: {
+          supported: 8,
+          approximated: 1,
+          requires_scenario: 0,
+          unsupported: 0
+        }
+      },
+      {
+        path: "openapi/unicode-3.1.yaml",
+        operations: 1,
+        levels: {
+          supported: 1,
+          approximated: 0,
+          requires_scenario: 0,
+          unsupported: 0
+        }
+      }
+    ]);
+    // Every operation of the style and keyword fixtures stays supported,
+    // so the gateway can serve each one without a scenario.
+    for (const path of [
+      "openapi/methods-eight.json",
+      "openapi/parameters-matrix.json",
+      "openapi/schema-keywords.json"
+    ]) {
+      const { contract } = compileEntry(path);
+      expect(
+        contract.diagnostics.map((entry) => entry.severity),
+        path
+      ).toEqual([]);
+    }
+  });
+
+  it("accepts the catastrophic pattern at compile time", () => {
+    const { contract } = compileEntry("adversarial/regex-bomb.json");
+    expect(contract.operations.map((operation) => operation.key)).toEqual([
+      "path:POST /slugs"
     ]);
   });
 
@@ -157,12 +256,16 @@ describe("conformance corpus", () => {
       ["adversarial/bad-version.json", "OAL-OAS-VERSION-UNSUPPORTED", 4],
       ["adversarial/billion-laughs.yaml", "OAL-YAML-NODE-LIMIT", 2],
       ["adversarial/cyclic-refs.yaml", "OAL-REF-CYCLE-UNSUPPORTED", 4],
+      ["adversarial/deep-ref-chain.yaml", "OAL-REF-LIMIT", 2],
       ["adversarial/duplicate-keys.yaml", "OAL-DUPLICATE-KEY", 2],
+      ["adversarial/encoded-traversal.yaml", "OAL-REF-NOT-FOUND", 2],
+      ["adversarial/escaping-ref.yaml", "OAL-REF-OUTSIDE-ROOT", 2],
       [
         "adversarial/high-confidence-secret.json",
         "OAL-INPUT-SECRET-DETECTED",
         2
       ],
+      ["adversarial/malformed-json.json", "OAL-JSON-INVALID", 2],
       [
         "adversarial/path-param-mismatch.json",
         "OAL-OAS-PATH-PARAMETER-MISSING",

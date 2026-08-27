@@ -1,0 +1,330 @@
+# OpenAPI 3.0.3 document that exercises every capability surface of the
+# version 0.1 compiler: parameter styles, media families, security schemes,
+# callbacks, servers with variables, and retained examples.
+openapi: 3.0.3
+info:
+  title: Petstore Expanded
+  version: 1.0.0
+  description: A pet inventory API used by the conformance corpus.
+servers:
+  - url: https://{region}.example.test/v1
+    description: Regional endpoint
+    variables:
+      region:
+        enum:
+          - us-east
+          - eu-west
+        default: us-east
+        description: Deployment region
+security:
+  - api_key: []
+tags:
+  - name: pets
+  - name: store
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      summary: List pets
+      tags: [pets]
+      parameters:
+        - name: limit
+          in: query
+          description: How many pets to return
+          schema:
+            type: integer
+            format: int32
+            default: 20
+          examples:
+            small:
+              value: 5
+            large:
+              value: 100
+        - name: tags
+          in: query
+          description: Form-style array of tags
+          schema:
+            type: array
+            items:
+              type: string
+        - name: ids
+          in: query
+          style: pipeDelimited
+          schema:
+            type: array
+            items:
+              type: integer
+        - name: names
+          in: query
+          style: spaceDelimited
+          schema:
+            type: array
+            items:
+              type: string
+        - name: metadata
+          in: query
+          style: deepObject
+          explode: true
+          schema:
+            $ref: "#/components/schemas/TagMetadata"
+        - name: x-request-token
+          in: header
+          description: Simple-style header parameter
+          schema:
+            type: string
+        - name: session
+          in: cookie
+          description: Form-style cookie parameter
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A page of pets
+          headers:
+            x-rate-limit:
+              description: Remaining quota
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Pet"
+              examples:
+                page:
+                  summary: Two pets
+                  value:
+                    - id: 1
+                      name: Rin Tin Tin
+                      tag: watchdog
+                    - id: 2
+                      name: Lassie
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/Pet"
+        "4XX":
+          description: Client error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+    post:
+      operationId: createPet
+      summary: Create a pet
+      tags: [pets]
+      security:
+        - petstore_auth:
+            - write:pets
+        - basic_auth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewPet"
+            examples:
+              dog:
+                summary: A new dog
+                value:
+                  name: Rex
+                  tag: friendly
+          application/xml:
+            schema:
+              $ref: "#/components/schemas/NewPet"
+      responses:
+        "201":
+          description: The created pet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+      callbacks:
+        onPetCreated:
+          "{$request.body#/callbackUrl}":
+            post:
+              requestBody:
+                content:
+                  application/json:
+                    schema:
+                      $ref: "#/components/schemas/Pet"
+              responses:
+                "200":
+                  description: Callback acknowledged
+  /pets/{id}:
+    get:
+      operationId: showPetById
+      summary: Fetch one pet
+      tags: [pets]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Simple-style path parameter
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: The pet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+        "404":
+          description: No such pet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      summary: Delete one pet without an operationId
+      tags: [pets]
+      security:
+        - petstore_auth:
+            - write:pets
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+  /pets/label/{id}:
+    get:
+      operationId: showPetByLabel
+      summary: Fetch one pet by label style
+      parameters:
+        - name: id
+          in: path
+          required: true
+          style: label
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The pet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+  /pets/matrix/{id}:
+    get:
+      operationId: showPetByMatrix
+      summary: Fetch one pet by matrix style
+      parameters:
+        - name: id
+          in: path
+          required: true
+          style: matrix
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The pet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+  /store/inventory:
+    get:
+      operationId: getInventory
+      summary: Read the inventory
+      tags: [store]
+      responses:
+        "200":
+          description: Counts by status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Inventory"
+components:
+  securitySchemes:
+    api_key:
+      type: apiKey
+      name: api_key
+      in: header
+      description: Synthetic partner key issued per run
+    basic_auth:
+      type: http
+      scheme: basic
+    bearer_auth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    petstore_auth:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.example.test/token
+          scopes:
+            read:pets: Read pets
+            write:pets: Write pets
+  schemas:
+    Pet:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        tag:
+          type: string
+          nullable: true
+        photoUrls:
+          type: array
+          items:
+            type: string
+        friends:
+          type: array
+          items:
+            $ref: "#/components/schemas/Pet"
+        category:
+          $ref: "#/components/schemas/Category"
+    NewPet:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: Rex
+        tag:
+          type: string
+          nullable: true
+        callbackUrl:
+          type: string
+          format: uri
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+    TagMetadata:
+      type: object
+      description: Flat object serialized with deepObject
+      properties:
+        source:
+          type: string
+        weight:
+          type: number
+    Inventory:
+      type: object
+      additionalProperties:
+        type: integer
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string

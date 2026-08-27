@@ -1,0 +1,125 @@
+# A reference chain deeper than the documented traversal limit. Every
+# schema points at the next, so resolution must stop with the documented
+# reference-limit diagnostic instead of exhausting the stack.
+openapi: 3.1.0
+info:
+  title: Deep reference chain
+  version: 1.0.0
+paths:
+  /nodes:
+    get:
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Node000"
+components:
+  schemas:
+    Node000: { $ref: "#/components/schemas/Node001" }
+    Node001: { $ref: "#/components/schemas/Node002" }
+    Node002: { $ref: "#/components/schemas/Node003" }
+    Node003: { $ref: "#/components/schemas/Node004" }
+    Node004: { $ref: "#/components/schemas/Node005" }
+    Node005: { $ref: "#/components/schemas/Node006" }
+    Node006: { $ref: "#/components/schemas/Node007" }
+    Node007: { $ref: "#/components/schemas/Node008" }
+    Node008: { $ref: "#/components/schemas/Node009" }
+    Node009: { $ref: "#/components/schemas/Node010" }
+    Node010: { $ref: "#/components/schemas/Node011" }
+    Node011: { $ref: "#/components/schemas/Node012" }
+    Node012: { $ref: "#/components/schemas/Node013" }
+    Node013: { $ref: "#/components/schemas/Node014" }
+    Node014: { $ref: "#/components/schemas/Node015" }
+    Node015: { $ref: "#/components/schemas/Node016" }
+    Node016: { $ref: "#/components/schemas/Node017" }
+    Node017: { $ref: "#/components/schemas/Node018" }
+    Node018: { $ref: "#/components/schemas/Node019" }
+    Node019: { $ref: "#/components/schemas/Node020" }
+    Node020: { $ref: "#/components/schemas/Node021" }
+    Node021: { $ref: "#/components/schemas/Node022" }
+    Node022: { $ref: "#/components/schemas/Node023" }
+    Node023: { $ref: "#/components/schemas/Node024" }
+    Node024: { $ref: "#/components/schemas/Node025" }
+    Node025: { $ref: "#/components/schemas/Node026" }
+    Node026: { $ref: "#/components/schemas/Node027" }
+    Node027: { $ref: "#/components/schemas/Node028" }
+    Node028: { $ref: "#/components/schemas/Node029" }
+    Node029: { $ref: "#/components/schemas/Node030" }
+    Node030: { $ref: "#/components/schemas/Node031" }
+    Node031: { $ref: "#/components/schemas/Node032" }
+    Node032: { $ref: "#/components/schemas/Node033" }
+    Node033: { $ref: "#/components/schemas/Node034" }
+    Node034: { $ref: "#/components/schemas/Node035" }
+    Node035: { $ref: "#/components/schemas/Node036" }
+    Node036: { $ref: "#/components/schemas/Node037" }
+    Node037: { $ref: "#/components/schemas/Node038" }
+    Node038: { $ref: "#/components/schemas/Node039" }
+    Node039: { $ref: "#/components/schemas/Node040" }
+    Node040: { $ref: "#/components/schemas/Node041" }
+    Node041: { $ref: "#/components/schemas/Node042" }
+    Node042: { $ref: "#/components/schemas/Node043" }
+    Node043: { $ref: "#/components/schemas/Node044" }
+    Node044: { $ref: "#/components/schemas/Node045" }
+    Node045: { $ref: "#/components/schemas/Node046" }
+    Node046: { $ref: "#/components/schemas/Node047" }
+    Node047: { $ref: "#/components/schemas/Node048" }
+    Node048: { $ref: "#/components/schemas/Node049" }
+    Node049: { $ref: "#/components/schemas/Node050" }
+    Node050: { $ref: "#/components/schemas/Node051" }
+    Node051: { $ref: "#/components/schemas/Node052" }
+    Node052: { $ref: "#/components/schemas/Node053" }
+    Node053: { $ref: "#/components/schemas/Node054" }
+    Node054: { $ref: "#/components/schemas/Node055" }
+    Node055: { $ref: "#/components/schemas/Node056" }
+    Node056: { $ref: "#/components/schemas/Node057" }
+    Node057: { $ref: "#/components/schemas/Node058" }
+    Node058: { $ref: "#/components/schemas/Node059" }
+    Node059: { $ref: "#/components/schemas/Node060" }
+    Node060: { $ref: "#/components/schemas/Node061" }
+    Node061: { $ref: "#/components/schemas/Node062" }
+    Node062: { $ref: "#/components/schemas/Node063" }
+    Node063: { $ref: "#/components/schemas/Node064" }
+    Node064: { $ref: "#/components/schemas/Node065" }
+    Node065: { $ref: "#/components/schemas/Node066" }
+    Node066: { $ref: "#/components/schemas/Node067" }
+    Node067: { $ref: "#/components/schemas/Node068" }
+    Node068: { $ref: "#/components/schemas/Node069" }
+    Node069: { $ref: "#/components/schemas/Node070" }
+    Node070: { $ref: "#/components/schemas/Node071" }
+    Node071: { $ref: "#/components/schemas/Node072" }
+    Node072: { $ref: "#/components/schemas/Node073" }
+    Node073: { $ref: "#/components/schemas/Node074" }
+    Node074: { $ref: "#/components/schemas/Node075" }
+    Node075: { $ref: "#/components/schemas/Node076" }
+    Node076: { $ref: "#/components/schemas/Node077" }
+    Node077: { $ref: "#/components/schemas/Node078" }
+    Node078: { $ref: "#/components/schemas/Node079" }
+    Node079: { $ref: "#/components/schemas/Node080" }
+    Node080: { $ref: "#/components/schemas/Node081" }
+    Node081: { $ref: "#/components/schemas/Node082" }
+    Node082: { $ref: "#/components/schemas/Node083" }
+    Node083: { $ref: "#/components/schemas/Node084" }
+    Node084: { $ref: "#/components/schemas/Node085" }
+    Node085: { $ref: "#/components/schemas/Node086" }
+    Node086: { $ref: "#/components/schemas/Node087" }
+    Node087: { $ref: "#/components/schemas/Node088" }
+    Node088: { $ref: "#/components/schemas/Node089" }
+    Node089: { $ref: "#/components/schemas/Node090" }
+    Node090: { $ref: "#/components/schemas/Node091" }
+    Node091: { $ref: "#/components/schemas/Node092" }
+    Node092: { $ref: "#/components/schemas/Node093" }
+    Node093: { $ref: "#/components/schemas/Node094" }
+    Node094: { $ref: "#/components/schemas/Node095" }
+    Node095: { $ref: "#/components/schemas/Node096" }
+    Node096: { $ref: "#/components/schemas/Node097" }
+    Node097: { $ref: "#/components/schemas/Node098" }
+    Node098: { $ref: "#/components/schemas/Node099" }
+    Node099: { $ref: "#/components/schemas/Node100" }
+    Node100:
+      type: object
+      required: [depth]
+      properties:
+        depth:
+          type: integer

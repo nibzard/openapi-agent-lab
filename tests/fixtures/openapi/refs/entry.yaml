@@ -1,0 +1,41 @@
+# Entry document that references schemas and responses in a sibling file.
+openapi: 3.1.0
+info:
+  title: Split contract
+  version: 1.0.0
+paths:
+  /widgets:
+    get:
+      operationId: listWidgets
+      responses:
+        "200":
+          description: Widgets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "shared.yaml#/components/schemas/Widget"
+  /widgets/{widgetId}:
+    get:
+      operationId: showWidget
+      parameters:
+        - name: widgetId
+          in: path
+          required: true
+          schema:
+            $ref: "shared.yaml#/components/schemas/WidgetId"
+      responses:
+        "200":
+          $ref: "shared.yaml#/components/responses/WidgetFound"
+    delete:
+      summary: Remove a widget
+      parameters:
+        - name: widgetId
+          in: path
+          required: true
+          schema:
+            $ref: "shared.yaml#/components/schemas/WidgetId"
+      responses:
+        "204":
+          description: Removed

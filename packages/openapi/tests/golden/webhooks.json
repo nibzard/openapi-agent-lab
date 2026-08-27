@@ -1,0 +1,213 @@
+{
+  "$schema": "https://agentlab.dev/schemas/contract-ir.v1.json",
+  "api": {
+    "description": null,
+    "servers": [],
+    "title": "Webhook-only API",
+    "version": "1.0.0"
+  },
+  "compiler": {
+    "name": "@oal/openapi",
+    "version": "0.1.0"
+  },
+  "diagnostics": [
+    {
+      "code": "OAL-CAP-CALLBACK-UNSUPPORTED",
+      "details": {
+        "level": "approximated",
+        "reason_codes": ["webhook:invocation-unsupported"]
+      },
+      "document_uri": "openapi/webhooks.json",
+      "json_pointer": "#/webhooks/newPet/post",
+      "message": "Webhook definitions are preserved but never invoked.",
+      "operation_key": "path:POST newPet",
+      "phase": "compile",
+      "related": [],
+      "retryable": false,
+      "severity": "info"
+    },
+    {
+      "code": "OAL-CAP-CALLBACK-UNSUPPORTED",
+      "details": {
+        "level": "approximated",
+        "reason_codes": ["webhook:invocation-unsupported"]
+      },
+      "document_uri": "openapi/webhooks.json",
+      "json_pointer": "#/webhooks/petDeleted/post",
+      "message": "Webhook definitions are preserved but never invoked.",
+      "operation_key": "path:POST petDeleted",
+      "phase": "compile",
+      "related": [],
+      "retryable": false,
+      "severity": "info"
+    }
+  ],
+  "extensions": {},
+  "kind": "ContractIR",
+  "operations": [],
+  "schema_version": 1,
+  "schemas": {
+    "sch_323db5dc4ec7": {
+      "document_uri": "openapi/webhooks.json",
+      "schema": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "name"],
+        "type": "object"
+      },
+      "source_pointer": "#/components/schemas/Pet",
+      "uid": "sch_323db5dc4ec7"
+    }
+  },
+  "security_schemes": {},
+  "source": {
+    "documents": [
+      {
+        "sha256": "fcc272195eef96e18274beff02dffb60687ad2f942981585c6aa5fc33a00d2dd",
+        "uri": "openapi/webhooks.json"
+      }
+    ],
+    "entrypoint": "openapi/webhooks.json",
+    "execution_sha256": "78422f4142e908d93d3299c799ab321605242d683fb873dfb2ce3565c166e1d0",
+    "media_type": "application/json",
+    "openapi_version": "3.1.0",
+    "semantic_sha256": "164066ab59d009313dc298642b2ae6c142851eeaf73ba288843d15bc4afb11cb",
+    "sha256": "fcc272195eef96e18274beff02dffb60687ad2f942981585c6aa5fc33a00d2dd"
+  },
+  "webhooks": [
+    {
+      "description": null,
+      "name": "newPet",
+      "operations": [
+        {
+          "callbacks": [],
+          "deprecated": false,
+          "description": null,
+          "extensions": {},
+          "key": "path:POST newPet",
+          "method": "POST",
+          "operation_id": "receiveNewPet",
+          "parameters": [],
+          "path_template": "newPet",
+          "request_body": {
+            "content": [
+              {
+                "examples": [],
+                "media_type": "application/json",
+                "schema_ref": "sch_323db5dc4ec7",
+                "support": "supported",
+                "support_reason_codes": ["media:supported"]
+              }
+            ],
+            "description": null,
+            "required": true,
+            "source_pointer": "#/webhooks/newPet/post/requestBody"
+          },
+          "responses": [
+            {
+              "content": [],
+              "description": "Acknowledged",
+              "headers": [],
+              "selector": "200",
+              "selector_kind": "exact",
+              "source_pointer": "#/webhooks/newPet/post/responses/200",
+              "status": 200
+            }
+          ],
+          "route_segments": [
+            {
+              "kind": "literal",
+              "value": "newPet"
+            }
+          ],
+          "security": {
+            "alternatives": [],
+            "anonymous": true
+          },
+          "servers": [],
+          "source_pointer": "#/webhooks/newPet/post",
+          "summary": "Receive a new-pet notification",
+          "support": {
+            "diagnostic_codes": ["OAL-CAP-CALLBACK-UNSUPPORTED"],
+            "level": "approximated"
+          },
+          "surface": "webhook",
+          "tags": [],
+          "tool_name": "receiveNewPet",
+          "uid": "op_bc840f63ffde"
+        }
+      ],
+      "source_pointer": "#/webhooks/newPet"
+    },
+    {
+      "description": null,
+      "name": "petDeleted",
+      "operations": [
+        {
+          "callbacks": [],
+          "deprecated": false,
+          "description": null,
+          "extensions": {},
+          "key": "path:POST petDeleted",
+          "method": "POST",
+          "operation_id": "receivePetDeleted",
+          "parameters": [],
+          "path_template": "petDeleted",
+          "request_body": {
+            "content": [
+              {
+                "examples": [],
+                "media_type": "application/json",
+                "schema_ref": "sch_323db5dc4ec7",
+                "support": "supported",
+                "support_reason_codes": ["media:supported"]
+              }
+            ],
+            "description": null,
+            "required": false,
+            "source_pointer": "#/webhooks/petDeleted/post/requestBody"
+          },
+          "responses": [
+            {
+              "content": [],
+              "description": "Acknowledged",
+              "headers": [],
+              "selector": "200",
+              "selector_kind": "exact",
+              "source_pointer": "#/webhooks/petDeleted/post/responses/200",
+              "status": 200
+            }
+          ],
+          "route_segments": [
+            {
+              "kind": "literal",
+              "value": "petDeleted"
+            }
+          ],
+          "security": {
+            "alternatives": [],
+            "anonymous": true
+          },
+          "servers": [],
+          "source_pointer": "#/webhooks/petDeleted/post",
+          "summary": null,
+          "support": {
+            "diagnostic_codes": ["OAL-CAP-CALLBACK-UNSUPPORTED"],
+            "level": "approximated"
+          },
+          "surface": "webhook",
+          "tags": [],
+          "tool_name": "receivePetDeleted",
+          "uid": "op_446dcbeb0134"
+        }
+      ],
+      "source_pointer": "#/webhooks/petDeleted"
+    }
+  ]
+}

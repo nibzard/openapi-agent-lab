@@ -1,0 +1,11 @@
+# Indentation uses a tab, which safe YAML parsing must reject.
+openapi: 3.1.0
+info:
+  title: Tab indent
+	version: 1.0.0
+paths:
+  /pets:
+    get:
+      responses:
+        "200":
+          description: ok

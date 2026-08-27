@@ -1,0 +1,319 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Parameter matrix API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/params/simple/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "description": "Inherited path-level declaration",
+          "schema": { "type": "integer", "minimum": 1 }
+        }
+      ],
+      "get": {
+        "operationId": "getSimple",
+        "summary": "A simple-style path parameter",
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    },
+    "/params/override/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "string" }
+        }
+      ],
+      "get": {
+        "operationId": "getOverride",
+        "summary": "The operation-level declaration overrides the path level",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 10 }
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    },
+    "/params/label/{ids}": {
+      "get": {
+        "operationId": "getLabel",
+        "summary": "A label-style path array",
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "path",
+            "required": true,
+            "style": "label",
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "minItems": 2,
+              "items": { "type": "string" }
+            }
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    },
+    "/params/matrix/{id}": {
+      "get": {
+        "operationId": "getMatrix",
+        "summary": "A matrix-style path parameter",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "style": "matrix",
+            "schema": { "type": "integer", "minimum": 1 }
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    },
+    "/params/form": {
+      "get": {
+        "operationId": "getForm",
+        "summary": "Query form primitives, arrays, and objects",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100 }
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "minItems": 2,
+              "items": { "type": "string" }
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "style": "form",
+            "explode": false,
+            "schema": {
+              "type": "object",
+              "required": ["source"],
+              "properties": {
+                "source": { "type": "string" },
+                "weight": { "type": "number" }
+              }
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "allowReserved": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    },
+    "/params/delimited": {
+      "get": {
+        "operationId": "getDelimited",
+        "summary": "Space- and pipe-delimited query arrays",
+        "parameters": [
+          {
+            "name": "words",
+            "in": "query",
+            "required": true,
+            "style": "spaceDelimited",
+            "schema": {
+              "type": "array",
+              "minItems": 2,
+              "items": { "type": "string" }
+            }
+          },
+          {
+            "name": "codes",
+            "in": "query",
+            "required": true,
+            "style": "pipeDelimited",
+            "schema": {
+              "type": "array",
+              "minItems": 2,
+              "items": { "type": "integer" }
+            }
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    },
+    "/params/deep": {
+      "get": {
+        "operationId": "getDeep",
+        "summary": "A one-level deepObject query parameter",
+        "parameters": [
+          {
+            "name": "meta",
+            "in": "query",
+            "required": true,
+            "style": "deepObject",
+            "explode": true,
+            "schema": {
+              "type": "object",
+              "required": ["source"],
+              "properties": {
+                "source": { "type": "string", "minLength": 1 },
+                "weight": { "type": "number" }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    },
+    "/params/header": {
+      "get": {
+        "operationId": "getHeader",
+        "summary": "A simple-style header parameter",
+        "parameters": [
+          {
+            "name": "X-Request-Token",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string", "minLength": 4 }
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    },
+    "/params/cookie": {
+      "get": {
+        "operationId": "getCookie",
+        "summary": "A form-style cookie parameter",
+        "parameters": [
+          {
+            "name": "session",
+            "in": "cookie",
+            "required": true,
+            "schema": { "type": "string", "minLength": 4 }
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    },
+    "/params/content": {
+      "get": {
+        "operationId": "getContentParameter",
+        "summary": "A query parameter declared through content",
+        "parameters": [
+          {
+            "name": "fields",
+            "in": "query",
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": { "type": "string" }
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    },
+    "/params/literal/{id}": {
+      "get": {
+        "operationId": "getLiteralParameter",
+        "summary": "A parameterized route that accepts two methods",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 1 }
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      },
+      "post": {
+        "operationId": "postLiteralParameter",
+        "summary": "The same parameterized route under POST",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 1 }
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    },
+    "/params/literal/fixed": {
+      "get": {
+        "operationId": "getLiteralFixed",
+        "summary": "A literal route that shadows the parameterized neighbour",
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    }
+  },
+  "components": {
+    "responses": {
+      "Ack": {
+        "description": "The parameters were accepted",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": ["status"],
+              "properties": {
+                "status": { "type": "string", "enum": ["ok"] }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -12,7 +12,7 @@ import type { LimitTable } from "@oal/config";
 import { evaluateSecurity, mintRunCredentials } from "./auth.ts";
 import { FRAMEWORK_ERRORS, problemDocument } from "./problem.ts";
 import { matchRoute } from "./router.ts";
-import { matchRequestMedia, negotiateResponseMedia } from "./negotiate.ts";
+import { matchRequestMedia } from "./negotiate.ts";
 import { selectResponse, type ContractFixture } from "./select.ts";
 import {
   validateBody,
@@ -188,7 +188,8 @@ export function handleGatewayRequest(
     };
   }
 
-  // Steps 10 to 12: contract backend selection.
+  // Steps 10 to 12: contract backend selection. The Accept header joins
+  // selection so the value comes from the media type that is served.
   const selected = selectResponse(
     operation.key,
     operation.responses,
@@ -196,7 +197,8 @@ export function handleGatewayRequest(
     {
       seed: `${options.runSeed}:${operation.uid}`,
       lookup: (ref: string) => contract.schemas[ref]?.schema
-    }
+    },
+    headerValue(raw.headers, "accept")
   );
   if (selected === null) {
     return framework(FRAMEWORK_ERRORS.mockBehaviorUnavailable, requestId);
@@ -205,9 +207,7 @@ export function handleGatewayRequest(
   // Response media negotiation.
   const declared =
     selected.response?.content.map((entry) => entry.media_type) ?? [];
-  const accept = headerValue(raw.headers, "accept");
-  const media =
-    declared.length > 0 ? negotiateResponseMedia(declared, accept) : null;
+  const media = selected.mediaType;
   if (declared.length > 0 && media === null) {
     return framework(FRAMEWORK_ERRORS.responseMediaTypeUnacceptable, requestId);
   }

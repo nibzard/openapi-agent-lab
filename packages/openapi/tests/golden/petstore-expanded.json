@@ -1,0 +1,1336 @@
+{
+  "$schema": "https://agentlab.dev/schemas/contract-ir.v1.json",
+  "api": {
+    "description": "A pet inventory API used by the conformance corpus.",
+    "servers": [
+      {
+        "description": "Regional endpoint",
+        "url": "https://{region}.example.test/v1",
+        "variables": {
+          "region": {
+            "default": "us-east",
+            "description": "Deployment region",
+            "enum": ["us-east", "eu-west"]
+          }
+        }
+      }
+    ],
+    "title": "Petstore Expanded",
+    "version": "1.0.0"
+  },
+  "compiler": {
+    "name": "@oal/openapi",
+    "version": "0.1.0"
+  },
+  "diagnostics": [
+    {
+      "code": "OAL-CAP-AUTH-FLOW-UNSUPPORTED",
+      "details": {
+        "level": "approximated",
+        "reason_codes": ["security:oauth2"]
+      },
+      "document_uri": "openapi/petstore-expanded.yaml",
+      "json_pointer": "#/components/securitySchemes/petstore_auth",
+      "message": "Security scheme 'petstore_auth' is approximated.",
+      "operation_key": null,
+      "phase": "compile",
+      "related": [],
+      "retryable": false,
+      "severity": "info"
+    },
+    {
+      "code": "OAL-CAP-AUTH-FLOW-UNSUPPORTED",
+      "details": {
+        "level": "approximated",
+        "reason_codes": ["security:oauth2"]
+      },
+      "document_uri": "openapi/petstore-expanded.yaml",
+      "json_pointer": "#/components/securitySchemes/petstore_auth",
+      "message": "Security scheme 'petstore_auth' is approximated.",
+      "operation_key": "path:POST /pets",
+      "phase": "compile",
+      "related": [],
+      "retryable": false,
+      "severity": "info"
+    },
+    {
+      "code": "OAL-CAP-AUTH-FLOW-UNSUPPORTED",
+      "details": {
+        "level": "approximated",
+        "reason_codes": ["security:oauth2"]
+      },
+      "document_uri": "openapi/petstore-expanded.yaml",
+      "json_pointer": "#/components/securitySchemes/petstore_auth",
+      "message": "Security scheme 'petstore_auth' is approximated.",
+      "operation_key": "path:DELETE /pets/{id}",
+      "phase": "compile",
+      "related": [],
+      "retryable": false,
+      "severity": "info"
+    },
+    {
+      "code": "OAL-CAP-CALLBACK-UNSUPPORTED",
+      "details": {
+        "level": "approximated",
+        "reason_codes": ["callback:onPetCreated"]
+      },
+      "document_uri": "openapi/petstore-expanded.yaml",
+      "json_pointer": "#/paths/~1pets/post/callbacks/onPetCreated",
+      "message": "Callback 'onPetCreated' is preserved but never invoked.",
+      "operation_key": "path:POST /pets",
+      "phase": "compile",
+      "related": [],
+      "retryable": false,
+      "severity": "info"
+    },
+    {
+      "code": "OAL-CAP-MEDIA-UNSUPPORTED",
+      "details": {
+        "level": "approximated",
+        "reason_codes": ["media:application/xml"]
+      },
+      "document_uri": "openapi/petstore-expanded.yaml",
+      "json_pointer": "#/paths/~1pets/get/responses/200/content/application~1xml",
+      "message": "Media type 'application/xml' is approximated.",
+      "operation_key": "path:GET /pets",
+      "phase": "compile",
+      "related": [],
+      "retryable": false,
+      "severity": "info"
+    },
+    {
+      "code": "OAL-CAP-MEDIA-UNSUPPORTED",
+      "details": {
+        "level": "approximated",
+        "reason_codes": ["media:application/xml"]
+      },
+      "document_uri": "openapi/petstore-expanded.yaml",
+      "json_pointer": "#/paths/~1pets/post/requestBody/content/application~1xml",
+      "message": "Media type 'application/xml' is approximated.",
+      "operation_key": "path:POST /pets",
+      "phase": "compile",
+      "related": [],
+      "retryable": false,
+      "severity": "info"
+    }
+  ],
+  "extensions": {},
+  "kind": "ContractIR",
+  "operations": [
+    {
+      "callbacks": [],
+      "deprecated": false,
+      "description": null,
+      "extensions": {},
+      "key": "path:DELETE /pets/{id}",
+      "method": "DELETE",
+      "operation_id": null,
+      "parameters": [
+        {
+          "allow_reserved": false,
+          "content": null,
+          "deprecated": false,
+          "description": null,
+          "examples": [],
+          "explode": false,
+          "location": "path",
+          "name": "id",
+          "required": true,
+          "schema_ref": "sch_f0765dbf409c",
+          "source_pointer": "#/paths/~1pets~1{id}/delete/parameters/0",
+          "style": "simple",
+          "support": "supported",
+          "support_reason_codes": []
+        }
+      ],
+      "path_template": "/pets/{id}",
+      "request_body": null,
+      "responses": [
+        {
+          "content": [],
+          "description": "Deleted",
+          "headers": [],
+          "selector": "204",
+          "selector_kind": "exact",
+          "source_pointer": "#/paths/~1pets~1{id}/delete/responses/204",
+          "status": 204
+        }
+      ],
+      "route_segments": [
+        {
+          "kind": "literal",
+          "value": "pets"
+        },
+        {
+          "kind": "parameter",
+          "value": "id"
+        }
+      ],
+      "security": {
+        "alternatives": [
+          {
+            "schemes": [
+              {
+                "name": "petstore_auth",
+                "scopes": ["write:pets"]
+              }
+            ]
+          }
+        ],
+        "anonymous": false
+      },
+      "servers": [
+        {
+          "description": "Regional endpoint",
+          "url": "https://{region}.example.test/v1",
+          "variables": {
+            "region": {
+              "default": "us-east",
+              "description": "Deployment region",
+              "enum": ["us-east", "eu-west"]
+            }
+          }
+        }
+      ],
+      "source_pointer": "#/paths/~1pets~1{id}/delete",
+      "summary": "Delete one pet without an operationId",
+      "support": {
+        "diagnostic_codes": ["OAL-CAP-AUTH-FLOW-UNSUPPORTED"],
+        "level": "approximated"
+      },
+      "surface": "path",
+      "tags": ["pets"],
+      "tool_name": "delete_pets_by_id",
+      "uid": "op_291e168f5187"
+    },
+    {
+      "callbacks": [],
+      "deprecated": false,
+      "description": null,
+      "extensions": {},
+      "key": "path:GET /pets",
+      "method": "GET",
+      "operation_id": "listPets",
+      "parameters": [
+        {
+          "allow_reserved": false,
+          "content": null,
+          "default_value": 20,
+          "deprecated": false,
+          "description": "How many pets to return",
+          "examples": [
+            {
+              "name": "large",
+              "value": 100
+            },
+            {
+              "name": "small",
+              "value": 5
+            }
+          ],
+          "explode": true,
+          "location": "query",
+          "name": "limit",
+          "required": false,
+          "schema_ref": "sch_7c1fe20bd0e9",
+          "source_pointer": "#/paths/~1pets/get/parameters/0",
+          "style": "form",
+          "support": "supported",
+          "support_reason_codes": []
+        },
+        {
+          "allow_reserved": false,
+          "content": null,
+          "deprecated": false,
+          "description": "Form-style array of tags",
+          "examples": [],
+          "explode": true,
+          "location": "query",
+          "name": "tags",
+          "required": false,
+          "schema_ref": "sch_681004346c78",
+          "source_pointer": "#/paths/~1pets/get/parameters/1",
+          "style": "form",
+          "support": "supported",
+          "support_reason_codes": []
+        },
+        {
+          "allow_reserved": false,
+          "content": null,
+          "deprecated": false,
+          "description": null,
+          "examples": [],
+          "explode": true,
+          "location": "query",
+          "name": "ids",
+          "required": false,
+          "schema_ref": "sch_0128ef9bd220",
+          "source_pointer": "#/paths/~1pets/get/parameters/2",
+          "style": "pipeDelimited",
+          "support": "supported",
+          "support_reason_codes": []
+        },
+        {
+          "allow_reserved": false,
+          "content": null,
+          "deprecated": false,
+          "description": null,
+          "examples": [],
+          "explode": true,
+          "location": "query",
+          "name": "names",
+          "required": false,
+          "schema_ref": "sch_681004346c78",
+          "source_pointer": "#/paths/~1pets/get/parameters/3",
+          "style": "spaceDelimited",
+          "support": "supported",
+          "support_reason_codes": []
+        },
+        {
+          "allow_reserved": false,
+          "content": null,
+          "deprecated": false,
+          "description": null,
+          "examples": [],
+          "explode": true,
+          "location": "query",
+          "name": "metadata",
+          "required": false,
+          "schema_ref": "sch_b36d72bb2bdd",
+          "source_pointer": "#/paths/~1pets/get/parameters/4",
+          "style": "deepObject",
+          "support": "supported",
+          "support_reason_codes": []
+        },
+        {
+          "allow_reserved": false,
+          "content": null,
+          "deprecated": false,
+          "description": "Simple-style header parameter",
+          "examples": [],
+          "explode": false,
+          "location": "header",
+          "name": "x-request-token",
+          "required": false,
+          "schema_ref": "sch_00404e686415",
+          "source_pointer": "#/paths/~1pets/get/parameters/5",
+          "style": "simple",
+          "support": "supported",
+          "support_reason_codes": []
+        },
+        {
+          "allow_reserved": false,
+          "content": null,
+          "deprecated": false,
+          "description": "Form-style cookie parameter",
+          "examples": [],
+          "explode": true,
+          "location": "cookie",
+          "name": "session",
+          "required": false,
+          "schema_ref": "sch_00404e686415",
+          "source_pointer": "#/paths/~1pets/get/parameters/6",
+          "style": "form",
+          "support": "supported",
+          "support_reason_codes": []
+        }
+      ],
+      "path_template": "/pets",
+      "request_body": null,
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [
+                {
+                  "name": "page",
+                  "summary": "Two pets",
+                  "value": [
+                    {
+                      "id": 1,
+                      "name": "Rin Tin Tin",
+                      "tag": "watchdog"
+                    },
+                    {
+                      "id": 2,
+                      "name": "Lassie"
+                    }
+                  ]
+                }
+              ],
+              "media_type": "application/json",
+              "schema_ref": "sch_d0b13a8705f5",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            },
+            {
+              "examples": [],
+              "media_type": "application/xml",
+              "schema_ref": "sch_2525d45f8f48",
+              "support": "approximated",
+              "support_reason_codes": ["media:application/xml"]
+            }
+          ],
+          "description": "A page of pets",
+          "headers": [
+            {
+              "content": null,
+              "deprecated": false,
+              "description": "Remaining quota",
+              "examples": [],
+              "name": "x-rate-limit",
+              "required": false,
+              "schema_ref": "sch_f0765dbf409c",
+              "support": "supported",
+              "support_reason_codes": []
+            }
+          ],
+          "selector": "200",
+          "selector_kind": "exact",
+          "source_pointer": "#/paths/~1pets/get/responses/200",
+          "status": 200
+        },
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_020401b31d09",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "Client error",
+          "headers": [],
+          "selector": "4XX",
+          "selector_kind": "range",
+          "source_pointer": "#/paths/~1pets/get/responses/4XX",
+          "status": null
+        },
+        {
+          "content": [],
+          "description": "Unexpected error",
+          "headers": [],
+          "selector": "default",
+          "selector_kind": "default",
+          "source_pointer": "#/paths/~1pets/get/responses/default",
+          "status": null
+        }
+      ],
+      "route_segments": [
+        {
+          "kind": "literal",
+          "value": "pets"
+        }
+      ],
+      "security": {
+        "alternatives": [
+          {
+            "schemes": [
+              {
+                "name": "api_key",
+                "scopes": []
+              }
+            ]
+          }
+        ],
+        "anonymous": false
+      },
+      "servers": [
+        {
+          "description": "Regional endpoint",
+          "url": "https://{region}.example.test/v1",
+          "variables": {
+            "region": {
+              "default": "us-east",
+              "description": "Deployment region",
+              "enum": ["us-east", "eu-west"]
+            }
+          }
+        }
+      ],
+      "source_pointer": "#/paths/~1pets/get",
+      "summary": "List pets",
+      "support": {
+        "diagnostic_codes": ["OAL-CAP-MEDIA-UNSUPPORTED"],
+        "level": "approximated"
+      },
+      "surface": "path",
+      "tags": ["pets"],
+      "tool_name": "listPets",
+      "uid": "op_2f88d562252d"
+    },
+    {
+      "callbacks": [],
+      "deprecated": false,
+      "description": null,
+      "extensions": {},
+      "key": "path:GET /pets/label/{id}",
+      "method": "GET",
+      "operation_id": "showPetByLabel",
+      "parameters": [
+        {
+          "allow_reserved": false,
+          "content": null,
+          "deprecated": false,
+          "description": null,
+          "examples": [],
+          "explode": false,
+          "location": "path",
+          "name": "id",
+          "required": true,
+          "schema_ref": "sch_f0765dbf409c",
+          "source_pointer": "#/paths/~1pets~1label~1{id}/get/parameters/0",
+          "style": "label",
+          "support": "supported",
+          "support_reason_codes": []
+        }
+      ],
+      "path_template": "/pets/label/{id}",
+      "request_body": null,
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_2525d45f8f48",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "The pet",
+          "headers": [],
+          "selector": "200",
+          "selector_kind": "exact",
+          "source_pointer": "#/paths/~1pets~1label~1{id}/get/responses/200",
+          "status": 200
+        }
+      ],
+      "route_segments": [
+        {
+          "kind": "literal",
+          "value": "pets"
+        },
+        {
+          "kind": "literal",
+          "value": "label"
+        },
+        {
+          "kind": "parameter",
+          "value": "id"
+        }
+      ],
+      "security": {
+        "alternatives": [
+          {
+            "schemes": [
+              {
+                "name": "api_key",
+                "scopes": []
+              }
+            ]
+          }
+        ],
+        "anonymous": false
+      },
+      "servers": [
+        {
+          "description": "Regional endpoint",
+          "url": "https://{region}.example.test/v1",
+          "variables": {
+            "region": {
+              "default": "us-east",
+              "description": "Deployment region",
+              "enum": ["us-east", "eu-west"]
+            }
+          }
+        }
+      ],
+      "source_pointer": "#/paths/~1pets~1label~1{id}/get",
+      "summary": "Fetch one pet by label style",
+      "support": {
+        "diagnostic_codes": [],
+        "level": "supported"
+      },
+      "surface": "path",
+      "tags": [],
+      "tool_name": "showPetByLabel",
+      "uid": "op_2733cb4bb1c3"
+    },
+    {
+      "callbacks": [],
+      "deprecated": false,
+      "description": null,
+      "extensions": {},
+      "key": "path:GET /pets/matrix/{id}",
+      "method": "GET",
+      "operation_id": "showPetByMatrix",
+      "parameters": [
+        {
+          "allow_reserved": false,
+          "content": null,
+          "deprecated": false,
+          "description": null,
+          "examples": [],
+          "explode": false,
+          "location": "path",
+          "name": "id",
+          "required": true,
+          "schema_ref": "sch_f0765dbf409c",
+          "source_pointer": "#/paths/~1pets~1matrix~1{id}/get/parameters/0",
+          "style": "matrix",
+          "support": "supported",
+          "support_reason_codes": []
+        }
+      ],
+      "path_template": "/pets/matrix/{id}",
+      "request_body": null,
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_2525d45f8f48",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "The pet",
+          "headers": [],
+          "selector": "200",
+          "selector_kind": "exact",
+          "source_pointer": "#/paths/~1pets~1matrix~1{id}/get/responses/200",
+          "status": 200
+        }
+      ],
+      "route_segments": [
+        {
+          "kind": "literal",
+          "value": "pets"
+        },
+        {
+          "kind": "literal",
+          "value": "matrix"
+        },
+        {
+          "kind": "parameter",
+          "value": "id"
+        }
+      ],
+      "security": {
+        "alternatives": [
+          {
+            "schemes": [
+              {
+                "name": "api_key",
+                "scopes": []
+              }
+            ]
+          }
+        ],
+        "anonymous": false
+      },
+      "servers": [
+        {
+          "description": "Regional endpoint",
+          "url": "https://{region}.example.test/v1",
+          "variables": {
+            "region": {
+              "default": "us-east",
+              "description": "Deployment region",
+              "enum": ["us-east", "eu-west"]
+            }
+          }
+        }
+      ],
+      "source_pointer": "#/paths/~1pets~1matrix~1{id}/get",
+      "summary": "Fetch one pet by matrix style",
+      "support": {
+        "diagnostic_codes": [],
+        "level": "supported"
+      },
+      "surface": "path",
+      "tags": [],
+      "tool_name": "showPetByMatrix",
+      "uid": "op_8e755ea42bd8"
+    },
+    {
+      "callbacks": [],
+      "deprecated": false,
+      "description": null,
+      "extensions": {},
+      "key": "path:GET /pets/{id}",
+      "method": "GET",
+      "operation_id": "showPetById",
+      "parameters": [
+        {
+          "allow_reserved": false,
+          "content": null,
+          "deprecated": false,
+          "description": "Simple-style path parameter",
+          "examples": [],
+          "explode": false,
+          "location": "path",
+          "name": "id",
+          "required": true,
+          "schema_ref": "sch_0cd97aa80e2f",
+          "source_pointer": "#/paths/~1pets~1{id}/get/parameters/0",
+          "style": "simple",
+          "support": "supported",
+          "support_reason_codes": []
+        }
+      ],
+      "path_template": "/pets/{id}",
+      "request_body": null,
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_2525d45f8f48",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "The pet",
+          "headers": [],
+          "selector": "200",
+          "selector_kind": "exact",
+          "source_pointer": "#/paths/~1pets~1{id}/get/responses/200",
+          "status": 200
+        },
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_020401b31d09",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "No such pet",
+          "headers": [],
+          "selector": "404",
+          "selector_kind": "exact",
+          "source_pointer": "#/paths/~1pets~1{id}/get/responses/404",
+          "status": 404
+        }
+      ],
+      "route_segments": [
+        {
+          "kind": "literal",
+          "value": "pets"
+        },
+        {
+          "kind": "parameter",
+          "value": "id"
+        }
+      ],
+      "security": {
+        "alternatives": [
+          {
+            "schemes": [
+              {
+                "name": "api_key",
+                "scopes": []
+              }
+            ]
+          }
+        ],
+        "anonymous": false
+      },
+      "servers": [
+        {
+          "description": "Regional endpoint",
+          "url": "https://{region}.example.test/v1",
+          "variables": {
+            "region": {
+              "default": "us-east",
+              "description": "Deployment region",
+              "enum": ["us-east", "eu-west"]
+            }
+          }
+        }
+      ],
+      "source_pointer": "#/paths/~1pets~1{id}/get",
+      "summary": "Fetch one pet",
+      "support": {
+        "diagnostic_codes": [],
+        "level": "supported"
+      },
+      "surface": "path",
+      "tags": ["pets"],
+      "tool_name": "showPetById",
+      "uid": "op_925b24646477"
+    },
+    {
+      "callbacks": [],
+      "deprecated": false,
+      "description": null,
+      "extensions": {},
+      "key": "path:GET /store/inventory",
+      "method": "GET",
+      "operation_id": "getInventory",
+      "parameters": [],
+      "path_template": "/store/inventory",
+      "request_body": null,
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_6c0c57913db9",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "Counts by status",
+          "headers": [],
+          "selector": "200",
+          "selector_kind": "exact",
+          "source_pointer": "#/paths/~1store~1inventory/get/responses/200",
+          "status": 200
+        }
+      ],
+      "route_segments": [
+        {
+          "kind": "literal",
+          "value": "store"
+        },
+        {
+          "kind": "literal",
+          "value": "inventory"
+        }
+      ],
+      "security": {
+        "alternatives": [
+          {
+            "schemes": [
+              {
+                "name": "api_key",
+                "scopes": []
+              }
+            ]
+          }
+        ],
+        "anonymous": false
+      },
+      "servers": [
+        {
+          "description": "Regional endpoint",
+          "url": "https://{region}.example.test/v1",
+          "variables": {
+            "region": {
+              "default": "us-east",
+              "description": "Deployment region",
+              "enum": ["us-east", "eu-west"]
+            }
+          }
+        }
+      ],
+      "source_pointer": "#/paths/~1store~1inventory/get",
+      "summary": "Read the inventory",
+      "support": {
+        "diagnostic_codes": [],
+        "level": "supported"
+      },
+      "surface": "path",
+      "tags": ["store"],
+      "tool_name": "getInventory",
+      "uid": "op_c9a84307a9b0"
+    },
+    {
+      "callbacks": [
+        {
+          "expressions": [
+            {
+              "method": "POST",
+              "path_template": "{$request.body#/callbackUrl}",
+              "request_body": {
+                "content": [
+                  {
+                    "examples": [],
+                    "media_type": "application/json",
+                    "schema_ref": "sch_2525d45f8f48",
+                    "support": "supported",
+                    "support_reason_codes": ["media:supported"]
+                  }
+                ],
+                "description": null,
+                "required": false,
+                "source_pointer": "#/paths/~1pets/post/callbacks/onPetCreated/{$request.body#~1callbackUrl}/post/requestBody"
+              },
+              "responses": [
+                {
+                  "content": [],
+                  "description": "Callback acknowledged",
+                  "headers": [],
+                  "selector": "200",
+                  "selector_kind": "exact",
+                  "source_pointer": "#/paths/~1pets/post/callbacks/onPetCreated/{$request.body#~1callbackUrl}/post/responses/200",
+                  "status": 200
+                }
+              ]
+            }
+          ],
+          "name": "onPetCreated",
+          "source_pointer": "#/paths/~1pets/post/callbacks/onPetCreated"
+        }
+      ],
+      "deprecated": false,
+      "description": null,
+      "extensions": {},
+      "key": "path:POST /pets",
+      "method": "POST",
+      "operation_id": "createPet",
+      "parameters": [],
+      "path_template": "/pets",
+      "request_body": {
+        "content": [
+          {
+            "examples": [
+              {
+                "name": "dog",
+                "summary": "A new dog",
+                "value": {
+                  "name": "Rex",
+                  "tag": "friendly"
+                }
+              }
+            ],
+            "media_type": "application/json",
+            "schema_ref": "sch_f0adac5eb9cd",
+            "support": "supported",
+            "support_reason_codes": ["media:supported"]
+          },
+          {
+            "examples": [],
+            "media_type": "application/xml",
+            "schema_ref": "sch_f0adac5eb9cd",
+            "support": "approximated",
+            "support_reason_codes": ["media:application/xml"]
+          }
+        ],
+        "description": null,
+        "required": true,
+        "source_pointer": "#/paths/~1pets/post/requestBody"
+      },
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_2525d45f8f48",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "The created pet",
+          "headers": [],
+          "selector": "201",
+          "selector_kind": "exact",
+          "source_pointer": "#/paths/~1pets/post/responses/201",
+          "status": 201
+        }
+      ],
+      "route_segments": [
+        {
+          "kind": "literal",
+          "value": "pets"
+        }
+      ],
+      "security": {
+        "alternatives": [
+          {
+            "schemes": [
+              {
+                "name": "petstore_auth",
+                "scopes": ["write:pets"]
+              }
+            ]
+          },
+          {
+            "schemes": [
+              {
+                "name": "basic_auth",
+                "scopes": []
+              }
+            ]
+          }
+        ],
+        "anonymous": false
+      },
+      "servers": [
+        {
+          "description": "Regional endpoint",
+          "url": "https://{region}.example.test/v1",
+          "variables": {
+            "region": {
+              "default": "us-east",
+              "description": "Deployment region",
+              "enum": ["us-east", "eu-west"]
+            }
+          }
+        }
+      ],
+      "source_pointer": "#/paths/~1pets/post",
+      "summary": "Create a pet",
+      "support": {
+        "diagnostic_codes": [
+          "OAL-CAP-AUTH-FLOW-UNSUPPORTED",
+          "OAL-CAP-CALLBACK-UNSUPPORTED",
+          "OAL-CAP-MEDIA-UNSUPPORTED"
+        ],
+        "level": "approximated"
+      },
+      "surface": "path",
+      "tags": ["pets"],
+      "tool_name": "createPet",
+      "uid": "op_0758db0a6070"
+    }
+  ],
+  "schema_version": 1,
+  "schemas": {
+    "sch_00404e686415": {
+      "document_uri": "openapi/petstore-expanded.yaml",
+      "schema": {
+        "type": "string"
+      },
+      "source_pointer": "#/paths/~1pets/get/parameters/5/schema",
+      "uid": "sch_00404e686415"
+    },
+    "sch_0128ef9bd220": {
+      "document_uri": "openapi/petstore-expanded.yaml",
+      "schema": {
+        "items": {
+          "type": "integer"
+        },
+        "type": "array"
+      },
+      "source_pointer": "#/paths/~1pets/get/parameters/2/schema",
+      "uid": "sch_0128ef9bd220"
+    },
+    "sch_020401b31d09": {
+      "document_uri": "openapi/petstore-expanded.yaml",
+      "schema": {
+        "properties": {
+          "code": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["code", "message"],
+        "type": "object"
+      },
+      "source_pointer": "#/components/schemas/Error",
+      "uid": "sch_020401b31d09"
+    },
+    "sch_0cd97aa80e2f": {
+      "document_uri": "openapi/petstore-expanded.yaml",
+      "schema": {
+        "format": "int64",
+        "type": "integer"
+      },
+      "source_pointer": "#/paths/~1pets~1{id}/get/parameters/0/schema",
+      "uid": "sch_0cd97aa80e2f"
+    },
+    "sch_2525d45f8f48": {
+      "document_uri": "openapi/petstore-expanded.yaml",
+      "schema": {
+        "properties": {
+          "category": {
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "friends": {
+            "items": {
+              "properties": {
+                "category": {
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "friends": {
+                  "items": {
+                    "$ref": "#/components/schemas/Pet"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "photoUrls": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "tag": {
+                  "type": ["string", "null"]
+                }
+              },
+              "required": ["id", "name"],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "photoUrls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tag": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["id", "name"],
+        "type": "object"
+      },
+      "source_pointer": "#/components/schemas/Pet",
+      "uid": "sch_2525d45f8f48"
+    },
+    "sch_681004346c78": {
+      "document_uri": "openapi/petstore-expanded.yaml",
+      "schema": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "source_pointer": "#/paths/~1pets/get/parameters/1/schema",
+      "uid": "sch_681004346c78"
+    },
+    "sch_6c0c57913db9": {
+      "document_uri": "openapi/petstore-expanded.yaml",
+      "schema": {
+        "additionalProperties": {
+          "type": "integer"
+        },
+        "type": "object"
+      },
+      "source_pointer": "#/components/schemas/Inventory",
+      "uid": "sch_6c0c57913db9"
+    },
+    "sch_7c1fe20bd0e9": {
+      "document_uri": "openapi/petstore-expanded.yaml",
+      "schema": {
+        "default": 20,
+        "format": "int32",
+        "type": "integer"
+      },
+      "source_pointer": "#/paths/~1pets/get/parameters/0/schema",
+      "uid": "sch_7c1fe20bd0e9"
+    },
+    "sch_b36d72bb2bdd": {
+      "document_uri": "openapi/petstore-expanded.yaml",
+      "schema": {
+        "description": "Flat object serialized with deepObject",
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "weight": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "source_pointer": "#/components/schemas/TagMetadata",
+      "uid": "sch_b36d72bb2bdd"
+    },
+    "sch_d0b13a8705f5": {
+      "document_uri": "openapi/petstore-expanded.yaml",
+      "schema": {
+        "items": {
+          "properties": {
+            "category": {
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "friends": {
+              "items": {
+                "$ref": "#/components/schemas/Pet"
+              },
+              "type": "array"
+            },
+            "id": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            },
+            "photoUrls": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "tag": {
+              "type": ["string", "null"]
+            }
+          },
+          "required": ["id", "name"],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "source_pointer": "#/paths/~1pets/get/responses/200/content/application~1json/schema",
+      "uid": "sch_d0b13a8705f5"
+    },
+    "sch_f0765dbf409c": {
+      "document_uri": "openapi/petstore-expanded.yaml",
+      "schema": {
+        "type": "integer"
+      },
+      "source_pointer": "#/paths/~1pets/get/responses/200/headers/x-rate-limit/schema",
+      "uid": "sch_f0765dbf409c"
+    },
+    "sch_f0adac5eb9cd": {
+      "document_uri": "openapi/petstore-expanded.yaml",
+      "schema": {
+        "properties": {
+          "callbackUrl": {
+            "format": "uri",
+            "type": "string"
+          },
+          "name": {
+            "examples": ["Rex"],
+            "type": "string"
+          },
+          "tag": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["name"],
+        "type": "object"
+      },
+      "source_pointer": "#/components/schemas/NewPet",
+      "uid": "sch_f0adac5eb9cd"
+    }
+  },
+  "security_schemes": {
+    "api_key": {
+      "bearer_format": null,
+      "description": "Synthetic partner key issued per run",
+      "flows": null,
+      "location": "header",
+      "name": "api_key",
+      "open_id_connect_url": null,
+      "scheme": null,
+      "source_pointer": "#/components/securitySchemes/api_key",
+      "support": "supported",
+      "support_reason_codes": [],
+      "type": "apiKey",
+      "wire_name": "api_key"
+    },
+    "basic_auth": {
+      "bearer_format": null,
+      "description": null,
+      "flows": null,
+      "location": null,
+      "name": "basic_auth",
+      "open_id_connect_url": null,
+      "scheme": "basic",
+      "source_pointer": "#/components/securitySchemes/basic_auth",
+      "support": "supported",
+      "support_reason_codes": [],
+      "type": "http",
+      "wire_name": null
+    },
+    "bearer_auth": {
+      "bearer_format": "JWT",
+      "description": null,
+      "flows": null,
+      "location": null,
+      "name": "bearer_auth",
+      "open_id_connect_url": null,
+      "scheme": "bearer",
+      "source_pointer": "#/components/securitySchemes/bearer_auth",
+      "support": "supported",
+      "support_reason_codes": [],
+      "type": "http",
+      "wire_name": null
+    },
+    "petstore_auth": {
+      "bearer_format": null,
+      "description": null,
+      "flows": {
+        "clientCredentials": {
+          "authorization_url": null,
+          "refresh_url": null,
+          "scopes": {
+            "read:pets": "Read pets",
+            "write:pets": "Write pets"
+          },
+          "token_url": "https://auth.example.test/token"
+        }
+      },
+      "location": null,
+      "name": "petstore_auth",
+      "open_id_connect_url": null,
+      "scheme": null,
+      "source_pointer": "#/components/securitySchemes/petstore_auth",
+      "support": "approximated",
+      "support_reason_codes": ["security:oauth2"],
+      "type": "oauth2",
+      "wire_name": null
+    }
+  },
+  "source": {
+    "documents": [
+      {
+        "sha256": "3ec2622eb1d11b06b2e4f21b8b3c14bd76c2e525c4994c5a0ce031b6a7ea975b",
+        "uri": "openapi/petstore-expanded.yaml"
+      }
+    ],
+    "entrypoint": "openapi/petstore-expanded.yaml",
+    "execution_sha256": "f12421bb648af2c375e966dc816e7faad6fb3996be0699e6a25f9e9a02575190",
+    "media_type": "application/yaml",
+    "openapi_version": "3.0.3",
+    "semantic_sha256": "f67db55c3d1c0504d1df9ded260f108015e5bca3652c3b1a9966ffb3e222e347",
+    "sha256": "3ec2622eb1d11b06b2e4f21b8b3c14bd76c2e525c4994c5a0ce031b6a7ea975b"
+  },
+  "webhooks": []
+}

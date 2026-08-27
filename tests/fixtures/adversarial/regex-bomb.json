@@ -1,0 +1,52 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Catastrophic pattern",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/slugs": {
+      "post": {
+        "operationId": "postSlug",
+        "summary": "A nested quantifier over an unbounded string",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["slug"],
+                "properties": {
+                  "slug": {
+                    "type": "string",
+                    "maxLength": 1024,
+                    "pattern": "^(a+)+$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["echo"],
+                  "properties": {
+                    "echo": {
+                      "type": "string",
+                      "pattern": "^(a|aa)+b$"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

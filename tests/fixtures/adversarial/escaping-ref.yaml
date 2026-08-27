@@ -1,0 +1,35 @@
+# Reference targets that leave the reference root by parent traversal.
+# Every target climbs above the pack root, so each is rejected before
+# any document is read.
+openapi: 3.1.0
+info:
+  title: Escaping references
+  version: 1.0.0
+paths:
+  /pets:
+    get:
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "../../outside-the-pack.yaml"
+  /kennels:
+    get:
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "nested/../../../outside-too.yaml"
+  /toys:
+    get:
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "../../../three-levels-up.yaml"

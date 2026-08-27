@@ -1,0 +1,32 @@
+# Shared components referenced from entry.yaml within the same pack.
+openapi: 3.1.0
+info:
+  title: Shared components
+  version: 1.0.0
+components:
+  schemas:
+    WidgetId:
+      type: string
+      format: uuid
+    Widget:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          $ref: "#/components/schemas/WidgetId"
+        name:
+          type: string
+        nested:
+          $ref: "#/components/schemas/Nested"
+    Nested:
+      type: object
+      properties:
+        depth:
+          type: integer
+  responses:
+    WidgetFound:
+      description: One widget
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Widget"

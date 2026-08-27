@@ -1,0 +1,18 @@
+# A reference cycle with no container: the response chain loops back on
+# itself, which reference resolution must reject.
+openapi: 3.1.0
+info:
+  title: Cyclic references
+  version: 1.0.0
+paths:
+  /broken:
+    get:
+      responses:
+        "200":
+          $ref: "#/components/responses/Broken"
+components:
+  responses:
+    Broken:
+      $ref: "#/components/responses/BrokenSelf"
+    BrokenSelf:
+      $ref: "#/components/responses/Broken"

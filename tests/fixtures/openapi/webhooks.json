@@ -1,0 +1,53 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Webhook-only API",
+    "version": "1.0.0"
+  },
+  "webhooks": {
+    "newPet": {
+      "post": {
+        "operationId": "receiveNewPet",
+        "summary": "Receive a new-pet notification",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Pet" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Acknowledged" }
+        }
+      }
+    },
+    "petDeleted": {
+      "post": {
+        "operationId": "receivePetDeleted",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Pet" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Acknowledged" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Pet": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" }
+        }
+      }
+    }
+  }
+}

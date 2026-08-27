@@ -1,0 +1,295 @@
+{
+  "$schema": "https://agentlab.dev/schemas/contract-ir.v1.json",
+  "api": {
+    "description": null,
+    "servers": [],
+    "title": "Split contract",
+    "version": "1.0.0"
+  },
+  "compiler": {
+    "name": "@oal/openapi",
+    "version": "0.1.0"
+  },
+  "diagnostics": [],
+  "extensions": {},
+  "kind": "ContractIR",
+  "operations": [
+    {
+      "callbacks": [],
+      "deprecated": false,
+      "description": null,
+      "extensions": {},
+      "key": "path:DELETE /widgets/{widgetId}",
+      "method": "DELETE",
+      "operation_id": null,
+      "parameters": [
+        {
+          "allow_reserved": false,
+          "content": null,
+          "deprecated": false,
+          "description": null,
+          "examples": [],
+          "explode": false,
+          "location": "path",
+          "name": "widgetId",
+          "required": true,
+          "schema_ref": "sch_44b2ecffc860",
+          "source_pointer": "#/paths/~1widgets~1{widgetId}/delete/parameters/0",
+          "style": "simple",
+          "support": "supported",
+          "support_reason_codes": []
+        }
+      ],
+      "path_template": "/widgets/{widgetId}",
+      "request_body": null,
+      "responses": [
+        {
+          "content": [],
+          "description": "Removed",
+          "headers": [],
+          "selector": "204",
+          "selector_kind": "exact",
+          "source_pointer": "#/paths/~1widgets~1{widgetId}/delete/responses/204",
+          "status": 204
+        }
+      ],
+      "route_segments": [
+        {
+          "kind": "literal",
+          "value": "widgets"
+        },
+        {
+          "kind": "parameter",
+          "value": "widgetId"
+        }
+      ],
+      "security": {
+        "alternatives": [],
+        "anonymous": true
+      },
+      "servers": [],
+      "source_pointer": "#/paths/~1widgets~1{widgetId}/delete",
+      "summary": "Remove a widget",
+      "support": {
+        "diagnostic_codes": [],
+        "level": "supported"
+      },
+      "surface": "path",
+      "tags": [],
+      "tool_name": "delete_widgets_by_widgetId",
+      "uid": "op_2eb59655440f"
+    },
+    {
+      "callbacks": [],
+      "deprecated": false,
+      "description": null,
+      "extensions": {},
+      "key": "path:GET /widgets",
+      "method": "GET",
+      "operation_id": "listWidgets",
+      "parameters": [],
+      "path_template": "/widgets",
+      "request_body": null,
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_1983b745458f",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "Widgets",
+          "headers": [],
+          "selector": "200",
+          "selector_kind": "exact",
+          "source_pointer": "#/paths/~1widgets/get/responses/200",
+          "status": 200
+        }
+      ],
+      "route_segments": [
+        {
+          "kind": "literal",
+          "value": "widgets"
+        }
+      ],
+      "security": {
+        "alternatives": [],
+        "anonymous": true
+      },
+      "servers": [],
+      "source_pointer": "#/paths/~1widgets/get",
+      "summary": null,
+      "support": {
+        "diagnostic_codes": [],
+        "level": "supported"
+      },
+      "surface": "path",
+      "tags": [],
+      "tool_name": "listWidgets",
+      "uid": "op_5aa11b32a04c"
+    },
+    {
+      "callbacks": [],
+      "deprecated": false,
+      "description": null,
+      "extensions": {},
+      "key": "path:GET /widgets/{widgetId}",
+      "method": "GET",
+      "operation_id": "showWidget",
+      "parameters": [
+        {
+          "allow_reserved": false,
+          "content": null,
+          "deprecated": false,
+          "description": null,
+          "examples": [],
+          "explode": false,
+          "location": "path",
+          "name": "widgetId",
+          "required": true,
+          "schema_ref": "sch_44b2ecffc860",
+          "source_pointer": "#/paths/~1widgets~1{widgetId}/get/parameters/0",
+          "style": "simple",
+          "support": "supported",
+          "support_reason_codes": []
+        }
+      ],
+      "path_template": "/widgets/{widgetId}",
+      "request_body": null,
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_73bbb034421c",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "One widget",
+          "headers": [],
+          "selector": "200",
+          "selector_kind": "exact",
+          "source_pointer": "#/components/responses/WidgetFound",
+          "status": 200
+        }
+      ],
+      "route_segments": [
+        {
+          "kind": "literal",
+          "value": "widgets"
+        },
+        {
+          "kind": "parameter",
+          "value": "widgetId"
+        }
+      ],
+      "security": {
+        "alternatives": [],
+        "anonymous": true
+      },
+      "servers": [],
+      "source_pointer": "#/paths/~1widgets~1{widgetId}/get",
+      "summary": null,
+      "support": {
+        "diagnostic_codes": [],
+        "level": "supported"
+      },
+      "surface": "path",
+      "tags": [],
+      "tool_name": "showWidget",
+      "uid": "op_3349b450926d"
+    }
+  ],
+  "schema_version": 1,
+  "schemas": {
+    "sch_1983b745458f": {
+      "document_uri": "openapi/refs/entry.yaml",
+      "schema": {
+        "items": {
+          "properties": {
+            "id": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "nested": {
+              "properties": {
+                "depth": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": ["id", "name"],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "source_pointer": "#/paths/~1widgets/get/responses/200/content/application~1json/schema",
+      "uid": "sch_1983b745458f"
+    },
+    "sch_44b2ecffc860": {
+      "document_uri": "openapi/refs/shared.yaml",
+      "schema": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "source_pointer": "#/components/schemas/WidgetId",
+      "uid": "sch_44b2ecffc860"
+    },
+    "sch_73bbb034421c": {
+      "document_uri": "openapi/refs/shared.yaml",
+      "schema": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nested": {
+            "properties": {
+              "depth": {
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": ["id", "name"],
+        "type": "object"
+      },
+      "source_pointer": "#/components/schemas/Widget",
+      "uid": "sch_73bbb034421c"
+    }
+  },
+  "security_schemes": {},
+  "source": {
+    "documents": [
+      {
+        "sha256": "50c58a4b9495b3b592e2441f5f5d0c7fffc1c4354c35d09fcfd9e9e8e832dea5",
+        "uri": "openapi/refs/entry.yaml"
+      },
+      {
+        "sha256": "ac1f2ad771e8b547aa231ba1f2d7244bb59035812c70c5f9f89a2317893d4ed1",
+        "uri": "openapi/refs/shared.yaml"
+      }
+    ],
+    "entrypoint": "openapi/refs/entry.yaml",
+    "execution_sha256": "a710071e642553e6375b3f793867a39f0ee568c7387289876a467352fd2b8720",
+    "media_type": "application/yaml",
+    "openapi_version": "3.1.0",
+    "semantic_sha256": "e802679674396abaf1838b7cce00d0ffc8d6cc19e16c82f2e71868250043eb29",
+    "sha256": "50c58a4b9495b3b592e2441f5f5d0c7fffc1c4354c35d09fcfd9e9e8e832dea5"
+  },
+  "webhooks": []
+}

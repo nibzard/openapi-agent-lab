@@ -1,0 +1,108 @@
+{
+  "$schema": "https://agentlab.dev/schemas/contract-ir.v1.json",
+  "api": {
+    "description": null,
+    "servers": [],
+    "title": "Minimal health API",
+    "version": "1.0.0"
+  },
+  "compiler": {
+    "name": "@oal/openapi",
+    "version": "0.1.0"
+  },
+  "diagnostics": [],
+  "extensions": {},
+  "kind": "ContractIR",
+  "operations": [
+    {
+      "callbacks": [],
+      "deprecated": false,
+      "description": null,
+      "extensions": {},
+      "key": "path:GET /health",
+      "method": "GET",
+      "operation_id": "getHealth",
+      "parameters": [],
+      "path_template": "/health",
+      "request_body": null,
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_982ec883bece",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "The service is healthy",
+          "headers": [],
+          "selector": "200",
+          "selector_kind": "exact",
+          "source_pointer": "#/paths/~1health/get/responses/200",
+          "status": 200
+        }
+      ],
+      "route_segments": [
+        {
+          "kind": "literal",
+          "value": "health"
+        }
+      ],
+      "security": {
+        "alternatives": [],
+        "anonymous": true
+      },
+      "servers": [],
+      "source_pointer": "#/paths/~1health/get",
+      "summary": "Report service health",
+      "support": {
+        "diagnostic_codes": [],
+        "level": "supported"
+      },
+      "surface": "path",
+      "tags": [],
+      "tool_name": "getHealth",
+      "uid": "op_7e78c135af5d"
+    }
+  ],
+  "schema_version": 1,
+  "schemas": {
+    "sch_982ec883bece": {
+      "document_uri": "openapi/minimal.json",
+      "schema": {
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "enum": ["ok", "degraded"],
+            "type": "string"
+          }
+        },
+        "required": ["status"],
+        "type": "object"
+      },
+      "source_pointer": "#/components/schemas/Health",
+      "uid": "sch_982ec883bece"
+    }
+  },
+  "security_schemes": {},
+  "source": {
+    "documents": [
+      {
+        "sha256": "299c3b04e97e73ea85d8b2f863c174a11a3c7ac242ece274dfa29040c521b2de",
+        "uri": "openapi/minimal.json"
+      }
+    ],
+    "entrypoint": "openapi/minimal.json",
+    "execution_sha256": "5521c09dc5a1bdb1c5a1c633e905419f630800b2bd9d5b2d34d3f7829e2a5b69",
+    "media_type": "application/json",
+    "openapi_version": "3.1.0",
+    "semantic_sha256": "0be8b1bb523647b4f70448cdbd6cb2dd7179817782174e7a911a3137386146a0",
+    "sha256": "299c3b04e97e73ea85d8b2f863c174a11a3c7ac242ece274dfa29040c521b2de"
+  },
+  "webhooks": []
+}

@@ -1,0 +1,78 @@
+# Alias-expansion bomb: each level multiplies the previous sequence nine
+# times, so referencing the last anchor materializes 9^6 nodes.
+openapi: 3.1.0
+info:
+  title: Billion laughs
+  version: 1.0.0
+paths:
+  /pets:
+    get:
+      responses:
+        "200":
+          description: ok
+components:
+  schemas:
+    a: &a
+      - "0123456789"
+      - "0123456789"
+      - "0123456789"
+      - "0123456789"
+      - "0123456789"
+      - "0123456789"
+      - "0123456789"
+      - "0123456789"
+      - "0123456789"
+    b: &b
+      - *a
+      - *a
+      - *a
+      - *a
+      - *a
+      - *a
+      - *a
+      - *a
+      - *a
+    c: &c
+      - *b
+      - *b
+      - *b
+      - *b
+      - *b
+      - *b
+      - *b
+      - *b
+      - *b
+    d: &d
+      - *c
+      - *c
+      - *c
+      - *c
+      - *c
+      - *c
+      - *c
+      - *c
+      - *c
+    e: &e
+      - *d
+      - *d
+      - *d
+      - *d
+      - *d
+      - *d
+      - *d
+      - *d
+      - *d
+    f: &f
+      - *e
+      - *e
+      - *e
+      - *e
+      - *e
+      - *e
+      - *e
+      - *e
+      - *e
+    Pet:
+      type: object
+      properties:
+        laughs: *f

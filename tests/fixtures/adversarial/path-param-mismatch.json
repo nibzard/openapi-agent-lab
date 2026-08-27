@@ -1,0 +1,19 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Path parameter mismatch",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/pets/{id}/tags/{tagId}": {
+      "get": {
+        "operationId": "showPetTag",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "unused", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "ok" } }
+      }
+    }
+  }
+}

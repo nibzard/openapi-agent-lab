@@ -1,0 +1,27 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Ambiguous routes",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/pets/{id}": {
+      "get": {
+        "operationId": "showPetById",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "ok" } }
+      }
+    },
+    "/pets/{petId}": {
+      "get": {
+        "operationId": "showPetByPetId",
+        "parameters": [
+          { "name": "petId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "ok" } }
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+# The `name` key appears twice in the same mapping.
+openapi: 3.1.0
+info:
+  title: Duplicate keys
+  version: 1.0.0
+paths:
+  /pets:
+    get:
+      responses:
+        "200":
+          description: ok
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name:
+          type: string
+        name:
+          type: integer
