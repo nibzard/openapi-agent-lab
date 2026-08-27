@@ -32,6 +32,15 @@ importers:
 
   apps/cli:
     dependencies:
+      '@oal/agent-adapter':
+        specifier: workspace:*
+        version: link:../../packages/agent-adapter
+      '@oal/agent-codex':
+        specifier: workspace:*
+        version: link:../../packages/agent-codex
+      '@oal/agent-generic':
+        specifier: workspace:*
+        version: link:../../packages/agent-generic
       '@oal/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -41,9 +50,15 @@ importers:
       '@oal/evaluator':
         specifier: workspace:*
         version: link:../../packages/evaluator
+      '@oal/mock-adapter':
+        specifier: workspace:*
+        version: link:../../packages/mock-adapter
       '@oal/pack':
         specifier: workspace:*
         version: link:../../packages/pack
+      '@oal/runner':
+        specifier: workspace:*
+        version: link:../../packages/runner
 
   packages/agent-adapter:
     dependencies:
@@ -119,7 +134,20 @@ importers:
         specifier: workspace:*
         version: link:../core
 
-  packages/contract-variant: {}
+  packages/contract-variant:
+    dependencies:
+      '@oal/contract-ir':
+        specifier: workspace:*
+        version: link:../contract-ir
+      '@oal/core':
+        specifier: workspace:*
+        version: link:../core
+      '@oal/openapi':
+        specifier: workspace:*
+        version: link:../openapi
+      '@oal/pack':
+        specifier: workspace:*
+        version: link:../pack
 
   packages/core: {}
 
@@ -223,6 +251,12 @@ importers:
       '@oal/evidence':
         specifier: workspace:*
         version: link:../evidence
+      '@oal/gateway':
+        specifier: workspace:*
+        version: link:../gateway
+      '@oal/state-store':
+        specifier: workspace:*
+        version: link:../state-store
       '@oal/statistics':
         specifier: workspace:*
         version: link:../statistics
@@ -253,12 +287,18 @@ importers:
       '@oal/documentation-facade':
         specifier: workspace:*
         version: link:../documentation-facade
+      '@oal/evaluator':
+        specifier: workspace:*
+        version: link:../evaluator
       '@oal/evidence':
         specifier: workspace:*
         version: link:../evidence
       '@oal/gateway':
         specifier: workspace:*
         version: link:../gateway
+      '@oal/mock-adapter':
+        specifier: workspace:*
+        version: link:../mock-adapter
       '@oal/mock-contract':
         specifier: workspace:*
         version: link:../mock-contract
@@ -271,11 +311,27 @@ importers:
       '@oal/state-store':
         specifier: workspace:*
         version: link:../state-store
+      '@oal/testkit':
+        specifier: workspace:*
+        version: link:../testkit
       '@oal/tools':
         specifier: workspace:*
         version: link:../tools
 
-  packages/scheduler: {}
+  packages/scheduler:
+    dependencies:
+      '@oal/contract-ir':
+        specifier: workspace:*
+        version: link:../contract-ir
+      '@oal/core':
+        specifier: workspace:*
+        version: link:../core
+      '@oal/state-store':
+        specifier: workspace:*
+        version: link:../state-store
+      '@oal/study-ir':
+        specifier: workspace:*
+        version: link:../study-ir
 
   packages/state-store:
     dependencies:
@@ -311,6 +367,12 @@ importers:
 
   packages/testkit:
     dependencies:
+      '@oal/config':
+        specifier: workspace:*
+        version: link:../config
+      '@oal/contract-ir':
+        specifier: workspace:*
+        version: link:../contract-ir
       '@oal/core':
         specifier: workspace:*
         version: link:../core
@@ -320,6 +382,12 @@ importers:
       '@oal/evidence':
         specifier: workspace:*
         version: link:../evidence
+      '@oal/gateway':
+        specifier: workspace:*
+        version: link:../gateway
+      '@oal/mock-contract':
+        specifier: workspace:*
+        version: link:../mock-contract
       '@oal/openapi':
         specifier: workspace:*
         version: link:../openapi
