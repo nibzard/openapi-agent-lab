@@ -58,6 +58,53 @@ export {
   type ToolDescriptor
 } from "./surface.ts";
 export {
+  buildCueAudit,
+  CueCode,
+  cueIsolationAdvisory,
+  parseSurfacePolicy,
+  policyJson,
+  PRIVATE_SURFACE_FRAGMENTS,
+  privateArtifactProblems,
+  surfaceEntriesOf,
+  surfaceEntryJson,
+  surfacePolicySha256,
+  treatmentOwnedMatch,
+  type CueAudit,
+  type CueAuditDifference,
+  type CueAuditFinding,
+  type CueAuditInput,
+  type CueAuditPairwise,
+  type CueAuditScanned,
+  type CuePrivacyProblem,
+  type ForbiddenLiteralRule,
+  type ParticipantSurfacePolicy,
+  type RenderedSurfaceText,
+  type SurfaceEntryView,
+  type SurfacePolicyException,
+  type SurfacePolicyNeutralProfiles,
+  type SurfacePolicyPairwiseAllowlist,
+  type SurfacePolicyRequiredReviews,
+  type SurfacePolicyTreatmentOwned
+} from "./cue.ts";
+export {
+  applyProvenancePolicy,
+  checkParticipantSurfaces,
+  classifySurfaceEntry,
+  compareCellSurfaces,
+  SurfaceCheckCode,
+  SURFACE_CHECK_FAILURE_CODES,
+  verifyPostRunSurface,
+  type CellSurface,
+  type PreservedCue,
+  type ProvenanceOutcome,
+  type ReviewEvidence,
+  type SurfaceCheckOutcome,
+  type SurfaceClassificationInput,
+  type SurfaceDigestDrift,
+  type SurfacePairDifference,
+  type SurfacePairOutcome
+} from "./surface-check.ts";
+export {
   collectParticipantReport,
   ReportCode,
   type AdapterFinalSource,
