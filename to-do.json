@@ -82,7 +82,7 @@
       "id": "T004",
       "title": "Build OpenAPI input parsing",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Accept bounded OpenAPI 3.0.x and 3.1.x JSON or YAML inputs with deterministic parsing limits and clear diagnostics.",
       "steps": [
         "Parse JSON and YAML input files.",
@@ -99,13 +99,14 @@
       ],
       "depends_on": [
         "T002"
-      ]
+      ],
+      "updated_at": "2026-08-27T16:40:21.988Z"
     },
     {
       "id": "T005",
       "title": "Resolve same-pack local references",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Resolve local OpenAPI references safely and deterministically while rejecting remote references and unsafe paths.",
       "steps": [
         "Implement document graph loading for same-pack files.",
@@ -122,13 +123,14 @@
       ],
       "depends_on": [
         "T004"
-      ]
+      ],
+      "updated_at": "2026-08-27T16:40:22.008Z"
     },
     {
       "id": "T006",
       "title": "Compile canonical operations",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Compile every parsed HTTP operation into ContractIR with stable operation identity, route metadata, request metadata, and response metadata.",
       "steps": [
         "Implement canonical operation identity rules.",
@@ -145,13 +147,14 @@
       ],
       "depends_on": [
         "T005"
-      ]
+      ],
+      "updated_at": "2026-08-27T16:40:22.028Z"
     },
     {
       "id": "T007",
       "title": "Implement capability reporting",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Produce machine-readable per-document and per-operation support outcomes with stable diagnostics and support matrix coverage.",
       "steps": [
         "Define supported, approximated, requires-scenario, and unsupported outcomes.",
@@ -168,7 +171,8 @@
       ],
       "depends_on": [
         "T006"
-      ]
+      ],
+      "updated_at": "2026-08-27T16:40:22.053Z"
     },
     {
       "id": "T008",
@@ -950,7 +954,7 @@
       "id": "T040",
       "title": "Build the OpenAPI conformance corpus",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Create fixture documents for formats, versions, references, paths, parameters, request bodies, responses, schemas, security, adversarial inputs, and real-world shapes.",
       "steps": [
         "Define the corpus manifest.",
@@ -967,7 +971,8 @@
       ],
       "depends_on": [
         "T004"
-      ]
+      ],
+      "updated_at": "2026-08-27T16:40:22.078Z"
     },
     {
       "id": "T041",
