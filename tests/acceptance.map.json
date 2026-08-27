@@ -1,0 +1,1514 @@
+[
+  {
+    "id": "AC-001",
+    "group": "42.1",
+    "claim": "Compiling identical input twice produces byte-identical ContractIR and capability output.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/openapi/tests/golden.test.ts > compiles byte-identically on a second run",
+      "packages/openapi/tests/capability.test.ts > is a pure function of the contract",
+      "packages/openapi/tests/property.test.ts > keeps canonical keys unique, ordered, and reproducible"
+    ]
+  },
+  {
+    "id": "AC-002",
+    "group": "42.1",
+    "claim": "Semantically equivalent JSON and YAML produce the same semantic digest and distinct source digests.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/openapi/tests/digests.test.ts > records a distinct source digest and media type per format",
+      "packages/openapi/tests/digests.test.ts > derives one semantic digest for both formats",
+      "packages/openapi/tests/digests.test.ts > derives one execution digest for both formats",
+      "packages/openapi/tests/digests.test.ts > compiles equal schemas and operations"
+    ]
+  },
+  {
+    "id": "AC-003",
+    "group": "42.1",
+    "claim": "Missing operationId still produces stable unique operation key, UID, and tool name.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/openapi/tests/capability.test.ts > reports identity findings for tool generation",
+      "packages/openapi/tests/compile.test.ts > derives tool names and breaks collisions",
+      "packages/tools/src/naming.test.ts > derives a path name when no operationId exists",
+      "packages/openapi/tests/property.test.ts > keeps canonical keys unique, ordered, and reproducible"
+    ]
+  },
+  {
+    "id": "AC-004",
+    "group": "42.1",
+    "claim": "Duplicate operationId produces distinct canonical operations and deterministic collision-free tool names.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/openapi/tests/capability.test.ts > reports duplicate operation ids and name collisions",
+      "packages/tools/src/naming.test.ts > fails when a duplicated operationId cannot earn the name",
+      "packages/tools/src/naming.test.ts > suffixes a generated name that collides with another one",
+      "packages/tools/src/describe.test.ts > rejects a duplicated operationId"
+    ]
+  },
+  {
+    "id": "AC-005",
+    "group": "42.1",
+    "claim": "Equivalent templates differing only by parameter name fail before startup.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/openapi/tests/compile.test.ts > rejects ambiguous templated routes",
+      "packages/openapi/tests/corpus.test.ts > rejects every adversarial fixture with a stable code"
+    ]
+  },
+  {
+    "id": "AC-006",
+    "group": "42.1",
+    "claim": "Unresolved approved references, out-of-root references, and symlink escapes fail with stable codes and pointers.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/openapi/tests/refs.test.ts > points an unresolved approved reference at the declaring node",
+      "packages/openapi/tests/refs.test.ts > points every out-of-root reference at the declaring node",
+      "packages/openapi/tests/refs.test.ts > points a denied remote reference at the declaring node"
+    ]
+  },
+  {
+    "id": "AC-007",
+    "group": "42.1",
+    "claim": "All eight explicitly declared path methods appear in ContractIR.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/openapi/tests/corpus.test.ts > compiles the section 35 fixture additions with clean support",
+      "packages/gateway/src/conformance.test.ts > routes every declared method of a path item"
+    ]
+  },
+  {
+    "id": "AC-008",
+    "group": "42.1",
+    "claim": "Path/operation parameter override follows OpenAPI rules.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/gateway/src/conformance.test.ts > lets the operation level override the inherited declaration"
+    ]
+  },
+  {
+    "id": "AC-009",
+    "group": "42.1",
+    "claim": "Security alternatives retain OR-of-AND semantics.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/gateway/src/conformance.test.ts > ANDs schemes inside one requirement",
+      "packages/gateway/src/conformance.test.ts > ORs declared alternatives",
+      "packages/openapi/tests/compile.test.ts > compiles security schemes with support levels"
+    ]
+  },
+  {
+    "id": "AC-010",
+    "group": "42.1",
+    "claim": "Recursive schemas compile as a graph without stack overflow.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/openapi/tests/corpus.test.ts > preserves recursive schemas as reference graphs"
+    ]
+  },
+  {
+    "id": "AC-011",
+    "group": "42.1",
+    "claim": "Every callback, webhook, and link remains represented with a capability outcome.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/openapi/tests/compile.test.ts > preserves response links as described-only data with an outcome",
+      "packages/openapi/tests/compile.test.ts > preserves callbacks as data and marks them approximated",
+      "packages/openapi/tests/compile.test.ts > compiles webhooks as data-only surfaces"
+    ]
+  },
+  {
+    "id": "AC-012",
+    "group": "42.1",
+    "claim": "Unsupported pack, backend, ContractIR, rubric, and trace schema versions fail before a listener or agent starts.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/evaluator/src/rubric.test.ts > rejects an unsupported schema version",
+      "packages/state-store/src/store.test.ts > rejects a database written by a newer build",
+      "packages/pack/src/manifest.test.ts > rejects an unsupported manifest api version before load completes",
+      "packages/gateway/src/listener.test.ts > refuses to start for an unsupported contract schema version",
+      "packages/gateway/src/server.test.ts > refuses an unsupported contract schema version per request",
+      "packages/runner/src/exposure.test.ts > refuses to start for an unsupported contract schema version",
+      "packages/runner/src/integration-trial.test.ts > marks a foreign-schema trace as corrupt evidence"
+    ]
+  },
+  {
+    "id": "AC-013",
+    "group": "42.2",
+    "claim": "A contract with no custom code starts and returns deterministic schema-valid responses for supported operations.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "apps/cli/src/serve.test.ts > serves a bare contract on an ephemeral port and answers fetches",
+      "packages/gateway/src/conformance.test.ts > repeats a success response byte for byte",
+      "packages/gateway/src/generate.test.ts > produces values that validate against their schema"
+    ]
+  },
+  {
+    "id": "AC-014",
+    "group": "42.2",
+    "claim": "Literal route beats parameter route at the same depth.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/gateway/src/conformance.test.ts > prefers the literal route over the parameterized neighbour",
+      "packages/gateway/src/params.test.ts > prefers literal segments over parameters"
+    ]
+  },
+  {
+    "id": "AC-015",
+    "group": "42.2",
+    "claim": "Unknown path returns 404 and one unmatched trace event.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/runner/src/exposure.test.ts > records exactly one unmatched exchange for an unknown path"
+    ]
+  },
+  {
+    "id": "AC-016",
+    "group": "42.2",
+    "claim": "Known path/wrong method returns 405 with Allow and one trace event.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/runner/src/exposure.test.ts > records exactly one unmatched exchange for a wrong method"
+    ]
+  },
+  {
+    "id": "AC-017",
+    "group": "42.2",
+    "claim": "Missing/invalid authentication returns 401; authorization rejection returns 403.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/gateway/src/conformance.test.ts > answers 401 authentication_failed without credentials",
+      "packages/gateway/src/conformance.test.ts > answers 403 authorization_failed for a scope deficit",
+      "packages/gateway/src/server.test.ts > requires declared authentication with 401"
+    ]
+  },
+  {
+    "id": "AC-018",
+    "group": "42.2",
+    "claim": "Malformed JSON, target limit, body limit, unsupported content type, and schema-invalid request return distinct bounded errors.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/gateway/src/server.test.ts > rejects malformed JSON bodies with 400",
+      "packages/gateway/src/server.test.ts > enforces the request target limit with 414",
+      "packages/gateway/src/server.test.ts > rejects undeclared request media types with 415",
+      "packages/gateway/src/server.test.ts > reports schema violations with pointers",
+      "packages/runner/src/exposure.test.ts > answers 413 when the body exceeds the limit"
+    ]
+  },
+  {
+    "id": "AC-019",
+    "group": "42.2",
+    "claim": "Exact response selector beats range, which beats default.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/gateway/src/generate.test.ts > finds exact, range-class, then default for a status"
+    ]
+  },
+  {
+    "id": "AC-020",
+    "group": "42.2",
+    "claim": "Response status, headers, media type, and body are validated before commit.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/gateway/src/server.test.ts > rejects a produced body that violates the declared schema",
+      "packages/gateway/src/server.test.ts > rejects a fixture status that matches no declared response",
+      "packages/gateway/src/server.test.ts > rejects a produced response missing a required header"
+    ]
+  },
+  {
+    "id": "AC-021",
+    "group": "42.2",
+    "claim": "Invalid generated or behavior response never mutates state.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/gateway/src/listener.test.ts > leaves state unchanged when the produced response is invalid",
+      "packages/gateway/src/listener.test.ts > commits state when the produced response is valid"
+    ]
+  },
+  {
+    "id": "AC-022",
+    "group": "42.2",
+    "claim": "Duplicate query/header values survive normalization in wire order.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/gateway/src/listener.test.ts > keeps repeated header and query values in wire order"
+    ]
+  },
+  {
+    "id": "AC-023",
+    "group": "42.2",
+    "claim": "Binary and multipart byte equality can be evaluated by bounded digest/blob evidence.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/gateway/src/listener.test.ts > stores a multipart body as its raw-byte digest and blob",
+      "packages/gateway/src/listener.test.ts > reduces a binary body to its digest and blob"
+    ]
+  },
+  {
+    "id": "AC-024",
+    "group": "42.2",
+    "claim": "A request containing a URL causes zero DNS/outbound traffic.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/runner/src/exposure.test.ts > serves URL-laden requests without any other socket connect"
+    ]
+  },
+  {
+    "id": "AC-025",
+    "group": "42.2",
+    "claim": "A request containing a command or host path causes zero host process/filesystem side effects.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/runner/src/exposure.test.ts > serves URL-laden requests without spawning any process"
+    ]
+  },
+  {
+    "id": "AC-026",
+    "group": "42.2",
+    "claim": "Exact scenario completeness fails on one missing or one extra operation declaration.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/behavior-api/src/completeness.test.ts > fails on one missing operation declaration",
+      "packages/behavior-api/src/completeness.test.ts > fails on one extra operation declaration",
+      "packages/behavior-api/src/completeness.test.ts > fails when one operation is declared more than once"
+    ]
+  },
+  {
+    "id": "AC-027",
+    "group": "42.2",
+    "claim": "State revision increments only on committed state change.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/state-store/src/state.test.ts > initializes at revision zero and increments on change",
+      "packages/state-store/src/state.test.ts > keeps the revision when the committed state is unchanged"
+    ]
+  },
+  {
+    "id": "AC-028",
+    "group": "42.3",
+    "claim": "Behavior exception, timeout, invalid response, and domain error roll back state.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/behavior-api/src/execute.test.ts > classifies a backend that exceeds its bound as a timeout",
+      "packages/behavior-runtime/src/execution.test.ts > classifies a child timeout as behavior_timeout and rolls state back",
+      "packages/behavior-runtime/src/execution.test.ts > rolls an in-process timeout back and recovers on the next request"
+    ]
+  },
+  {
+    "id": "AC-029",
+    "group": "42.3",
+    "claim": "State, response outcome, idempotency, API event, and zero or more semantic events commit atomically under injected crash tests.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/state-store/src/store.test.ts > commits every row of one request transaction",
+      "packages/state-store/src/store.test.ts > rolls back every row when a crash fires after the idempotency write",
+      "packages/state-store/src/store.test.ts > rolls back every row when a crash fires after the event writes"
+    ]
+  },
+  {
+    "id": "AC-030",
+    "group": "42.3",
+    "claim": "Matching run/contract semantic+execution/source inventory/pack/scenario/variant/backend/implementation/seed/state version resumes; each mismatch refuses without modifying state.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/state-store/src/store.test.ts > accepts a resume attempt with matching fingerprints",
+      "packages/state-store/src/store.test.ts > refuses every fingerprint mismatch without modifying the database",
+      "packages/state-store/src/store.test.ts > refuses a resume attempt on an uninitialized database"
+    ]
+  },
+  {
+    "id": "AC-031",
+    "group": "42.3",
+    "claim": "Idempotency replay returns exact original visible response and no second mutation.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/behavior-runtime/src/execution.test.ts > replays the stored response and runs the handler once"
+    ]
+  },
+  {
+    "id": "AC-032",
+    "group": "42.3",
+    "claim": "Idempotency key reuse with a different normalized body returns conflict.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/state-store/src/idempotency.test.ts > reports a conflict with the configured status on a different body"
+    ]
+  },
+  {
+    "id": "AC-033",
+    "group": "42.3",
+    "claim": "Same seed and request sequence yield identical logical response bodies, IDs, state, and normalized trace fields.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/runner/src/integration-determinism.test.ts > repeats every artifact byte for byte on a pinned port",
+      "packages/runner/src/integration-determinism.test.ts > repeats the normalized logical artifacts when the port is ephemeral"
+    ]
+  },
+  {
+    "id": "AC-034",
+    "group": "42.3",
+    "claim": "Real timestamps and latency differ without affecting deterministic replay verification.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/report/src/replay.test.ts > ignores differing timestamps, latency, and volatile headers",
+      "packages/report/src/replay.test.ts > still compares every non-volatile response header",
+      "packages/report/src/replay.test.ts > produces a stable digest over the replay"
+    ]
+  },
+  {
+    "id": "AC-035",
+    "group": "42.3",
+    "claim": "Concurrent state-changing requests execute in recorded ingress order.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/runner/src/exposure.test.ts > records concurrent exchanges in ingress order, not completion order"
+    ]
+  },
+  {
+    "id": "AC-036",
+    "group": "42.3",
+    "claim": "Different PRNG namespaces prevent unrelated generator calls from changing existing IDs/values.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/state-store/src/random.test.ts > keeps one namespace stable when another draws values",
+      "packages/state-store/src/seed.test.ts > derives independent PRNG namespace seeds"
+    ]
+  },
+  {
+    "id": "AC-037",
+    "group": "42.3",
+    "claim": "Contract response generator never emits an unvalidated success response.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/gateway/src/generate.test.ts > produces values that validate against their schema",
+      "packages/gateway/src/generate.test.ts > fails closed on unproducible schemas",
+      "packages/gateway/src/generate.test.ts > never selects a default response as success",
+      "packages/gateway/src/conformance.test.ts > answers 501 quickly when generation is unsupported"
+    ]
+  },
+  {
+    "id": "AC-038",
+    "group": "42.4",
+    "claim": "Every accepted/rejected/disconnected request yields exactly one trace event.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/runner/src/exposure.test.ts > serves the product pipeline and records api exchanges",
+      "packages/runner/src/exposure.test.ts > answers 429 when the run request quota is spent",
+      "packages/evidence/src/trace.test.ts > flushes one line per event",
+      "packages/runner/src/exposure.test.ts > records exactly one unmatched exchange for an unknown path",
+      "packages/runner/src/exposure.test.ts > records exactly one unmatched exchange for a wrong method"
+    ]
+  },
+  {
+    "id": "AC-039",
+    "group": "42.4",
+    "claim": "Trace records are exported in strictly increasing ingress sequence.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/evidence/src/trace.test.ts > writes completed events in sequence order despite racing"
+    ]
+  },
+  {
+    "id": "AC-040",
+    "group": "42.4",
+    "claim": "A truncated final JSONL record is reported while prior complete records remain readable.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/evidence/src/integrity.test.ts > keeps the valid records before one corrupt trailing line"
+    ]
+  },
+  {
+    "id": "AC-041",
+    "group": "42.4",
+    "claim": "Artifact manifest verifies every finalized evidence file.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/evidence/src/artifacts.test.ts > writes a non-self-referential manifest and verifies it",
+      "packages/evidence/src/artifacts.test.ts > detects tampering after finalization",
+      "packages/evidence/src/artifacts.test.ts > detects a missing manifest from the completion pointer",
+      "packages/evidence/src/artifacts.test.ts > covers batch files and trial manifests as children"
+    ]
+  },
+  {
+    "id": "AC-042",
+    "group": "42.4",
+    "claim": "Existing batch and trial directories are never overwritten, including after interruption.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/evidence/src/artifacts.test.ts > enforces write-once semantics",
+      "packages/runner/src/run.test.ts > refuses to freeze a batch identifier twice",
+      "packages/runner/src/setup.test.ts > refuses a second start of the same trial",
+      "packages/runner/src/integration-trial.test.ts > refuses to resume a run id that already started"
+    ]
+  },
+  {
+    "id": "AC-043",
+    "group": "42.4",
+    "claim": "Input mutation after freeze marks evidence invalid.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/evidence/src/integrity.test.ts > classifies input mutation as invalid evidence",
+      "packages/report/src/replay.test.ts > fails the frozen contract digest check on drift",
+      "apps/cli/src/replay.test.ts > fails when the frozen contract drifted from the batch manifest"
+    ]
+  },
+  {
+    "id": "AC-044",
+    "group": "42.4",
+    "claim": "Retry creates a new ID linked to the old trial.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/runner/src/disposition.test.ts > records the immutable link to the failed attempt",
+      "packages/runner/src/disposition.test.ts > rejects the first attempt and unsafe identifiers"
+    ]
+  },
+  {
+    "id": "AC-045",
+    "group": "42.4",
+    "claim": "Participant archive never dereferences a symlink to a host sentinel.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/runner/src/workspace.test.ts > rejects a symlinked copy source",
+      "packages/runner/src/workspace.test.ts > rejects a symlink inside the workspace during verification",
+      "packages/runner/src/participant-report.test.ts > rejects a missing file, a symlink, a directory, and oversize"
+    ]
+  },
+  {
+    "id": "AC-046",
+    "group": "42.5",
+    "claim": "Two simultaneous trials share no port, key, state, IDs, blobs, workspace, temp, home, MCP config, or trace.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/runner/src/integration-isolation.test.ts > shares no port, credential, workspace, or evidence between trials"
+    ]
+  },
+  {
+    "id": "AC-047",
+    "group": "42.5",
+    "claim": "Participant receives only the declared files.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/runner/src/workspace.test.ts > writes only the declared materials for file visibility",
+      "packages/runner/src/workspace.test.ts > skips the contract file for non-file visibility",
+      "packages/runner/src/workspace.test.ts > reports an undeclared file, a missing file, and a changed digest"
+    ]
+  },
+  {
+    "id": "AC-048",
+    "group": "42.5",
+    "claim": "Root-, path-, and operation-level production server URLs are all rewritten in the participant copy.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/runner/src/setup.test.ts > rewrites servers declared at path-item and operation level"
+    ]
+  },
+  {
+    "id": "AC-049",
+    "group": "42.5",
+    "claim": "Participant environment contains only allowlisted names and no provider credential.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/agent-generic/src/adapter.test.ts > applies the tool environment and hides the launcher environment",
+      "packages/agent-codex/src/adapter.test.ts > applies only the declared launcher environment names"
+    ]
+  },
+  {
+    "id": "AC-050",
+    "group": "42.5",
+    "claim": "Agent invocation uses an argv array and records secret-free effective argv.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/agent-adapter/src/argv.test.ts > expands every declared token into the same element",
+      "packages/agent-generic/src/adapter.test.ts > keeps prompt text with quotes as one argv element",
+      "packages/agent-codex/src/adapter.test.ts > builds the argv from verified flags and keeps credentials out",
+      "packages/agent-codex/src/adapter.test.ts > emits session events, usage, and the final message"
+    ]
+  },
+  {
+    "id": "AC-051",
+    "group": "42.5",
+    "claim": "TERM then KILL removes a fake agent's descendant process on completion and timeout.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/agent-adapter/src/process.test.ts > terminates a descendant that outlives its parent",
+      "packages/agent-adapter/src/process.test.ts > times out, escalates past an ignored SIGTERM, and reports SIGKILL"
+    ]
+  },
+  {
+    "id": "AC-052",
+    "group": "42.5",
+    "claim": "Codex probe detects missing required flags before a paid run.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/agent-codex/src/adapter.test.ts > fails preflight when the help text omits a required flag",
+      "packages/agent-codex/src/adapter.test.ts > verifies the version, the help digest, and the flag set"
+    ]
+  },
+  {
+    "id": "AC-053",
+    "group": "42.5",
+    "claim": "Dry-run reaches no model provider and starts no paid agent.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "apps/cli/src/run.test.ts > prints a dry-run plan and writes nothing"
+    ]
+  },
+  {
+    "id": "AC-054",
+    "group": "42.5",
+    "claim": "Zero-request, nonzero exit, timeout, budget exhaustion, operator interruption, missing report, malformed report, invalid setup, and provider failures produce immutable lifecycle evidence and the frozen-precedence disposition.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/runner/src/integration-trial.test.ts > completes a trial whose participant makes no api request"
+    ]
+  },
+  {
+    "id": "AC-055",
+    "group": "42.5",
+    "claim": "Hard isolation test denies host sentinel, internet sink, metadata endpoint, unrelated loopback port, state, rubric, and sibling evidence.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/runner/src/integration-isolation.test.ts > keeps a spawned probing participant inside its declared surface"
+    ]
+  },
+  {
+    "id": "AC-056",
+    "group": "42.6",
+    "claim": "Exact registered secrets appear nowhere in exported bytes across every supported request, response, state, session, and report location.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/evidence/src/redaction.test.ts > never exposes the secret through any output path",
+      "packages/evidence/src/trace.test.ts > drops the digest when a text body contains a registered secret",
+      "packages/report/src/redact.test.ts > carries no registered secret anywhere in its canonical JSON",
+      "packages/agent-generic/src/adapter.test.ts > redacts a registered secret through the sink redactor",
+      "packages/runner/src/integration-isolation.test.ts > shares no port, credential, workspace, or evidence between trials"
+    ]
+  },
+  {
+    "id": "AC-057",
+    "group": "42.6",
+    "claim": "Security-scheme-aware query, cookie, and header credentials are redacted.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/evidence/src/redaction.test.ts > redacts header values for sensitive names and secret contents",
+      "packages/evidence/src/redaction.test.ts > gives query values stable fingerprints for sensitive names",
+      "packages/evidence/src/trace.test.ts > keeps lowercase names, wire order, and redaction flags",
+      "packages/evidence/src/trace.test.ts > fingerprints sensitive query values"
+    ]
+  },
+  {
+    "id": "AC-058",
+    "group": "42.6",
+    "claim": "Credential passed under an unexpected neutral key is caught by the exact-value registry.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/evidence/src/redaction.test.ts > redacts registered secret values inside JSON strings",
+      "packages/evidence/src/redaction.test.ts > redacts registered secrets anywhere in free text",
+      "packages/evidence/src/trace.test.ts > drops the digest when a text body contains a registered secret"
+    ]
+  },
+  {
+    "id": "AC-059",
+    "group": "42.6",
+    "claim": "Credentials never appear in process argv.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/agent-codex/src/adapter.test.ts > builds the argv from verified flags and keeps credentials out",
+      "packages/agent-adapter/src/argv.test.ts > rejects an unknown placeholder"
+    ]
+  },
+  {
+    "id": "AC-060",
+    "group": "42.6",
+    "claim": "Parser node, depth, ref, and operation limits plus study, request, queue, state, log, disk, and wall-time limits have bounded failure tests.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/config/src/limits.test.ts > pins every default and every hard ceiling",
+      "packages/config/src/limits.test.ts > keeps every default at or below its ceiling",
+      "packages/config/src/limits.test.ts > refuses an override above its hard ceiling",
+      "packages/config/src/limits.test.ts > pins the profile limit defaults"
+    ]
+  },
+  {
+    "id": "AC-061",
+    "group": "42.6",
+    "claim": "YAML alias bombs, regex bombs, reference bombs, multipart floods, and connection floods remain within test resource ceilings.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/openapi/tests/yaml.test.ts > fails closed on alias expansion bombs",
+      "packages/openapi/tests/corpus.test.ts > rejects every adversarial fixture with a stable code",
+      "packages/gateway/src/conformance.test.ts > answers 501 quickly when generation is unsupported",
+      "packages/runner/src/exposure.test.ts > bounds the request queue and answers 429",
+      "packages/gateway/src/multipart.test.ts > fails once the parts limit is exceeded"
+    ]
+  },
+  {
+    "id": "AC-062",
+    "group": "42.7",
+    "claim": "Rubric cannot access filesystem, network, clock, random, environment, reflection, or hidden credential.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/evaluator/src/expression.test.ts > rejects host globals at the root of a path",
+      "packages/evaluator/src/expression.test.ts > rejects function calls",
+      "packages/evaluator/src/rubric.test.ts > rejects a forbidden host global in an expression",
+      "packages/evaluator/src/rubric.test.ts > rejects a json_schema reference that traverses outside the pack",
+      "packages/evaluator/src/rubric.test.ts > rejects a variable that the position does not expose"
+    ]
+  },
+  {
+    "id": "AC-063",
+    "group": "42.7",
+    "claim": "Sequence matching backtracks past an incidental checkpoint and finds the complete recovery sequence.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/evaluator/src/evaluate.test.ts > backtracks instead of committing to the first candidate"
+    ]
+  },
+  {
+    "id": "AC-064",
+    "group": "42.7",
+    "claim": "Sequence tie selects lexicographically smallest event tuple.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/evaluator/src/evaluate.test.ts > selects the lexicographically smallest complete event tuple",
+      "packages/evaluator/src/evaluate.test.ts > picks the same tuple on a repeat evaluation"
+    ]
+  },
+  {
+    "id": "AC-065",
+    "group": "42.7",
+    "claim": "Candidate-limit exhaustion is evaluator error, not task failure.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/evaluator/src/evaluate.test.ts > turns a candidate overflow into an infrastructure error"
+    ]
+  },
+  {
+    "id": "AC-066",
+    "group": "42.7",
+    "claim": "Every check contains event, pointer, or artifact evidence.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/evaluator/src/evaluate.test.ts > records event, pointer, or artifact evidence for every check",
+      "packages/evaluator/src/evaluate.test.ts > references the report artifact from report-valued checks",
+      "packages/evaluator/src/evaluate.test.ts > keeps at least one evidence field of every wire check record",
+      "packages/evaluator/src/evaluate.test.ts > warns for every check that declares no evidence class"
+    ]
+  },
+  {
+    "id": "AC-067",
+    "group": "42.7",
+    "claim": "Required checks and weighted threshold jointly determine pass.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/evaluator/src/evaluate.test.ts > stays failed when the score passes but a required check fails",
+      "packages/evaluator/src/evaluate.test.ts > stays failed when required checks pass but the score misses the threshold"
+    ]
+  },
+  {
+    "id": "AC-068",
+    "group": "42.7",
+    "claim": "Signals do not affect score.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/evaluator/src/evaluate.test.ts > keeps the score under the threshold as a failure",
+      "packages/evaluator/src/integration-steel.test.ts > passes every rubric on its passing trace"
+    ]
+  },
+  {
+    "id": "AC-069",
+    "group": "42.7",
+    "claim": "Primary, activated-replacement, operational-assignment, launched-trial, not-started, control-started, primary-agent-outcome, API-behavior, task-evaluation, report-agreement, usage-known, and valid-evaluation counts are always explicit.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/report/src/aggregate.test.ts > counts attempts and slots separately",
+      "packages/report/src/aggregate.test.ts > emits every required denominator of section 27.3",
+      "packages/report/src/aggregate.test.ts > derives not-started primaries from the schedule override"
+    ]
+  },
+  {
+    "id": "AC-070",
+    "group": "42.7",
+    "claim": "Frozen intent-to-run, operational-assignment, primary-agent-outcome, valid-execution, and worst-case-censor denominators produce reproducible aggregates; empty denominators and missing usage remain explicitly undefined or unknown.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/report/src/aggregate.test.ts > emits every required denominator of section 27.3",
+      "packages/report/src/aggregate.test.ts > produces byte-identical canonical JSON from shuffled trials",
+      "packages/report/src/aggregate.test.ts > computes the worst-case sensitivity from censor bounds",
+      "packages/report/src/aggregate.test.ts > summarizes usage with observed values only",
+      "packages/report/src/aggregate.test.ts > returns null for an empty sample",
+      "packages/statistics/src/statistics.test.ts > degenerates at the boundaries and rejects empty denominators"
+    ]
+  },
+  {
+    "id": "AC-071",
+    "group": "42.7",
+    "claim": "Report refuses or flags an artifact hash mismatch.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/report/src/aggregate.test.ts > reports integrity and unresolved-slot warnings",
+      "packages/evidence/src/artifacts.test.ts > detects tampering after finalization",
+      "packages/evidence/src/integrity.test.ts > classifies input mutation as invalid evidence"
+    ]
+  },
+  {
+    "id": "AC-072",
+    "group": "42.7",
+    "claim": "Regrading creates derived artifacts and leaves originals byte-identical.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/report/src/regrade.test.ts > writes a derived artifact and leaves the original byte-identical",
+      "packages/report/src/regrade.test.ts > validates the derived evaluation against the evaluation schema",
+      "packages/report/src/regrade.test.ts > never overwrites an existing derived artifact",
+      "packages/report/src/regrade.test.ts > produces identical derived bytes for identical inputs"
+    ]
+  },
+  {
+    "id": "AC-073",
+    "group": "42.7",
+    "claim": "Descriptive compare warns on every cell-identity difference, never infers pairing from a shared seed, and inferential study analyze refuses an undeclared compatibility-key difference.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/report/src/compare.test.ts > never pairs two cells that only share a cohort seed",
+      "packages/report/src/compare.test.ts > reads a shared cohort seed from cell input digests",
+      "packages/report/src/compare.test.ts > stays silent when the seeds differ or pairing is declared"
+    ]
+  },
+  {
+    "id": "AC-074",
+    "group": "42.8",
+    "claim": "HTTP, direct tool, and catalog invocation of one operation produce equivalent API semantics and normalized events.",
+    "milestone": "agent-native-tools",
+    "status": "partial",
+    "tests": [
+      "packages/tools/src/catalog.test.ts > walks search, describe, and invoke over one contract",
+      "packages/tools/src/catalog.test.ts > serves a direct tool name through the same envelope",
+      "packages/tools/src/invoke.test.ts > reports the direct transport when configured",
+      "packages/runner/src/exposure.test.ts > serves the product pipeline and records api exchanges"
+    ]
+  },
+  {
+    "id": "AC-075",
+    "group": "42.8",
+    "claim": "Direct tool collisions resolve deterministically or preflight fails.",
+    "milestone": "agent-native-tools",
+    "status": "covered",
+    "tests": [
+      "packages/tools/src/naming.test.ts > suffixes a generated name that collides with another one",
+      "packages/tools/src/naming.test.ts > suffixes a generated name that collides with an earned operationId",
+      "packages/tools/src/naming.test.ts > produces the same frozen map and digest for any input order",
+      "packages/tools/src/naming.test.ts > fails a map build when a name cannot satisfy the pattern",
+      "packages/openapi/tests/capability.test.ts > reports duplicate operation ids and name collisions"
+    ]
+  },
+  {
+    "id": "AC-076",
+    "group": "42.8",
+    "claim": "Catalog search is byte-deterministic and stable under repeated execution.",
+    "milestone": "agent-native-tools",
+    "status": "covered",
+    "tests": [
+      "packages/tools/src/search.test.ts > freezes and records every ranking decision",
+      "packages/tools/src/search.test.ts > breaks score ties by canonical key in code-point order",
+      "packages/tools/src/search.test.ts > compares strings by code point, not by UTF-16 unit",
+      "packages/tools/src/search.test.ts > is checked in, versioned, lowercase, unique, and sorted"
+    ]
+  },
+  {
+    "id": "AC-077",
+    "group": "42.8",
+    "claim": "Catalog descriptions reveal no hidden behavior, state, workflow, or rubric content.",
+    "milestone": "agent-native-tools",
+    "status": "partial",
+    "tests": [
+      "packages/tools/src/catalog.test.ts > describes every direct tool without trusting contract prose",
+      "packages/tools/src/description.test.ts > places source text under the untrusted label",
+      "packages/tools/src/describe.test.ts > bounds and normalizes the source description"
+    ]
+  },
+  {
+    "id": "AC-078",
+    "group": "42.8",
+    "claim": "Authentication values do not appear in tool inputs, descriptions, results, or transcripts.",
+    "milestone": "agent-native-tools",
+    "status": "covered",
+    "tests": [
+      "packages/tools/src/envelope.test.ts > rejects a supplied credential without recording its value",
+      "packages/tools/src/invoke.test.ts > rejects a credential before the target runs",
+      "packages/tools/src/invoke.test.ts > exposes the typed rejection code without the value",
+      "packages/tools/src/description.test.ts > states the bridge-injected authentication rule",
+      "packages/evidence/src/redaction.test.ts > never exposes the secret through any output path",
+      "packages/runner/src/exposure.test.ts > records the instructions without any credential value"
+    ]
+  },
+  {
+    "id": "AC-079",
+    "group": "42.8",
+    "claim": "Operation/tool schema thresholds force an explicit catalog choice.",
+    "milestone": "agent-native-tools",
+    "status": "covered",
+    "tests": [
+      "packages/openapi/tests/capability.test.ts > recommends an exposure treatment from the thresholds",
+      "packages/openapi/tests/capability.test.ts > demotes direct tools when the operation threshold is exceeded"
+    ]
+  },
+  {
+    "id": "AC-080",
+    "group": "42.9",
+    "claim": "Steel ContractIR contains exactly 37 path operations.",
+    "milestone": "raw-http-mvp",
+    "status": "partial",
+    "tests": [
+      "packages/testkit/src/steel-pack.test.ts > keeps all 41 Steel v1 operations in the contract",
+      "packages/testkit/src/steel-parity.test.ts > compiles source and pack to the same 41 operations"
+    ],
+    "deviation": {
+      "summary": "The frozen Steel source declares 41 operations, not 37.",
+      "spec_ref": "SPEC.md section 39.1 (source of truth) and section 42.9",
+      "enforced": "steel-pack and steel-parity tests pin the 41-operation surface"
+    }
+  },
+  {
+    "id": "AC-081",
+    "group": "42.9",
+    "claim": "Steel exact-completeness maps all 37 operations once with no extra key.",
+    "milestone": "raw-http-mvp",
+    "status": "partial",
+    "tests": [
+      "packages/testkit/src/steel-parity.test.ts > compiles source and pack to the same 41 operations",
+      "packages/testkit/src/steel-parity.test.ts > keeps every operation reachable through the router",
+      "packages/testkit/src/steel-parity.test.ts > resolves every eval to the exact full contract surface"
+    ],
+    "deviation": {
+      "summary": "Exact completeness holds for all 41 declared operations, not 37.",
+      "spec_ref": "SPEC.md section 39.1 (source of truth) and section 42.9",
+      "enforced": "steel-parity tests map every declared operation exactly once"
+    }
+  },
+  {
+    "id": "AC-082",
+    "group": "42.9",
+    "claim": "The ten prototype tests pass or have one-to-one parity equivalents with a recorded mapping.",
+    "milestone": "raw-http-mvp",
+    "status": "partial",
+    "tests": [
+      "packages/testkit/src/steel-parity.test.ts > answers a manual resume attempt with the documented v1 result",
+      "packages/testkit/src/steel-parity.test.ts > handles an idempotency key as an unmanaged header",
+      "packages/testkit/src/steel-parity.test.ts > answers a malformed file path with the neutral route problem",
+      "packages/testkit/src/steel-parity.test.ts > answers invented routes with the same neutral problem"
+    ],
+    "deviation": {
+      "summary": "Seven of the ten prototype signal areas have one-to-one parity tests; three stay recorded absences that need behavior handlers.",
+      "spec_ref": "SPEC.md section 39.5 signal list and MIGRATION-NOTES drift item 17",
+      "enforced": "PARITY.md maps all ten areas; every mapped area cites a real test or a recorded absence with its reason"
+    }
+  },
+  {
+    "id": "AC-083",
+    "group": "42.9",
+    "claim": "Golden fake-agent checkpoint recovery passes the ordered trace and final-state rubric.",
+    "milestone": "raw-http-mvp",
+    "status": "partial",
+    "tests": [
+      "packages/testkit/src/steel-pack.test.ts > scores the checkpoint-recovery happy path as passed",
+      "packages/runner/src/integration-trial.test.ts > runs the steel basic-lifecycle eval end to end",
+      "packages/runner/src/integration-trial.test.ts > accepts the shipped checkpoint-recovery eval at preflight"
+    ],
+    "deviation": {
+      "summary": "The rubric passes on the recorded golden trace; a live end-to-end pass needs scenario behavior handlers, which the contract-mode pack defers.",
+      "spec_ref": "SPEC.md section 39.2 and MIGRATION-NOTES drift item 17",
+      "enforced": "The checkpoint-recovery rubric scores the nine-event golden trace as passed, the shipped eval freezes a clean plan at preflight, and the same pipeline runs a steel trial end to end"
+    }
+  },
+  {
+    "id": "AC-084",
+    "group": "42.9",
+    "claim": "Steel auth, lifecycle, file, environment, checkpoint, idempotency, SSE, binary, and stand-in behavior matches frozen golden cases.",
+    "milestone": "raw-http-mvp",
+    "status": "partial",
+    "tests": [
+      "packages/testkit/src/steel-parity-golden.test.ts > serves the frozen status for every operation",
+      "packages/testkit/src/steel-parity-golden.test.ts > serves the pack fixture bytes exactly as the file holds them",
+      "packages/testkit/src/steel-parity.test.ts > accepts a minted run credential through the gateway",
+      "packages/testkit/src/steel-parity.test.ts > handles an idempotency key as an unmanaged header"
+    ],
+    "deviation": {
+      "summary": "Auth, lifecycle, files, checkpoints, and binary responses match frozen goldens in contract mode; idempotency replay, SSE streams, and safe stand-ins need the scenario backend.",
+      "spec_ref": "SPEC.md section 39.2 and MIGRATION-NOTES drift items 17 through 19",
+      "enforced": "Golden fixture bytes serve verbatim for all 41 operations, credentials mint and authenticate, and undeclared idempotency headers stay inert"
+    }
+  },
+  {
+    "id": "AC-085",
+    "group": "42.9",
+    "claim": "Current diagnostic signals remain observable.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/testkit/src/steel-parity.test.ts > answers an unknown endpoint with the neutral route_not_found problem",
+      "packages/testkit/src/steel-parity.test.ts > answers a wrong method with method_not_allowed and the allow header",
+      "packages/testkit/src/steel-parity.test.ts > answers invented routes with the same neutral problem",
+      "packages/testkit/src/steel-parity.test.ts > rejects a checkpoint-on-create attempt"
+    ]
+  },
+  {
+    "id": "AC-086",
+    "group": "42.9",
+    "claim": "The paused-stop drift is surfaced and not silently corrected in Steel pack 1.0.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/testkit/src/steel-parity.test.ts > declares the drift in the manifest, the PackIR, and the notes",
+      "packages/testkit/src/steel-parity.test.ts > adds no silent running-only gate to the stop analog"
+    ]
+  },
+  {
+    "id": "AC-087",
+    "group": "42.9",
+    "claim": "Computer creation does not accept checkpoint_id.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/testkit/src/steel-parity.test.ts > rejects a checkpoint-on-create attempt"
+    ]
+  },
+  {
+    "id": "AC-088",
+    "group": "42.10",
+    "claim": "inspect, serve, pack init, pack validate, eval init, eval validate, run, evaluate, report, compare, replay, and doctor have CLI contract tests.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "apps/cli/src/inspect.test.ts > prints a stable-key JSON artifact with exactly the documented keys",
+      "apps/cli/src/serve.test.ts > serves a bare contract on an ephemeral port and answers fetches",
+      "apps/cli/src/pack.test.ts > scaffolds a pack that validates cleanly",
+      "apps/cli/src/pack.test.ts > prints a summary and exits 0 for a valid pack",
+      "apps/cli/src/eval.test.ts > scaffolds an eval directory that validates cleanly",
+      "apps/cli/src/eval.test.ts > summarizes a valid eval and exits 0",
+      "apps/cli/src/run.test.ts > runs one trial end to end with the default mock agent",
+      "apps/cli/src/evaluate.test.ts > reports the recorded evaluation and names the frozen rubric gap",
+      "apps/cli/src/replay.test.ts > verifies a faithful run in verify mode",
+      "apps/cli/src/doctor.test.ts > prints terminal check lines with the stable ids",
+      "apps/cli/src/report.test.ts > renders the canonical JSON report of one batch",
+      "apps/cli/src/report.test.ts > compares two recorded batches descriptively",
+      "apps/cli/src/workflow.test.ts > aligns a workflow against a recorded scrape call",
+      "apps/cli/src/study.test.ts > analyzes a study run assembled from engine outputs"
+    ]
+  },
+  {
+    "id": "AC-089",
+    "group": "42.10",
+    "claim": "Clean install on supported Linux and macOS starts and completes a fake-agent evaluation.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "tests/ci-gates.test.ts > runs the clean-install test suite on Linux and macOS",
+      "apps/cli/src/run.test.ts > runs one trial end to end with the default mock agent"
+    ]
+  },
+  {
+    "id": "AC-090",
+    "group": "42.10",
+    "claim": "Published JSON Schemas validate every project-produced artifact in golden runs.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "tests/schemas.test.ts > accepts its valid golden example",
+      "tests/schemas.test.ts > is rejected by its schema",
+      "packages/openapi/tests/golden.test.ts > validates against the contract-ir schema",
+      "packages/scheduler/src/schedule.test.ts > validates against assignment-schedule.v1.schema.json",
+      "packages/scheduler/src/studyrun.test.ts > validates against study-run.v1.schema.json",
+      "packages/runner/src/surface.test.ts > conforms to participant-surface-manifest.v1.schema.json"
+    ]
+  },
+  {
+    "id": "AC-091",
+    "group": "42.11",
+    "claim": "A multi-file bare or packed contract yields one sanitized participant bundle with no broken references and an operation mapping identical to scoped ContractIR.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/runner/src/setup.test.ts > bundles a two-file contract into a self-contained copy",
+      "packages/runner/src/integration-trial.test.ts > copies a two-file contract into the workspace fully bundled"
+    ]
+  },
+  {
+    "id": "AC-092",
+    "group": "42.11",
+    "claim": "A secured manual serve writes exclusive mode-0600 credentials with correct OR/AND scheme mapping and never emits values to logs, readiness, or evidence.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "apps/cli/src/serve.test.ts > builds one alternative per declared scheme, values excluded from help",
+      "apps/cli/src/serve.test.ts > serves a secured contract and enforces the declared credential",
+      "apps/cli/src/serve.test.ts > writes the readiness record to --ready and keeps the default port",
+      "apps/cli/src/serve.test.ts > writes the private control files with mode 0600"
+    ]
+  },
+  {
+    "id": "AC-093",
+    "group": "42.11",
+    "claim": "A fake adapter proves launcher provider variables stay out of model-generated tool commands, and incapable adapters report advisory isolation before launch.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/agent-generic/src/adapter.test.ts > applies the tool environment and hides the launcher environment",
+      "packages/agent-generic/src/adapter.test.ts > declares advisory separation when launcher names are required"
+    ]
+  },
+  {
+    "id": "AC-094",
+    "group": "42.11",
+    "claim": "Bare contract mode infers no idempotency; an explicit pack policy replays, conflicts, expires, scopes, and evicts as configured.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/runner/src/exposure.test.ts > executes two identical posts with one idempotency key"
+    ]
+  },
+  {
+    "id": "AC-095",
+    "group": "42.11",
+    "claim": "PromptSet and Eval resolution produces one collision-free participant plan and rejects missing IDs, duplicate targets, and unresolved templates.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/runner/src/prompts.test.ts > renders the three roles with one immutable context",
+      "packages/runner/src/prompts.test.ts > rejects a duplicate target unless both declarations allow it",
+      "packages/runner/src/prompts.test.ts > fails on an unknown prompt set, an unknown eval, or a mismatch",
+      "packages/runner/src/prompts.test.ts > reports an unresolved template variable instead of substituting"
+    ]
+  },
+  {
+    "id": "AC-096",
+    "group": "42.11",
+    "claim": "Contract response fixtures resolve inside the pack, validate preflight, and deterministically override example or schema generation only for their operation.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/pack/src/manifest.test.ts > loads a json_file response fixture body as a document",
+      "packages/pack/src/invariants.test.ts > reports a fixture that targets an unknown operation",
+      "packages/pack/src/invariants.test.ts > accepts a fixture status matched by a range or default response",
+      "packages/gateway/src/generate.test.ts > lets fixtures win with recorded provenance",
+      "packages/testkit/src/steel-parity-golden.test.ts > serves the pack fixture bytes exactly as the file holds them",
+      "packages/testkit/src/steel-parity-golden.test.ts > answers the three fixture-backed operations from the fixtures"
+    ]
+  },
+  {
+    "id": "AC-097",
+    "group": "42.11",
+    "claim": "Reordering semantically unordered maps, enum members, media types, or named examples cannot alter behavior without changing the execution or participant-surface digest.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/openapi/tests/digests.test.ts > keeps the execution digest identical",
+      "packages/openapi/tests/digests.test.ts > keeps the semantic digest identical",
+      "packages/openapi/tests/digests.test.ts > keeps the schema registry and operations identical",
+      "packages/openapi/tests/digests.test.ts > keeps named examples and media types in canonical order",
+      "packages/openapi/tests/digests.test.ts > still records the reordered source bytes as a distinct source digest"
+    ]
+  },
+  {
+    "id": "AC-098",
+    "group": "42.11",
+    "claim": "Resume succeeds only for matching unfinalized private control state and rejects every digest or version mismatch and all finalized runs.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "apps/cli/src/serve.test.ts > resumes an interrupted serve with the same identity",
+      "apps/cli/src/serve.test.ts > refuses a resume after the contract changed",
+      "apps/cli/src/serve.test.ts > refuses a resume of a finalized serve",
+      "apps/cli/src/serve.test.ts > refuses a resume while the recorded server still runs",
+      "packages/runner/src/integration-trial.test.ts > refuses to resume a run id that already started"
+    ]
+  },
+  {
+    "id": "AC-099",
+    "group": "42.11",
+    "claim": "A 2XX selector emits 200, default is never inferred as success, and a concrete fixture can select a status represented by default.",
+    "milestone": "raw-http-mvp",
+    "status": "covered",
+    "tests": [
+      "packages/gateway/src/generate.test.ts > takes the lowest other 2xx and emits 2XX as concrete 200",
+      "packages/gateway/src/generate.test.ts > never selects a default response as success",
+      "packages/pack/src/invariants.test.ts > accepts a fixture status matched by a range or default response"
+    ]
+  },
+  {
+    "id": "AC-100",
+    "group": "42.11",
+    "claim": "A hidden Arazzo workflow compiles to canonical keys, stays off participant surfaces, backtracks in trace matching, and reports unsupported expressions before launch.",
+    "milestone": "workflow",
+    "status": "partial",
+    "tests": [
+      "packages/arazzo/src/compile.test.ts > compiles the steel fixture without diagnostics",
+      "packages/arazzo/src/compile.test.ts > orders steps by dependency and maps canonical keys",
+      "packages/arazzo/src/compile.test.ts > rejects unsupported runtime expressions",
+      "packages/arazzo/src/align.test.ts > backtracks instead of consuming the first candidate"
+    ]
+  },
+  {
+    "id": "AC-101",
+    "group": "42.12",
+    "claim": "study init, validate, schedule, run, and analyze have CLI contract tests; validation materializes schema-valid StudyIR, a protocol lock, and a runtime phase lock whose hashes exclude their own hash fields.",
+    "milestone": "research-protocol",
+    "status": "partial",
+    "tests": [
+      "packages/study-ir/src/compile.test.ts > compiles a validated protocol into schema-valid IR",
+      "packages/study-ir/src/lock.test.ts > creates a schema-valid lock over every member",
+      "packages/study-ir/src/lock.test.ts > never contains its own digest"
+    ]
+  },
+  {
+    "id": "AC-102",
+    "group": "42.12",
+    "claim": "A phase lock freezes model, adapter, surface, variant, schedule, seed, binding, replacement, stopping-rule, compatibility, estimand, and statistics inputs before any participant launch.",
+    "milestone": "research-protocol",
+    "status": "covered",
+    "tests": [
+      "packages/study-ir/src/lock.test.ts > creates a schema-valid lock over every member",
+      "packages/study-ir/src/lock.test.ts > never contains its own digest",
+      "packages/study-ir/src/phase.test.ts > rejects a confirmatory phase without a multiplicity policy",
+      "packages/study/src/validate.test.ts > refuses an analytical phase without a lock",
+      "packages/study/src/validate.test.ts > refuses an analytical phase under a drifted lock"
+    ]
+  },
+  {
+    "id": "AC-103",
+    "group": "42.12",
+    "claim": "After the first paid trial reaches participant_spawned, protocol or phase changes are refused; amendments need a new version with lineage while original locks stay byte-identical.",
+    "milestone": "research-protocol",
+    "status": "gap",
+    "tests": []
+  },
+  {
+    "id": "AC-104",
+    "group": "42.12",
+    "claim": "A StudyRun may interleave cells globally while every child batch keeps one cell identity and every trial maps to exactly one planned or activated assignment.",
+    "milestone": "research-protocol",
+    "status": "covered",
+    "tests": [
+      "packages/scheduler/src/schedule.test.ts > binds every assignment of one cell to one child batch",
+      "packages/scheduler/src/studyrun.test.ts > lists child batches in canonical cell-ID order with derived IDs",
+      "packages/scheduler/src/studyrun.test.ts > binds every child batch to the batch the schedule already recorded",
+      "packages/scheduler/src/seeds.test.ts > binds every assignment to one run ID, run seed, and child batch",
+      "packages/scheduler/src/events.test.ts > rejects a bad timestamp, an unknown assignment, and a foreign batch"
+    ]
+  },
+  {
+    "id": "AC-105",
+    "group": "42.12",
+    "claim": "Identical locked inputs and seed give a byte-identical schedule, blocks stay balanced, and a seed change moves order but not cell definitions or counts.",
+    "milestone": "research-protocol",
+    "status": "covered",
+    "tests": [
+      "packages/scheduler/src/schedule.test.ts > produces byte-identical schedules for identical inputs",
+      "packages/scheduler/src/schedule.test.ts > keeps every block complete: every cell exactly once per block",
+      "packages/scheduler/src/schedule.test.ts > moves the order when the cohort seed changes"
+    ]
+  },
+  {
+    "id": "AC-106",
+    "group": "42.12",
+    "claim": "Missing seed or StudyRun ID, duplicate assignment ID, undeclared level, bad cell count, impossible balance, over-cap pool, or digest mismatch fails before listener, workspace, or paid agent startup.",
+    "milestone": "research-protocol",
+    "status": "partial",
+    "tests": [
+      "packages/scheduler/src/schedule.test.ts > rejects a primary count that is not divisible by the cell count",
+      "packages/scheduler/src/schedule.test.ts > rejects a declared block structure that contradicts the counts",
+      "packages/scheduler/src/schedule.test.ts > rejects an activation ceiling above the held capacity",
+      "packages/scheduler/src/schedule.test.ts > rejects a schedule above the frozen paid ceiling",
+      "packages/scheduler/src/studyrun.test.ts > rejects a StudyRun or phase that contradicts the schedule",
+      "packages/scheduler/src/studyrun.test.ts > rejects a malformed creation time and malformed digests",
+      "packages/scheduler/src/ids.test.ts > rejects a duplicate key",
+      "packages/study/src/compatibility.test.ts > rejects a level the factor does not declare",
+      "packages/study/src/run.test.ts > refuses to assemble a header when preflight failed"
+    ]
+  },
+  {
+    "id": "AC-107",
+    "group": "42.12",
+    "claim": "Only preregistered pre-control failures or post-control instrumentation censures activate the next held replacement for the same stratum; operator interruption and participant failure never do; slots substitute at most one failure append-only.",
+    "milestone": "research-protocol",
+    "status": "covered",
+    "tests": [
+      "packages/scheduler/src/events.test.ts > maps one held slot of the failed cell to exactly one primary",
+      "packages/scheduler/src/events.test.ts > refuses a second replacement for the same primary",
+      "packages/scheduler/src/events.test.ts > refuses a disposition the locked policy does not select",
+      "packages/scheduler/src/events.test.ts > selects a held slot for corrupt evidence and records the reason",
+      "packages/scheduler/src/events.test.ts > marks a never-activated held slot held_unused once the schedule settles",
+      "packages/study/src/run.test.ts > activates one held replacement for an eligible pre-control failure",
+      "packages/study/src/run.test.ts > never activates a replacement for an agent failure",
+      "packages/study/src/run.test.ts > aborts on an operator interruption",
+      "packages/study/src/analyze.test.ts > maps a replacement onto the failed primary slot",
+      "packages/report/src/aggregate.test.ts > resolves slots with substitution lineage and outcome source",
+      "packages/report/src/aggregate.test.ts > computes the worst-case sensitivity from censor bounds"
+    ]
+  },
+  {
+    "id": "AC-108",
+    "group": "42.12",
+    "claim": "No paid analytical launch happens until contract, behavior, evaluator, surface, cue, variant-parity, schedule, compatibility, resource, adapter, and fake-agent preflight passes; smoke trials stay non-analytical.",
+    "milestone": "research-protocol",
+    "status": "partial",
+    "tests": [
+      "packages/runner/src/preflight.test.ts > freezes a clean plan for the steel pack",
+      "packages/runner/src/preflight.test.ts > refuses a paid run without a confirmation callback",
+      "packages/study/src/validate.test.ts > refuses an analytical phase without a lock",
+      "packages/study/src/validate.test.ts > allows a smoke phase without a lock and warns",
+      "packages/study/src/run.test.ts > refuses to assemble a header when preflight holds an error",
+      "packages/report/src/aggregate.test.ts > aggregates API behavior without pooling smoke traffic"
+    ]
+  },
+  {
+    "id": "AC-109",
+    "group": "42.12",
+    "claim": "Lifecycle fixtures cover every stage, conservative control-start evidence, every terminal disposition, precedence races, and crash recovery without turning exit zero, report presence, or operator signal into completion.",
+    "milestone": "research-protocol",
+    "status": "covered",
+    "tests": [
+      "packages/evidence/src/lifecycle.test.ts > covers every event family from section 33.1",
+      "packages/runner/src/lifecycle.test.ts > records the run identity and stages in order",
+      "packages/runner/src/lifecycle.test.ts > refuses a backward transition",
+      "packages/runner/src/lifecycle.test.ts > keeps the operator signal outside the stage order",
+      "packages/runner/src/lifecycle.test.ts > rebuilds a snapshot from records and rejects a corrupt ledger",
+      "packages/runner/src/disposition.test.ts > rule 1: an operator signal before any fired limit wins",
+      "packages/runner/src/disposition.test.ts > rule 7: a persisted turn completion completes the trial",
+      "packages/runner/src/disposition.test.ts > rule 8: exit zero without a turn completion stays incomplete"
+    ]
+  },
+  {
+    "id": "AC-110",
+    "group": "42.12",
+    "claim": "Disposition, evidence integrity, censor class, metric availability, task evaluation, and report agreement stay independent axes with full censor precedence, frozen-dependency integrity coverage, and censor-aware denominators and worst-case bounds.",
+    "milestone": "research-protocol",
+    "status": "covered",
+    "tests": [
+      "packages/report/src/aggregate.test.ts > never collapses the outcome axes",
+      "packages/report/src/aggregate.test.ts > emits every required denominator of section 27.3",
+      "packages/report/src/aggregate.test.ts > counts attempts and slots separately",
+      "packages/report/src/aggregate.test.ts > computes the worst-case sensitivity from censor bounds",
+      "packages/runner/src/disposition.test.ts > rule 4: a participant failure on intact evidence never censors",
+      "packages/runner/src/disposition.test.ts > rule 1: no control start censors as pre-control",
+      "packages/evidence/src/integrity.test.ts > classifies every contradiction signal as invalid evidence"
+    ]
+  },
+  {
+    "id": "AC-111",
+    "group": "42.12",
+    "claim": "Inferential pooling requires identical declared compatibility keys; multi-study synthesis preserves per-study lineage and strata while schedule order and seed never masquerade as compatibility or pairing.",
+    "milestone": "research-protocol",
+    "status": "partial",
+    "tests": [
+      "packages/study/src/compatibility.test.ts > includes every cell that matches the declared keys",
+      "packages/study/src/compatibility.test.ts > excludes a cell produced under a different study key",
+      "packages/report/src/compare.test.ts > accepts equal compatibility keys with equal analytical status",
+      "packages/report/src/compare.test.ts > refuses pooled estimates when compatibility keys differ",
+      "packages/report/src/compare.test.ts > computes the paired difference and exact McNemar p-value",
+      "packages/study/src/analyze.test.ts > refuses pooled estimates when a required block stays incomplete"
+    ]
+  },
+  {
+    "id": "AC-112",
+    "group": "42.12",
+    "claim": "Preflight freezes a complete pre-localization surface manifest and each trial its rendered manifest; strict cue scans and pairwise surface diffs cover filenames, contents, prompts, environment names, credential shapes, HTTP responses, tool metadata, and adapter messages, invalidating undeclared differences.",
+    "milestone": "research-protocol",
+    "status": "covered",
+    "tests": [
+      "packages/runner/src/surface.test.ts > conforms to participant-surface-manifest.v1.schema.json",
+      "packages/runner/src/surface.test.ts > records every channel exactly once with stable identifiers",
+      "packages/runner/src/surface.test.ts > leaves the digest null for the pre-localization template",
+      "packages/runner/src/cue.test.ts > scans entry names, so a revealing environment name is caught",
+      "packages/runner/src/cue.test.ts > fails on an unallowed pairwise difference and records the pair",
+      "packages/runner/src/surface-check.test.ts > fails a shared entry whose bytes drift outside the allowlist",
+      "packages/runner/src/preflight.test.ts > freezes a clean plan for the steel pack"
+    ]
+  },
+  {
+    "id": "AC-113",
+    "group": "42.12",
+    "claim": "Discoverable documentation serves byte-equivalent localized contract content only at frozen routes, authenticates as declared, records its own monotonic stream plus shared ingress order, cannot touch domain state, never increments product or task counts, refuses colliding routes, and makes zero externalDocs requests.",
+    "milestone": "research-protocol",
+    "status": "partial",
+    "tests": [
+      "packages/documentation-facade/src/facade.test.ts > serves the frozen document bytes on the declared route",
+      "packages/documentation-facade/src/facade.test.ts > records documentation exchanges in stream order",
+      "packages/runner/src/exposure.test.ts > discoverable serves the sanitized bytes before product routing",
+      "packages/runner/src/exposure.test.ts > keeps product routing outside the documentation plane",
+      "packages/runner/src/exposure.test.ts > rejects an enabled candidate that collides with a product route",
+      "packages/runner/src/exposure.test.ts > refuses to start a colliding discoverable server",
+      "packages/runner/src/exposure.test.ts > localizes the sanitized document against the live base URL",
+      "packages/runner/src/exposure.test.ts > records documentation exchanges with their own stream identity",
+      "packages/runner/src/exposure.test.ts > serves the declared synthetic credential",
+      "packages/state-store/src/store.test.ts > records documentation exchanges on their own sequence"
+    ]
+  },
+  {
+    "id": "AC-114",
+    "group": "42.12",
+    "claim": "A blinded no-contract or noncandidate documentation request gets a neutral bounded response with no condition, experiment, framework, filename, operation, or control-plane cue.",
+    "milestone": "research-protocol",
+    "status": "covered",
+    "tests": [
+      "packages/runner/src/exposure.test.ts > matches the unknown-route shape byte for byte",
+      "packages/runner/src/exposure.test.ts > stays neutral whatever credentials the probe presents"
+    ]
+  },
+  {
+    "id": "AC-115",
+    "group": "42.12",
+    "claim": "ContractVariant materialization is byte-deterministic, limited to approved JSON Pointer prefixes, produces reviewed diffs, preserves common-projection facts and semantics, proves route, handler, documentation, and event parity, and leaves the canonical contract byte-identical.",
+    "milestone": "research-protocol",
+    "status": "covered",
+    "tests": [
+      "packages/contract-variant/src/endtoend.test.ts > materializes the same set bytes byte-identically twice",
+      "packages/contract-variant/src/generate.test.ts > leaves the hand-built base contract bytes alone",
+      "packages/contract-variant/src/model.test.ts > rejects a variant patch outside its allowlist",
+      "packages/contract-variant/src/endtoend.test.ts > verifies both diffs and pins the base digest in each",
+      "packages/contract-variant/src/model.test.ts > rejects a diff that claims to be verified while carrying violations"
+    ]
+  },
+  {
+    "id": "AC-116",
+    "group": "42.12",
+    "claim": "Semantic events validate against a frozen registry with unique ordered IDs and valid parents, commit atomically with request, state, and idempotency evidence, reproduce on replay, and keep one declared meaning across HTTP, direct, and catalog variants without inferring from response text.",
+    "milestone": "research-protocol",
+    "status": "partial",
+    "tests": [
+      "packages/behavior-api/src/execute.test.ts > rejects a semantic event the backend never registered",
+      "packages/behavior-api/src/execute.test.ts > rejects a registered event with the wrong version or payload",
+      "packages/behavior-api/src/execute.test.ts > accepts a registered event with a matching payload",
+      "packages/state-store/src/store.test.ts > links semantic events to their request and parent",
+      "packages/evidence/src/artifacts.test.ts > semantic events number sequentially in commit order",
+      "packages/report/src/replay.test.ts > verifies every recorded exchange of a faithful run"
+    ]
+  },
+  {
+    "id": "AC-117",
+    "group": "42.12",
+    "claim": "Wilson, Newcombe, Fisher, Holm, weighted estimands, worst-case censor bounds, and every supported paired method match checked-in reference vectors within a frozen tolerance.",
+    "milestone": "research-protocol",
+    "status": "covered",
+    "tests": [
+      "packages/statistics/src/statistics.test.ts > matches the specification vector for 5/10",
+      "packages/statistics/src/statistics.test.ts > matches the symmetric specification vector for 5/10 minus 5/10",
+      "packages/statistics/src/statistics.test.ts > matches the specification vector for [[1,9],[8,2]]",
+      "packages/statistics/src/statistics.test.ts > matches the specification vector",
+      "packages/statistics/src/statistics.test.ts > respects unequal weights",
+      "packages/statistics/src/statistics.test.ts > brackets the unknown outcomes",
+      "packages/statistics/src/statistics.test.ts > matches the hand-computed exact McNemar p-value"
+    ]
+  },
+  {
+    "id": "AC-118",
+    "group": "42.12",
+    "claim": "Primary outcomes, weights, exclusions, multiplicity family, small-cohort behavior, precision floor, and paired design are preregistered; unplanned analyses are labeled descriptive and undefined estimates are reported, not fabricated.",
+    "milestone": "research-protocol",
+    "status": "covered",
+    "tests": [
+      "packages/study-ir/src/phase.test.ts > rejects a confirmatory phase without a multiplicity policy",
+      "packages/study-ir/src/phase.test.ts > rejects a floor and ceiling rule over an unknown factor",
+      "packages/evaluator/src/rubric.test.ts > rejects weights that are negative or all zero",
+      "packages/statistics/src/statistics.test.ts > withholds p95 from small samples",
+      "packages/report/src/aggregate.test.ts > hides extreme quantiles for small samples",
+      "packages/report/src/compare.test.ts > computes deltas, intervals, and adjusted p-values",
+      "packages/report/src/compare.test.ts > returns null instead of inventing values for empty denominators",
+      "packages/report/src/compare.test.ts > computes the paired difference and exact McNemar p-value"
+    ]
+  },
+  {
+    "id": "AC-119",
+    "group": "42.12",
+    "claim": "Declarative evaluation is the safe default; a custom evaluator is rejected unless a trusted or isolated profile pins its digest, capabilities, limits, and provenance, and it can only create derived artifacts.",
+    "milestone": "research-protocol",
+    "status": "partial",
+    "tests": [
+      "packages/evaluator/src/rubric.test.ts > rejects a forbidden host global in an expression",
+      "packages/evaluator/src/rubric.test.ts > rejects weights that are negative or all zero"
+    ]
+  },
+  {
+    "id": "AC-120",
+    "group": "42.12",
+    "claim": "The Steel reference study pins steel-computer@1.0.0 with 37 canonical operations, rejects checkpoint_id, leaves fork unimplemented, separates diagnostic from naturalistic cells, and draws participant assets from the pinned agent-native-research PackRef under StudyRun provenance without study directories owning sources or handlers.",
+    "milestone": "research-protocol",
+    "status": "partial",
+    "tests": [
+      "packages/testkit/src/steel-parity.test.ts > rejects a checkpoint-on-create attempt",
+      "packages/testkit/src/steel-parity.test.ts > answers invented routes with the same neutral problem"
+    ]
+  }
+]
