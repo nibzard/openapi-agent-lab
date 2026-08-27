@@ -2,9 +2,26 @@
   "name": "@oal/runner",
   "version": "0.0.0",
   "private": true,
-  "description": "Trial and cohort runner.",
+  "description": "Trial runner: preflight, setup, lifecycle, and execution.",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@oal/agent-adapter": "workspace:*",
+    "@oal/behavior-api": "workspace:*",
+    "@oal/behavior-runtime": "workspace:*",
+    "@oal/capability": "workspace:*",
+    "@oal/config": "workspace:*",
+    "@oal/contract-ir": "workspace:*",
+    "@oal/core": "workspace:*",
+    "@oal/documentation-facade": "workspace:*",
+    "@oal/evidence": "workspace:*",
+    "@oal/gateway": "workspace:*",
+    "@oal/mock-contract": "workspace:*",
+    "@oal/openapi": "workspace:*",
+    "@oal/pack": "workspace:*",
+    "@oal/state-store": "workspace:*",
+    "@oal/tools": "workspace:*"
   }
 }
