@@ -1,0 +1,537 @@
+import { afterEach, describe, expect, it } from "vitest";
+import type { Buffer } from "node:buffer";
+import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import {
+  collectingSink,
+  validateAgentSessionEvent,
+  type AgentCapabilities,
+  type AgentRunContext,
+  type AgentRunResult,
+  type AgentSessionEvent,
+  type AgentStreamPayload
+} from "@oal/agent-adapter";
+
+import { MockAgentAdapter, type MockPreparedAgent } from "./adapter.ts";
+import type { MockAgentConfig } from "./script.ts";
+
+const schemaPath = fileURLToPath(
+  new URL("../../../schemas/agent-event.v1.schema.json", import.meta.url)
+);
+
+const MOCK_KEY = "mock-key-canary-0002";
+const NO_SIGNAL = (): AbortSignal => new AbortController().signal;
+
+const CAPABILITIES: AgentCapabilities = {
+  nativeSystemPrompt: true,
+  nativeOutputSchema: false,
+  mcp: false,
+  machineReadableTranscript: true,
+  usageReporting: true,
+  separateToolEnvironment: true,
+  enforceableToolNetworkPolicy: true,
+  sandboxModes: []
+};
+
+interface Harness {
+  adapter: MockAgentAdapter;
+  context: AgentRunContext;
+  root: string;
+}
+
+async function harness(
+  config: MockAgentConfig = {},
+  contextOverride: Partial<AgentRunContext> = {},
+  exposureBaseUrl = "http://127.0.0.1:8099/api"
+): Promise<Harness> {
+  const root = await mkdtemp(join(tmpdir(), "oal-mock-agent-"));
+  const workspace = join(root, "workspace");
+  const home = join(root, "home");
+  const temporary = join(root, "tmp");
+  await mkdir(workspace, { recursive: true });
+  await mkdir(home, { recursive: true });
+  await mkdir(temporary, { recursive: true });
+  const context: AgentRunContext = {
+    runId: "run_000001",
+    workspaceDir: workspace,
+    syntheticHomeDir: home,
+    temporaryDir: temporary,
+    prompts: {
+      instructions: "Follow the contract.",
+      task: "Create one computer.",
+      launch: "launch text payload"
+    },
+    exposure: {
+      mode: "raw-http",
+      baseUrl: exposureBaseUrl,
+      credentialNames: ["X_API_KEY"]
+    },
+    launcherEnvironment: {
+      PATH: process.env.PATH ?? "/usr/bin:/bin",
+      LAUNCHER_KEY: "sk-launcher-topsecret-0001"
+    },
+    toolEnvironment: {
+      PATH: process.env.PATH ?? "/usr/bin:/bin",
+      HOME: home,
+      TMPDIR: temporary,
+      X_API_KEY: MOCK_KEY
+    },
+    toolExecutionPolicy: {
+      inheritEnvironment: "none",
+      allowedEnvironmentNames: ["PATH", "HOME", "TMPDIR", "X_API_KEY"],
+      network: "mock-only",
+      filesystem: "workspace-only"
+    },
+    timeoutMs: 5000,
+    ...contextOverride
+  };
+  return { adapter: new MockAgentAdapter(config), context, root };
+}
+
+async function runScript(
+  state: Harness,
+  signal: AbortSignal = NO_SIGNAL()
+): Promise<{
+  prepared: MockPreparedAgent;
+  result: AgentRunResult;
+  events: AgentSessionEvent[];
+}> {
+  const collector = collectingSink();
+  const prepared: MockPreparedAgent = await state.adapter.prepare(
+    state.context
+  );
+  const result = await state.adapter.run(prepared, collector.sink, signal);
+  return { prepared, result, events: collector.events };
+}
+
+/** Captured request received by the local exposure server. */
+interface CapturedRequest {
+  method: string;
+  url: string;
+  authorization: string;
+  body: string;
+}
+
+async function startExposureServer(
+  status: number,
+  body: string
+): Promise<{ server: Server; requests: CapturedRequest[]; baseUrl: string }> {
+  const requests: CapturedRequest[] = [];
+  const server = createServer((message, response) => {
+    let bodyText = "";
+    message.on("data", (chunk: Buffer) => {
+      bodyText += chunk.toString("utf8");
+    });
+    message.on("end", () => {
+      requests.push({
+        method: message.method ?? "GET",
+        url: message.url ?? "/",
+        authorization: message.headers.authorization ?? "none",
+        body: bodyText
+      });
+      response.writeHead(status, { "content-type": "application/json" });
+      response.end(body);
+    });
+  });
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    server.once("error", rejectPromise);
+    server.listen(0, "127.0.0.1", () => {
+      resolvePromise();
+    });
+  });
+  const address = server.address() as AddressInfo;
+  return {
+    server,
+    requests,
+    baseUrl: `http://127.0.0.1:${address.port}/api`
+  };
+}
+
+async function closeServer(server: Server): Promise<void> {
+  await new Promise<void>((resolvePromise) => {
+    server.close(() => {
+      resolvePromise();
+    });
+  });
+}
+
+const openServers: Server[] = [];
+
+afterEach(async () => {
+  while (openServers.length > 0) {
+    const server = openServers.pop();
+    if (server !== undefined) {
+      await closeServer(server);
+    }
+  }
+});
+
+describe("MockAgentAdapter.probe", () => {
+  it("always succeeds with the declared capabilities", async () => {
+    const state = await harness({
+      capabilities: CAPABILITIES,
+      model: "mock-model"
+    });
+    try {
+      const probe = await state.adapter.probe();
+      expect(probe.status).toBe("available");
+      expect(probe.version).toBe("oal-mock-agent 1.0.0 (in-process, no model)");
+      expect(probe.capabilities).toEqual(CAPABILITIES);
+      expect(probe.environmentSeparation).toBe("enforced");
+      expect(probe.launcherEnvironmentNames).toEqual([]);
+      expect(probe.details?.requests).toBe("0");
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("MockAgentAdapter.run", () => {
+  it("emits the scripted session events in order", async () => {
+    const state = await harness({
+      events: [
+        { channel: "jsonrpc", text: "thread.started", kind: "thread.started" },
+        { channel: "stdout", text: "creating computer" },
+        { channel: "adapter", text: "tool call prepared", kind: "mock.note" }
+      ],
+      usage: { input_tokens: 5, output_tokens: 3, total_tokens: 8 },
+      finalText: '{"computer_id":"c_1"}'
+    });
+    try {
+      const { result, events } = await runScript(state);
+      expect(result.status).toBe("completed");
+      expect(result.exitCode).toBe(0);
+      expect(result.finalText).toBe('{"computer_id":"c_1"}');
+      expect(result.usage).toEqual({
+        input_tokens: 5,
+        output_tokens: 3,
+        total_tokens: 8
+      });
+      expect(events.map((event) => event.type)).toEqual([
+        "agent.started",
+        "agent.session_event",
+        "agent.session_event",
+        "agent.session_event",
+        "agent.session_event",
+        "agent.exited"
+      ]);
+      expect(previews(events, "stdout")).toEqual(["creating computer"]);
+      expect(kindsOn(events, "jsonrpc")).toEqual(["thread.started"]);
+      expect(events.at(-1)?.type).toBe("agent.exited");
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("writes the declared workspace files and removes them on cleanup", async () => {
+    const state = await harness({
+      files: [
+        { path: "report.txt", content: "kept" },
+        { path: "nested/artifacts/notes.json", content: '{"ok":true}' }
+      ]
+    });
+    try {
+      const { prepared, result } = await runScript(state);
+      expect(result.status).toBe("completed");
+      expect(
+        await readFile(join(state.context.workspaceDir, "report.txt"), "utf8")
+      ).toBe("kept");
+      expect(
+        await readFile(
+          join(state.context.workspaceDir, "nested/artifacts/notes.json"),
+          "utf8"
+        )
+      ).toBe('{"ok":true}');
+      await state.adapter.cleanup(prepared);
+      expect(await exists(join(state.context.workspaceDir, "report.txt"))).toBe(
+        false
+      );
+      expect(
+        await exists(
+          join(state.context.workspaceDir, "nested/artifacts/notes.json")
+        )
+      ).toBe(false);
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("calls the exposure base URL and records no credential value", async () => {
+    const exposure = await startExposureServer(201, '{"id":"c_1"}');
+    openServers.push(exposure.server);
+    const state = await harness(
+      {
+        requests: [
+          {
+            path: "/computers",
+            method: "POST",
+            credentialName: "X_API_KEY",
+            body: { name: "worker" },
+            expectStatus: 201
+          }
+        ]
+      },
+      {},
+      exposure.baseUrl
+    );
+    try {
+      const { result, events } = await runScript(state);
+      expect(result.status).toBe("completed");
+      expect(exposure.requests.length).toBe(1);
+      expect(exposure.requests[0]?.method).toBe("POST");
+      expect(exposure.requests[0]?.url).toBe("/api/computers");
+      expect(exposure.requests[0]?.authorization).toBe(`Bearer ${MOCK_KEY}`);
+      expect(JSON.parse(exposure.requests[0]?.body ?? "{}")).toEqual({
+        name: "worker"
+      });
+      const recorded = JSON.stringify(events);
+      expect(recorded).toContain("X_API_KEY");
+      expect(recorded).not.toContain(MOCK_KEY);
+      expect(kindsOn(events, "adapter")).toEqual([
+        "mock.script",
+        "http.request",
+        "http.response"
+      ]);
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("fails the run when the exposure status differs", async () => {
+    const exposure = await startExposureServer(500, '{"error":"boom"}');
+    openServers.push(exposure.server);
+    const state = await harness(
+      {
+        requests: [{ path: "/computers", expectStatus: 201 }],
+        events: [{ channel: "stdout", text: "after the request" }]
+      },
+      {},
+      exposure.baseUrl
+    );
+    try {
+      const { result, events } = await runScript(state);
+      expect(result.status).toBe("failed");
+      expect(result.errorCode).toBe("MOCK_HTTP_STATUS_MISMATCH");
+      expect(previews(events, "stdout")).toEqual([]);
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("fails the run when no exposure base URL is configured", async () => {
+    const state = await harness(
+      { requests: [{ path: "/computers" }] },
+      { exposure: { mode: "direct-tools" } }
+    );
+    try {
+      const { result } = await runScript(state);
+      expect(result.status).toBe("failed");
+      expect(result.errorCode).toBe("MOCK_HTTP_REQUEST_FAILED");
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("cancels through the abort signal", async () => {
+    const state = await harness({
+      events: [
+        { channel: "stdout", text: "first" },
+        { channel: "stdout", text: "second", delayMs: 400 },
+        { channel: "stdout", text: "third" }
+      ],
+      finalText: "never reached"
+    });
+    try {
+      const collector = collectingSink();
+      const prepared = await state.adapter.prepare(state.context);
+      const controller = new AbortController();
+      setTimeout(() => {
+        controller.abort();
+      }, 100);
+      const result = await state.adapter.run(
+        prepared,
+        collector.sink,
+        controller.signal
+      );
+      expect(result.status).toBe("cancelled");
+      expect(result.errorCode).toBe("AGENT_CANCELLED");
+      expect(result.exitCode).toBeNull();
+      expect(result.finalText).toBeUndefined();
+      expect(previews(collector.events, "stdout")).toEqual(["first"]);
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("stops at the run deadline", async () => {
+    const state = await harness(
+      {
+        events: [
+          { channel: "stdout", text: "first" },
+          { channel: "stdout", text: "second", delayMs: 5000 }
+        ]
+      },
+      { timeoutMs: 250 }
+    );
+    try {
+      const { result, events } = await runScript(state);
+      expect(result.status).toBe("timed_out");
+      expect(result.exitCode).toBeNull();
+      expect(previews(events, "stdout")).toEqual(["first"]);
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("reports a scripted provider failure", async () => {
+    const state = await harness({
+      status: "provider_failed",
+      exitCode: 78,
+      events: [{ channel: "stderr", text: "provider quota exceeded" }]
+    });
+    try {
+      const { result } = await runScript(state);
+      expect(result.status).toBe("provider_failed");
+      expect(result.exitCode).toBe(78);
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("parses the structured final output", async () => {
+    const state = await harness(
+      { finalText: '{"computer_id":"c_7"}' },
+      { resultSchemaPath: "/run/tmp/result.schema.json" }
+    );
+    try {
+      const { result } = await runScript(state);
+      expect(result.finalJson).toEqual({ computer_id: "c_7" });
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a script that escapes the workspace", async () => {
+    const state = await harness({
+      files: [{ path: "../escape.txt", content: "no" }]
+    });
+    try {
+      expect(() => {
+        void state.adapter.prepare(state.context);
+      }).toThrowError(/must stay inside the workspace/);
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("produces the same event sequence for the same script", async () => {
+    const config: MockAgentConfig = {
+      events: [
+        { channel: "stdout", text: "step one" },
+        { channel: "jsonrpc", text: "turn.completed", kind: "turn.completed" }
+      ],
+      files: [{ path: "out.txt", content: "same" }],
+      finalText: "done"
+    };
+    const first = await harness(config);
+    const second = await harness(config);
+    try {
+      const firstRun = await runScript(first);
+      const secondRun = await runScript(second);
+      expect(shapeOf(firstRun.events)).toEqual(shapeOf(secondRun.events));
+      expect(firstRun.result.finalText).toBe(secondRun.result.finalText);
+      expect(
+        await readFile(join(first.context.workspaceDir, "out.txt"), "utf8")
+      ).toBe(
+        await readFile(join(second.context.workspaceDir, "out.txt"), "utf8")
+      );
+    } finally {
+      await rm(first.root, { recursive: true, force: true });
+      await rm(second.root, { recursive: true, force: true });
+    }
+  });
+
+  it("emits session events that satisfy the published schema", async () => {
+    const state = await harness({
+      events: [{ channel: "stdout", text: "visible text" }],
+      requests: [
+        { path: "/ping", credentialName: "X_API_KEY", expectStatus: 204 }
+      ],
+      files: [{ path: "out.txt", content: "kept" }]
+    });
+    const exposure = await startExposureServer(204, "");
+    openServers.push(exposure.server);
+    try {
+      const collector = collectingSink();
+      const prepared = await state.adapter.prepare({
+        ...state.context,
+        exposure: { ...state.context.exposure, baseUrl: exposure.baseUrl }
+      });
+      await state.adapter.run(prepared, collector.sink, NO_SIGNAL());
+      const schema: unknown = JSON.parse(await readFile(schemaPath, "utf8"));
+      expect(collector.events.length).toBeGreaterThan(0);
+      for (const event of collector.events) {
+        expect(validateAgentSessionEvent(event, schema)).toEqual([]);
+      }
+      expect(JSON.stringify(collector.events)).not.toContain(MOCK_KEY);
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+});
+
+async function exists(path: string): Promise<boolean> {
+  return await stat(path).then(
+    () => true,
+    () => false
+  );
+}
+
+/** Previews recorded on one stream channel. */
+function previews(
+  events: readonly AgentSessionEvent[],
+  channel: AgentStreamPayload["channel"]
+): string[] {
+  const out: string[] = [];
+  for (const event of events) {
+    const payload = event.payload;
+    if ("channel" in payload && payload.channel === channel) {
+      if (typeof payload.preview === "string") {
+        out.push(payload.preview);
+      }
+    }
+  }
+  return out;
+}
+
+/** Adapter-declared kinds recorded on one stream channel. */
+function kindsOn(
+  events: readonly AgentSessionEvent[],
+  channel: AgentStreamPayload["channel"]
+): string[] {
+  const out: string[] = [];
+  for (const event of events) {
+    const payload = event.payload;
+    if ("channel" in payload && payload.channel === channel) {
+      if (typeof payload.kind === "string") {
+        out.push(payload.kind);
+      }
+    }
+  }
+  return out;
+}
+
+/** Event sequence without timestamps, so two runs compare equal. */
+function shapeOf(events: readonly AgentSessionEvent[]): unknown {
+  return events.map((event) => ({
+    type: event.type,
+    sequence: event.sequence,
+    payload: event.payload,
+    extensions: event.extensions
+  }));
+}
