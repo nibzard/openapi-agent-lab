@@ -379,7 +379,7 @@ function defaultExposure(plan: FrozenPlan, pack: LoadedPack): ExposureFactory {
     documentation: {
       sanitizedContract: (baseUrl: string) =>
         sanitizeParticipantContract(entry, settings, baseUrl).text,
-      candidates: { openapiJson: true }
+      candidates: { openapi: true }
     }
   });
 }
