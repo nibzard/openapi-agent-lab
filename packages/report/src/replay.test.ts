@@ -740,4 +740,110 @@ describe("replayRun", () => {
     const strict = replayRun({ ...replayInput(events), verify: false });
     expect(strict.replay_sha256).not.toBe(first.replay_sha256);
   });
+
+  it("ignores differing timestamps, latency, and volatile headers", async () => {
+    const events = await recordedRun(fullRedactor());
+    const earlier = shiftWallClock(structuredClone(events), {
+      at: "2026-01-01T00:00:00.000Z",
+      durationMs: 4,
+      date: "Thu, 01 Jan 2026 00:00:00 GMT",
+      age: "0"
+    });
+    const later = shiftWallClock(structuredClone(events), {
+      at: "2027-03-09T08:17:42.513Z",
+      durationMs: 987,
+      date: "Mon, 09 Mar 2027 08:17:42 GMT",
+      age: "43200"
+    });
+    expect(earlier[2]?.observed_at).toBe("2026-01-01T00:00:00.000Z");
+    expect(later[2]?.observed_at).toBe("2027-03-09T08:17:42.513Z");
+
+    const first = replayRun(replayInput(earlier));
+    const second = replayRun(replayInput(later));
+
+    for (const result of [first, second]) {
+      expect(result.counts).toEqual({
+        in_scope: 4,
+        replayed: 4,
+        verified: 4,
+        mismatched: 0,
+        skipped: 0,
+        failed: 0
+      });
+      expect(result.full_verification).toBe(true);
+      expect(result.diagnostics).toEqual([]);
+      expect(
+        result.outcomes.every((outcome) => outcome.differences.length === 0)
+      ).toBe(true);
+    }
+    // Volatile recording values never enter the verification result.
+    expect(second.replay_sha256).toBe(first.replay_sha256);
+  });
+
+  it("still compares every non-volatile response header", async () => {
+    const events = structuredClone(await recordedRun(fullRedactor()));
+    const mutated = events[2];
+    expect(mutated?.type).toBe("api.exchange");
+    if (mutated?.type === "api.exchange" && mutated.response !== null) {
+      const contentType = mutated.response.headers[0];
+      if (contentType === undefined) {
+        throw new Error("The fixture must record a content-type header.");
+      }
+      contentType.values = ["text/plain"];
+    }
+
+    const result = replayRun(replayInput(events));
+
+    expect(result.counts.verified).toBe(3);
+    expect(result.counts.mismatched).toBe(1);
+    expect(result.full_verification).toBe(false);
+    expect(result.outcomes[0]?.differences).toEqual([
+      {
+        kind: "header",
+        name: "content-type",
+        recorded: "text/plain",
+        observed: "application/json; charset=utf-8"
+      }
+    ]);
+  });
 });
+
+interface WallClock {
+  at: string;
+  durationMs: number;
+  date: string;
+  age: string;
+}
+
+/**
+ * Re-stamp one recorded run as if the server had served it at another
+ * real time: every observed_at, received_at, and completed_at timestamp
+ * moves, latency changes, and the serving layer stamped different Date
+ * and Age response headers.
+ */
+function shiftWallClock(
+  events: ReplayEvidenceEvent[],
+  clock: WallClock
+): ReplayEvidenceEvent[] {
+  for (const event of events) {
+    event.observed_at = clock.at;
+    if (event.type !== "api.exchange") {
+      continue;
+    }
+    event.duration_ms = clock.durationMs;
+    if (event.request !== null) {
+      event.request.received_at = clock.at;
+    }
+    if (event.response !== null) {
+      event.response.completed_at = clock.at;
+      event.response.headers = [
+        ...event.response.headers.filter(
+          (header) => header.name !== "date" && header.name !== "age"
+        ),
+        { name: "date", values: [clock.date], redacted: false },
+        { name: "age", values: [clock.age], redacted: false }
+      ];
+    }
+  }
+  return events;
+}

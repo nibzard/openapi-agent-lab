@@ -76,6 +76,13 @@ export const DEFAULT_EVALUATOR_LIMITS: EvaluatorLimits = {
   maxCaptureBytes: 4096
 };
 
+/**
+ * Artifact reference recorded by every check whose evidence is the
+ * parsed participant report (section 26.8). The runner persists that
+ * report as participant-report.json beside the evaluation.
+ */
+export const REPORT_ARTIFACT_REF = "participant-report.json";
+
 export interface EvaluateOptions {
   rubric: Rubric;
   /** Safe identifier of the evaluated run. */
@@ -483,7 +490,13 @@ function predicateCheck(
   context: EvaluationContext,
   base: CheckResult
 ): CheckResult {
-  const started: CheckResult = { ...base, expressionSource: check.expression };
+  const started: CheckResult = {
+    ...base,
+    expressionSource: check.expression,
+    ...(readsReport(check.expression, context)
+      ? { artifactRefs: [REPORT_ARTIFACT_REF] }
+      : {})
+  };
   if (referencesReport(check.expression, context)) {
     return missingResult(started, check.on_missing, "The report is");
   }
@@ -538,10 +551,12 @@ function referencesReport(
   expression: string,
   context: EvaluationContext
 ): boolean {
-  return (
-    context.report === null &&
-    context.compiled(expression).rootIdentifiers.includes("report")
-  );
+  return context.report === null && readsReport(expression, context);
+}
+
+/** Whether an expression reads the parsed participant report. */
+function readsReport(expression: string, context: EvaluationContext): boolean {
+  return context.compiled(expression).rootIdentifiers.includes("report");
 }
 
 /**
@@ -968,20 +983,28 @@ function jsonSchemaCheck(
       })
     };
   }
+  const started: CheckResult = {
+    ...base,
+    ...(check.value === "report" ? { artifactRefs: [REPORT_ARTIFACT_REF] } : {})
+  };
   const target = jsonSchemaTarget(check.value, context);
   if (target === null) {
-    return missingResult(base, check.on_missing, `The ${check.value} value is`);
+    return missingResult(
+      started,
+      check.on_missing,
+      `The ${check.value} value is`
+    );
   }
   const violations = new SchemaValidator(schema).errors(target);
   if (violations.length === 0) {
     return {
-      ...base,
+      ...started,
       status: "passed",
       message: `The ${check.value} value matches the required schema.`
     };
   }
   return {
-    ...base,
+    ...started,
     status: "failed",
     failedPointers: uniqueStrings(violations.map(violationPointer)),
     message: `The ${check.value} value has ${String(

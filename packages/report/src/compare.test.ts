@@ -377,3 +377,100 @@ describe("comparison determinism", () => {
     expect(first.family_id).toBe("holm-family");
   });
 });
+
+describe("pairing inference (section 27.6)", () => {
+  const SEED = "steel-baseline-2026-08-27";
+
+  /** Two cells of one study: equal keys, equal status, one shared seed. */
+  function sharedSeedPair(): { baseline: Report; candidate: Report } {
+    const extensions = {
+      analytical_status: "analytical",
+      cohort_seed: SEED
+    } as Record<string, Json>;
+    return {
+      baseline: rateReport(
+        "cell-baseline",
+        [{ id: "pass_rate", numerator: 2, denominator: 10 }],
+        [SHA_A],
+        extensions
+      ),
+      candidate: rateReport(
+        "cell-candidate",
+        [{ id: "pass_rate", numerator: 9, denominator: 10 }],
+        [SHA_A],
+        extensions
+      )
+    };
+  }
+
+  it("never pairs two cells that only share a cohort seed", () => {
+    const { baseline, candidate } = sharedSeedPair();
+    const comparison = compareReports(baseline, candidate);
+    // The shared seed is a cell-identity concern, not a pairing and not
+    // a compatibility refusal.
+    expect(comparison.paired).toEqual([]);
+    expect(comparison.compatible).toBe(true);
+    expect(comparison.pairing_warnings).toEqual([
+      `shared cohort seed ${SEED} never establishes pairing (section 27.6)`
+    ]);
+    // The metrics stay independent: Fisher and Newcombe, never McNemar.
+    const metric = comparison.metrics[0];
+    expect(metric?.verdict).toBe("difference_detected");
+    expect(metric?.p_value).not.toBeNull();
+    expect(metric?.interval).not.toBeNull();
+  });
+
+  it("reads a shared cohort seed from cell input digests", () => {
+    const seedDigest = "c".repeat(64);
+    const withDigest = (id: string): Report => ({
+      ...rateReport(
+        id,
+        [{ id: "pass_rate", numerator: 2, denominator: 10 }],
+        [SHA_A]
+      ),
+      provenance: {
+        cells: [
+          {
+            cell_id: id,
+            factor_levels: { model: "test-model" },
+            compatibility_sha256: SHA_A,
+            input_digests: { cohort_seed: seedDigest }
+          }
+        ],
+        implementation: {}
+      }
+    });
+    const comparison = compareReports(
+      withDigest("cell-baseline"),
+      withDigest("cell-candidate")
+    );
+    expect(comparison.paired).toEqual([]);
+    expect(comparison.pairing_warnings).toEqual([
+      `shared cohort seed ${seedDigest} never establishes pairing (section 27.6)`
+    ]);
+  });
+
+  it("stays silent when the seeds differ or pairing is declared", () => {
+    const { baseline, candidate } = sharedSeedPair();
+    const otherSeed = {
+      ...candidate,
+      extensions: {
+        ...candidate.extensions,
+        cohort_seed: "steel-replacement-2026-08-27"
+      }
+    };
+    expect(compareReports(baseline, otherSeed).pairing_warnings).toEqual([]);
+
+    const paired = compareReports(baseline, candidate, {
+      paired: [
+        {
+          metric_id: "pass_rate",
+          counts: { both: 2, onlyFirst: 0, onlySecond: 7, neither: 1 }
+        }
+      ]
+    });
+    expect(paired.pairing_warnings).toEqual([]);
+    expect(paired.paired).toHaveLength(1);
+    expect(paired.paired[0]?.metric_id).toBe("pass_rate");
+  });
+});

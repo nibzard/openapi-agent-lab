@@ -125,6 +125,20 @@ export {
   type ReplayResult
 } from "./replay.ts";
 export {
+  DERIVED_EVALUATION_DIR,
+  DERIVED_EVALUATION_KIND,
+  DERIVED_EVALUATION_SCHEMA_VERSION,
+  RegradeCode,
+  derivedEvaluationPath,
+  regradeRun,
+  type DerivedEvaluationArtifact,
+  type RegradeEvidence,
+  type RegradeInput,
+  type RegradeOptions,
+  type RegradeResult,
+  type RegradeStore
+} from "./regrade.ts";
+export {
   DOCTOR_CAPABILITIES,
   DOCTOR_PROBE_LIMITS,
   DOCTOR_REPORT_KIND,

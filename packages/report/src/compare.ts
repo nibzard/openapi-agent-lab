@@ -94,6 +94,12 @@ export interface ReportComparison {
   readonly compatible: boolean;
   /** Sorted, human-readable reasons for every compatibility refusal. */
   readonly compatibility_differences: readonly string[];
+  /**
+   * Cell-identity concerns that never refuse pooling and never pair:
+   * a shared cohort seed, for example, is reported here instead of
+   * being read as preregistered pairing (section 27.6).
+   */
+  readonly pairing_warnings: readonly string[];
   readonly family_id: string | null;
   readonly alpha: number;
   readonly metrics: readonly MetricComparison[];
@@ -108,6 +114,58 @@ const INCOMPATIBLE_CLAIM =
   "Compatibility keys differ. Counts are shown side by side; no pooled estimate, p-value, or winner claim is computed.";
 const DESCRIPTIVE_CLAIM =
   "Descriptive comparison only. Adjusted p-values never establish a confirmatory claim, and a non-significant result is not evidence of equivalence.";
+
+/** Extensions and cell input-digest keys that name the cohort seed. */
+const COHORT_SEED_KEYS: readonly string[] = [
+  "cohort_seed",
+  "cohort_seed_sha256"
+];
+
+/**
+ * Cohort seed identity of one report, from its extensions or its cell
+ * input digests. Two cells of one study share it by construction, so
+ * it can never serve as pairing evidence.
+ */
+function cohortSeedOf(report: Report): string | null {
+  for (const key of COHORT_SEED_KEYS) {
+    const value = report.extensions[key];
+    if (typeof value === "string" && value.length > 0) {
+      return value;
+    }
+  }
+  for (const cell of report.provenance.cells) {
+    const digest = cell.input_digests?.["cohort_seed"];
+    if (typeof digest === "string" && digest.length > 0) {
+      return digest;
+    }
+  }
+  return null;
+}
+
+/**
+ * Warnings about shared identities that are not pairing. Matching run
+ * or cohort seeds never establish pairing (section 27.6); only the
+ * preregistered assignment-unit pairing the caller passes does.
+ */
+function pairingWarnings(
+  baseline: Report,
+  candidate: Report,
+  paired: readonly PairedMetricInput[]
+): string[] {
+  const warnings: string[] = [];
+  const baselineSeed = cohortSeedOf(baseline);
+  const candidateSeed = cohortSeedOf(candidate);
+  if (
+    baselineSeed !== null &&
+    baselineSeed === candidateSeed &&
+    paired.length === 0
+  ) {
+    warnings.push(
+      `shared cohort seed ${baselineSeed} never establishes pairing (section 27.6)`
+    );
+  }
+  return warnings;
+}
 
 function metricSide(metric: ReportMetric): RateSide {
   const rate =
@@ -341,6 +399,11 @@ export function compareReports(
     },
     compatible: gate.compatible,
     compatibility_differences: gate.differences,
+    pairing_warnings: pairingWarnings(
+      baseline,
+      candidate,
+      options.paired ?? []
+    ),
     family_id:
       gate.compatible && metrics.length + paired.length > 0 ? familyId : null,
     alpha,

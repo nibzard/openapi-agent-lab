@@ -17,6 +17,7 @@ import type {
 import { EVALUATOR_NAME, EVALUATOR_VERSION } from "./evaluation.ts";
 import { loadRubric } from "./rubric.ts";
 import {
+  REPORT_ARTIFACT_REF,
   evaluateRubric,
   toEvaluation,
   type CheckResult,
@@ -1120,6 +1121,10 @@ describe("evaluation document conformance", () => {
   });
 });
 
+/**
+ * A pure predicate reads no report value, so section 26.8 gives it no
+ * event, pointer, or artifact evidence to record.
+ */
 function projectionRubric(): Rubric {
   const result = loadRubric(
     {
@@ -1130,7 +1135,7 @@ function projectionRubric(): Rubric {
           kind: "predicate",
           weight: 1,
           required: false,
-          expression: "report.fan_out.supported == false"
+          expression: 'run.mode == "record"'
         }
       ],
       signals: []
@@ -1149,5 +1154,436 @@ describe("rubric digest", () => {
     const second = evaluate(loadFixture(STEEL_RECOVERY));
     expect(first.rubricSha256).toBe(second.rubricSha256);
     expect(first.rubricSha256).toMatch(/^[a-f0-9]{64}$/);
+  });
+});
+
+describe("evaluation evidence invariant (section 26.8)", () => {
+  const DOC_SERVED: DocumentationExchange = {
+    schema_version: 1,
+    type: "documentation.exchange",
+    event_id: "doc-1",
+    sequence: 1,
+    participant_ingress_sequence: 1,
+    observed_at: "2026-01-01T00:00:00.000Z",
+    batch_id: null,
+    run_id: RUN_ID,
+    actor: "participant",
+    request: { method: "GET", path: "/openapi.json" },
+    candidate: { profile: "openapi-3-1", route_id: "docs" },
+    authentication: { status: "not_required" },
+    visibility: "public",
+    outcome: "served",
+    response: {
+      status: 200,
+      content_type: "application/json",
+      bytes: 2048,
+      body_sha256: CLEAN_SHA
+    },
+    duration_ms: 2,
+    extensions: {}
+  };
+
+  const CHECKPOINT_CREATED: SemanticEvent = {
+    schema_version: 1,
+    type: "semantic.event",
+    event_id: "sem-1",
+    semantic_sequence: 1,
+    run_id: RUN_ID,
+    pack_id: "steel-recovery",
+    name: "checkpoint.created",
+    event_version: 1,
+    logical_time: "2026-01-01T00:00:00.000Z",
+    caused_by_api_event_id: "evt-1",
+    actor: "participant",
+    state_revision_before: 3,
+    state_revision_after: 4,
+    payload_schema: "steel-recovery.checkpoint.created",
+    payload: { computer_id: "cmp-1", checkpoint_id: "chk-9" }
+  };
+
+  /** One check of every evidence-bearing kind, plus a report predicate. */
+  const MIXED_CHECKS: Json[] = [
+    {
+      id: "recovery_flow",
+      kind: "sequence",
+      weight: 8,
+      required: true,
+      evidence_class: "participant_observable",
+      match: "any",
+      steps: [
+        {
+          id: "create",
+          where:
+            'event.operation.operation_id == "createComputer" && ' +
+            "event.response.status < 300",
+          capture: { computer_id: "event.response.body.value.id" }
+        },
+        {
+          id: "pause",
+          where:
+            'event.operation.operation_id == "pauseComputer" && ' +
+            "event.request.path_parameters.computer_id == vars.computer_id"
+        }
+      ],
+      postconditions: [
+        {
+          id: "final_paused",
+          expression: 'state.computers[vars.computer_id].state == "paused"'
+        }
+      ]
+    },
+    {
+      id: "result_report",
+      kind: "json_schema",
+      weight: 1,
+      required: true,
+      evidence_class: "participant_observable",
+      value: "report",
+      schema: "result.schema.json"
+    },
+    {
+      id: "single_create",
+      kind: "event",
+      weight: 1,
+      required: false,
+      evidence_class: "participant_observable",
+      match: "counted",
+      min_count: 1,
+      max_count: 1,
+      where:
+        'event.operation.operation_id == "createComputer" && ' +
+        "event.response.status < 300"
+    },
+    {
+      id: "fan_out_reported",
+      kind: "predicate",
+      weight: 1,
+      required: false,
+      evidence_class: "participant_observable",
+      expression: "report.fan_out.supported == false"
+    },
+    {
+      id: "log_present",
+      kind: "artifact",
+      weight: 1,
+      required: false,
+      evidence_class: "mixed",
+      path: "logs/run.jsonl",
+      exists: true,
+      media_type: "application/x-ndjson"
+    },
+    {
+      id: "docs_served",
+      kind: "documentation_event",
+      weight: 1,
+      required: false,
+      evidence_class: "participant_observable",
+      match: "existential",
+      where: 'event.outcome == "served"'
+    },
+    {
+      id: "one_checkpoint",
+      kind: "semantic_event",
+      weight: 1,
+      required: false,
+      evidence_class: "private_domain",
+      match: "counted",
+      min_count: 1,
+      max_count: 1,
+      where: 'event.name == "checkpoint.created"'
+    }
+  ];
+
+  const MIXED_RUBRIC: JsonObject = {
+    rubric_version: 1,
+    id: "mixed-evidence",
+    description: "One check of every kind",
+    scoring: { method: "weighted_binary", pass_threshold: 0.9 },
+    checks: MIXED_CHECKS,
+    signals: []
+  };
+
+  const MIXED_ARTIFACTS = {
+    "logs/run.jsonl": {
+      present: true,
+      bytes: 512,
+      sha256: CLEAN_SHA,
+      media_type: "application/x-ndjson"
+    }
+  };
+
+  function evaluateMixed(): EvaluationResult {
+    return evaluate(loadFixture(MIXED_RUBRIC), {
+      documentationEvents: [DOC_SERVED],
+      semanticEvents: [CHECKPOINT_CREATED],
+      artifacts: MIXED_ARTIFACTS
+    });
+  }
+
+  /** Every evidence channel one check result carries. */
+  function evidenceOf(check: CheckResult): string[] {
+    return [
+      ...check.eventIds,
+      ...check.steps.map((step) => `steps/${step.id}`),
+      ...check.postconditions.map((outcome) => `postconditions/${outcome.id}`),
+      ...check.failedPointers,
+      ...check.artifactRefs
+    ];
+  }
+
+  it("passes every kind of the mixed rubric", () => {
+    const result = evaluateMixed();
+    expect(result.status).toBe("passed");
+    expect(result.checks.map((check) => check.status)).toEqual(
+      result.checks.map(() => "passed")
+    );
+  });
+
+  it("records event, pointer, or artifact evidence for every check", () => {
+    const result = evaluateMixed();
+    expect(result.checks).toHaveLength(7);
+    for (const check of result.checks) {
+      expect(evidenceOf(check).length).toBeGreaterThan(0);
+    }
+    const flow = checkOf(result, "recovery_flow");
+    expect(flow.eventIds).toEqual(["evt-1", "evt-8"]);
+    expect(flow.steps.map((step) => step.id)).toEqual(["create", "pause"]);
+    expect(flow.postconditions.map((outcome) => outcome.id)).toEqual([
+      "final_paused"
+    ]);
+    expect(checkOf(result, "single_create").eventIds).toEqual(["evt-1"]);
+    expect(checkOf(result, "docs_served").eventIds).toEqual(["doc-1"]);
+    expect(checkOf(result, "one_checkpoint").eventIds).toEqual(["sem-1"]);
+    expect(checkOf(result, "log_present").artifactRefs).toEqual([
+      "logs/run.jsonl"
+    ]);
+  });
+
+  it("references the report artifact from report-valued checks", () => {
+    const result = evaluateMixed();
+    expect(checkOf(result, "fan_out_reported").artifactRefs).toEqual([
+      REPORT_ARTIFACT_REF
+    ]);
+    expect(checkOf(result, "result_report").artifactRefs).toEqual([
+      REPORT_ARTIFACT_REF
+    ]);
+  });
+
+  it("keeps at least one evidence field of every wire check record", () => {
+    const document = toEvaluation(evaluateMixed());
+    expect(document.checks).toHaveLength(7);
+    for (const check of document.checks) {
+      const channels = [
+        check.event_ids,
+        check.failed_pointers,
+        check.artifact_refs,
+        check.captures
+      ].filter((channel) => channel !== undefined);
+      expect(channels.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("warns for every check that declares no evidence class", () => {
+    const declared = loadRubric(MIXED_RUBRIC, {
+      resolveSchema: () => RESULT_SCHEMA
+    });
+    expect(
+      declared.diagnostics.filter((entry) => entry.severity === "warning")
+    ).toEqual([]);
+
+    const stripped = loadRubric(
+      {
+        ...MIXED_RUBRIC,
+        checks: MIXED_CHECKS.map((check) => {
+          const rest = { ...(check as JsonObject) };
+          delete rest.evidence_class;
+          return rest as Json;
+        })
+      },
+      { resolveSchema: () => RESULT_SCHEMA }
+    );
+    const warnings = stripped.diagnostics.filter(
+      (entry) => entry.severity === "warning"
+    );
+    expect(warnings).toHaveLength(MIXED_CHECKS.length);
+    warnings.forEach((warning, index) => {
+      expect(warning.code).toBe("OAL-RUBRIC-INVALID");
+      expect(warning.json_pointer).toBe(`#/checks/${index}/evidence_class`);
+    });
+    // The warning alone never drops the rubric.
+    expect(stripped.rubric).not.toBeNull();
+  });
+});
+
+describe("sequence tie-breaking (section 26.6)", () => {
+  interface TieInit {
+    event_id: string;
+    sequence: number;
+    operation_id: string;
+    tag: string;
+  }
+
+  function tieExchange(init: TieInit): TraceEvent {
+    return exchange({
+      event_id: init.event_id,
+      sequence: init.sequence,
+      operation_id: init.operation_id,
+      method: "POST",
+      path: "/computers",
+      status: 200,
+      request_body: jsonBody({ tag: init.tag }),
+      response_body: jsonBody({ tag: init.tag })
+    });
+  }
+
+  /**
+   * Two probes carry two tags, and two confirmations echo them. Exactly
+   * two complete matches exist: (evt-0001, evt-0003) with tag aaa and
+   * (evt-0002, evt-0004) with tag bbb.
+   */
+  function tieEvents(): TraceEvent[] {
+    return [
+      tieExchange({
+        event_id: "evt-0001",
+        sequence: 1,
+        operation_id: "probeComputer",
+        tag: "aaa"
+      }),
+      tieExchange({
+        event_id: "evt-0002",
+        sequence: 2,
+        operation_id: "probeComputer",
+        tag: "bbb"
+      }),
+      tieExchange({
+        event_id: "evt-0003",
+        sequence: 3,
+        operation_id: "confirmComputer",
+        tag: "aaa"
+      }),
+      tieExchange({
+        event_id: "evt-0004",
+        sequence: 4,
+        operation_id: "confirmComputer",
+        tag: "bbb"
+      })
+    ];
+  }
+
+  function tieRubric(): Rubric {
+    const document: Json = {
+      rubric_version: 1,
+      id: "tie-break",
+      scoring: { method: "weighted_binary", pass_threshold: 1 },
+      checks: [
+        {
+          id: "probe_then_confirm",
+          kind: "sequence",
+          weight: 1,
+          required: true,
+          match: "any",
+          steps: [
+            {
+              id: "probe",
+              where:
+                'event.operation.operation_id == "probeComputer" && ' +
+                'event.request.body.kind == "json"',
+              capture: { tag: "event.request.body.value.tag" }
+            },
+            {
+              id: "confirm",
+              where:
+                'event.operation.operation_id == "confirmComputer" && ' +
+                'event.request.body.kind == "json" && ' +
+                "event.request.body.value.tag == vars.tag"
+            }
+          ]
+        }
+      ],
+      signals: []
+    };
+    return loadFixture(document);
+  }
+
+  it("selects the lexicographically smallest complete event tuple", () => {
+    const result = evaluate(tieRubric(), { events: tieEvents() });
+    const flow = checkOf(result, "probe_then_confirm");
+    expect(flow.status).toBe("passed");
+    // (evt-0001, evt-0003) sorts before (evt-0002, evt-0004).
+    expect(flow.eventIds).toEqual(["evt-0001", "evt-0003"]);
+    expect(flow.captures).toEqual({ tag: "aaa" });
+    expect(flow.steps.map((step) => step.event_id)).toEqual([
+      "evt-0001",
+      "evt-0003"
+    ]);
+    expect(result.status).toBe("passed");
+  });
+
+  it("picks the same tuple on a repeat evaluation", () => {
+    const first = evaluate(tieRubric(), { events: tieEvents() });
+    const second = evaluate(tieRubric(), { events: tieEvents() });
+    expect(second.checks[0]?.eventIds).toEqual(first.checks[0]?.eventIds);
+    expect(second.checks[0]?.eventIds).toEqual(["evt-0001", "evt-0003"]);
+  });
+});
+
+describe("required checks and threshold (section 26.5)", () => {
+  function jointRubric(requiredFlowFails: boolean, heavyWeight: number): Json {
+    return {
+      rubric_version: 1,
+      id: "joint-pass-rule",
+      scoring: { method: "weighted_binary", pass_threshold: 0.5 },
+      checks: [
+        {
+          id: "flow",
+          kind: "sequence",
+          weight: 1,
+          required: true,
+          match: "any",
+          steps: [
+            {
+              id: "pause",
+              where:
+                'event.operation.operation_id == "pauseComputer" && ' +
+                `event.response.status ${requiredFlowFails ? ">=" : "<"} 300`
+            }
+          ]
+        },
+        {
+          id: "heavy_extra",
+          kind: "predicate",
+          weight: heavyWeight,
+          required: false,
+          expression: requiredFlowFails ? "true" : "false"
+        }
+      ],
+      signals: []
+    };
+  }
+
+  it("stays failed when the score passes but a required check fails", () => {
+    const result = evaluate(loadFixture(jointRubric(true, 9)));
+    // Every non-required check passed and the score meets the threshold.
+    expect(result.passedWeight).toBe(9);
+    expect(result.totalWeight).toBe(10);
+    expect(result.score).toBeCloseTo(0.9, 12);
+    expect(result.score).toBeGreaterThanOrEqual(0.5);
+    const flow = checkOf(result, "flow");
+    expect(flow.status).toBe("failed");
+    expect(flow.required).toBe(true);
+    expect(checkOf(result, "heavy_extra").status).toBe("passed");
+    expect(result.status).toBe("failed");
+  });
+
+  it("stays failed when required checks pass but the score misses the threshold", () => {
+    const result = evaluate(loadFixture(jointRubric(false, 9)));
+    const flow = checkOf(result, "flow");
+    expect(flow.status).toBe("passed");
+    expect(flow.required).toBe(true);
+    expect(checkOf(result, "heavy_extra").status).toBe("failed");
+    expect(checkOf(result, "heavy_extra").required).toBe(false);
+    expect(result.score).toBeCloseTo(0.1, 12);
+    expect(result.score).toBeLessThan(0.5);
+    expect(result.status).toBe("failed");
   });
 });

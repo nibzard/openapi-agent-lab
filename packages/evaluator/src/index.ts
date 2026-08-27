@@ -56,6 +56,7 @@ export type {
 } from "./eval-doc.ts";
 export {
   DEFAULT_EVALUATOR_LIMITS,
+  REPORT_ARTIFACT_REF,
   evaluateRubric,
   toEvaluation
 } from "./evaluate.ts";
