@@ -13,7 +13,9 @@ const doc = JSON.parse(readFileSync(path, "utf8"));
 const [cmd, id, status] = process.argv.slice(2);
 
 function usage() {
-  console.error("usage: todo.mjs set <ID> <todo|doing|blocked|done> | show <ID> | remaining");
+  console.error(
+    "usage: todo.mjs set <ID> <todo|doing|blocked|done> | show <ID> | remaining"
+  );
   process.exit(2);
 }
 

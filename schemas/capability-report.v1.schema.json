@@ -1,0 +1,415 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/capability-report.v1.json",
+  "title": "CapabilityReport",
+  "description": "Machine-readable support assessment produced before any server or agent starts. Field-for-field mirror of the CapabilityReport types in @oal/capability.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "contract_semantic_sha256",
+    "source",
+    "counts",
+    "operations",
+    "features",
+    "missing_operation_ids",
+    "duplicate_operation_ids",
+    "tool_name_collisions",
+    "recommendations",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "CapabilityReport"
+    },
+    "contract_semantic_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["openapi_version", "media_type", "entrypoint"],
+      "properties": {
+        "openapi_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "entrypoint": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operations", "security_schemes"],
+      "properties": {
+        "operations": {
+          "$ref": "#/$defs/supportCounts"
+        },
+        "security_schemes": {
+          "$ref": "#/$defs/supportCounts"
+        }
+      }
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "uid",
+          "operation_id",
+          "method",
+          "path_template",
+          "level",
+          "reason_codes",
+          "surfaces"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^path:[A-Z]+ [^ ]+$"
+          },
+          "uid": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "operation_id": {
+            "type": ["string", "null"]
+          },
+          "method": {
+            "type": "string",
+            "pattern": "^[A-Z]+$"
+          },
+          "path_template": {
+            "type": "string",
+            "minLength": 1
+          },
+          "level": {
+            "$ref": "#/$defs/supportLevel"
+          },
+          "reason_codes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "surfaces": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "name"],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "parameter",
+                    "request_media_type",
+                    "response_selector",
+                    "response_media_type",
+                    "security_alternative",
+                    "callback",
+                    "webhook",
+                    "schema",
+                    "operation"
+                  ]
+                },
+                "name": {
+                  "type": ["string", "null"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "name", "level", "reason_codes", "operation_keys"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "serialization",
+              "media_type",
+              "security_flow",
+              "schema",
+              "callback",
+              "webhook",
+              "link",
+              "response_generation"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "level": {
+            "$ref": "#/$defs/supportLevel"
+          },
+          "reason_codes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "operation_keys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^path:[A-Z]+ [^ ]+$"
+            }
+          }
+        }
+      }
+    },
+    "missing_operation_ids": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "duplicate_operation_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "tool_name_collisions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "recommendations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_mode_viability",
+        "scenario_requirements",
+        "direct_tools",
+        "catalog_tools",
+        "recommended_exposure",
+        "strict_blockers"
+      ],
+      "properties": {
+        "contract_mode_viability": {
+          "type": "string",
+          "enum": ["viable", "partial", "not_viable"]
+        },
+        "scenario_requirements": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "direct_tools": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "viable",
+            "operation_count",
+            "serialized_schema_bytes",
+            "max_operations",
+            "max_schema_bytes",
+            "reason_codes"
+          ],
+          "properties": {
+            "viable": {
+              "type": "boolean"
+            },
+            "operation_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "serialized_schema_bytes": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            },
+            "max_operations": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "max_schema_bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "reason_codes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "catalog_tools": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["viable", "reason_codes"],
+          "properties": {
+            "viable": {
+              "type": "boolean"
+            },
+            "reason_codes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "recommended_exposure": {
+          "type": "string",
+          "enum": ["raw-http", "direct-tools", "catalog-tools"]
+        },
+        "strict_blockers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/diagnostic"
+      }
+    }
+  },
+  "$defs": {
+    "supportLevel": {
+      "type": "string",
+      "enum": ["supported", "approximated", "requires_scenario", "unsupported"]
+    },
+    "supportCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "supported",
+        "approximated",
+        "requires_scenario",
+        "unsupported"
+      ],
+      "properties": {
+        "supported": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "approximated": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requires_scenario": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unsupported": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "severity",
+        "phase",
+        "code",
+        "message",
+        "document_uri",
+        "json_pointer",
+        "operation_key",
+        "retryable",
+        "related",
+        "details"
+      ],
+      "properties": {
+        "severity": {
+          "type": "string",
+          "enum": ["info", "warning", "error"]
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "ingest",
+            "compile",
+            "preflight",
+            "serve",
+            "run",
+            "evaluate",
+            "report"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9-]*$",
+          "minLength": 3
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "document_uri": {
+          "type": ["string", "null"]
+        },
+        "json_pointer": {
+          "type": ["string", "null"]
+        },
+        "operation_key": {
+          "type": ["string", "null"],
+          "pattern": "^path:[A-Z]+ [^ ]+$"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "related": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["document_uri", "json_pointer"],
+            "properties": {
+              "document_uri": {
+                "type": "string",
+                "minLength": 1
+              },
+              "json_pointer": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "details": {
+          "description": "Free-form machine-readable detail values."
+        }
+      }
+    }
+  }
+}
