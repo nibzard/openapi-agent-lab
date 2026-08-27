@@ -147,6 +147,19 @@ export function smokeAdapter(): MockAgentAdapter {
   });
 }
 
+/**
+ * A participant of the smoke pack that makes no api request: it starts,
+ * completes its turn, and files the same valid report.
+ */
+export function silentAdapter(): MockAgentAdapter {
+  return new MockAgentAdapter({
+    model: "mock-model-1",
+    requests: [],
+    events: [{ channel: "stdout", kind: "turn.completed", text: "done" }],
+    finalText: SMOKE_REPORT
+  });
+}
+
 /** Repository root, found the way the testkit finds it. */
 export function repoRoot(): string {
   return findRepoRoot();

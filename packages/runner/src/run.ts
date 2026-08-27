@@ -378,7 +378,10 @@ function defaultExposure(plan: FrozenPlan, pack: LoadedPack): ExposureFactory {
     visibility: "discoverable",
     documentation: {
       sanitizedContract: (baseUrl: string) =>
-        sanitizeParticipantContract(entry, settings, baseUrl).text,
+        sanitizeParticipantContract(entry, settings, baseUrl, {
+          entrypoint: plan.contract.entrypoint,
+          documents: plan.contract.documents
+        }).text,
       candidates: { openapi: true }
     }
   });

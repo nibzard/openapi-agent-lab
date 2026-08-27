@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { request as httpRequest } from "node:http";
 import type { IncomingMessage } from "node:http";
+import net from "node:net";
+import childProcess from "node:child_process";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import { LIMIT_DEFAULTS, type LimitTable } from "@oal/config";
+import { sha256Hex } from "@oal/core";
 import type {
   ContractIR,
   OperationIR,
@@ -10,7 +16,7 @@ import type {
   SchemaIR,
   SecuritySchemeIR
 } from "@oal/contract-ir";
-import type { TraceEvent } from "@oal/evidence";
+import { EventStream, JsonlSink, type TraceEvent } from "@oal/evidence";
 import { mintRunCredentials } from "@oal/gateway";
 
 import {
@@ -167,6 +173,46 @@ interface Exchange {
   readonly body: string;
 }
 
+/**
+ * A contract with one POST operation that accepts a JSON body, so tests can
+ * drive request bodies and query strings carrying URLs.
+ */
+function postingContract(): ContractIR {
+  const base = contract({
+    operations: [
+      operation({}),
+      operation({
+        key: "path:POST /things",
+        uid: "op_things_create",
+        method: "POST",
+        tool_name: "create_thing",
+        request_body: {
+          required: true,
+          description: null,
+          content: [
+            {
+              media_type: "application/json",
+              schema_ref: "sch_input",
+              examples: [],
+              support: "supported",
+              support_reason_codes: []
+            }
+          ],
+          source_pointer: ""
+        },
+        responses: [response({ selector: "201", status: 201 })]
+      })
+    ]
+  });
+  return {
+    ...base,
+    schemas: {
+      ...base.schemas,
+      sch_input: schema("sch_input", { type: "object" })
+    }
+  };
+}
+
 /** A trace sink the test can read back event by event. */
 interface EventSink extends TraceWriter {
   readonly events: unknown[];
@@ -214,6 +260,50 @@ class GatedTrace implements EventSink {
     if (this.events.length === 1) {
       await this.gate;
     }
+  }
+
+  open(): void {
+    this.release();
+  }
+}
+
+/**
+ * A trace that persists through the production event stream, records the
+ * order completions arrive, and holds the first ingress until the test
+ * opens it.
+ */
+class IngressOrderTrace implements EventSink {
+  readonly events: unknown[] = [];
+  readonly completions: number[] = [];
+  private release: () => void = () => undefined;
+  private signal: () => void = () => undefined;
+  /** Resolves once the first request reserved its sequence. */
+  readonly firstIngress: Promise<void> = new Promise<void>((resolve) => {
+    this.signal = resolve;
+  });
+  private readonly gate: Promise<void> = new Promise<void>((resolve) => {
+    this.release = resolve;
+  });
+
+  constructor(private readonly stream: EventStream) {}
+
+  reserve(): { sequence: number; event_id: string } {
+    const slot = this.stream.reserve();
+    if (slot.sequence === 1) {
+      this.signal();
+    }
+    return slot;
+  }
+
+  async complete(event: TraceEvent): Promise<void> {
+    if (event.sequence === 1) {
+      await this.gate;
+    }
+    await this.stream.complete(
+      event as unknown as Parameters<EventStream["complete"]>[0]
+    );
+    this.completions.push(event.sequence);
+    this.events.push(event);
   }
 
   open(): void {
@@ -346,6 +436,59 @@ function portOf(handle: ExposureHandle): number {
     throw new Error("The server record carries no port.");
   }
   return port;
+}
+
+/** The connect target of one socket connect call, whatever its shape. */
+function connectTargetOf(args: readonly unknown[]): {
+  host: string;
+  port: number;
+} {
+  const first = args[0];
+  if (typeof first === "number") {
+    return { host: "127.0.0.1", port: first };
+  }
+  if (typeof first === "string") {
+    return { host: first, port: Number(args[1] ?? 0) };
+  }
+  if (typeof first === "object" && first !== null) {
+    const options = first as {
+      host?: unknown;
+      hostname?: unknown;
+      port?: unknown;
+    };
+    const rawHost = options.host ?? options.hostname;
+    const rawPort = options.port;
+    return {
+      host:
+        typeof rawHost === "string"
+          ? rawHost
+          : typeof rawHost === "number"
+            ? String(rawHost)
+            : "127.0.0.1",
+      port: typeof rawPort === "number" ? rawPort : Number(rawPort ?? 0)
+    };
+  }
+  return { host: "unknown", port: 0 };
+}
+
+/** Snapshot one directory tree: sorted file paths with content digests. */
+async function snapshotTree(root: string): Promise<string[]> {
+  const entries: string[] = [];
+  const walk = async (relative: string): Promise<void> => {
+    for (const entry of await readdir(path.join(root, relative), {
+      withFileTypes: true
+    })) {
+      const child = relative === "" ? entry.name : `${relative}/${entry.name}`;
+      if (entry.isDirectory()) {
+        await walk(child);
+      } else if (entry.isFile()) {
+        const bytes = await readFile(path.join(root, child), "utf8");
+        entries.push(`${child}:${sha256Hex(bytes)}`);
+      }
+    }
+  };
+  await walk("");
+  return entries.sort();
 }
 
 describe("createLoopbackExposure", () => {
@@ -1024,6 +1167,255 @@ describe("runtime controls", () => {
     } finally {
       gated.open();
       await server.handle.close();
+    }
+  });
+
+  it("records exactly one unmatched exchange for an unknown path", async () => {
+    const server = await startServer();
+    try {
+      const response = await exchange(server.handle, "GET", "/not-a-route");
+      expect(response.status).toBe(404);
+      expect(problemCode(response.body)).toBe("route_not_found");
+      expect(documentationEvents(server.trace)).toBe(0);
+      expect(server.trace.events.length).toBe(1);
+      const event = firstApiEvent(server.trace);
+      expect((event["operation"] as Record<string, unknown>)["matched"]).toBe(
+        false
+      );
+      expect((event["error"] as Record<string, unknown>)["code"]).toBe(
+        "route_not_found"
+      );
+    } finally {
+      await server.handle.close();
+    }
+  });
+
+  it("records exactly one unmatched exchange for a wrong method", async () => {
+    const server = await startServer();
+    try {
+      const response = await exchange(server.handle, "DELETE", "/things");
+      expect(response.status).toBe(405);
+      expect(problemCode(response.body)).toBe("method_not_allowed");
+      expect(response.headers["allow"]).toBe("GET");
+      expect(documentationEvents(server.trace)).toBe(0);
+      expect(server.trace.events.length).toBe(1);
+      const event = firstApiEvent(server.trace);
+      expect((event["operation"] as Record<string, unknown>)["matched"]).toBe(
+        false
+      );
+      expect((event["error"] as Record<string, unknown>)["code"]).toBe(
+        "method_not_allowed"
+      );
+    } finally {
+      await server.handle.close();
+    }
+  });
+
+  it("executes two identical posts with one idempotency key", async () => {
+    // A bare contract declares no idempotency behavior, so the same key on
+    // the same request must not short-circuit the second execution.
+    const server = await startServer({ contract: postingContract() });
+    try {
+      const headers = {
+        "content-type": "application/json",
+        "idempotency-key": "key-42"
+      };
+      const body = JSON.stringify({ label: "same" });
+      const first = await exchange(server.handle, "POST", "/things", {
+        headers,
+        body
+      });
+      const second = await exchange(server.handle, "POST", "/things", {
+        headers,
+        body
+      });
+      expect(first.status).toBe(201);
+      expect(second.status).toBe(201);
+      expect(neutralShape(first.body)).toBe(neutralShape(second.body));
+
+      const events = apiEvents(server.trace);
+      expect(events.length).toBe(2);
+      for (const event of events) {
+        expect((event["operation"] as Record<string, unknown>)["matched"]).toBe(
+          true
+        );
+        expect(
+          (event["idempotency"] as Record<string, unknown>)["status"]
+        ).toBe("not_requested");
+        expect((event["backend"] as Record<string, unknown>)["outcome"]).toBe(
+          "handled"
+        );
+        expect(
+          (event["replay"] as Record<string, unknown>)["classification"]
+        ).toBe("full");
+      }
+      expect(events.map((event) => event["event_id"])).toEqual([
+        "req_00000001",
+        "req_00000002"
+      ]);
+    } finally {
+      await server.handle.close();
+    }
+  });
+
+  it("records concurrent exchanges in ingress order, not completion order", async () => {
+    const scratch = await mkdtemp(path.join(tmpdir(), "oal-exposure-order-"));
+    const sink = await JsonlSink.open(path.join(scratch, "trace.jsonl"));
+    const stream = EventStream.open(sink, "req");
+    const trace = new IngressOrderTrace(stream);
+    const server = await startServer({ contract: postingContract(), trace });
+    try {
+      const headers = { "content-type": "application/json" };
+      const first = exchange(server.handle, "POST", "/things", {
+        headers,
+        body: JSON.stringify({ n: 1 })
+      });
+      await trace.firstIngress;
+      const second = exchange(server.handle, "POST", "/things", {
+        headers,
+        body: JSON.stringify({ n: 2 })
+      });
+      const third = exchange(server.handle, "POST", "/things", {
+        headers,
+        body: JSON.stringify({ n: 3 })
+      });
+      // The later exchanges finish and settle while the first one is held.
+      expect((await second).status).toBe(201);
+      expect((await third).status).toBe(201);
+      expect(trace.completions).toEqual([2, 3]);
+      trace.open();
+      expect((await first).status).toBe(201);
+      expect(trace.completions).toEqual([2, 3, 1]);
+
+      const recorded = (
+        await readFile(path.join(scratch, "trace.jsonl"), "utf8")
+      )
+        .trim()
+        .split("\n")
+        .map(
+          (line) => (JSON.parse(line) as Record<string, unknown>)["sequence"]
+        );
+      expect(recorded).toEqual([1, 2, 3]);
+      const operations = apiEvents(trace).map(
+        (event) => (event["operation"] as Record<string, unknown>)["matched"]
+      );
+      expect(operations).toEqual([true, true, true]);
+    } finally {
+      trace.open();
+      await server.handle.close();
+      await rm(scratch, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("egress and process guards", () => {
+  /** A request whose query and body both carry URL payloads. */
+  const URL_QUERY =
+    "/things?redirect=http://169.254.169.254/latest/meta-data/" +
+    "&peer=http://example.invalid/hook";
+  const URL_BODY = JSON.stringify({
+    metadata: "http://169.254.169.254/",
+    fallback: "http://example.invalid/"
+  });
+
+  it("serves URL-laden requests without any other socket connect", async () => {
+    // Patching net.Socket.prototype.connect also governs TLS sockets:
+    // tls.TLSSocket inherits connect from net.Socket.
+    const server = await startServer({ contract: postingContract() });
+    const port = portOf(server.handle);
+    // Capture the original through a plain-function view: the class method
+    // type would flag the detached reference.
+    const socketPrototype = net.Socket.prototype as unknown as {
+      connect: (...args: unknown[]) => net.Socket;
+    };
+    const connect = socketPrototype.connect;
+    const denied: string[] = [];
+    let allowed = 0;
+    const loopback = new Set([
+      "127.0.0.1",
+      "localhost",
+      "::1",
+      "::ffff:127.0.0.1"
+    ]);
+    const guarded = function guardedConnect(
+      this: net.Socket,
+      ...args: unknown[]
+    ): net.Socket {
+      const target = connectTargetOf(args);
+      const unspecified = !Number.isInteger(target.port) || target.port <= 0;
+      if (loopback.has(target.host) && (target.port === port || unspecified)) {
+        allowed += 1;
+        return (connect as (...call: unknown[]) => net.Socket).apply(
+          this,
+          args
+        );
+      }
+      denied.push(`${target.host}:${target.port}`);
+      throw new Error(
+        `Blocked socket connect to ${target.host}:${target.port}.`
+      );
+    } as unknown as typeof net.Socket.prototype.connect;
+    net.Socket.prototype.connect = guarded;
+    try {
+      const response = await exchange(server.handle, "POST", URL_QUERY, {
+        headers: { "content-type": "application/json" },
+        body: URL_BODY
+      });
+      expect(response.status).toBe(201);
+      expect(denied).toEqual([]);
+      expect(allowed).toBeGreaterThan(0);
+      const event = firstApiEvent(server.trace);
+      expect((event["operation"] as Record<string, unknown>)["matched"]).toBe(
+        true
+      );
+      expect((event["backend"] as Record<string, unknown>)["outcome"]).toBe(
+        "handled"
+      );
+    } finally {
+      socketPrototype.connect = connect;
+      await server.handle.close();
+    }
+  });
+
+  it("serves URL-laden requests without spawning any process", async () => {
+    const server = await startServer({ contract: postingContract() });
+    const workspace = await mkdtemp(path.join(tmpdir(), "oal-exposure-cp-"));
+    await writeFile(path.join(workspace, "openapi.json"), "{}", "utf8");
+    await writeFile(
+      path.join(workspace, "prompt.txt"),
+      "call the api\n",
+      "utf8"
+    );
+    const before = await snapshotTree(workspace);
+    const spawn: typeof childProcess.spawn = childProcess.spawn;
+    const exec: typeof childProcess.exec = childProcess.exec;
+    const spawns: string[] = [];
+    const refuse = (kind: string) =>
+      function refused(...args: unknown[]): never {
+        spawns.push(`${kind}:${String(args[0])}`);
+        throw new Error(`Blocked ${kind} call.`);
+      };
+    childProcess.spawn = refuse(
+      "spawn"
+    ) as unknown as typeof childProcess.spawn;
+    childProcess.exec = refuse("exec") as unknown as typeof childProcess.exec;
+    try {
+      const response = await exchange(server.handle, "POST", URL_QUERY, {
+        headers: { "content-type": "application/json" },
+        body: URL_BODY
+      });
+      expect(response.status).toBe(201);
+      expect(spawns).toEqual([]);
+      expect(await snapshotTree(workspace)).toEqual(before);
+      const event = firstApiEvent(server.trace);
+      expect((event["operation"] as Record<string, unknown>)["matched"]).toBe(
+        true
+      );
+    } finally {
+      childProcess.spawn = spawn;
+      childProcess.exec = exec;
+      await server.handle.close();
+      await rm(workspace, { recursive: true, force: true });
     }
   });
 });

@@ -8,12 +8,13 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { sha256Hex } from "@oal/core";
+import { sha256Hex, type Json } from "@oal/core";
 import { ArtifactStore } from "@oal/evidence";
+import { compileOpenApi } from "@oal/openapi";
 
 import {
   assertPreflightClean,
@@ -31,6 +32,7 @@ import {
   readStageList,
   readTraceEvents,
   schemaDirectory,
+  silentAdapter,
   smokeAdapter,
   steelAdapter,
   steelPackRoot,
@@ -464,9 +466,277 @@ describe("runner integration: fake-agent trials through the loopback exposure", 
       expect(evaluations[0]).toBe(evaluations[1]);
     }
   );
+
+  it(
+    "completes a trial whose participant makes no api request",
+    { timeout: 30000 },
+    async () => {
+      // A silent participant is a captured task outcome, never an
+      // infrastructure one: the turn completes, the report validates, and
+      // the frozen evidence set stays complete and immutable.
+      const adapter = silentAdapter();
+      const scratch = await mkdtemp(path.join(tmpdir(), "oal-it-silent-"));
+      const packDir = await writeSmokePack(scratch);
+      const harness = await prepareTrial({
+        label: "oal-it-silent-",
+        packDir,
+        evalId: "smoke",
+        batchId: "it-silent-participant",
+        adapter
+      });
+      try {
+        const outcome = await runTrial({
+          store: harness.store,
+          plan: harness.plan,
+          pack: harness.pack,
+          adapter,
+          index: 0,
+          exposure: createLoopbackExposure,
+          now: fixedClock()
+        });
+
+        expect(outcome.disposition).toBe("completed");
+        expect(outcome.reasonCode).toBe("OAL-RUN-DISPOSITION-COMPLETED");
+        expect(outcome.censorClass).toBe("none");
+        expect(outcome.evidenceIntegrity).toBe("intact");
+        expect(outcome.reportStatus).toBe("valid");
+        expect(outcome.apiRequests).toBe(0);
+        expect(outcome.exit).toEqual({ code: 0, signal: null });
+
+        const root = trialRootOf(harness.plan.batchId, outcome.runId);
+        for (const artifact of EXPECTED_ARTIFACTS) {
+          expect(await harness.store.exists(`${root}/${artifact}`)).toBe(true);
+        }
+
+        // No request means no api_started stage; every other stage of a
+        // clean run still happens.
+        const stages = await readStageList(harness.store, root);
+        expect(stages).toEqual(
+          EXPECTED_STAGES.filter((stage) => stage !== "api_started")
+        );
+
+        // The trace exists, and stays empty.
+        expect(await harness.store.read(`${root}/trace.jsonl`)).toBe("");
+
+        // The honest evaluation: the report checks pass, the call check
+        // fails, and nothing turns into an infrastructure error.
+        const evaluation = await readJsonObject(
+          harness.store,
+          `${root}/evaluation.json`
+        );
+        expect(evaluation["status"]).toBe("failed");
+        expect(evaluation["passed_weight"]).toBe(2);
+        expect(evaluation["total_weight"]).toBe(4);
+        expect(evaluation["infrastructure_errors"]).toEqual([]);
+        expect(outcome.evaluation).toEqual({
+          status: "failed",
+          score: 0.5,
+          passedWeight: 2,
+          totalWeight: 4,
+          valid: true
+        });
+
+        // The ledger is write-once: replaying a terminal or initial record
+        // never rewrites history.
+        await expect(
+          harness.store.writeOnce(`${root}/run.completed.json`, "{}\n")
+        ).rejects.toThrowError(/already exists/u);
+        await expect(
+          harness.store.writeOnce(`${root}/run.started.json`, "{}\n")
+        ).rejects.toThrowError(/already exists/u);
+        const completed = await readJsonObject(
+          harness.store,
+          `${root}/run.completed.json`
+        );
+        expect(completed["disposition"]).toBe("completed");
+        expect(completed["evidence_integrity"]).toBe("intact");
+      } finally {
+        await harness.clean();
+      }
+    }
+  );
+
+  it(
+    "copies a two-file contract into the workspace fully bundled",
+    { timeout: 30000 },
+    async () => {
+      // The pack contract spans two files joined by a relative reference.
+      // The participant copy in the workspace must resolve every reference
+      // on its own and declare the same operations as the scoped compile.
+      const scratch = await mkdtemp(path.join(tmpdir(), "oal-it-twofile-"));
+      const packDir = await writeSmokePack(scratch);
+      await writeFile(
+        path.join(packDir, "contract/openapi.json"),
+        `${JSON.stringify(
+          {
+            openapi: "3.1.0",
+            info: { title: "Smoke Ping", version: "1.0.0" },
+            servers: [{ url: "http://127.0.0.1:0" }],
+            paths: {
+              "/v1/ping": {
+                get: {
+                  operationId: "ping",
+                  summary: "Answer with one constant status value.",
+                  responses: {
+                    200: {
+                      description: "Constant status document.",
+                      content: {
+                        "application/json": {
+                          schema: {
+                            $ref: "components.json#/components/schemas/PingStatus"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          null,
+          2
+        )}\n`,
+        "utf8"
+      );
+      await writeFile(
+        path.join(packDir, "contract/components.json"),
+        `${JSON.stringify(
+          {
+            components: {
+              schemas: {
+                PingStatus: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["status"],
+                  properties: { status: { type: "string", enum: ["ok"] } }
+                }
+              }
+            }
+          },
+          null,
+          2
+        )}\n`,
+        "utf8"
+      );
+      const adapter = smokeAdapter();
+      const harness = await prepareTrial({
+        label: "oal-it-twofile-",
+        packDir,
+        evalId: "smoke",
+        batchId: "it-two-file-contract",
+        adapter
+      });
+      try {
+        // The frozen plan carries both documents of the contract set.
+        expect(
+          harness.plan.contract.documents["contract/components.json"]
+        ).toBeDefined();
+        expect(
+          harness.plan.contract.documents["contract/openapi.json"]
+        ).toBeDefined();
+
+        const outcome = await runTrial({
+          store: harness.store,
+          plan: harness.plan,
+          pack: harness.pack,
+          adapter,
+          index: 0,
+          exposure: createLoopbackExposure,
+          now: fixedClock()
+        });
+        expect(outcome.disposition).toBe("completed");
+        expect(outcome.reportStatus).toBe("valid");
+        expect(outcome.apiRequests).toBe(1);
+
+        const root = trialRootOf(harness.plan.batchId, outcome.runId);
+        const copyText = await harness.store.read(
+          `${root}/workspace/openapi.json`
+        );
+        const copy = JSON.parse(copyText) as Json;
+
+        // Every reference in the copy is internal and resolves, and the
+        // sibling document never lands in the workspace.
+        const refs = collectRefs(copy);
+        expect(refs).toEqual(["#/components/schemas/PingStatus"]);
+        expect(refPointerExists(copy, refs[0] ?? "")).toBe(true);
+        expect(
+          await harness.store.exists(`${root}/workspace/components.json`)
+        ).toBe(false);
+        const schemas = (
+          copy as { components?: { schemas?: Record<string, unknown> } }
+        ).components?.schemas;
+        expect(Object.keys(schemas ?? {})).toEqual(["PingStatus"]);
+
+        // The copy compiles alone, with the operation set of the scoped
+        // contract IR the trial itself ran.
+        const alone = compileOpenApi({
+          documents: { "openapi.json": copyText },
+          entrypoint: "openapi.json"
+        });
+        expect(alone.contract.operations.map((item) => item.key)).toEqual(
+          harness.plan.contract.ir.operations.map((item) => item.key)
+        );
+        expect(
+          alone.contract.operations.map((item) => item.operation_id)
+        ).toEqual(["ping"]);
+
+        // The one exchange the participant made still matched and served.
+        const trace = await readTraceEvents(harness.store, root);
+        expect(trace.length).toBe(1);
+        expect(trace[0]?.response?.status).toBe(200);
+      } finally {
+        await harness.clean();
+      }
+    }
+  );
 });
 
 /** Replace the loopback port in trace text. */
 function normalizePort(text: string): string {
   return text.replace(/127\.0\.0\.1:\d+/gu, "127.0.0.1:PORT");
+}
+
+/** Every `$ref` value in the document, in traversal order. */
+function collectRefs(value: Json, refs: string[] = []): string[] {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectRefs(item, refs);
+    }
+    return refs;
+  }
+  if (value === null || typeof value !== "object") {
+    return refs;
+  }
+  const ref = (value as Record<string, Json>)["$ref"];
+  if (typeof ref === "string") {
+    refs.push(ref);
+  }
+  for (const item of Object.values(value)) {
+    collectRefs(item, refs);
+  }
+  return refs;
+}
+
+/** True when one internal reference resolves inside the document. */
+function refPointerExists(document: Json, ref: string): boolean {
+  let current: Json = document;
+  for (const token of ref.slice(2).split("/")) {
+    if (Array.isArray(current)) {
+      const next = current[Number(token)];
+      if (next === undefined) {
+        return false;
+      }
+      current = next;
+      continue;
+    }
+    if (current === null || typeof current !== "object") {
+      return false;
+    }
+    const next = (current as Record<string, Json | undefined>)[token];
+    if (next === undefined) {
+      return false;
+    }
+    current = next;
+  }
+  return true;
 }

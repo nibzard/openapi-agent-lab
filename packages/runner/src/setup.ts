@@ -15,12 +15,14 @@ import {
   formatRfc3339,
   isJsonObject,
   jsonClone,
+  resolveJsonPointer,
   type Json,
   type JsonObject
 } from "@oal/core";
 import type { LimitTable } from "@oal/config";
 import type { ContractIR } from "@oal/contract-ir";
 import type { SecuritySchemeIR } from "@oal/contract-ir";
+import { splitRef } from "@oal/openapi";
 import {
   EventStream,
   type ArtifactStore,
@@ -231,14 +233,54 @@ function credentialAliases(contract: ContractIR): readonly string[] {
 }
 
 /**
+ * Sibling documents of a multi-file contract, keyed by the same normalized
+ * root-relative path the preflight froze.
+ */
+export interface ContractBundleInput {
+  /** Root-relative path of the entrypoint document, for example
+   * `contract/openapi.json`. */
+  readonly entrypoint: string;
+  /** Every document of the set, entrypoint included, keyed by normalized
+   * root-relative path. */
+  readonly documents: Readonly<Record<string, Json>>;
+}
+
+/** Component sections a bundled reference can land in. */
+const COMPONENT_SECTIONS: ReadonlySet<string> = new Set([
+  "schemas",
+  "responses",
+  "parameters",
+  "examples",
+  "requestBodies",
+  "headers",
+  "securitySchemes",
+  "links",
+  "callbacks",
+  "pathItems"
+]);
+
+/** Component names OpenAPI allows: word characters plus dots and dashes. */
+const COMPONENT_NAME = /^[A-Za-z0-9._-]+$/u;
+
+interface BundleState {
+  readonly root: JsonObject;
+  readonly documents: Readonly<Record<string, Json>>;
+  readonly entryUri: string;
+  /** Maps `uri + pointer` of an imported target to its internal ref. */
+  readonly imported: Map<string, string>;
+}
+
+/**
  * Build the sanitized participant contract for `file` visibility: deep
- * clone the entrypoint document, strip external documentation links, and
- * point every server entry at the live loopback base URL.
+ * clone the entrypoint document, strip external documentation links, point
+ * every declared server entry at the live loopback base URL, and bundle
+ * references that cross document boundaries into root components.
  */
 export function sanitizeParticipantContract(
   document: Json,
   settings: ContractSettings,
-  baseUrl: string
+  baseUrl: string,
+  bundle?: ContractBundleInput
 ): { text: string; warnings: readonly string[] } {
   const warnings: string[] = [];
   const clone = jsonClone(isJsonObject(document) ? document : {});
@@ -250,6 +292,7 @@ export function sanitizeParticipantContract(
         if (!isJsonObject(item)) {
           continue;
         }
+        delete item["externalDocs"];
         for (const operation of Object.values(item)) {
           if (isJsonObject(operation)) {
             delete operation["externalDocs"];
@@ -259,15 +302,254 @@ export function sanitizeParticipantContract(
     }
   }
   if (settings.replaceServers) {
-    clone["servers"] = [{ url: baseUrl }];
+    replaceDeclaredServers(clone, baseUrl);
+  }
+  if (settings.bundleRefs && bundle !== undefined) {
+    const state: BundleState = {
+      root: clone,
+      documents: bundle.documents,
+      entryUri: bundle.entrypoint,
+      imported: new Map()
+    };
+    rewriteRefsIn(clone, bundle.entrypoint, state, warnings);
+  }
+  if (settings.bundleRefs) {
+    auditRefs(clone, warnings);
   }
   const text = canonicalJson(clone as Json);
-  if (settings.bundleRefs && text.includes("$ref")) {
+  return { text, warnings: Object.freeze(warnings) };
+}
+
+/**
+ * Replace every declared servers array — root, path item, and operation —
+ * with the single live loopback entry.
+ */
+function replaceDeclaredServers(document: JsonObject, baseUrl: string): void {
+  document["servers"] = [{ url: baseUrl }];
+  const paths = isJsonObject(document["paths"]) ? document["paths"] : null;
+  if (paths === null) {
+    return;
+  }
+  for (const item of Object.values(paths)) {
+    if (!isJsonObject(item)) {
+      continue;
+    }
+    if ("servers" in item) {
+      item["servers"] = [{ url: baseUrl }];
+    }
+    for (const operation of Object.values(item)) {
+      if (isJsonObject(operation) && "servers" in operation) {
+        operation["servers"] = [{ url: baseUrl }];
+      }
+    }
+  }
+}
+
+/** Rewrite every `$ref` under `value` into an internal components ref. */
+function rewriteRefsIn(
+  value: Json,
+  uri: string,
+  state: BundleState,
+  warnings: string[]
+): void {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      rewriteRefsIn(item, uri, state, warnings);
+    }
+    return;
+  }
+  if (!isJsonObject(value)) {
+    return;
+  }
+  const ref = value["$ref"];
+  if (typeof ref === "string") {
+    const internal = importTargetOf(ref, uri, state, warnings);
+    if (internal !== null) {
+      value["$ref"] = internal;
+    }
+  }
+  for (const [key, item] of Object.entries(value)) {
+    if (key !== "$ref") {
+      rewriteRefsIn(item, uri, state, warnings);
+    }
+  }
+}
+
+/**
+ * Resolve one reference site. Returns the internal replacement, or null
+ * when the reference must stay as it is.
+ */
+function importTargetOf(
+  ref: string,
+  uri: string,
+  state: BundleState,
+  warnings: string[]
+): string | null {
+  let target: { uri: string; pointer: string };
+  try {
+    target = splitRef(uri, ref);
+  } catch {
     warnings.push(
-      "The sanitized contract still declares a $ref; the pack requested bundled references."
+      `The sanitized contract keeps a reference the policy refused: ${ref}.`
+    );
+    return null;
+  }
+  if (target.uri === state.entryUri) {
+    // Root-internal references already resolve inside the entrypoint.
+    return null;
+  }
+  return importDocument(target.uri, stripHash(target.pointer), state, warnings);
+}
+
+/** Hoist one cross-document target into root components. */
+function importDocument(
+  uri: string,
+  pointer: string,
+  state: BundleState,
+  warnings: string[]
+): string | null {
+  const key = `${uri}#${pointer}`;
+  const known = state.imported.get(key);
+  if (known !== undefined) {
+    return known;
+  }
+  const document = state.documents[uri];
+  if (document === undefined) {
+    warnings.push(
+      `The sanitized contract cannot resolve ${key}: the document is absent.`
+    );
+    return null;
+  }
+  const value = resolveJsonPointer(document, pointer);
+  if (value === undefined) {
+    warnings.push(
+      `The sanitized contract cannot resolve ${key}: the pointer is absent.`
+    );
+    return null;
+  }
+  const copy = jsonClone(value);
+  if (!isJsonObject(copy)) {
+    warnings.push(
+      `The sanitized contract cannot bundle ${key}: the target is not an object.`
+    );
+    return null;
+  }
+  const slot = componentSlot(uri, pointer, state.root);
+  const internal = `#/components/${slot.section}/${slot.name}`;
+  // Register before the recursive copy so cyclic references terminate.
+  state.imported.set(key, internal);
+  rewriteRefsIn(copy, uri, state, warnings);
+  const components = componentsOf(state.root);
+  const section = isJsonObject(components[slot.section])
+    ? (components[slot.section] as JsonObject)
+    : {};
+  components[slot.section] = section;
+  section[slot.name] = copy;
+  return internal;
+}
+
+/** Pick the components section and a free name for one imported target. */
+function componentSlot(
+  uri: string,
+  pointer: string,
+  root: JsonObject
+): { section: string; name: string } {
+  const match = /^\/components\/([^/]+)\/([^/]+)$/u.exec(pointer);
+  const declaredSection = match === null ? undefined : match[1];
+  const declaredName = match === null ? undefined : match[2];
+  const section =
+    declaredSection !== undefined && COMPONENT_SECTIONS.has(declaredSection)
+      ? declaredSection
+      : "schemas";
+  const wanted =
+    declaredName !== undefined && COMPONENT_NAME.test(declaredName)
+      ? declaredName
+      : slugName(uri, pointer);
+  return { section, name: freeName(section, wanted, root) };
+}
+
+/** Build a valid component name from a pointer that has no natural one. */
+function slugName(uri: string, pointer: string): string {
+  const raw = `${uri}${pointer}`
+    .replace(/[^A-Za-z0-9._-]+/gu, "-")
+    .replace(/^-+|-+$/gu, "");
+  return raw === "" ? "bundled" : raw;
+}
+
+/** Suffix the name until it collides with no existing component. */
+function freeName(section: string, name: string, root: JsonObject): string {
+  const existing = sectionOf(root, section);
+  if (existing === null || !(name in existing)) {
+    return name;
+  }
+  let index = 2;
+  while (`${name}--${index}` in existing) {
+    index += 1;
+  }
+  return `${name}--${index}`;
+}
+
+function componentsOf(root: JsonObject): JsonObject {
+  const components = isJsonObject(root["components"]) ? root["components"] : {};
+  root["components"] = components;
+  return components;
+}
+
+function sectionOf(root: JsonObject, section: string): JsonObject | null {
+  const components = isJsonObject(root["components"])
+    ? (root["components"] as JsonObject)
+    : null;
+  if (components === null) {
+    return null;
+  }
+  const value = components[section];
+  return isJsonObject(value) ? value : null;
+}
+
+function stripHash(pointer: string): string {
+  return pointer.startsWith("#") ? pointer.slice(1) : pointer;
+}
+
+/**
+ * Warn about every reference that survived bundling: pointers that resolve
+ * nowhere inside the sanitized copy, and every external reference.
+ */
+function auditRefs(root: JsonObject, warnings: string[]): void {
+  walkRefs(root, root, warnings);
+}
+
+function walkRefs(value: Json, root: JsonObject, warnings: string[]): void {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      walkRefs(item, root, warnings);
+    }
+    return;
+  }
+  if (!isJsonObject(value)) {
+    return;
+  }
+  const ref = value["$ref"];
+  if (typeof ref === "string" && !resolvesInRoot(ref, root)) {
+    warnings.push(
+      `The sanitized contract keeps an unresolved reference: ${ref}.`
     );
   }
-  return { text, warnings: Object.freeze(warnings) };
+  for (const [key, item] of Object.entries(value)) {
+    if (key !== "$ref") {
+      walkRefs(item, root, warnings);
+    }
+  }
+}
+
+/** True when the reference points inside `root` and the target exists. */
+function resolvesInRoot(ref: string, root: JsonObject): boolean {
+  if (ref === "#") {
+    return true;
+  }
+  if (!ref.startsWith("#/")) {
+    return false;
+  }
+  return resolveJsonPointer(root, stripHash(ref)) !== undefined;
 }
 
 function buildToolEnvironment(input: {
@@ -406,6 +688,9 @@ export async function setupTrial(
   const credentials = mintRunCredentials(plan.contract.ir, trialSeed);
 
   const settings = contractSettings(pack);
+  // Create the trace artifact up front. A participant that makes no
+  // request still leaves a complete, empty api trace behind.
+  await store.writeOnce(`${relativeRoot}/trace.jsonl`, "");
   const trace = traceWriterOf(
     await store.openSink(`${relativeRoot}/trace.jsonl`)
   );
@@ -518,7 +803,11 @@ export async function setupTrial(
       sanitized = sanitizeParticipantContract(
         entry.document,
         settings,
-        liveExposure.baseUrl
+        liveExposure.baseUrl,
+        {
+          entrypoint: plan.contract.entrypoint,
+          documents: plan.contract.documents
+        }
       );
     }
 
@@ -645,7 +934,11 @@ export async function setupTrial(
         data_plane_scope: plan.dataPlaneScope,
         adapter_id: plan.adapter.id,
         trial_seed_id: trialSeed.slice(0, 12),
-        credential_names: [...liveExposure.credentialNames]
+        credential_names: [...liveExposure.credentialNames],
+        // What the adapter probe declared about its own enforcement. An
+        // advisory level never masquerades as an enforced boundary.
+        environment_separation: plan.adapter.probe.environmentSeparation,
+        tool_network_policy: plan.adapter.probe.toolNetworkPolicy
       } as unknown as JsonObject
     };
     await store.writeOnce(

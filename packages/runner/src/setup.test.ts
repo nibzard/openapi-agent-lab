@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { ArtifactStore } from "@oal/evidence";
-import { canonicalJson } from "@oal/core";
+import { canonicalJson, type Json } from "@oal/core";
+import { compileOpenApi } from "@oal/openapi";
 import { MockAgentAdapter } from "@oal/mock-adapter";
 import { findRepoRoot, loadSteelPack } from "@oal/testkit";
 
@@ -323,4 +324,215 @@ describe("sanitizeParticipantContract", () => {
     expect(parsed.servers).toEqual([{ url: "https://api.example.test" }]);
     expect(result.warnings).toEqual([]);
   });
+
+  it("rewrites servers declared at path-item and operation level", () => {
+    // OpenAPI allows a servers array at the document root, on a path item,
+    // and on one operation. Every level must land on the loopback base URL,
+    // because the participant may only learn the live exposure.
+    const document = {
+      openapi: "3.1.0",
+      servers: [{ url: "https://api.example.test/root" }],
+      paths: {
+        "/a": {
+          servers: [{ url: "https://api.example.test/path-a" }],
+          get: {
+            servers: [{ url: "https://api.example.test/op-get" }],
+            responses: { 200: { description: "ok" } }
+          },
+          post: {
+            responses: { 200: { description: "ok" } }
+          }
+        },
+        "/b": {
+          get: {
+            servers: [{ url: "https://api.example.test/b-get" }],
+            responses: { 200: { description: "ok" } }
+          }
+        }
+      }
+    };
+    const result = sanitizeParticipantContract(
+      document,
+      {
+        filename: "openapi.json",
+        stripExternalDocs: true,
+        replaceServers: true,
+        bundleRefs: true
+      },
+      "http://127.0.0.1:9"
+    );
+    const parsed = JSON.parse(result.text) as {
+      servers: unknown;
+      paths: Record<string, Record<string, unknown>>;
+    };
+    const loopback = [{ url: "http://127.0.0.1:9" }];
+    expect(parsed.servers).toEqual(loopback);
+    const itemA = parsed.paths["/a"];
+    const itemB = parsed.paths["/b"];
+    expect(itemA?.["servers"]).toEqual(loopback);
+    expect((itemA?.["get"] as Record<string, unknown>)["servers"]).toEqual(
+      loopback
+    );
+    expect(itemA?.["post"]).not.toHaveProperty("servers");
+    expect((itemB?.["get"] as Record<string, unknown>)["servers"]).toEqual(
+      loopback
+    );
+    expect(itemB).not.toHaveProperty("servers");
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("bundles a two-file contract into a self-contained copy", () => {
+    // The pack contract spans two files joined by a relative reference. The
+    // participant copy must resolve every reference on its own and declare
+    // the same operations as the scoped compile of the full set.
+    const entry = {
+      openapi: "3.1.0",
+      info: { title: "two-file", version: "1.0.0" },
+      servers: [{ url: "https://api.example.test" }],
+      paths: {
+        "/widgets": {
+          get: {
+            responses: {
+              200: {
+                description: "ok",
+                content: {
+                  "application/json": {
+                    schema: {
+                      $ref: "components.json#/components/schemas/Widget"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          post: {
+            requestBody: {
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "components.json#/components/schemas/WidgetInput"
+                  }
+                }
+              }
+            },
+            responses: { 201: { description: "created" } }
+          }
+        }
+      }
+    };
+    const components = {
+      components: {
+        schemas: {
+          Widget: {
+            type: "object",
+            properties: {
+              input: { $ref: "#/components/schemas/WidgetInput" },
+              peer: { $ref: "#/components/schemas/Peer" }
+            }
+          },
+          WidgetInput: { type: "object" },
+          Peer: { type: "string" }
+        }
+      }
+    };
+    const result = sanitizeParticipantContract(
+      entry,
+      {
+        filename: "openapi.json",
+        stripExternalDocs: true,
+        replaceServers: true,
+        bundleRefs: true
+      },
+      "http://127.0.0.1:9",
+      {
+        entrypoint: "contract/openapi.json",
+        documents: {
+          "contract/openapi.json": entry,
+          "contract/components.json": components
+        }
+      }
+    );
+    expect(result.warnings).toEqual([]);
+
+    const parsed = JSON.parse(result.text) as Json;
+    const refs = collectRefs(parsed);
+    expect(refs.length).toBeGreaterThanOrEqual(3);
+    for (const ref of refs) {
+      expect(ref.startsWith("#/components/")).toBe(true);
+      expect(refPointerExists(parsed, ref)).toBe(true);
+    }
+    // The bundled component tree carries every hoisted schema.
+    const bundledComponents = (
+      parsed as { components?: { schemas?: Record<string, unknown> } }
+    ).components?.schemas;
+    expect(Object.keys(bundledComponents ?? {}).sort()).toEqual([
+      "Peer",
+      "Widget",
+      "WidgetInput"
+    ]);
+
+    // The copy compiles alone, with the same operation set as the scoped
+    // compile of the original two-file set.
+    const scoped = compileOpenApi({
+      documents: {
+        "contract/openapi.json": canonicalJson(entry),
+        "contract/components.json": canonicalJson(components)
+      },
+      entrypoint: "contract/openapi.json"
+    });
+    const alone = compileOpenApi({
+      documents: { "openapi.json": result.text },
+      entrypoint: "openapi.json"
+    });
+    expect(alone.contract.operations.map((operation) => operation.key)).toEqual(
+      scoped.contract.operations.map((operation) => operation.key)
+    );
+    expect(alone.contract.operations.length).toBe(2);
+  });
 });
+
+/** Every `$ref` value in the document, in canonical traversal order. */
+function collectRefs(value: Json, refs: string[] = []): string[] {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectRefs(item, refs);
+    }
+    return refs;
+  }
+  if (value === null || typeof value !== "object") {
+    return refs;
+  }
+  const ref = (value as Record<string, Json>)["$ref"];
+  if (typeof ref === "string") {
+    refs.push(ref);
+  }
+  for (const item of Object.values(value)) {
+    collectRefs(item, refs);
+  }
+  return refs;
+}
+
+/** True when one internal reference resolves inside the document. */
+function refPointerExists(document: Json, ref: string): boolean {
+  let current: Json = document;
+  for (const token of ref.slice(2).split("/")) {
+    if (Array.isArray(current)) {
+      const index = Number(token);
+      const next = current[index];
+      if (next === undefined) {
+        return false;
+      }
+      current = next;
+      continue;
+    }
+    if (current === null || typeof current !== "object") {
+      return false;
+    }
+    const next = (current as Record<string, Json | undefined>)[token];
+    if (next === undefined) {
+      return false;
+    }
+    current = next;
+  }
+  return true;
+}

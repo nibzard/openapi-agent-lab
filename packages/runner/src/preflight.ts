@@ -7,8 +7,6 @@
  * compatibility, compute the paid-call plan, and require confirmation.
  */
 
-import { readFile } from "node:fs/promises";
-
 import {
   canonicalJsonSha256,
   diagnostic,
@@ -39,7 +37,12 @@ import {
   type EvalCase
 } from "@oal/evaluator";
 import type { Rubric } from "@oal/evaluator";
-import { compileOpenApi } from "@oal/openapi";
+import {
+  compileOpenApi,
+  loadDocumentSet,
+  parseSafeYaml,
+  resolveCompilerLimits
+} from "@oal/openapi";
 import {
   buildPackIr,
   contractIndexFromDocument,
@@ -203,6 +206,9 @@ export interface FrozenPlan {
     readonly semanticSha256: string;
     readonly executionSha256: string;
     readonly ir: ContractIR;
+    /** Parsed document set of the contract, keyed by root-relative path.
+     * Sibling documents exist only when the contract spans files. */
+    readonly documents: Readonly<Record<string, Json>>;
     readonly capabilityReport: CapabilityReport;
     readonly capabilityReportSha256: string;
   };
@@ -275,6 +281,21 @@ export function batchTrialRunId(batchId: string, index: number): string {
 
 function describe(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
+}
+
+/** Parse one contract document: JSON first, safe YAML second. */
+function parseDocumentText(relative: string, text: string): Json {
+  try {
+    return parseJsonStrict(text);
+  } catch {
+    try {
+      return parseSafeYaml(text);
+    } catch (cause) {
+      throw new Error(
+        `Document ${relative} parses as neither JSON nor YAML: ${describe(cause)}`
+      );
+    }
+  }
 }
 
 function str(value: Json | undefined): string | null {
@@ -675,6 +696,7 @@ export async function runPreflight(
   // Step 4: compile the contract and the capability report.
   let contractIr: ContractIR | null = null;
   let capability: CapabilityReport | null = null;
+  let bundleDocuments: Record<string, Json> | null = null;
   if (entry === undefined || entry.bytes === 0) {
     findings.push(
       error(
@@ -683,13 +705,31 @@ export async function runPreflight(
       )
     );
   } else {
-    const documents: Record<string, string> = {
-      [entry.path]: await readFile(entry.absolutePath, "utf8")
-    };
-    const compiled = compileOpenApi({ documents, entrypoint: entry.path });
-    findings.push(...compiled.contract.diagnostics);
-    contractIr = compiled.contract;
-    capability = compiled.report;
+    try {
+      const set = await loadDocumentSet(
+        pack.root,
+        entry.path,
+        resolveCompilerLimits()
+      );
+      const documents: Record<string, string> = {};
+      const parsed: Record<string, Json> = {};
+      for (const [relative, text] of set.documents) {
+        documents[relative] = text;
+        parsed[relative] = parseDocumentText(relative, text);
+      }
+      const compiled = compileOpenApi({ documents, entrypoint: entry.path });
+      findings.push(...compiled.contract.diagnostics);
+      contractIr = compiled.contract;
+      capability = compiled.report;
+      bundleDocuments = parsed;
+    } catch (cause) {
+      findings.push(
+        error(
+          PreflightCode.PackInvalid,
+          `The contract document set did not compile: ${describe(cause)}`
+        )
+      );
+    }
   }
   if (contractIr === null || capability === null || built.ir === null) {
     return { ok: false, findings, plan: null };
@@ -1096,6 +1136,7 @@ export async function runPreflight(
         semanticSha256,
         executionSha256,
         ir: contractIr,
+        documents: bundleDocuments ?? {},
         capabilityReport: capability,
         capabilityReportSha256: canonicalJsonSha256(
           capability as unknown as Json
