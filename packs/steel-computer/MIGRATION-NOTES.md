@@ -114,6 +114,23 @@ them was corrected, per the locked decision.
     assume a solver service. The idle fixture answers with epoch-zero
     timestamps and an empty task list, which is schema-valid but not
     realistic.
+20. **Paused-stop drift (`paused-stop-precondition`).** SPEC section
+    39.6 records that the broader Steel contract permits stopping a
+    running or paused computer while the prototype handler accepted
+    only running. Steel v1 publishes no stop operation; its stop
+    analog is `release_session`, and the published contract puts no
+    lifecycle precondition on it: the only parameter is the session
+    id and the request body is the empty nullable object. The pack
+    keeps that broader surface and does not correct the drift
+    silently. The release wiring is copied unchanged, behavior mode
+    stays `contract` so no handler enforces a running-only rule, and
+    the discrepancy is declared in `pack.yaml` under
+    `extensions.drift` with the shape documented in that file. The
+    loader passes the extensions map to the PackIR, so the entry
+    surfaces in pack diagnostics. A correction requires the section
+    39.6 sequence: a deliberate version bump, a changelog entry,
+    updated behavior tests, a decision confirmed against the Steel
+    source-of-truth documents, and a new cohort.
 
 ## Migration decisions
 
@@ -145,6 +162,13 @@ are decisions, not drift.
   `pack.version`, `api.baseUrl`, `api.contractFile`, `case.name`, and
   `case.input.*` appear in templates, all permitted by SPEC section
   19.2.
+- **Preserved drift is declared under `extensions.drift`.** The pack
+  schema keeps the `extensions` map free-form and the loader passes it
+  to the PackIR unchanged, so a `drift` list there is the diagnostic
+  surface of record for preserved discrepancies. Each entry carries
+  `id`, `status`, `summary`, and `note`; `status` stays `preserved`
+  until a deliberate version bump corrects the drift through the
+  section 39.6 sequence.
 
 ## Planned for 0.2.0
 
@@ -153,6 +177,9 @@ cohort, never as silent edits to 0.1.0.
 
 - Add the scenario backend module with behavior handlers for the 41
   operations, and move `behavior.mode` from `contract` to `scenario`.
+- Decide whether release gains a lifecycle precondition once scenario
+  state exists, and resolve drift item 20 through the section 39.6
+  correction sequence rather than a silent edit.
 - Restore the v2 computer semantics of SPEC section 39 (computers,
   checkpoints, pause, resume, restore) as a new contract version or as
   scenario handlers, then restore the original checkpoint-recovery

@@ -36,6 +36,7 @@ import {
   compileSteelSourceContract,
   credentialFindings,
   fillPathTemplate,
+  gatewayRecord,
   operationOf,
   packFilePaths,
   packResponseFixtures,
@@ -466,6 +467,196 @@ describe("Steel parity: Steel signals stay observable", () => {
         "type"
       ]);
     });
+  });
+
+  it("answers a manual resume attempt with the documented v1 result", () => {
+    const sessionId = "00000000-0000-0000-0000-000000000000";
+    // Steel v1 publishes no pause or resume route (migration note drift
+    // item 2), so the documented v1 result of a manual resume attempt
+    // is the neutral route problem, never a lifecycle answer.
+    const attempts: readonly (readonly [string, string])[] = [
+      ["POST", `/v1/sessions/${sessionId}/resume`],
+      ["POST", `/v1/sessions/${sessionId}/pause`]
+    ];
+    attempts.forEach(([method, target], index) => {
+      const { status, document } = problem(method, target, index + 20);
+      expect(status, target).toBe(404);
+      expect(document.code, target).toBe("route_not_found");
+      expect(Object.keys(document).sort(), target).toEqual([
+        "code",
+        "request_id",
+        "status",
+        "title",
+        "type"
+      ]);
+    });
+  });
+
+  it("answers a malformed file path with the neutral route problem", () => {
+    const sessionId = "00000000-0000-0000-0000-000000000000";
+    // The `path` parameter of the file routes is free-form (migration
+    // note drift item 14) and contract mode resolves no host path, so a
+    // traversal-shaped target never matches a file route.
+    const malformed: readonly string[] = [
+      `/v1/sessions/${sessionId}/files/a/../brief.txt`,
+      `/v1/sessions/${sessionId}/files/../../etc/passwd`,
+      `/v1/files/../../etc/passwd`,
+      `/v1/sessions/${sessionId}/files/`
+    ];
+    malformed.forEach((target, index) => {
+      const { status, document } = problem("GET", target, index + 30);
+      expect(status, target).toBe(404);
+      expect(document.code, target).toBe("route_not_found");
+    });
+  });
+
+  it("handles an idempotency key as an unmanaged header", async () => {
+    const migrated = await compilePackContract(pack.loaded);
+    const source = await compileSteelSourceContract(repoRoot);
+    // No Steel v1 operation declares a header parameter and the pack
+    // declares no `idempotency` policy, so the gateway neither honors
+    // nor rejects an `Idempotency-Key` header: the declared response
+    // serves unchanged, and a repeat serves it again instead of
+    // answering with a replay conflict. Bare contract mode applies no
+    // inferred idempotency (acceptance criterion AC-094).
+    for (const contract of [source.contract, migrated.contract]) {
+      for (const operation of contract.operations) {
+        const headers = operation.parameters.filter(
+          (parameter) => parameter.location === "header"
+        );
+        expect(headers, operation.key).toEqual([]);
+      }
+    }
+    expect(pack.loaded.manifest["idempotency"]).toBeUndefined();
+    expect(pack.validation.coverage.idempotencyOperations).toEqual([]);
+
+    const apiKey = parityApiKey(migrated.contract);
+    const withoutKey: RawRequest = {
+      method: "GET",
+      target: "/v1/sessions",
+      headers: { [STEEL_API_KEY_HEADER]: apiKey },
+      body: new Uint8Array(0)
+    };
+    const withKey: RawRequest = {
+      method: "GET",
+      target: "/v1/sessions",
+      headers: {
+        [STEEL_API_KEY_HEADER]: apiKey,
+        "idempotency-key": "idp-0001"
+      },
+      body: new Uint8Array(0)
+    };
+    expect(gatewayRecord(handleGatewayRequest(options, 40, withKey))).toBe(
+      gatewayRecord(handleGatewayRequest(options, 40, withoutKey))
+    );
+    const repeat = handleGatewayRequest(options, 41, withKey);
+    expect(repeat.status).toBe(200);
+    expect(repeat.frameworkCode).toBeNull();
+    expect(repeat.provenance).toBe("fixture:sessions-list-empty");
+  });
+});
+
+describe("Steel parity: paused-stop drift stays surfaced", () => {
+  let options: GatewayOptions;
+
+  beforeAll(async () => {
+    const migrated = await compilePackContract(pack.loaded);
+    const fixtures = await packResponseFixtures(
+      pack.loaded.root,
+      pack.loaded.manifest
+    );
+    options = parityGatewayOptions(migrated.contract, fixtures);
+  });
+
+  it("declares the drift in the manifest, the PackIR, and the notes", async () => {
+    const extensions = objectOf(pack.loaded.manifest["extensions"]);
+    expect(extensions).toBeDefined();
+    const drift = asObjectArray(extensions?.["drift"]);
+    expect(drift).toHaveLength(1);
+    const entry = drift[0];
+    expect(textOf(entry?.["id"])).toBe("paused-stop-precondition");
+    expect(textOf(entry?.["status"])).toBe("preserved");
+    expect(textOf(entry?.["summary"])).toContain("paused");
+    expect(textOf(entry?.["summary"])).toContain("running");
+    expect(textOf(entry?.["note"])).toContain("drift item 20");
+
+    // The loader passes the extensions map through to the PackIR
+    // unchanged, so the drift entry travels with every compiled pack,
+    // not only with the manifest file, and the pack still validates.
+    const irExtensions = objectOf(pack.validation.packIr?.["extensions"]);
+    expect(irExtensions).toEqual(extensions);
+    expect(pack.validation.errors).toEqual([]);
+
+    // The written record: MIGRATION-NOTES.md carries the matching drift
+    // item and names the specification section behind it.
+    const notes = await readFile(
+      path.join(pack.root, "MIGRATION-NOTES.md"),
+      "utf8"
+    );
+    expect(notes).toContain("paused-stop-precondition");
+    expect(notes).toContain("39.6");
+  });
+
+  it("adds no silent running-only gate to the stop analog", async () => {
+    const source = await compileSteelSourceContract(repoRoot);
+    const migrated = await compilePackContract(pack.loaded);
+    const key = "path:POST /v1/sessions/{id}/release";
+    const packRelease = operationOf(migrated.contract, key);
+    const sourceRelease = operationOf(source.contract, key);
+    expect(packRelease.operation_id).toBe("release_session");
+    expect(sourceRelease.operation_id).toBe("release_session");
+
+    // The stop analog of Steel v1 is release. The published contract
+    // puts no lifecycle precondition on it: the only parameter is the
+    // session id, and the request body is the empty nullable object.
+    // Section 39.6 keeps the broader surface and forbids a silent
+    // correction, so the pack must not narrow either side.
+    for (const release of [sourceRelease, packRelease]) {
+      expect(release.parameters).toHaveLength(1);
+      expect(release.parameters[0]?.name).toBe("id");
+      expect(release.parameters[0]?.location).toBe("path");
+    }
+    const packRef = packRelease.request_body?.content[0]?.schema_ref;
+    const sourceRef = sourceRelease.request_body?.content[0]?.schema_ref;
+    const packBody = migrated.contract.schemas[packRef ?? ""]?.schema as
+      | JsonObject
+      | undefined;
+    const sourceBody = source.contract.schemas[sourceRef ?? ""]?.schema as
+      | JsonObject
+      | undefined;
+    expect(packBody).toEqual(sourceBody);
+    expect(packBody?.["properties"]).toEqual({});
+    expect(packBody?.["additionalProperties"]).toBe(false);
+
+    // No behavior handler sits behind the contract to enforce a
+    // running-only rule: behavior mode stays `contract` and the pack
+    // ships no behavior entrypoint.
+    expect(objectOf(pack.loaded.manifest["behavior"])?.["mode"]).toBe(
+      "contract"
+    );
+    expect(objectOf(pack.validation.packIr?.["behavior"])?.["mode"]).toBe(
+      "contract"
+    );
+    expect(
+      pack.loaded.references.filter(
+        (reference) => reference.role === "behavior_entrypoint"
+      )
+    ).toEqual([]);
+
+    // At the wire, a release request in the declared nullable form
+    // reaches the declared success response: the pipeline puts no
+    // state check in front of the route.
+    const response = handleGatewayRequest(options, 50, {
+      method: "POST",
+      target: "/v1/sessions/00000000-0000-0000-0000-000000000000/release",
+      headers: {
+        [STEEL_API_KEY_HEADER]: parityApiKey(options.contract),
+        "content-type": "application/json"
+      },
+      body: new TextEncoder().encode("null")
+    });
+    expect(response.status).toBe(200);
+    expect(response.frameworkCode).toBeNull();
   });
 });
 

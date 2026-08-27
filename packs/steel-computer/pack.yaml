@@ -205,4 +205,22 @@ scenarios:
     fixtures:
       - fixtures/baseline.json
 
-extensions: {}
+# Declared migration drift (SPEC section 39.6). The pack schema keeps
+# this map free-form and the loader passes it through to the PackIR
+# without interpreting it, so the list is the diagnostic surface of
+# record for preserved discrepancies. Entry shape:
+#   id      stable slug of the drift
+#   status  "preserved" while the drift stands, never "corrected"
+#   summary what differs and why the pack keeps it
+#   note    the MIGRATION-NOTES.md item that documents the drift
+extensions:
+  drift:
+    - id: paused-stop-precondition
+      status: preserved
+      summary: >-
+        The broader Steel contract permits stopping a running or paused
+        computer, while the prototype handler accepted only running.
+        Steel v1 publishes no stop operation, and its release analog
+        declares no lifecycle precondition, so the pack keeps the
+        broader surface and adds no running-only gate.
+      note: "MIGRATION-NOTES.md, drift item 20"

@@ -6,7 +6,7 @@ There is no older implementation in this repository to run side by side, so
 parity means this: the migrated pack compiles against the source contract to
 the same operation surface, and the pack satisfies every requirement of
 specification section 39.5 that version 0.1.0 can express. The evidence lives
-in `packages/testkit/src/steel-parity.test.ts` (17 tests) and
+in `packages/testkit/src/steel-parity.test.ts` (22 tests) and
 `packages/testkit/src/steel-parity-golden.test.ts` (6 tests), together with
 the existing `steel-pack.test.ts` (7 tests).
 
@@ -25,7 +25,7 @@ the existing `steel-pack.test.ts` (7 tests).
 | Descendants terminate on completion and timeout | Cannot apply | Contract mode runs no processes. The termination policy belongs to the runner chain. |
 | Participant sees only declared materials | Full | Participant references cover exactly the declared roles: contract entrypoint, prompt instructions, prompt launch, task, participant files, result schema, case sources, and fixture bodies. All pass the label scan, and the participant copy drops the production server. |
 | Contract, participant copy, prompts, task, instructions, schema, behavior, rubric, adapter, core hashed | Partial | The manifest digests cover the contract, prompts, task, result schema, rubric, participant files, and state fixtures, and the pack digest covers the manifest itself. Three reference roles stay outside that walk (see below). Behavior, adapter, and core have no artifact to hash in contract mode. |
-| Steel signals observable | Partial | Covered now: unknown endpoint, wrong method, checkpoint on create, invented fork, clone, snapshot, and browser routes. Cannot apply in contract mode: invalid transition, manual resume, idempotency, argv versus shell exec, streaming, malformed file paths. Those need behavior handlers (drift item 17). |
+| Steel signals observable | Partial | Covered now: unknown endpoint, wrong method, checkpoint on create, invented fork, clone, snapshot, and browser routes, manual resume (the v1 answer to a resume attempt), malformed file paths (traversal-shaped targets), and idempotency at the contract level (an unmanaged header with no declared policy). Cannot apply in contract mode: invalid transition, argv versus shell exec, streaming. Those need behavior handlers (drift item 17). |
 
 ## Section 39.7 migration sequence
 
@@ -51,10 +51,62 @@ the existing `steel-pack.test.ts` (7 tests).
    covers status, headers, body, provenance, and framework code, byte for
    byte. State digests await behavior mode.
 10. Document intentional differences. Done. MIGRATION-NOTES.md records drift
-    items 1 through 19, and this file records the parity coverage.
-11. Mark golden after all tests pass. Done for 0.1.0. The 30 tests in
+    items 1 through 20, and this file records the parity coverage.
+11. Mark golden after all tests pass. Done for 0.1.0. The 35 tests in
     `packages/testkit` pass. The ten prototype tests the spec names do not
-    exist in this repository.
+    exist in this repository; the prototype test mapping below records the
+    closest equivalent of each, or the reason no equivalent can exist.
+
+## Prototype test mapping (AC-082)
+
+Specification section 39.2 names ten existing automated tests in the
+prototype, and section 39.5 lists the signals they cover: unknown endpoint,
+wrong method, invalid transition, checkpoint-on-create attempt, invented
+fork/clone/snapshot, invented browser routes, manual resume, idempotency,
+argv versus shell exec, streaming, and malformed file paths. The two
+invented-route signals form one prototype test area, which gives the ten
+areas below. The prototype repository itself is not part of this repository,
+so each row maps the area to the closest equivalent parity test here, or
+records the absence with a reason.
+
+| Prototype test area | Closest equivalent in this repository | Status |
+|---|---|---|
+| Unknown endpoint | `packages/testkit/src/steel-parity.test.ts`, "answers an unknown endpoint with the neutral route_not_found problem" | Equivalent |
+| Wrong method | `packages/testkit/src/steel-parity.test.ts`, "answers a wrong method with method_not_allowed and the allow header" | Equivalent |
+| Invalid transition | None | Absent: Steel v1 declares no lifecycle transition rules and contract mode keeps no state machine (drift items 2 and 17). The basic-lifecycle rubric ordering in `steel-pack.test.ts` is the nearest coverage. |
+| Checkpoint-on-create attempt | `packages/testkit/src/steel-parity.test.ts`, "rejects a checkpoint-on-create attempt" | Equivalent |
+| Invented routes (fork, clone, snapshot, browser) | `packages/testkit/src/steel-parity.test.ts`, "answers invented routes with the same neutral problem" | Equivalent |
+| Manual resume | `packages/testkit/src/steel-parity.test.ts`, "answers a manual resume attempt with the documented v1 result" | Equivalent: v1 publishes no resume route, so the documented v1 result is the neutral route problem (drift item 2) |
+| Idempotency | `packages/testkit/src/steel-parity.test.ts`, "handles an idempotency key as an unmanaged header" | Equivalent at the contract level: no operation declares a header parameter and the pack declares no policy, so the header changes nothing; replay semantics land with the idempotency policy work |
+| Argv versus shell exec | None | Absent: v1 publishes no exec operation and its computer-action request is a closed set of typed actions with no command form (drift item 1) |
+| Streaming | None | Absent as behavior: contract mode serves no live stream (drift item 17); the golden trace covers the recording routes `get_session_events` and `get_session_hls` with their declared statuses |
+| Malformed file paths | `packages/testkit/src/steel-parity.test.ts`, "answers a malformed file path with the neutral route problem" | Equivalent at the contract level: traversal-shaped targets never match a file route and contract mode resolves no host path (drift item 14) |
+
+## Paused-stop drift (AC-086)
+
+Section 39.6 requires the paused-stop drift to stay surfaced and not be
+silently corrected in the first Steel pack. The pack declares it in
+`pack.yaml` under `extensions.drift` with the shape documented in that file
+(`id`, `status`, `summary`, `note`). The pack loader passes the extensions
+map through to the PackIR unchanged, so every compiled pack carries the
+entry, and MIGRATION-NOTES.md drift item 20 is the written record. The drift
+suite asserts the entry on all three surfaces, and asserts that the v1 stop
+analog (`release_session`) keeps its published shape: one path parameter,
+the empty nullable request body, contract behavior mode, and the declared
+success response at the wire. Steel v1 has no paused status at all (drift
+item 2), so the permissive release surface is preserved rather than
+narrowed to a running-only gate.
+
+## Operation-count acceptance (AC-080, AC-081)
+
+- **AC-080** requires exactly 37 path operations; the migrated Steel v1
+  contract of record contains 41, because the specification count came from
+  a different API snapshot than the assigned v1 source, and
+  MIGRATION-NOTES.md drift item 1 records the deviation.
+- **AC-081** requires exact completeness over all 37 keys; the completeness
+  check passes over the same 41 keys of that snapshot (drift item 1), with
+  every eval scope covering each key once and no extra key on either side
+  of the compile comparison.
 
 ## The golden trace
 
@@ -101,6 +153,6 @@ credential material only, never for study labels.
   and T053), then add the 401 rejection check and the fake-agent trial.
 - Port behavior handlers behind the backend interface (drift item 17), then
   freeze lifecycle, streaming, persistence, and isolation semantics, and add
-  the behavior signals: invalid transition, manual resume, idempotency, argv
-  versus shell exec, and malformed file paths.
+  the behavior signals that contract mode cannot express: invalid
+  transition, argv versus shell exec, and streaming.
 - Cover the three remaining digest roles once the pack IR records them.
