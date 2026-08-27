@@ -193,20 +193,20 @@ describe("shell behavior", () => {
     expect(io.stderrChunks[0]).toContain("Usage: oal <command>");
   });
 
-  it("exits 3 with a clear diagnostic for stub commands", async () => {
-    for (const argv of [
-      ["serve", "doc.json"],
-      ["study", "run", "."],
-      ["workflow", "run", "."]
-    ]) {
+  it("reports its own diagnostics instead of a stub marker", async () => {
+    const cases: readonly (readonly [readonly string[], number, string])[] = [
+      [["study", "run", "."], 2, "OAL-STUDY-RUN-RUNTIME-LOCK-UNMET"],
+      [["workflow", "run", "."], 4, "OAL-WORKFLOW-NO-EXECUTOR"]
+    ];
+    for (const [argv, code, marker] of cases) {
       const io = new MemoryIo();
-      await expect(main(argv, io)).resolves.toBe(3);
-      expect(io.stderrChunks[0]).toContain("OAL-NOT-IMPLEMENTED");
-      expect(io.stderrChunks[0]).toContain("not implemented in this build");
+      await expect(main(argv, io)).resolves.toBe(code);
+      expect(io.stderrChunks[0]).toContain(marker);
+      expect(io.stderrChunks[0]).not.toContain("OAL-NOT-IMPLEMENTED");
     }
   });
 
-  it("emits stub diagnostics as one JSON line under --format json", async () => {
+  it("emits error diagnostics as one JSON line under --format json", async () => {
     const io = new MemoryIo();
     await main(["evaluate", "runs/missing", "--format", "json"], io);
     expect(io.stderrChunks.length).toBe(1);
@@ -214,7 +214,7 @@ describe("shell behavior", () => {
       string,
       unknown
     >;
-    expect(record["code"]).toBe("OAL-NOT-IMPLEMENTED");
+    expect(record["code"]).toBe("OAL-RUNTREE-NOT-RUN-OR-BATCH");
     expect(record["severity"]).toBe("error");
   });
 
@@ -235,7 +235,10 @@ describe("shell behavior", () => {
   it("parses flags declared only on later-milestone commands", async () => {
     const io = new MemoryIo();
     await main(["study", "run", ".", "--agent", "codex-cli", "--dry-run"], io);
-    expect(io.stderrChunks[0]).toContain("oal study run is not implemented");
+    expect(io.stderrChunks[0]).not.toContain("OAL-CLI-UNKNOWN-OPTION");
+    expect(io.stderrChunks[0]).toContain(
+      'Command "study run" requires --phase'
+    );
   });
 
   it("uses the shared command registry by default", () => {

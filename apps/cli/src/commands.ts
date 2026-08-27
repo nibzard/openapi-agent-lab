@@ -2,18 +2,27 @@ import type { ExitCode } from "@oal/core";
 
 import type { FlagView, OptionSpec } from "./argv.ts";
 import type { RunContext } from "./context.ts";
+import { compareCommand } from "./handlers/compare.ts";
 import {
   evalInitCommand,
   evalListCommand,
   evalValidateCommand
 } from "./handlers/eval.ts";
 import { doctorCommand } from "./handlers/doctor.ts";
+import { evaluateCommand } from "./handlers/evaluate.ts";
 import { inspectCommand } from "./handlers/inspect.ts";
 import { helpCommand, versionCommand } from "./handlers/misc.ts";
 import { packInitCommand, packValidateCommand } from "./handlers/pack.ts";
 import { replayCommand } from "./handlers/replay.ts";
+import { reportCommand } from "./handlers/report.ts";
 import { runCommand } from "./handlers/run.ts";
-import { stubCommand } from "./handlers/stub.ts";
+import { serveCommand } from "./handlers/serve.ts";
+import { studyAnalyzeCommand } from "./handlers/study-analyze.ts";
+import { studyInitCommand } from "./handlers/study-init.ts";
+import { studyRunCommand } from "./handlers/study-run.ts";
+import { studyScheduleCommand } from "./handlers/study-schedule.ts";
+import { studyValidateCommand } from "./handlers/study-validate.ts";
+import { workflowCommand } from "./handlers/workflow.ts";
 import type { Io } from "./io.ts";
 
 /** Everything a command handler receives. */
@@ -151,7 +160,7 @@ export const COMMANDS: readonly CommandSpec[] = [
       flag("strict", "Refuse unsupported operations."),
       flag("allow-non-loopback", "Explicitly allow non-loopback binding.")
     ],
-    handler: stubCommand("serve")
+    handler: serveCommand
   },
   {
     name: "pack init",
@@ -230,7 +239,7 @@ export const COMMANDS: readonly CommandSpec[] = [
       { name: "run-or-batch", description: "Run or batch directory." }
     ],
     options: [value("rubric", "Rubric overriding the frozen one.")],
-    handler: stubCommand("evaluate")
+    handler: evaluateCommand
   },
   {
     name: "report",
@@ -238,18 +247,24 @@ export const COMMANDS: readonly CommandSpec[] = [
     arguments: [
       { name: "run-or-batch", description: "Run or batch directory." }
     ],
-    options: [flag("regrade", "Create a derived evaluation and report.")],
-    handler: stubCommand("report")
+    options: [
+      value(
+        "rubric",
+        "Rubric for --regrade; the run tree alone cannot re-grade."
+      ),
+      flag("regrade", "Create a derived evaluation and report.")
+    ],
+    handler: reportCommand
   },
   {
     name: "compare",
     summary: "Compare two batches descriptively.",
     arguments: [
-      { name: "batch-a", description: "First batch directory." },
-      { name: "batch-b", description: "Second batch directory." }
+      { name: "batch-a", description: "First batch or report file." },
+      { name: "batch-b", description: "Second batch or report file." }
     ],
     options: [],
-    handler: stubCommand("compare")
+    handler: compareCommand
   },
   {
     name: "replay",
@@ -283,10 +298,13 @@ export const COMMANDS: readonly CommandSpec[] = [
   },
   {
     name: "workflow run",
-    summary: "Run an Arazzo workflow against a pack as a control run.",
+    summary: "Align an Arazzo workflow with a recorded run.",
     arguments: [{ name: "pack", description: "Pack directory." }],
-    options: [value("workflow", "Workflow identifier.")],
-    handler: stubCommand("workflow run")
+    options: [
+      value("workflow", "Workflow identifier; required when several exist."),
+      value("run", "Recorded run directory to align against.")
+    ],
+    handler: workflowCommand
   },
   {
     name: "study init",
@@ -295,11 +313,11 @@ export const COMMANDS: readonly CommandSpec[] = [
       { name: "new-study-dir", description: "Target directory; must be empty." }
     ],
     options: [
-      value("pack", "Local pack backing the study."),
-      value("eval", "Eval identifier."),
-      value("id", "Study identifier.")
+      value("pack", "Local pack backing the study; required."),
+      value("eval", "Eval identifier of that pack; required."),
+      value("id", "Study identifier; defaults to the directory name.")
     ],
-    handler: stubCommand("study init")
+    handler: studyInitCommand
   },
   {
     name: "study validate",
@@ -307,41 +325,42 @@ export const COMMANDS: readonly CommandSpec[] = [
     arguments: [{ name: "study-dir", description: "Study directory." }],
     options: [
       value("pack", "Local pack resolving the protocol PackRef."),
-      value("phase", "Phase to validate."),
+      value("phase", "Phase to validate; the default validates every phase."),
       value("materialize-contracts", "Directory for materialized variants."),
       flag("check-lock", "Fail on protocol drift."),
       flag("write-lock", "Explicitly write the lock.")
     ],
-    handler: stubCommand("study validate")
+    handler: studyValidateCommand
   },
   {
     name: "study schedule",
     summary: "Emit deterministic phase assignments.",
     arguments: [{ name: "study-dir", description: "Study directory." }],
     options: [
-      value("phase", "Phase to schedule."),
-      value("seed", "Scheduling seed."),
-      value("study-run", "StudyRun identifier.")
+      value("pack", "Local pack resolving the protocol PackRef."),
+      value("phase", "Phase to schedule; the default uses the first phase."),
+      value("seed", "Scheduling seed; required."),
+      value("study-run", "StudyRun identifier; required.")
     ],
-    handler: stubCommand("study schedule")
+    handler: studyScheduleCommand
   },
   {
     name: "study run",
     summary: "Run one scheduled study phase.",
     arguments: [{ name: "study-dir", description: "Study directory." }],
     options: [
-      value("phase", "Phase to run."),
+      value("phase", "Phase to run; required."),
       value("pack", "Local pack resolving the protocol PackRef."),
-      value("schedule", "Candidate assignments document."),
-      value("study-run", "StudyRun identifier."),
+      value("schedule", "Candidate assignments document; required."),
+      value("study-run", "StudyRun identifier; required."),
       value("model", "Model identifier."),
       value("effort", "Model effort level."),
       value("agent", "Agent adapter selector."),
       value("sandbox", "Sandbox mode."),
       flag("yes", "Confirm paid launches without a prompt."),
-      flag("dry-run", "Validate in a temporary root; launch nothing.")
+      flag("dry-run", "Validate only; print the launch plan, start nothing.")
     ],
-    handler: stubCommand("study run")
+    handler: studyRunCommand
   },
   {
     name: "study analyze",
@@ -351,7 +370,7 @@ export const COMMANDS: readonly CommandSpec[] = [
       value("analysis-plan", "Frozen derived analysis plan."),
       value("include-study-run", "Additional compatible StudyRun directory.")
     ],
-    handler: stubCommand("study analyze")
+    handler: studyAnalyzeCommand
   }
 ];
 

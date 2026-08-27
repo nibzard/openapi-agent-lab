@@ -41,9 +41,15 @@ importers:
       '@oal/agent-generic':
         specifier: workspace:*
         version: link:../../packages/agent-generic
+      '@oal/arazzo':
+        specifier: workspace:*
+        version: link:../../packages/arazzo
       '@oal/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@oal/contract-ir':
+        specifier: workspace:*
+        version: link:../../packages/contract-ir
       '@oal/contract-variant':
         specifier: workspace:*
         version: link:../../packages/contract-variant
@@ -62,6 +68,9 @@ importers:
       '@oal/mock-adapter':
         specifier: workspace:*
         version: link:../../packages/mock-adapter
+      '@oal/openapi':
+        specifier: workspace:*
+        version: link:../../packages/openapi
       '@oal/pack':
         specifier: workspace:*
         version: link:../../packages/pack
