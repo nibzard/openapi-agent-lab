@@ -1,0 +1,59 @@
+name: Nightly
+
+on:
+  schedule:
+    # 03:17 UTC: off-peak, and not on the :00 mark.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Section 36.2 lane "extended": the full vitest run includes the
+  # property suite (packages/openapi/tests/property.test.ts, fixed 300
+  # iteration seeds) and the golden corpus
+  # (packages/openapi/tests/golden.test.ts, corpus.test.ts).
+  extended-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec vitest run
+
+  # Section 36.2 lane: repeated same-seed schedule materialization and
+  # shuffled-order balance checks.
+  schedule-materialization:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/schedule-balance.mjs
+
+  # Section 36.2 lane: large-document performance against the section
+  # 36.4 budget. Fails only on a gross regression (over 4x budget).
+  compile-performance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/perf-probe.mjs

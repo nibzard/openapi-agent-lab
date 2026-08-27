@@ -16,6 +16,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
+    "probe:compile": "node scripts/perf-probe.mjs",
+    "probe:schedule": "node scripts/schedule-balance.mjs",
+    "scan:secrets": "node scripts/secret-scan.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
