@@ -9,5 +9,9 @@
   },
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@oal/config": "workspace:*",
+    "@oal/core": "workspace:*"
   }
 }

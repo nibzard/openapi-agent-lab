@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/diagnostic.v1.json",
+  "title": "Diagnostic",
+  "description": "Normalized diagnostic record emitted by the compiler, gateway, and runtime. Codes are stable API; wording is not. Serialized form of the Diagnostic type in @oal/core.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "severity",
+    "phase",
+    "code",
+    "message",
+    "document_uri",
+    "json_pointer",
+    "operation_key",
+    "retryable",
+    "related",
+    "details"
+  ],
+  "properties": {
+    "severity": {
+      "type": "string",
+      "enum": ["info", "warning", "error"]
+    },
+    "phase": {
+      "type": "string",
+      "enum": [
+        "ingest",
+        "compile",
+        "preflight",
+        "serve",
+        "run",
+        "evaluate",
+        "report"
+      ]
+    },
+    "code": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9-]*$",
+      "minLength": 3
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1
+    },
+    "document_uri": {
+      "type": ["string", "null"]
+    },
+    "json_pointer": {
+      "type": ["string", "null"]
+    },
+    "operation_key": {
+      "type": ["string", "null"],
+      "pattern": "^path:[A-Z]+ [^ ]+$"
+    },
+    "retryable": {
+      "type": "boolean"
+    },
+    "related": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/location"
+      }
+    },
+    "details": {
+      "description": "Free-form machine-readable detail values."
+    }
+  },
+  "$defs": {
+    "location": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_uri", "json_pointer"],
+      "properties": {
+        "document_uri": {
+          "type": "string",
+          "minLength": 1
+        },
+        "json_pointer": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

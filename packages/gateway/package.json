@@ -6,5 +6,11 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@oal/capability": "workspace:*",
+    "@oal/config": "workspace:*",
+    "@oal/contract-ir": "workspace:*",
+    "@oal/core": "workspace:*"
   }
 }

@@ -30,7 +30,14 @@ importers:
         specifier: 4.0.8
         version: 4.0.8(@types/node@24.10.1)
 
-  apps/cli: {}
+  apps/cli:
+    dependencies:
+      '@oal/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@oal/core':
+        specifier: workspace:*
+        version: link:../../packages/core
 
   packages/agent-adapter: {}
 
@@ -69,13 +76,36 @@ importers:
 
   packages/evidence: {}
 
-  packages/gateway: {}
+  packages/gateway:
+    dependencies:
+      '@oal/capability':
+        specifier: workspace:*
+        version: link:../capability
+      '@oal/config':
+        specifier: workspace:*
+        version: link:../config
+      '@oal/contract-ir':
+        specifier: workspace:*
+        version: link:../contract-ir
+      '@oal/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/mock-adapter: {}
 
   packages/mock-contract: {}
 
-  packages/openapi: {}
+  packages/openapi:
+    dependencies:
+      '@oal/capability':
+        specifier: workspace:*
+        version: link:../capability
+      '@oal/contract-ir':
+        specifier: workspace:*
+        version: link:../contract-ir
+      '@oal/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/pack: {}
 
@@ -87,7 +117,11 @@ importers:
 
   packages/scheduler: {}
 
-  packages/state-store: {}
+  packages/state-store:
+    dependencies:
+      '@oal/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/statistics: {}
 
