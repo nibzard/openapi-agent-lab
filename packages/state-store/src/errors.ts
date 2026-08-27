@@ -47,3 +47,29 @@ export function limitReached(message: string, details?: Json): OalError {
     ...(details === undefined ? {} : { details })
   });
 }
+
+/**
+ * Stable code for a refused resume or attach attempt. The specification
+ * lists it under startup failures: infrastructure, not participant
+ * behavior.
+ */
+export const RUN_IDENTITY_MISMATCH_CODE = "OAL-STATE-DIGEST-MISMATCH";
+
+/**
+ * A run record differs from the identity the caller expected, so the
+ * database cannot be resumed or attached. Thrown before any write, so
+ * the stored bytes are unchanged.
+ */
+export function runIdentityMismatch(
+  field: string,
+  expected: string | number | null,
+  found: string | number | null
+): OalError {
+  return new OalError({
+    code: RUN_IDENTITY_MISMATCH_CODE,
+    message: `Run identity field ${field} is ${JSON.stringify(found)}, but the caller expected ${JSON.stringify(expected)}.`,
+    category: "startup",
+    exitCode: EXIT_INFRASTRUCTURE,
+    details: { field, expected, found }
+  });
+}

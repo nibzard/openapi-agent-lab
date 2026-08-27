@@ -7,7 +7,11 @@
  */
 
 import { SchemaValidator, type Json } from "@oal/core";
-import { BehaviorHttpError } from "./error.ts";
+import {
+  BehaviorHttpError,
+  BehaviorTimeoutError,
+  DEFAULT_BEHAVIOR_TIMEOUT_MS
+} from "./error.ts";
 import type {
   BehaviorBackend,
   BehaviorRequest,
@@ -37,6 +41,8 @@ export interface ExecuteOptions {
   stateSchema?: Json;
   /** Maximum serialized state size in bytes. */
   maxStateBytes: number;
+  /** Bounded per-call timeout in milliseconds. Default 10 000. */
+  timeoutMs?: number;
   /** Semantic-event registry from the backend description. */
   eventRegistry: ReadonlyMap<string, RegisteredEvent>;
 }
@@ -52,6 +58,14 @@ export type ExecuteOutcome =
   | { ok: false; kind: "http_error"; error: BehaviorHttpError }
   | {
       ok: false;
+      kind: "timeout";
+      code: "behavior_timeout";
+      /** The bound that fired, in milliseconds. */
+      timeoutMs: number;
+      message: string;
+    }
+  | {
+      ok: false;
       kind: "internal";
       code: "behavior_internal_error";
       message: string;
@@ -60,28 +74,52 @@ export type ExecuteOutcome =
 /**
  * Run one behavior request under version 1 semantics. The backend
  * receives immutable state; only a valid nextState commits. Any
- * failure rolls everything back to the input state.
+ * failure, including a timeout, rolls everything back to the input
+ * state.
  */
 export async function executeBehaviorRequest(
   options: ExecuteOptions
 ): Promise<ExecuteOutcome> {
   const { backend, request, state } = options;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_BEHAVIOR_TIMEOUT_MS;
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return {
+      ok: false,
+      kind: "internal",
+      code: "behavior_internal_error",
+      message: `timeoutMs must be a positive finite number, got ${timeoutMs}.`
+    };
+  }
   let result: BehaviorResult;
   try {
-    result = await backend.handle(request, {
-      runId: options.runId,
-      requestId: options.requestId,
-      state,
-      clock: options.clock,
-      ids: options.ids,
-      random: options.random,
-      blobs: options.blobs
-    });
+    result = await withTimeout(
+      backend.handle(request, {
+        runId: options.runId,
+        requestId: options.requestId,
+        state,
+        clock: options.clock,
+        ids: options.ids,
+        random: options.random,
+        blobs: options.blobs
+      }),
+      timeoutMs
+    );
   } catch (error) {
     if (error instanceof BehaviorHttpError) {
       // A declared HTTP error returns its contract-shaped body and
       // rolls state back.
       return { ok: false, kind: "http_error", error };
+    }
+    if (error instanceof BehaviorTimeoutError) {
+      // A timed-out backend call is a transport failure with its own
+      // stable code; state rolls back like any other failure.
+      return {
+        ok: false,
+        kind: "timeout",
+        code: "behavior_timeout",
+        timeoutMs: error.timeoutMs,
+        message: error.message
+      };
     }
     return {
       ok: false,
@@ -118,6 +156,29 @@ export async function executeBehaviorRequest(
     state: result.nextState ?? state,
     committed: result.nextState !== undefined
   };
+}
+
+/**
+ * Reject with `BehaviorTimeoutError` when the call outlives its bound.
+ * The racing timer is always cleared, and the losing promise keeps a
+ * handler attached, so a late result or rejection is never unhandled.
+ */
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new BehaviorTimeoutError(timeoutMs));
+    }, timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    );
+  });
 }
 
 function checkState(state: Json, options: ExecuteOptions): string | null {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -185,6 +185,33 @@ describe("BehaviorModuleHost", () => {
         code: "fixture_refused"
       });
     } finally {
+      await host.close();
+      await rm(packRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("drops protocol lines beyond the byte bound", async () => {
+    // Every reply line from the fixture is longer than eight bytes, so
+    // an enforced bound leaves the create call unanswered and the
+    // per-call timeout fires instead.
+    vi.useFakeTimers();
+    const packRoot = await mkdtemp(join(tmpdir(), "oal-pack-"));
+    const host = new BehaviorModuleHost({
+      entry: fixtureEntry,
+      context: { contract: contract(), packRoot, config: {} },
+      runSeed: RUN_SEED_A,
+      timeoutMs: 50,
+      maxMessageBytes: 8
+    });
+    try {
+      const started = host.start();
+      const refused = expect(started).rejects.toMatchObject({
+        name: "BehaviorTimeoutError"
+      });
+      await vi.advanceTimersByTimeAsync(50);
+      await refused;
+    } finally {
+      vi.useRealTimers();
       await host.close();
       await rm(packRoot, { recursive: true, force: true });
     }

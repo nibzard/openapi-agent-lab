@@ -21,6 +21,8 @@ export type {
 } from "./database.ts";
 export {
   limitReached,
+  runIdentityMismatch,
+  RUN_IDENTITY_MISMATCH_CODE,
   schemaVersionUnsupported,
   stateCommitFailed
 } from "./errors.ts";

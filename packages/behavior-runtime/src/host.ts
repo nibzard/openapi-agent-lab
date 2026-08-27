@@ -8,6 +8,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import {
   BehaviorHttpError,
+  BehaviorTimeoutError,
+  DEFAULT_BEHAVIOR_TIMEOUT_MS,
   type BackendDescription,
   type BackendFactoryContext,
   type BehaviorBackend,
@@ -20,7 +22,9 @@ import {
 } from "@oal/behavior-api";
 import {
   decodeBody,
+  DEFAULT_MAX_MESSAGE_BYTES,
   encodeBody,
+  parseLine,
   type ChildReply,
   type HostMessage,
   type WireBehaviorRequest,
@@ -39,7 +43,7 @@ export interface BehaviorHostOptions {
   timeoutMs?: number;
   /** Working directory for the child. Default the pack root. */
   cwd?: string;
-  /** Protocol line bound. */
+  /** Protocol line bound. Default 16 MiB. */
   maxMessageBytes?: number;
 }
 
@@ -73,7 +77,10 @@ export class BehaviorModuleHost implements BehaviorBackend {
       }
     );
     this.child = child;
+    const maxMessageBytes =
+      this.options.maxMessageBytes ?? DEFAULT_MAX_MESSAGE_BYTES;
     let buffer = "";
+    let discarding = false;
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
       buffer += chunk;
@@ -81,8 +88,20 @@ export class BehaviorModuleHost implements BehaviorBackend {
       while (newline !== -1) {
         const line = buffer.slice(0, newline);
         buffer = buffer.slice(newline + 1);
-        this.receive(line);
+        if (discarding) {
+          // The line before this newline was over the bound; drop it.
+          discarding = false;
+        } else {
+          this.receive(line, maxMessageBytes);
+        }
         newline = buffer.indexOf("\n");
+      }
+      // A partial line already past the bound can never parse; stop
+      // buffering it. UTF-8 bytes never run below the character count,
+      // so the character check is conservative.
+      if (buffer.length > maxMessageBytes) {
+        discarding = true;
+        buffer = "";
       }
     });
     child.on("exit", () => {
@@ -195,13 +214,13 @@ export class BehaviorModuleHost implements BehaviorBackend {
     return this.nextId;
   }
 
-  private receive(line: string): void {
+  private receive(line: string, maxMessageBytes: number): void {
     if (line.trim().length === 0) {
       return;
     }
     let reply: ChildReply;
     try {
-      reply = JSON.parse(line) as ChildReply;
+      reply = parseLine(line, maxMessageBytes) as ChildReply;
     } catch {
       return;
     }
@@ -221,8 +240,13 @@ export class BehaviorModuleHost implements BehaviorBackend {
       }
       const timer = setTimeout(() => {
         this.pending.delete(message.id);
-        reject(new Error("behavior module call timed out"));
-      }, this.options.timeoutMs ?? 10_000);
+        reject(
+          new BehaviorTimeoutError(
+            this.options.timeoutMs ?? DEFAULT_BEHAVIOR_TIMEOUT_MS,
+            "behavior module call timed out"
+          )
+        );
+      }, this.options.timeoutMs ?? DEFAULT_BEHAVIOR_TIMEOUT_MS);
       this.pending.set(message.id, (reply) => {
         clearTimeout(timer);
         if (reply.ok) {

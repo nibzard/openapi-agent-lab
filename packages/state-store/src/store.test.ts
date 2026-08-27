@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,6 +18,7 @@ import {
 } from "./schema.ts";
 import type { StateStoreLimits } from "./limits.ts";
 import { StateStore } from "./store.ts";
+import type { RunMetaInput } from "./store.ts";
 
 const RUN_ID = "codex-baseline-01-run-01";
 const OBSERVED_AT = "2026-08-27T12:00:00.480Z";
@@ -540,5 +543,282 @@ describe("transaction helper", () => {
     } finally {
       raw.close();
     }
+  });
+});
+
+describe("atomic request commit under an injected crash", () => {
+  const IDENTITY = {
+    operationKey: "path:POST /v1/computers",
+    principalKey: "principal:primary-api-key",
+    normalizedPath: "/v1/computers",
+    idempotencyKey: "idem-0001"
+  };
+  const FINGERPRINT = '{"template":"system/chrome"}';
+
+  /**
+   * One request's full commit body: state, idempotency record, API
+   * event, one semantic event, and the request terminal outcome. The
+   * crash point names where the simulated crash fires.
+   */
+  function commitBody(
+    store: StateStore,
+    sequence: number,
+    crashAt: "never" | "after idempotency" | "after events"
+  ): void {
+    store.putState({
+      state: { computers: { comp_0001: { state: "running" } } },
+      expectedRevision: null
+    });
+    store.putIdempotencyRecord({
+      identity: IDENTITY,
+      requestFingerprint: FINGERPRINT,
+      response: {
+        status: 201,
+        headers: { "content-type": "application/json" },
+        body: { id: "comp_0001", state: "running" }
+      },
+      sequence,
+      logicalTime: store.clock.now()
+    });
+    if (crashAt === "after idempotency") {
+      throw new Error("simulated crash after the idempotency write");
+    }
+    const apiEvent = store.appendApiEvent({
+      sequence,
+      eventJson: { type: "api.exchange", sequence }
+    });
+    store.appendSemanticEvent({
+      requestSequence: sequence,
+      parentEventId: apiEvent.eventId,
+      eventName: "computer.created",
+      schemaVersion: 1,
+      eventJson: { computer_id: "comp_0001" }
+    });
+    if (crashAt === "after events") {
+      throw new Error("simulated crash after the event writes");
+    }
+    store.completeRequest(sequence, {
+      operationKey: IDENTITY.operationKey,
+      method: "POST",
+      pathRedacted: "/v1/computers",
+      terminalStatus: "committed",
+      responseStatus: 201,
+      committed: true
+    });
+  }
+
+  function tableCounts(path: string): Record<string, number> {
+    const raw = new DatabaseSync(path);
+    try {
+      const counts: Record<string, number> = {};
+      for (const table of [
+        "domain_state",
+        "idempotency",
+        "events",
+        "semantic_events"
+      ]) {
+        const row = raw.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get();
+        counts[table] = Number(row?.["n"]);
+      }
+      expect(integrityCheck(raw)).toBe(true);
+      return counts;
+    } finally {
+      raw.close();
+    }
+  }
+
+  it("commits every row of one request transaction", () => {
+    const path = storePath();
+    const store = openStore(path);
+    const request = store.beginRequest({ ingressObservedAt: OBSERVED_AT });
+    store.transaction(() => {
+      commitBody(store, request.sequence, "never");
+    });
+    expect(tableCounts(path)).toEqual({
+      domain_state: 1,
+      idempotency: 1,
+      events: 1,
+      semantic_events: 1
+    });
+    const snapshot = store.getState();
+    expect(snapshot?.revision).toBe(0);
+    expect(store.getRequest(request.sequence)).toMatchObject({
+      terminalStatus: "committed",
+      responseStatus: 201,
+      committed: true
+    });
+    expect(
+      store.lookupIdempotency({
+        identity: IDENTITY,
+        requestFingerprint: FINGERPRINT
+      })
+    ).toMatchObject({ outcome: "replay" });
+    store.close();
+  });
+
+  it("rolls back every row when a crash fires after the idempotency write", () => {
+    const path = storePath();
+    const store = openStore(path);
+    const request = store.beginRequest({ ingressObservedAt: OBSERVED_AT });
+    try {
+      store.transaction(() => {
+        commitBody(store, request.sequence, "after idempotency");
+      });
+      expect.unreachable("the injected crash must abort the transaction");
+    } catch (error) {
+      expect((error as Error).message).toContain("simulated crash");
+    }
+    expect(tableCounts(path)).toEqual({
+      domain_state: 0,
+      idempotency: 0,
+      events: 0,
+      semantic_events: 0
+    });
+    expect(store.getState()).toBeNull();
+    expect(store.countIdempotencyEntries()).toBe(0);
+    expect(store.eventLogBytes()).toBe(0);
+    expect(store.getRequest(request.sequence)).toMatchObject({
+      terminalStatus: "pending",
+      committed: false
+    });
+    store.close();
+  });
+
+  it("rolls back every row when a crash fires after the event writes", () => {
+    const path = storePath();
+    const store = openStore(path);
+    const request = store.beginRequest({ ingressObservedAt: OBSERVED_AT });
+    try {
+      store.transaction(() => {
+        commitBody(store, request.sequence, "after events");
+      });
+      expect.unreachable("the injected crash must abort the transaction");
+    } catch (error) {
+      expect((error as Error).message).toContain("simulated crash");
+    }
+    expect(tableCounts(path)).toEqual({
+      domain_state: 0,
+      idempotency: 0,
+      events: 0,
+      semantic_events: 0
+    });
+    expect(store.getState()).toBeNull();
+    expect(store.countIdempotencyEntries()).toBe(0);
+    expect(store.eventLogBytes()).toBe(0);
+    expect(store.getRequest(request.sequence)).toMatchObject({
+      terminalStatus: "pending",
+      committed: false
+    });
+    // The rolled-back sequence numbers are reusable: the next commit
+    // starts from a clean slate.
+    store.transaction(() => {
+      commitBody(store, request.sequence, "never");
+    });
+    expect(tableCounts(path)).toEqual({
+      domain_state: 1,
+      idempotency: 1,
+      events: 1,
+      semantic_events: 1
+    });
+    store.close();
+  });
+});
+
+describe("run identity verification", () => {
+  const META: RunMetaInput = {
+    batchId: "codex-baseline-01",
+    contractSemanticSha256: "a".repeat(64),
+    contractExecutionSha256: "b".repeat(64),
+    sourceInventorySha256: "c".repeat(64),
+    packSha256: "d".repeat(64),
+    scenarioSha256: "e".repeat(64),
+    contractVariantSha256: null,
+    backendSha256: "f".repeat(64),
+    implementationSha256: "9".repeat(64),
+    seed: "0".repeat(64),
+    stateSchemaVersion: 1,
+    createdAt: "2026-08-27T12:00:00.000Z"
+  };
+
+  /** Digest of the database and its write-ahead log. */
+  function snapshotFiles(path: string): string {
+    const hash = createHash("sha256");
+    for (const suffix of ["", "-wal"]) {
+      try {
+        hash.update(readFileSync(`${path}${suffix}`));
+      } catch {
+        hash.update(`<absent:${suffix}>`);
+      }
+    }
+    return hash.digest("hex");
+  }
+
+  it("accepts a resume attempt with matching fingerprints", () => {
+    const store = openStore(storePath());
+    const record = store.initializeRun(META);
+    expect(store.verifyRunIdentity(META)).toEqual(record);
+    store.close();
+  });
+
+  it("refuses every fingerprint mismatch without modifying the database", () => {
+    const path = storePath();
+    const store = openStore(path);
+    const record = store.initializeRun(META);
+    // Warm one read so the snapshot covers a settled database.
+    expect(store.getRunMeta()).toEqual(record);
+    const before = snapshotFiles(path);
+    const variants: Array<[string, RunMetaInput]> = [
+      [
+        "contract_semantic_sha256",
+        { ...META, contractSemanticSha256: "0".repeat(64) }
+      ],
+      [
+        "contract_execution_sha256",
+        { ...META, contractExecutionSha256: "0".repeat(64) }
+      ],
+      [
+        "source_inventory_sha256",
+        { ...META, sourceInventorySha256: "0".repeat(64) }
+      ],
+      ["pack_sha256", { ...META, packSha256: "0".repeat(64) }],
+      ["pack_sha256", { ...META, packSha256: null }],
+      ["scenario_sha256", { ...META, scenarioSha256: "0".repeat(64) }],
+      ["contract_variant_sha256", { ...META, contractVariantSha256: "1" }],
+      ["backend_sha256", { ...META, backendSha256: "0".repeat(64) }],
+      [
+        "implementation_sha256",
+        { ...META, implementationSha256: "8".repeat(64) }
+      ],
+      ["seed", { ...META, seed: "1".repeat(64) }],
+      ["state_schema_version", { ...META, stateSchemaVersion: 2 }]
+    ];
+    for (const [field, variant] of variants) {
+      try {
+        store.verifyRunIdentity(variant);
+        expect.unreachable(`a mismatch on ${field} must refuse the resume`);
+      } catch (error) {
+        expect(error).toBeInstanceOf(OalError);
+        const oal = error as OalError;
+        expect(oal.code).toBe("OAL-STATE-DIGEST-MISMATCH");
+        expect(oal.exitCode).toBe(3);
+        expect(oal.message).toContain(field);
+      }
+    }
+    // Neither the bytes nor the logical run record changed.
+    expect(snapshotFiles(path)).toBe(before);
+    expect(store.getRunMeta()).toEqual(record);
+    store.close();
+  });
+
+  it("refuses a resume attempt on an uninitialized database", () => {
+    const store = openStore(storePath());
+    try {
+      store.verifyRunIdentity(META);
+      expect.unreachable("an empty database cannot resume a run");
+    } catch (error) {
+      expect(error).toBeInstanceOf(OalError);
+      expect((error as OalError).code).toBe("OAL-STATE-COMMIT-FAILED");
+    }
+    store.close();
   });
 });

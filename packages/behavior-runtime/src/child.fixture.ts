@@ -1,8 +1,9 @@
 /**
  * Test fixture: a stateful counter backend served over the child
  * protocol. Used by host tests through a real child process. A JSON
- * request body of {"fail": true} triggers a declared HTTP error so
- * tests can check error propagation.
+ * request body of {"fail": true} triggers a declared HTTP error and
+ * {"hang": true} never settles, so tests can check error propagation
+ * and per-call timeouts.
  */
 
 import {
@@ -47,6 +48,14 @@ const backend: BehaviorBackend = {
           body: { kind: "json", value: { refused: true } }
         })
       );
+    }
+    const hang =
+      signal !== null &&
+      typeof signal === "object" &&
+      !Array.isArray(signal) &&
+      signal.hang === true;
+    if (hang) {
+      return new Promise<BehaviorResult>(() => undefined);
     }
     const count = (state.count ?? 0) + 1;
     return Promise.resolve({

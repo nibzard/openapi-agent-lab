@@ -32,7 +32,11 @@ import {
   runInTransaction,
   type JournalMode
 } from "./database.ts";
-import { limitReached, stateCommitFailed } from "./errors.ts";
+import {
+  limitReached,
+  runIdentityMismatch,
+  stateCommitFailed
+} from "./errors.ts";
 import { resolveStateStoreLimits, type StateStoreLimits } from "./limits.ts";
 import {
   apiEventSequenceId,
@@ -477,6 +481,82 @@ export class StateStore {
       stateSchemaVersion: requiredInteger(record, "state_schema_version"),
       createdAt: requiredText(record, "created_at")
     };
+  }
+
+  /**
+   * Verify that this database belongs to the run described by `expected`
+   * before it is resumed or attached. Restart is permitted only when the
+   * contract semantic and execution digests, source inventory, pack,
+   * scenario, contract variant, backend bundle, implementation, seed,
+   * and state-schema version match (section 16.3). The check is
+   * read-only: a refusal leaves every stored byte unchanged.
+   */
+  verifyRunIdentity(expected: RunMetaInput): RunMetaRecord {
+    const record = this.getRunMeta();
+    if (record === null) {
+      throw stateCommitFailed(
+        `Run ${this.runId} has no run record to resume or attach.`,
+        { run_id: this.runId }
+      );
+    }
+    const checks: Array<{
+      field: string;
+      expected: string | number | null;
+      found: string | number | null;
+    }> = [
+      {
+        field: "contract_semantic_sha256",
+        expected: expected.contractSemanticSha256,
+        found: record.contractSemanticSha256
+      },
+      {
+        field: "contract_execution_sha256",
+        expected: expected.contractExecutionSha256,
+        found: record.contractExecutionSha256
+      },
+      {
+        field: "source_inventory_sha256",
+        expected: expected.sourceInventorySha256,
+        found: record.sourceInventorySha256
+      },
+      {
+        field: "pack_sha256",
+        expected: expected.packSha256 ?? null,
+        found: record.packSha256 ?? null
+      },
+      {
+        field: "scenario_sha256",
+        expected: expected.scenarioSha256 ?? null,
+        found: record.scenarioSha256 ?? null
+      },
+      {
+        field: "contract_variant_sha256",
+        expected: expected.contractVariantSha256 ?? null,
+        found: record.contractVariantSha256 ?? null
+      },
+      {
+        field: "backend_sha256",
+        expected: expected.backendSha256,
+        found: record.backendSha256
+      },
+      {
+        field: "implementation_sha256",
+        expected: expected.implementationSha256,
+        found: record.implementationSha256
+      },
+      { field: "seed", expected: expected.seed, found: record.seed },
+      {
+        field: "state_schema_version",
+        expected: expected.stateSchemaVersion,
+        found: record.stateSchemaVersion
+      }
+    ];
+    for (const check of checks) {
+      if (check.expected !== check.found) {
+        throw runIdentityMismatch(check.field, check.expected, check.found);
+      }
+    }
+    return record;
   }
 
   // ------------------------------------------------------------- ingress

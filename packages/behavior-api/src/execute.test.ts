@@ -1,8 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Json } from "@oal/core";
 import type { OperationIR } from "@oal/contract-ir";
-import { BehaviorHttpError } from "./error.ts";
+import {
+  BehaviorHttpError,
+  BehaviorTimeoutError,
+  DEFAULT_BEHAVIOR_TIMEOUT_MS
+} from "./error.ts";
 import {
   executeBehaviorRequest,
   type ExecuteOptions,
@@ -84,6 +88,7 @@ function options(
     stateSchema?: Json;
     events?: Record<string, RegisteredEvent>;
     maxStateBytes?: number;
+    timeoutMs?: number;
   } = {}
 ): ExecuteOptions {
   const executeOptions: ExecuteOptions = {
@@ -111,6 +116,9 @@ function options(
   };
   if (init.stateSchema !== undefined) {
     executeOptions.stateSchema = init.stateSchema;
+  }
+  if (init.timeoutMs !== undefined) {
+    executeOptions.timeoutMs = init.timeoutMs;
   }
   return executeOptions;
 }
@@ -310,4 +318,93 @@ describe("executeBehaviorRequest", () => {
     );
     expect(outcome.ok).toBe(true);
   });
+
+  it("classifies a backend that exceeds its bound as a timeout", async () => {
+    vi.useFakeTimers();
+    const impl = backend(() => new Promise<BehaviorResult>(() => undefined));
+    let settled = false;
+    const promise = executeBehaviorRequest(
+      options(impl, { state: { before: true }, timeoutMs: 50 })
+    ).then((value) => {
+      settled = true;
+      return value;
+    });
+    await vi.advanceTimersByTimeAsync(49);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    const outcome = await promise;
+    expect(settled).toBe(true);
+    expect(outcome).toMatchObject({
+      ok: false,
+      kind: "timeout",
+      code: "behavior_timeout",
+      timeoutMs: 50
+    });
+    // A timeout outcome carries no state, so the caller keeps the input
+    // state and nothing commits.
+    expect(Object.hasOwn(outcome, "state")).toBe(false);
+    expect(Object.hasOwn(outcome, "committed")).toBe(false);
+  });
+
+  it("applies the default bound when no timeout is configured", async () => {
+    vi.useFakeTimers();
+    const impl = backend(() => new Promise<BehaviorResult>(() => undefined));
+    const promise = executeBehaviorRequest(options(impl));
+    await vi.advanceTimersByTimeAsync(DEFAULT_BEHAVIOR_TIMEOUT_MS - 1);
+    await vi.advanceTimersByTimeAsync(1);
+    const outcome = await promise;
+    expect(outcome).toMatchObject({
+      ok: false,
+      kind: "timeout",
+      timeoutMs: DEFAULT_BEHAVIOR_TIMEOUT_MS
+    });
+  });
+
+  it("classifies a backend-reported timeout outcome", async () => {
+    const impl = backend(() =>
+      Promise.reject(new BehaviorTimeoutError(5_000, "child timed out"))
+    );
+    const outcome: ExecuteOutcome = await executeBehaviorRequest(
+      options(impl, { timeoutMs: 60_000 })
+    );
+    expect(outcome).toMatchObject({
+      ok: false,
+      kind: "timeout",
+      code: "behavior_timeout",
+      timeoutMs: 5_000,
+      message: "child timed out"
+    });
+  });
+
+  it("commits a backend that answers inside the bound", async () => {
+    vi.useFakeTimers();
+    const impl = backend(
+      () =>
+        new Promise<BehaviorResult>((resolve) => {
+          setTimeout(() => {
+            resolve(counted());
+          }, 20);
+        })
+    );
+    const promise = executeBehaviorRequest(options(impl, { timeoutMs: 5_000 }));
+    await vi.advanceTimersByTimeAsync(20);
+    const outcome = await promise;
+    expect(outcome).toMatchObject({
+      ok: true,
+      committed: true,
+      state: { count: 1 }
+    });
+  });
+
+  it("refuses a non-positive timeout bound as a configuration error", async () => {
+    const impl = backend(() => counted());
+    const outcome: ExecuteOutcome = await executeBehaviorRequest(
+      options(impl, { timeoutMs: 0 })
+    );
+    expect(internalMessage(outcome)).toContain("timeoutMs");
+  });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
