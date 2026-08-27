@@ -8,8 +8,17 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@oal/arazzo": "workspace:*",
+    "@oal/config": "workspace:*",
+    "@oal/contract-ir": "workspace:*",
     "@oal/core": "workspace:*",
-    "@oal/study-ir": "workspace:*",
-    "@oal/contract-ir": "workspace:*"
+    "@oal/evaluator": "workspace:*",
+    "@oal/evidence": "workspace:*",
+    "@oal/pack": "workspace:*",
+    "@oal/report": "workspace:*",
+    "@oal/scheduler": "workspace:*",
+    "@oal/state-store": "workspace:*",
+    "@oal/statistics": "workspace:*",
+    "@oal/study-ir": "workspace:*"
   }
 }
