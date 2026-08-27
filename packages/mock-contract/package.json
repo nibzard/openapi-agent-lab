@@ -2,9 +2,14 @@
   "name": "@oal/mock-contract",
   "version": "0.0.0",
   "private": true,
-  "description": "Contract response backend.",
+  "description": "Contract-response mock adapter boundary.",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@oal/contract-ir": "workspace:*",
+    "@oal/core": "workspace:*",
+    "@oal/gateway": "workspace:*"
   }
 }
