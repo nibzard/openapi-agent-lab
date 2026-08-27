@@ -9,8 +9,10 @@
   },
   "dependencies": {
     "@oal/core": "workspace:*",
-    "@oal/evidence": "workspace:*",
     "@oal/evaluator": "workspace:*",
+    "@oal/evidence": "workspace:*",
+    "@oal/gateway": "workspace:*",
+    "@oal/state-store": "workspace:*",
     "@oal/statistics": "workspace:*"
   }
 }
