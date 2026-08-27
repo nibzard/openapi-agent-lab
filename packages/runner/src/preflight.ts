@@ -896,12 +896,15 @@ export async function runPreflight(
   }
   const contractVisibility: ContractVisibility =
     options.contractVisibility ?? "file";
-  if (contractVisibility === "discoverable") {
+  if (contractVisibility === "discoverable" && exposureMode !== "raw-http") {
     findings.push(
       error(
         PreflightCode.VisibilityUnsupported,
-        "Contract visibility discoverable needs a documentation facade, and this build serves none at run time.",
-        { contract_visibility: contractVisibility }
+        "Contract visibility discoverable needs the raw HTTP documentation facade, and this exposure mode serves none.",
+        {
+          contract_visibility: contractVisibility,
+          exposure_mode: exposureMode
+        }
       )
     );
   }

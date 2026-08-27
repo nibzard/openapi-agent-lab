@@ -26,10 +26,13 @@ import {
   type EvidenceRequirement
 } from "./disposition.ts";
 import type { Clock, LifecycleStage } from "./lifecycle.ts";
-import type { FrozenPlan } from "./preflight.ts";
-import { createLoopbackExposure } from "./exposure.ts";
+import { contractSettings, type FrozenPlan } from "./preflight.ts";
+import { createLoopbackExposure, createRawHttpExposure } from "./exposure.ts";
 import type { ExposureFactory } from "./setup.ts";
-import { credentialEnvironmentNames } from "./setup.ts";
+import {
+  credentialEnvironmentNames,
+  sanitizeParticipantContract
+} from "./setup.ts";
 import {
   batchAssignmentId,
   runTrial,
@@ -355,6 +358,33 @@ class AssignmentLedger {
 }
 
 /**
+ * The default exposure treatment of one batch. `discoverable` visibility
+ * serves the sanitized contract through the conventional documentation
+ * candidates, so the facade hands out the same bytes the `file`
+ * treatment would copy into the workspace.
+ */
+function defaultExposure(plan: FrozenPlan, pack: LoadedPack): ExposureFactory {
+  if (plan.contractVisibility !== "discoverable") {
+    return createLoopbackExposure;
+  }
+  const entry = pack.references.find(
+    (reference) => reference.role === "contract_entrypoint"
+  )?.document;
+  if (entry === undefined || entry === null) {
+    return createLoopbackExposure;
+  }
+  const settings = contractSettings(pack);
+  return createRawHttpExposure({
+    visibility: "discoverable",
+    documentation: {
+      sanitizedContract: (baseUrl: string) =>
+        sanitizeParticipantContract(entry, settings, baseUrl).text,
+      candidates: { openapiJson: true }
+    }
+  });
+}
+
+/**
  * Run every trial of one frozen batch. The batch always finalizes: an
  * operator signal records `not_started` for unlaunched trials, and a
  * batch-wide defect fails fast the same way before the error surfaces.
@@ -368,7 +398,7 @@ export async function runBatch(
     await store.openSink(`runs/${plan.batchId}/assignment-events.jsonl`),
     plan.batchId
   );
-  const exposure = options.exposure ?? createLoopbackExposure;
+  const exposure = options.exposure ?? defaultExposure(plan, pack);
   const outcomes: Array<TrialOutcome | null> = Array.from(
     { length: plan.count },
     (): TrialOutcome | null => null

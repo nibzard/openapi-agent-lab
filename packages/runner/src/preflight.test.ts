@@ -135,7 +135,7 @@ describe("runPreflight", () => {
     }
   });
 
-  it("refuses discoverable visibility because no facade ships", async () => {
+  it("accepts discoverable visibility under the raw HTTP facade", async () => {
     const pack = await loadSteelPack();
     const { store, clean } = await newStore();
     try {
@@ -146,6 +146,29 @@ describe("runPreflight", () => {
         store,
         adapter: new MockAgentAdapter(),
         paid: false,
+        exposureMode: "raw-http",
+        contractVisibility: "discoverable",
+        schemaDir: SCHEMA_DIR
+      });
+      expect(result.ok).toBe(true);
+      expect(result.plan?.contractVisibility).toBe("discoverable");
+    } finally {
+      await clean();
+    }
+  });
+
+  it("refuses discoverable visibility when the exposure mode serves no facade", async () => {
+    const pack = await loadSteelPack();
+    const { store, clean } = await newStore();
+    try {
+      const result = await runPreflight({
+        packDir: pack.root,
+        evalId: "basic-lifecycle",
+        batchId: "b-discoverable-tools",
+        store,
+        adapter: new MockAgentAdapter(),
+        paid: false,
+        exposureMode: "catalog-tools",
         contractVisibility: "discoverable",
         schemaDir: SCHEMA_DIR
       });
