@@ -1,0 +1,10 @@
+{
+  "name": "@oal/behavior-runtime",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Behavior backend runtime isolation.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

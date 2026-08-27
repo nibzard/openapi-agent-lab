@@ -1,0 +1,10 @@
+{
+  "name": "@oal/agent-adapter",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Agent adapter public API.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

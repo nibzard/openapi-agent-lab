@@ -1,0 +1,10 @@
+{
+  "name": "@oal/openapi",
+  "version": "0.0.0",
+  "private": true,
+  "description": "OpenAPI parsing and compilation.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

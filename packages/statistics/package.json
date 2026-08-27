@@ -1,0 +1,10 @@
+{
+  "name": "@oal/statistics",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Study statistics helpers.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@oal/contract-variant",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Contract variant materialization.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

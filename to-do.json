@@ -1,0 +1,1279 @@
+{
+  "schema_version": 1,
+  "project": {
+    "name": "OpenAPI Agent Lab",
+    "root": "."
+  },
+  "source_files": [
+    "README.md",
+    "SPEC.md"
+  ],
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Initialize the TypeScript workspace",
+      "priority": 1,
+      "status": "done",
+      "details": "Create the Node.js 24 LTS, ESM, strict TypeScript workspace with package boundaries, linting, formatting, test tooling, and repository hygiene from the specification.",
+      "steps": [
+        "Create package manifests and TypeScript configuration.",
+        "Add lint, format, test, and build scripts.",
+        "Create the reference repository layout.",
+        "Add baseline continuous integration commands."
+      ],
+      "tags": [
+        "workspace",
+        "tooling"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "updated_at": "2026-08-27T15:51:44.142Z"
+    },
+    {
+      "id": "T002",
+      "title": "Define shared schemas and data contracts",
+      "priority": 1,
+      "status": "doing",
+      "details": "Implement versioned schemas and TypeScript types for ContractIR, PackIR, RunProfile, StudyProtocol, PhasePlan, traces, artifacts, diagnostics, and reports.",
+      "steps": [
+        "Create schema packages for shared data contracts.",
+        "Generate or validate TypeScript types from schemas.",
+        "Add schema validation helpers.",
+        "Add golden schema examples."
+      ],
+      "tags": [
+        "schemas",
+        "types"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T001"
+      ],
+      "updated_at": "2026-08-27T15:51:44.163Z"
+    },
+    {
+      "id": "T003",
+      "title": "Implement source resolution and CLI shell",
+      "priority": 1,
+      "status": "todo",
+      "details": "Build the oal command shell, source resolution rules, stable output rules, and stable exit codes.",
+      "steps": [
+        "Create the executable entry point.",
+        "Implement JSON and terminal output modes.",
+        "Add source resolution for documents, packs, runs, and studies.",
+        "Map failures to stable exit codes."
+      ],
+      "tags": [
+        "cli"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T001",
+        "T002"
+      ]
+    },
+    {
+      "id": "T004",
+      "title": "Build OpenAPI input parsing",
+      "priority": 1,
+      "status": "todo",
+      "details": "Accept bounded OpenAPI 3.0.x and 3.1.x JSON or YAML inputs with deterministic parsing limits and clear diagnostics.",
+      "steps": [
+        "Parse JSON and YAML input files.",
+        "Reject unsupported OpenAPI versions.",
+        "Apply size, depth, and resource limits.",
+        "Normalize parser diagnostics."
+      ],
+      "tags": [
+        "compiler",
+        "openapi"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T002"
+      ]
+    },
+    {
+      "id": "T005",
+      "title": "Resolve same-pack local references",
+      "priority": 1,
+      "status": "todo",
+      "details": "Resolve local OpenAPI references safely and deterministically while rejecting remote references and unsafe paths.",
+      "steps": [
+        "Implement document graph loading for same-pack files.",
+        "Resolve JSON Pointer references.",
+        "Detect cycles and excessive reference depth.",
+        "Emit stable diagnostics for unsupported references."
+      ],
+      "tags": [
+        "compiler",
+        "security"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T004"
+      ]
+    },
+    {
+      "id": "T006",
+      "title": "Compile canonical operations",
+      "priority": 1,
+      "status": "todo",
+      "details": "Compile every parsed HTTP operation into ContractIR with stable operation identity, route metadata, request metadata, and response metadata.",
+      "steps": [
+        "Implement canonical operation identity rules.",
+        "Compile path and method route records.",
+        "Compile parameters, request bodies, responses, and security.",
+        "Preserve unsupported operations in the capability report."
+      ],
+      "tags": [
+        "compiler",
+        "contract-ir"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T005"
+      ]
+    },
+    {
+      "id": "T007",
+      "title": "Implement capability reporting",
+      "priority": 1,
+      "status": "todo",
+      "details": "Produce machine-readable per-document and per-operation support outcomes with stable diagnostics and support matrix coverage.",
+      "steps": [
+        "Define supported, approximated, requires-scenario, and unsupported outcomes.",
+        "Attach stable reason codes to each outcome.",
+        "Report feature coverage at document and operation levels.",
+        "Add inspect command output."
+      ],
+      "tags": [
+        "compiler",
+        "diagnostics"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T006"
+      ]
+    },
+    {
+      "id": "T008",
+      "title": "Validate OpenAPI request data",
+      "priority": 1,
+      "status": "todo",
+      "details": "Validate path, query, header, cookie, and body inputs against compiled operation metadata.",
+      "steps": [
+        "Implement parameter serialization and parsing.",
+        "Validate required fields and schema constraints.",
+        "Validate request media types.",
+        "Return explicit validation errors."
+      ],
+      "tags": [
+        "gateway",
+        "validation"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T006"
+      ]
+    },
+    {
+      "id": "T009",
+      "title": "Implement deterministic response generation",
+      "priority": 1,
+      "status": "todo",
+      "details": "Generate schema-valid contract responses from examples, defaults, enums, schemas, and seeded deterministic fallback values.",
+      "steps": [
+        "Implement response status selection rules.",
+        "Select examples and example values deterministically.",
+        "Generate JSON schema values deterministically.",
+        "Validate generated responses before returning them."
+      ],
+      "tags": [
+        "gateway",
+        "contract-backend"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T006"
+      ]
+    },
+    {
+      "id": "T010",
+      "title": "Build the HTTP gateway",
+      "priority": 1,
+      "status": "todo",
+      "details": "Start a loopback mock server that routes supported operations, handles framework defaults, enforces validation, and records accepted and rejected requests.",
+      "steps": [
+        "Map ContractIR routes to the server.",
+        "Implement the request pipeline.",
+        "Handle unmatched routes and methods.",
+        "Return deterministic errors and responses."
+      ],
+      "tags": [
+        "gateway",
+        "http"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T008",
+        "T009"
+      ]
+    },
+    {
+      "id": "T011",
+      "title": "Implement authentication emulation",
+      "priority": 1,
+      "status": "todo",
+      "details": "Emulate supported OpenAPI security requirements with synthetic per-run credentials and deterministic authorization failures.",
+      "steps": [
+        "Compile supported security schemes.",
+        "Generate synthetic credentials for a trial.",
+        "Validate credential delivery locations.",
+        "Redact credential material in traces and reports."
+      ],
+      "tags": [
+        "auth",
+        "gateway",
+        "security"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T010"
+      ]
+    },
+    {
+      "id": "T012",
+      "title": "Implement content negotiation and HTTP semantics",
+      "priority": 2,
+      "status": "todo",
+      "details": "Support request and response media negotiation, headers, status rules, wire semantics, and explicit framework defaults.",
+      "steps": [
+        "Select response media types deterministically.",
+        "Enforce request content types.",
+        "Apply response and documentation profiles.",
+        "Add tests for HTTP edge cases."
+      ],
+      "tags": [
+        "gateway",
+        "http"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T010"
+      ]
+    },
+    {
+      "id": "T013",
+      "title": "Create the SQLite state store",
+      "priority": 1,
+      "status": "todo",
+      "details": "Implement the transactional SQLite source of truth for runs, trials, mutable state, requests, events, artifacts, idempotency, and terminal disposition.",
+      "steps": [
+        "Create database schema migrations.",
+        "Implement state revision tracking.",
+        "Implement idempotency records.",
+        "Add transactional repository helpers."
+      ],
+      "tags": [
+        "state",
+        "persistence"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T002"
+      ]
+    },
+    {
+      "id": "T014",
+      "title": "Implement deterministic seed and clock services",
+      "priority": 1,
+      "status": "todo",
+      "details": "Provide deterministic seed derivation, virtual time, request ordering, and concurrency behavior for repeatable runs.",
+      "steps": [
+        "Implement seed derivation functions.",
+        "Implement the virtual clock.",
+        "Persist request order and state revision data.",
+        "Add determinism tests."
+      ],
+      "tags": [
+        "determinism",
+        "state"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T013"
+      ]
+    },
+    {
+      "id": "T015",
+      "title": "Define pack manifests and invariants",
+      "priority": 1,
+      "status": "todo",
+      "details": "Implement pack manifest parsing, PackIR creation, validation, invariants, task definitions, prompt sets, fixtures, scenarios, and result schemas.",
+      "steps": [
+        "Define the pack directory contract.",
+        "Load and validate pack manifests.",
+        "Build effective PackIR.",
+        "Validate pack invariants."
+      ],
+      "tags": [
+        "packs",
+        "validation"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T002",
+        "T007"
+      ]
+    },
+    {
+      "id": "T016",
+      "title": "Implement pack authoring commands",
+      "priority": 2,
+      "status": "todo",
+      "details": "Add oal pack init and oal pack validate for scenario pack authors.",
+      "steps": [
+        "Create pack scaffolding templates.",
+        "Implement strict pack validation.",
+        "Validate referenced OpenAPI documents and eval files.",
+        "Return clear author diagnostics."
+      ],
+      "tags": [
+        "cli",
+        "packs"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T003",
+        "T015"
+      ]
+    },
+    {
+      "id": "T017",
+      "title": "Implement behavior backend API",
+      "priority": 1,
+      "status": "todo",
+      "details": "Create the behavior backend interface, request envelope, response contract, state mutation semantics, and behavior error handling.",
+      "steps": [
+        "Define TypeScript interfaces for behavior backends.",
+        "Implement behavior request and response validation.",
+        "Support state transitions and semantic events.",
+        "Map behavior errors to gateway responses."
+      ],
+      "tags": [
+        "behavior",
+        "packs"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T013",
+        "T015"
+      ]
+    },
+    {
+      "id": "T018",
+      "title": "Implement behavior runtime isolation",
+      "priority": 2,
+      "status": "todo",
+      "details": "Run scenario behavior under the declared trust model with explicit isolation levels, process separation, and safe defaults.",
+      "steps": [
+        "Define execution profiles for behavior code.",
+        "Implement process lifecycle management.",
+        "Restrict network and filesystem access according to profile.",
+        "Record effective isolation level."
+      ],
+      "tags": [
+        "behavior",
+        "security",
+        "sandbox"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T017"
+      ]
+    },
+    {
+      "id": "T019",
+      "title": "Implement deterministic fault injection",
+      "priority": 2,
+      "status": "todo",
+      "details": "Support deterministic scenario fault schedules for responses, transport failures, delays, and behavior errors.",
+      "steps": [
+        "Define fault schedule schema support.",
+        "Apply faults in request order.",
+        "Persist fault decisions in evidence.",
+        "Add replay and determinism tests."
+      ],
+      "tags": [
+        "behavior",
+        "determinism"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T014",
+        "T017"
+      ]
+    },
+    {
+      "id": "T020",
+      "title": "Implement normalized trace capture",
+      "priority": 1,
+      "status": "todo",
+      "details": "Capture one normalized trace exchange for each request, including accepted, rejected, unmatched, documentation, and semantic events.",
+      "steps": [
+        "Define trace writers and validators.",
+        "Record request, response, timing, and redaction data.",
+        "Capture documentation exchanges separately.",
+        "Capture semantic events from behavior backends."
+      ],
+      "tags": [
+        "trace",
+        "evidence"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T010",
+        "T013"
+      ]
+    },
+    {
+      "id": "T021",
+      "title": "Implement redaction and raw capture policy",
+      "priority": 1,
+      "status": "todo",
+      "details": "Implement credential classes, delivery, redaction canaries, redaction representation, and optional raw capture controls.",
+      "steps": [
+        "Classify credential material.",
+        "Apply deterministic redaction to traces and artifacts.",
+        "Implement redaction canary checks.",
+        "Gate raw capture by explicit configuration."
+      ],
+      "tags": [
+        "redaction",
+        "security",
+        "evidence"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T011",
+        "T020"
+      ]
+    },
+    {
+      "id": "T022",
+      "title": "Implement artifact store layout",
+      "priority": 1,
+      "status": "todo",
+      "details": "Write batch, trial, and study artifacts with immutable paths, manifests, frozen input hashes, implementation metadata, and evidence integrity checks.",
+      "steps": [
+        "Create artifact writer interfaces.",
+        "Write batch and trial directory layouts.",
+        "Write artifact manifests and frozen metadata.",
+        "Refuse overwrites of existing evidence paths."
+      ],
+      "tags": [
+        "artifacts",
+        "evidence"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T013",
+        "T020"
+      ]
+    },
+    {
+      "id": "T023",
+      "title": "Build the runner preflight",
+      "priority": 1,
+      "status": "todo",
+      "details": "Validate contract, pack, eval, adapter, prompt, workflow, rubric, limits, and run profile before an agent process starts.",
+      "steps": [
+        "Resolve all run inputs.",
+        "Validate strict support requirements.",
+        "Freeze the effective run profile.",
+        "Return setup and configuration failures before launch."
+      ],
+      "tags": [
+        "runner",
+        "validation"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T015",
+        "T022"
+      ]
+    },
+    {
+      "id": "T024",
+      "title": "Implement trial setup and lifecycle",
+      "priority": 1,
+      "status": "todo",
+      "details": "Create isolated trial workspaces, per-run mock servers, credentials, state, lifecycle stages, timeout handling, and terminal finalization.",
+      "steps": [
+        "Create trial workspace construction.",
+        "Start and stop per-trial mocks.",
+        "Track lifecycle stages durably.",
+        "Finalize all terminal dispositions."
+      ],
+      "tags": [
+        "runner",
+        "lifecycle"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T010",
+        "T014",
+        "T023"
+      ]
+    },
+    {
+      "id": "T025",
+      "title": "Implement participant material and prompts",
+      "priority": 1,
+      "status": "todo",
+      "details": "Generate participant workspaces, prompt roles, template variables, prompt sets, documentation visibility, and structured final-output instructions.",
+      "steps": [
+        "Implement prompt template rendering.",
+        "Write participant-visible contract materials.",
+        "Apply contract visibility modes.",
+        "Validate final-output schema instructions."
+      ],
+      "tags": [
+        "prompts",
+        "runner"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T015",
+        "T024"
+      ]
+    },
+    {
+      "id": "T026",
+      "title": "Implement agent adapter API",
+      "priority": 1,
+      "status": "todo",
+      "details": "Define the normalized adapter interface and implement adapter conformance behavior for launching, monitoring, cancelling, and collecting outputs.",
+      "steps": [
+        "Create adapter TypeScript interfaces.",
+        "Validate adapter capabilities.",
+        "Capture process output and exit status.",
+        "Add adapter conformance tests."
+      ],
+      "tags": [
+        "adapters",
+        "runner"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T024"
+      ]
+    },
+    {
+      "id": "T027",
+      "title": "Implement the generic command adapter",
+      "priority": 1,
+      "status": "todo",
+      "details": "Ship the argv-based adapter for arbitrary local agent commands using the shared adapter API.",
+      "steps": [
+        "Map run context to environment variables and arguments.",
+        "Launch the configured command.",
+        "Collect final output and artifacts.",
+        "Handle timeouts and cancellation."
+      ],
+      "tags": [
+        "adapters"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T026"
+      ]
+    },
+    {
+      "id": "T028",
+      "title": "Implement the Codex CLI adapter",
+      "priority": 1,
+      "status": "todo",
+      "details": "Ship the reference adapter for Codex CLI with model, effort, sandbox, environment, output, and cancellation handling.",
+      "steps": [
+        "Map run profile fields to Codex CLI flags.",
+        "Inject participant workspace and environment.",
+        "Collect structured final output.",
+        "Add conformance tests without paid model calls."
+      ],
+      "tags": [
+        "adapters",
+        "codex"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T026"
+      ]
+    },
+    {
+      "id": "T029",
+      "title": "Implement oal run for trials and cohorts",
+      "priority": 1,
+      "status": "todo",
+      "details": "Run one trial or a homogeneous cohort with pinned run inputs, parallelism limits, durable evidence, and visible non-success outcomes.",
+      "steps": [
+        "Implement count and parallel execution.",
+        "Pin cohort run profile inputs.",
+        "Retain failed, timed-out, malformed, zero-request, and interrupted trials.",
+        "Write canonical run artifacts."
+      ],
+      "tags": [
+        "cli",
+        "runner"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T024",
+        "T026"
+      ]
+    },
+    {
+      "id": "T030",
+      "title": "Implement raw HTTP exposure",
+      "priority": 1,
+      "status": "todo",
+      "details": "Expose a trial mock over raw HTTP with independent contract visibility modes and documentation-plane handling.",
+      "steps": [
+        "Serve the selected contract endpoint set.",
+        "Generate participant-visible base URLs and credentials.",
+        "Implement documentation discovery routes when selected.",
+        "Keep control-plane routes private."
+      ],
+      "tags": [
+        "exposure",
+        "http"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T010",
+        "T025"
+      ]
+    },
+    {
+      "id": "T031",
+      "title": "Implement direct tool exposure",
+      "priority": 2,
+      "status": "todo",
+      "details": "Generate one tool per operation for small or filtered contracts, with stable names, schemas, and invocation behavior.",
+      "steps": [
+        "Generate direct tool metadata from ContractIR.",
+        "Map tool calls to gateway invocations.",
+        "Validate tool arguments.",
+        "Record tool exchanges in normalized trace."
+      ],
+      "tags": [
+        "exposure",
+        "tools"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T010",
+        "T020"
+      ]
+    },
+    {
+      "id": "T032",
+      "title": "Implement catalog tool exposure",
+      "priority": 2,
+      "status": "todo",
+      "details": "Implement catalog search, describe, and invoke tools for large contracts using the shared invocation envelope.",
+      "steps": [
+        "Build operation search indexes.",
+        "Implement operation description output.",
+        "Implement catalog invocation.",
+        "Add MCP lifecycle support."
+      ],
+      "tags": [
+        "exposure",
+        "tools",
+        "mcp"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T010",
+        "T020"
+      ]
+    },
+    {
+      "id": "T033",
+      "title": "Implement Arazzo workflow support",
+      "priority": 3,
+      "status": "todo",
+      "details": "Validate hidden and participant-visible Arazzo workflows, align them with traces, and support control execution.",
+      "steps": [
+        "Parse workflow documents.",
+        "Validate workflow references to operations.",
+        "Render participant-visible workflows when selected.",
+        "Align workflow steps with trace events."
+      ],
+      "tags": [
+        "workflows",
+        "arazzo"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T015",
+        "T020"
+      ]
+    },
+    {
+      "id": "T034",
+      "title": "Implement evaluator and rubric DSL",
+      "priority": 1,
+      "status": "todo",
+      "details": "Grade trials from normalized trace, final state, artifacts, and structured final output using deterministic rubric checks.",
+      "steps": [
+        "Define evaluator input contracts.",
+        "Implement rubric parsing and validation.",
+        "Implement check kinds, scoring, and sequence semantics.",
+        "Write evaluation evidence artifacts."
+      ],
+      "tags": [
+        "evaluator",
+        "rubric"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T020",
+        "T022"
+      ]
+    },
+    {
+      "id": "T035",
+      "title": "Implement eval authoring commands",
+      "priority": 2,
+      "status": "todo",
+      "details": "Add oal eval init, oal eval validate, and oal evaluate for task authors and offline evaluation.",
+      "steps": [
+        "Create eval scaffolding templates.",
+        "Validate task, prompt, scenario, result schema, and rubric links.",
+        "Run evaluation against existing evidence.",
+        "Report malformed final output separately."
+      ],
+      "tags": [
+        "cli",
+        "evaluator"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T016",
+        "T034"
+      ]
+    },
+    {
+      "id": "T036",
+      "title": "Implement reports and comparisons",
+      "priority": 1,
+      "status": "todo",
+      "details": "Generate canonical JSON, terminal, and Markdown reports plus descriptive comparisons that preserve all trial outcomes and compatibility warnings.",
+      "steps": [
+        "Aggregate trial outcomes and scores.",
+        "Emit required denominators and independent outcome axes.",
+        "Implement report formats.",
+        "Implement compare output with compatibility drift."
+      ],
+      "tags": [
+        "reports",
+        "analysis"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T029",
+        "T034"
+      ]
+    },
+    {
+      "id": "T037",
+      "title": "Implement replay and doctor commands",
+      "priority": 3,
+      "status": "todo",
+      "details": "Add oal replay for evidence replay and oal doctor for environment, dependency, version, and system checks.",
+      "steps": [
+        "Replay recorded traces against configured backends.",
+        "Check environment prerequisites.",
+        "Check dependency and binary versions.",
+        "Report actionable diagnostic output."
+      ],
+      "tags": [
+        "cli",
+        "diagnostics"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T022",
+        "T036"
+      ]
+    },
+    {
+      "id": "T038",
+      "title": "Implement resource limits and failure taxonomy",
+      "priority": 1,
+      "status": "todo",
+      "details": "Enforce parsing, runtime, process, network, filesystem, and denial-of-service controls with normalized failure categories and retry policy.",
+      "steps": [
+        "Define default limits and ceilings.",
+        "Apply parser and runtime controls.",
+        "Normalize diagnostic categories.",
+        "Implement crash recovery behavior."
+      ],
+      "tags": [
+        "limits",
+        "failures",
+        "security"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T004",
+        "T024"
+      ]
+    },
+    {
+      "id": "T039",
+      "title": "Implement observability and evidence integrity",
+      "priority": 2,
+      "status": "todo",
+      "details": "Emit internal events, metrics, diagnostic records, and evidence integrity classifications without adding participant-facing control endpoints.",
+      "steps": [
+        "Define event families and metrics.",
+        "Record setup, provider, runner, mock, evaluator, and artifact failures.",
+        "Classify evidence integrity.",
+        "Add observability tests."
+      ],
+      "tags": [
+        "observability",
+        "evidence"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T020",
+        "T022"
+      ]
+    },
+    {
+      "id": "T040",
+      "title": "Build the OpenAPI conformance corpus",
+      "priority": 1,
+      "status": "todo",
+      "details": "Create fixture documents for formats, versions, references, paths, parameters, request bodies, responses, schemas, security, adversarial inputs, and real-world shapes.",
+      "steps": [
+        "Define the corpus manifest.",
+        "Add accepted and rejected document fixtures.",
+        "Add feature matrix fixtures.",
+        "Add adversarial and real-world shape fixtures."
+      ],
+      "tags": [
+        "testing",
+        "openapi"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T004"
+      ]
+    },
+    {
+      "id": "T041",
+      "title": "Add compiler and gateway test suites",
+      "priority": 1,
+      "status": "todo",
+      "details": "Create unit, golden, black-box mock conformance, fuzz, and property tests for compiler and contract gateway behavior.",
+      "steps": [
+        "Add compiler unit tests.",
+        "Add ContractIR golden tests.",
+        "Add black-box mock conformance tests.",
+        "Add fuzz and property tests for critical parser paths."
+      ],
+      "tags": [
+        "testing",
+        "compiler",
+        "gateway"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T007",
+        "T010",
+        "T040"
+      ]
+    },
+    {
+      "id": "T042",
+      "title": "Add runner and evaluator test suites",
+      "priority": 1,
+      "status": "todo",
+      "details": "Create integration, security, adversarial, conformance, real-agent dry-run, and study protocol tests for the runner and evaluator.",
+      "steps": [
+        "Add runner integration tests without paid model calls.",
+        "Add scenario pack conformance tests.",
+        "Add evaluator and report tests.",
+        "Add security and adversarial tests."
+      ],
+      "tags": [
+        "testing",
+        "runner",
+        "evaluator"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T029",
+        "T034",
+        "T040"
+      ]
+    },
+    {
+      "id": "T043",
+      "title": "Migrate the Steel Computer pack",
+      "priority": 1,
+      "status": "todo",
+      "details": "Move Steel into the first built-in high-fidelity pack while preserving historical behavior before any semantic corrections.",
+      "steps": [
+        "Import the Steel source contract and prototype data.",
+        "Map routes, state, prompts, tasks, and rubric to pack files.",
+        "Implement Steel behavior backend parity.",
+        "Document known migration drift."
+      ],
+      "tags": [
+        "steel",
+        "packs",
+        "migration"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T017",
+        "T034"
+      ]
+    },
+    {
+      "id": "T044",
+      "title": "Validate Steel parity",
+      "priority": 1,
+      "status": "todo",
+      "details": "Create the required Steel reference study profile and parity tests for existing behavior, traces, outcomes, and reports.",
+      "steps": [
+        "Create Steel golden traces and fixtures.",
+        "Run parity checks against migrated behavior.",
+        "Validate the required reference study profile.",
+        "Add regression tests for known drift."
+      ],
+      "tags": [
+        "steel",
+        "testing"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T036",
+        "T043"
+      ]
+    },
+    {
+      "id": "T045",
+      "title": "Implement StudyProtocol validation and locking",
+      "priority": 2,
+      "status": "todo",
+      "details": "Support optional preregistered research protocols with frozen questions, factors, phases, participant surfaces, estimands, analysis, and interpretation limits.",
+      "steps": [
+        "Parse StudyProtocol and PhasePlan documents.",
+        "Validate protocol and phase invariants.",
+        "Create protocol and phase locks.",
+        "Refuse analytical runs without valid locks."
+      ],
+      "tags": [
+        "study",
+        "research"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T002",
+        "T015",
+        "T036"
+      ]
+    },
+    {
+      "id": "T046",
+      "title": "Implement study scheduling and assignment",
+      "priority": 2,
+      "status": "todo",
+      "details": "Create deterministic StudyRun scheduling with balanced cells, primary assignments, held replacements, paid-call ceilings, and immutable assignment files.",
+      "steps": [
+        "Generate assignments from locked PhasePlan inputs.",
+        "Balance assignments across cells.",
+        "Persist primary and replacement slots.",
+        "Hash and freeze schedule artifacts."
+      ],
+      "tags": [
+        "study",
+        "scheduler"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T045"
+      ]
+    },
+    {
+      "id": "T047",
+      "title": "Implement study runs and analysis",
+      "priority": 2,
+      "status": "todo",
+      "details": "Run multi-cell studies as parent StudyRuns with homogeneous child batches, compatibility keys, replacement policy, immutable analysis, and statistical outputs.",
+      "steps": [
+        "Create StudyRun artifact layout.",
+        "Interleave assignments across child batches.",
+        "Apply replacement and eligibility rules.",
+        "Generate registered analysis outputs."
+      ],
+      "tags": [
+        "study",
+        "analysis"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T029",
+        "T046"
+      ]
+    },
+    {
+      "id": "T048",
+      "title": "Implement counterfactual contract variants",
+      "priority": 3,
+      "status": "todo",
+      "details": "Support locked research artifacts derived from pinned base contracts by allowlisted deterministic transformations.",
+      "steps": [
+        "Define ContractVariant set schemas.",
+        "Implement allowlisted transformations.",
+        "Validate participant-surface compatibility.",
+        "Record compatibility keys and drift output."
+      ],
+      "tags": [
+        "study",
+        "contracts"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T045"
+      ]
+    },
+    {
+      "id": "T049",
+      "title": "Implement participant-surface checks",
+      "priority": 2,
+      "status": "todo",
+      "details": "Detect accidental differences in bytes, names, routes, metadata, credentials shapes, errors, and tools across compatible cells.",
+      "steps": [
+        "Capture participant-surface manifests.",
+        "Compare surfaces across cells.",
+        "Separate intended treatment differences from drift.",
+        "Fail inferential pooling on incompatible keys."
+      ],
+      "tags": [
+        "study",
+        "blinding"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T025",
+        "T045"
+      ]
+    },
+    {
+      "id": "T050",
+      "title": "Add continuous integration and release gates",
+      "priority": 2,
+      "status": "todo",
+      "details": "Implement pull-request, nightly, release, coverage, compatibility, and performance gates described by the specification.",
+      "steps": [
+        "Add pull-request test gates.",
+        "Add nightly conformance gates.",
+        "Add release completeness checks.",
+        "Add performance budget checks."
+      ],
+      "tags": [
+        "ci",
+        "release"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T041",
+        "T042",
+        "T044"
+      ]
+    },
+    {
+      "id": "T051",
+      "title": "Evaluate external component choices",
+      "priority": 3,
+      "status": "todo",
+      "details": "Decide how Stoplight Prism, Microcks, Schemathesis, Arazzo tooling, and dependency governance fit the implementation.",
+      "steps": [
+        "Create technical decision notes for each component.",
+        "Prototype integration paths where useful.",
+        "Document dependency license and security constraints.",
+        "Lock dependency governance rules."
+      ],
+      "tags": [
+        "architecture",
+        "dependencies"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T001"
+      ]
+    },
+    {
+      "id": "T052",
+      "title": "Document local product usage",
+      "priority": 3,
+      "status": "todo",
+      "details": "Write user documentation for local CLI workflows, pack authoring, eval authoring, cohort runs, reports, and limits.",
+      "steps": [
+        "Document inspect and serve workflows.",
+        "Document pack and eval authoring workflows.",
+        "Document run, report, compare, replay, and doctor workflows.",
+        "Document local exclusions and hosted prerequisites."
+      ],
+      "tags": [
+        "docs"
+      ],
+      "files": [
+        "README.md",
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T036",
+        "T037"
+      ]
+    },
+    {
+      "id": "T053",
+      "title": "Complete MVP acceptance criteria",
+      "priority": 1,
+      "status": "todo",
+      "details": "Verify all automated acceptance criteria for compiler, gateway, state, trace, runner, redaction, evaluator, tools, Steel migration, release completeness, workflows, and study features.",
+      "steps": [
+        "Map acceptance criteria to automated tests.",
+        "Run the full acceptance suite.",
+        "Fix failing gaps.",
+        "Publish acceptance reports."
+      ],
+      "tags": [
+        "acceptance",
+        "mvp"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T030",
+        "T032",
+        "T033",
+        "T044",
+        "T047",
+        "T050"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "@oal/cli",
+  "version": "0.0.0",
+  "private": true,
+  "description": "OpenAPI Agent Lab command line interface.",
+  "type": "module",
+  "bin": {
+    "oal": "./src/index.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

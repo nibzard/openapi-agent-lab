@@ -1,0 +1,10 @@
+{
+  "name": "@oal/agent-codex",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Codex CLI agent adapter.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

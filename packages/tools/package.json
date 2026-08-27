@@ -1,0 +1,10 @@
+{
+  "name": "@oal/tools",
+  "version": "0.0.0",
+  "private": true,
+  "description": "MCP tool facade.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

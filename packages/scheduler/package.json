@@ -1,0 +1,10 @@
+{
+  "name": "@oal/scheduler",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Deterministic run and study scheduling.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

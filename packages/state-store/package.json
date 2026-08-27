@@ -1,0 +1,10 @@
+{
+  "name": "@oal/state-store",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SQLite state and event store.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

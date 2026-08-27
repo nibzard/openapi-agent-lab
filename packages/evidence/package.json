@@ -1,0 +1,10 @@
+{
+  "name": "@oal/evidence",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Evidence artifact writing and verification.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

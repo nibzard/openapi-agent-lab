@@ -1,0 +1,10 @@
+{
+  "name": "@oal/documentation-facade",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Participant documentation facade.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

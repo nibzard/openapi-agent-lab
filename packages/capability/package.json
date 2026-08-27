@@ -1,0 +1,14 @@
+{
+  "name": "@oal/capability",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Capability reports and diagnostics.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@oal/core": "workspace:*",
+    "@oal/contract-ir": "workspace:*"
+  }
+}

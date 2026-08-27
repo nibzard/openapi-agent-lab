@@ -1,0 +1,10 @@
+{
+  "name": "@oal/gateway",
+  "version": "0.0.0",
+  "private": true,
+  "description": "HTTP gateway runtime.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}
