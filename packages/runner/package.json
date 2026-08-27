@@ -24,6 +24,7 @@
     "@oal/openapi": "workspace:*",
     "@oal/pack": "workspace:*",
     "@oal/state-store": "workspace:*",
+    "@oal/study-ir": "workspace:*",
     "@oal/testkit": "workspace:*",
     "@oal/tools": "workspace:*"
   }
