@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "description": "Initial state of the baseline scenario: no sessions, files, credentials, extensions, or profiles exist before the participant acts.",
+  "sessions": {},
+  "global_files": {},
+  "credentials": [],
+  "extensions": [],
+  "profiles": []
+}

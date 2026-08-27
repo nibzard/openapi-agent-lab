@@ -1,1 +1,208 @@
-# Placeholder for the Steel Computer pack manifest.
+# Steel Computer pack manifest, migrated from the real Steel v1 API
+# (examples/steel-v1.json). See MIGRATION-NOTES.md for the preserved
+# historical drift.
+apiVersion: agentlab.dev/v1
+kind: Pack
+
+metadata:
+  id: steel-computer
+  name: Steel Computer
+  version: 0.1.0
+  description: >-
+    Migration of the real Steel v1 browser-session API as the first
+    built-in pack. Historical v1 semantics are preserved as published,
+    including every drift listed in MIGRATION-NOTES.md.
+
+requires:
+  agentlab: ">=0.1.0 <0.2.0"
+  backend_api: 1
+  rubric_api: 1
+
+contract:
+  entrypoint: contract/openapi.json
+  compile:
+    remote_refs: deny
+    unsupported_features: error
+    warnings_as_errors: false
+  participant_copy:
+    filename: openapi.json
+    bundle_refs: true
+    replace_servers: true
+    external_docs: strip
+  response_fixtures:
+    - id: sessions-list-empty
+      operation: "path:GET /v1/sessions"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/sessions-list.json
+    - id: jwks-empty
+      operation: "path:GET /.well-known/jwks.json"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_inline
+        value:
+          keys: []
+    - id: captcha-status-idle
+      operation: "path:GET /v1/sessions/{sessionId}/captchas/status"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_inline
+        value:
+          pageId: ""
+          url: ""
+          isSolvingCaptcha: false
+          tasks: []
+          created: 0
+          lastUpdated: 0
+
+server:
+  host: 127.0.0.1
+  port: 0
+  request_body_limit_bytes: 5242880
+  request_timeout_ms: 30000
+  response_validation: error
+  request_validation: error
+  concurrency: serial
+
+# Contract mode in 0.1.0: the pack ships data only. The 41 Steel
+# behavior handlers of the frozen prototype are scenario-backend work
+# for a later pack version (MIGRATION-NOTES.md, drift item 17).
+behavior:
+  mode: contract
+  completeness: exact
+  fallback: none
+
+security:
+  enforce: true
+  credentials:
+    - id: primary-api-key
+      scheme: apiKey
+      provider:
+        kind: generated
+        bytes: 32
+      expose:
+        environment: STEEL_API_KEY
+  base_url_environment: STEEL_BASE_URL
+
+redaction:
+  header_names:
+    - authorization
+    - steel-api-key
+    - x-api-key
+  key_patterns:
+    - "(?i)api.?key"
+    - "(?i)token"
+    - "(?i)secret"
+    - "(?i)password"
+    - "(?i)credentials"
+    - "(?i)private.?key"
+  capture_binary_blobs: false
+  max_text_capture_bytes: 65536
+
+participant:
+  environment:
+    inherit: none
+    allow:
+      - PATH
+      - HOME
+      - TMPDIR
+      - STEEL_BASE_URL
+      - STEEL_API_KEY
+
+prompt_sets:
+  - id: diagnostic
+    purpose_disclosure: diagnostic
+    instructions:
+      source: prompts/diagnostic/instructions.md
+      engine: mustache-strict
+      delivery: file
+      target: AGENTS.md
+    launch:
+      source: prompts/diagnostic/launch.txt
+      engine: mustache-strict
+  - id: naturalistic
+    purpose_disclosure: naturalistic
+    instructions:
+      source: prompts/naturalistic/instructions.md
+      engine: mustache-strict
+      delivery: file
+      target: INSTRUCTIONS.md
+    launch:
+      source: prompts/naturalistic/launch.txt
+      engine: literal
+
+evals:
+  - id: checkpoint-recovery
+    prompt_set: diagnostic
+    task:
+      source: tasks/checkpoint-recovery/task.md
+      engine: mustache-strict
+      target: TASK.md
+    participant_files:
+      - source: schemas/checkpoint-recovery-result.schema.json
+        target: result.schema.json
+    cases:
+      source: tasks/checkpoint-recovery/cases.jsonl
+      schema: schemas/checkpoint-recovery-case.schema.json
+      id_pointer: /id
+    operation_scope:
+      mode: all
+    result:
+      source: adapter_final
+      schema: schemas/checkpoint-recovery-result.schema.json
+      required: true
+    rubric: evals/checkpoint-recovery/rubric.yaml
+    scenario: baseline
+
+  - id: basic-lifecycle
+    prompt_set: naturalistic
+    task:
+      source: tasks/basic-lifecycle/task.md
+      engine: literal
+      target: lifecycle-task.md
+    participant_files:
+      - source: schemas/basic-lifecycle-result.schema.json
+        target: lifecycle-result.schema.json
+    operation_scope:
+      mode: all
+    result:
+      source: adapter_final
+      schema: schemas/basic-lifecycle-result.schema.json
+      required: true
+    rubric: evals/basic-lifecycle/rubric.yaml
+    scenario: baseline
+
+  - id: documentation-discovery
+    prompt_set: diagnostic
+    task:
+      source: tasks/documentation-discovery/task.md
+      engine: mustache-strict
+      target: discovery-task.md
+    participant_files:
+      - source: schemas/documentation-discovery-result.schema.json
+        target: discovery-result.schema.json
+    operation_scope:
+      mode: all
+    result:
+      source: adapter_final
+      schema: schemas/documentation-discovery-result.schema.json
+      required: true
+    rubric: evals/documentation-discovery/rubric.yaml
+    scenario: baseline
+
+scenarios:
+  - id: baseline
+    fixtures:
+      - fixtures/baseline.json
+
+extensions: {}

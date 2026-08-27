@@ -1,0 +1,141 @@
+# Checkpoint-recovery rubric for the Steel Computer pack.
+#
+# Adapted from the SPEC 26.3 example rubric and the evaluator fixture in
+# packages/evaluator/src/evaluate.test.ts. The frozen Steel v1 contract has
+# no checkpoints, no pause or resume, and no saved-state session creation,
+# so the prepare, alter, restore, and pause steps map onto the workspace
+# file operations that v1 does expose. See MIGRATION-NOTES.md, drift
+# item 1.
+rubric_version: 1
+id: steel-checkpoint-recovery
+description: >-
+  Seed one session workspace file, prove the bytes, overwrite them,
+  recover the seed bytes, release the session, and report released state
+  plus the absence of any saved-state creation mechanism.
+scoring:
+  method: weighted_binary
+  pass_threshold: 0.9
+checks:
+  - id: recovery_flow
+    kind: sequence
+    match: any
+    max_candidates: 10000
+    weight: 8
+    required: true
+    evidence_class: participant_observable
+    description: >-
+      One ordered flow over exactly one session: create, seed upload,
+      verified seed read, overwrite upload, changed read, recovery
+      upload, recovered read, release, released status read.
+    steps:
+      - id: create_session
+        where: >-
+          event.operation.operation_id == "create_session" &&
+          event.response.status >= 200 &&
+          event.response.status < 300
+        capture:
+          session_id: event.response.body.value.id
+      - id: seed_upload
+        where: >-
+          event.operation.operation_id == "upload_file" &&
+          event.request.path_parameters.sessionId == vars.session_id &&
+          event.request.body.kind == "multipart" &&
+          event.response.status == 201
+      - id: seed_read
+        where: >-
+          event.operation.operation_id == "download_file" &&
+          event.request.path_parameters.sessionId == vars.session_id &&
+          event.response.status == 200 &&
+          event.response.body.kind == "binary"
+        capture:
+          clean_sha: event.response.body.sha256
+      - id: changed_upload
+        where: >-
+          event.operation.operation_id == "upload_file" &&
+          event.request.path_parameters.sessionId == vars.session_id &&
+          event.request.body.kind == "multipart" &&
+          event.response.status == 201
+      - id: changed_read
+        where: >-
+          event.operation.operation_id == "download_file" &&
+          event.request.path_parameters.sessionId == vars.session_id &&
+          event.response.status == 200 &&
+          event.response.body.kind == "binary" &&
+          event.response.body.sha256 != vars.clean_sha
+      - id: restore_seed
+        where: >-
+          event.operation.operation_id == "upload_file" &&
+          event.request.path_parameters.sessionId == vars.session_id &&
+          event.request.body.kind == "multipart" &&
+          event.response.status == 201
+      - id: recovered_read
+        where: >-
+          event.operation.operation_id == "download_file" &&
+          event.request.path_parameters.sessionId == vars.session_id &&
+          event.response.status == 200 &&
+          event.response.body.kind == "binary" &&
+          event.response.body.sha256 == vars.clean_sha
+      - id: release_session
+        where: >-
+          event.operation.operation_id == "release_session" &&
+          event.request.path_parameters.id == vars.session_id &&
+          event.response.status == 200
+      - id: released_status
+        where: >-
+          event.operation.operation_id == "get_session" &&
+          event.request.path_parameters.id == vars.session_id &&
+          event.response.status == 200 &&
+          event.response.body.value.status == "released"
+    postconditions:
+      - id: report_agrees_released
+        expression: report.released_session == true
+  - id: result_report
+    kind: json_schema
+    value: report
+    schema: schemas/checkpoint-recovery-result.schema.json
+    weight: 1
+    required: true
+    evidence_class: participant_observable
+    description: The final report matches the pack result schema.
+  - id: single_create
+    kind: event
+    match: counted
+    where: >-
+      event.operation.operation_id == "create_session" &&
+      event.response.status >= 200 &&
+      event.response.status < 300
+    min_count: 1
+    max_count: 1
+    weight: 1
+    required: true
+    evidence_class: participant_observable
+    description: Exactly one session is created.
+  - id: saved_state_reported_unsupported
+    kind: predicate
+    expression: report.saved_state_create_supported == false
+    weight: 1
+    required: true
+    evidence_class: participant_observable
+    description: >-
+      The Steel v1 API publishes no operation that creates a session
+      from saved state, so an accurate report answers false.
+  - id: no_unmatched_requests
+    kind: event
+    match: universal
+    where: event.operation.matched == true
+    weight: 1
+    required: true
+    evidence_class: participant_observable
+    description: >-
+      Every request targets a route the contract declares. Replaces the
+      no_false_fanout check of the SPEC 26.3 example.
+signals:
+  - id: first_call_is_create
+    kind: predicate
+    expression: >-
+      events[0].operation.operation_id == "create_session"
+    description: The participant opened with session creation.
+  - id: first_call_matched
+    kind: predicate
+    expression: events[0].operation.matched == true
+    description: The first request hit a declared route.

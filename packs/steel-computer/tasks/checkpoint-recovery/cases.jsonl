@@ -1,0 +1,2 @@
+{"id": "seed-brief", "input": {"seed_path": "brief.txt", "replacement_path": "draft.txt"}, "description": "Recover brief.txt after the workspace is overwritten with draft.txt."}
+{"id": "seed-checkout", "input": {"seed_path": "checkout.md", "replacement_path": "handoff.md"}, "description": "Recover checkout.md after the workspace is overwritten with handoff.md."}

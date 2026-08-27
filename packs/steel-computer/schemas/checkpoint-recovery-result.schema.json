@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/packs/steel-computer/schemas/checkpoint-recovery-result.schema.json",
+  "title": "Steel Computer checkpoint-recovery result",
+  "type": "object",
+  "properties": {
+    "released_session": {
+      "type": "boolean",
+      "description": "Whether the session reached the released state."
+    },
+    "saved_state_create_supported": {
+      "type": "boolean",
+      "description": "Whether the Steel v1 API actually offers creating a session from saved session state."
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000
+    }
+  },
+  "required": ["released_session", "saved_state_create_supported"],
+  "additionalProperties": false
+}

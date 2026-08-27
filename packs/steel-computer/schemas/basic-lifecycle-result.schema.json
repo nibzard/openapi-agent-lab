@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/packs/steel-computer/schemas/basic-lifecycle-result.schema.json",
+  "title": "Steel Computer basic-lifecycle result",
+  "type": "object",
+  "properties": {
+    "session_created": {
+      "type": "boolean",
+      "description": "Whether one session was started."
+    },
+    "session_released": {
+      "type": "boolean",
+      "description": "Whether the session was shut down."
+    },
+    "final_status": {
+      "type": "string",
+      "enum": ["live", "released", "failed"],
+      "description": "The session status the service reported at the end."
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000
+    }
+  },
+  "required": ["session_created", "session_released", "final_status"],
+  "additionalProperties": false
+}

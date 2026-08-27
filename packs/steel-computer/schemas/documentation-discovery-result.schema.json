@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/packs/steel-computer/schemas/documentation-discovery-result.schema.json",
+  "title": "Steel Computer documentation-discovery result",
+  "type": "object",
+  "properties": {
+    "session_created": {
+      "type": "boolean",
+      "description": "Whether exactly one session was created."
+    },
+    "operations_discovered": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 200,
+      "description": "How many operations the API description declares."
+    },
+    "contract_source": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 260,
+      "description": "The file name used as the source of truth."
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000
+    }
+  },
+  "required": ["session_created", "operations_discovered", "contract_source"],
+  "additionalProperties": false
+}

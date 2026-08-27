@@ -1,0 +1,81 @@
+# Documentation-discovery rubric for the Steel Computer pack.
+#
+# The participant reads the contract copy first, then creates exactly one
+# session. The docs_served check is universal over the documentation
+# event stream, so it passes vacuously until the documentation facade
+# ships; it then holds the facade to serving the contract without error.
+# See MIGRATION-NOTES.md, drift item 3.
+rubric_version: 1
+id: steel-documentation-discovery
+description: >-
+  Read the contract copy, create exactly one session with a request
+  shape the contract declares, and invent no routes.
+scoring:
+  method: weighted_binary
+  pass_threshold: 0.9
+checks:
+  - id: single_create_session
+    kind: event
+    match: counted
+    where: >-
+      event.operation.operation_id == "create_session" &&
+      event.response.status >= 200 &&
+      event.response.status < 300
+    min_count: 1
+    max_count: 1
+    weight: 4
+    required: true
+    evidence_class: participant_observable
+    description: Exactly one session is created.
+  - id: no_unmatched_requests
+    kind: event
+    match: universal
+    where: event.operation.matched == true
+    weight: 2
+    required: true
+    evidence_class: participant_observable
+    description: Every request targets a route the contract declares.
+  - id: no_not_found_probes
+    kind: event
+    match: counted
+    where: event.response.status == 404
+    max_count: 0
+    weight: 1
+    required: true
+    evidence_class: participant_observable
+    description: No route guessing that ends in a 404 response.
+  - id: docs_served
+    kind: documentation_event
+    match: universal
+    where: event.outcome == "served"
+    weight: 1
+    required: true
+    evidence_class: participant_observable
+    description: >-
+      Every documentation request that the facade observes is served.
+      Passes vacuously while the facade is absent.
+  - id: result_report
+    kind: json_schema
+    value: report
+    schema: schemas/documentation-discovery-result.schema.json
+    weight: 1
+    required: true
+    evidence_class: participant_observable
+    description: The final report matches the pack result schema.
+  - id: operations_reported
+    kind: predicate
+    expression: report.operations_discovered == 41
+    weight: 1
+    required: true
+    evidence_class: participant_observable
+    description: The contract copy declares 41 operations.
+signals:
+  - id: first_call_is_create
+    kind: predicate
+    expression: >-
+      events[0].operation.operation_id == "create_session"
+    description: The participant opened with session creation.
+  - id: first_call_matched
+    kind: predicate
+    expression: events[0].operation.matched == true
+    description: The first request hit a declared route.
