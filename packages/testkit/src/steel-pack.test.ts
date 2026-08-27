@@ -2,7 +2,12 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { SchemaValidator, type Json, type JsonObject } from "@oal/core";
+import {
+  SchemaValidator,
+  isJsonObject,
+  type Json,
+  type JsonObject
+} from "@oal/core";
 import { evaluateRubric } from "@oal/evaluator";
 import type { TraceEvent } from "@oal/evidence";
 
@@ -93,7 +98,7 @@ describe("the Steel Computer pack", () => {
     ]);
   });
 
-  it("ships cases that satisfy both case schemas", async () => {
+  it("ships cases that satisfy the line and input schemas", async () => {
     const source = pack.loaded.references.find(
       (reference) => reference.role === "case_source"
     );
@@ -116,8 +121,14 @@ describe("the Steel Computer pack", () => {
     const seen = new Set<Json>();
     for (const line of lines) {
       const entry = JSON.parse(line) as JsonObject;
+      // The repository schema governs the whole line; the pack schema
+      // governs the synthetic input object only (SPEC section 12.6).
       expect(repository.errors(entry)).toEqual([]);
-      expect(packCase.errors(entry)).toEqual([]);
+      const input = entry.input;
+      expect(typeof input === "object" && input !== null).toBe(true);
+      if (isJsonObject(input)) {
+        expect(packCase.errors(input)).toEqual([]);
+      }
       expect(seen.has(entry.id ?? null)).toBe(false);
       seen.add(entry.id ?? null);
     }

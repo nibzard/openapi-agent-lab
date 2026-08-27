@@ -53,7 +53,7 @@ import type {
   OperatorSignalFact
 } from "./disposition.ts";
 import type { TrialLifecycle, Clock } from "./lifecycle.ts";
-import { packReferenceOf, type FrozenPlan } from "./preflight.ts";
+import { packDocumentOf, type FrozenPlan } from "./preflight.ts";
 import {
   collectParticipantReport,
   ReportCode,
@@ -498,7 +498,7 @@ export async function runTrial(
         state: finalState as Json,
         report: report.status === "ok" ? report.value : null,
         resolveSchema: (reference: string): Json | undefined =>
-          packReferenceOf(pack, reference)?.document ?? undefined,
+          packDocumentOf(pack, reference),
         evaluatedAt: formatRfc3339(now())
       });
       evaluation = toEvaluation(evaluated);

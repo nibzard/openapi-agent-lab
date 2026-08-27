@@ -401,22 +401,23 @@ describe("oal run", () => {
       io,
       { cwd }
     );
-    // The unscripted mock produces no turn completion and no report, so the
-    // disposition is honest and the evaluation errors for missing evidence.
-    // No threshold was applied, so section 23.18 maps the batch to 0.
-    expect(code).toBe(EXIT_OK);
+    // The unscripted mock produces no turn completion and no report, so
+    // the disposition is honest and the rubric fails the missing report
+    // check. The verdict is valid, so section 23.18 maps the batch to
+    // the evaluation threshold exit.
+    expect(code).toBe(EXIT_EVAL_THRESHOLD);
     const summary = JSON.parse(io.stdoutChunks.join("\n")) as Record<
       string,
       unknown
     >;
     expect(summary.kind).toBe("RunCompletedCli");
     expect(summary.batch_id).toBe("cli-live");
-    expect(summary.exit_code).toBe(EXIT_OK);
+    expect(summary.exit_code).toBe(EXIT_EVAL_THRESHOLD);
     expect(summary.launched).toBe(1);
     expect(summary.dispositions).toMatchObject({ agent_incomplete: 1 });
     const runs = summary.runs as readonly Record<string, unknown>[];
     expect(runs[0]?.disposition).toBe("agent_incomplete");
-    expect(runs[0]?.evaluation_status).toBe("error");
+    expect(runs[0]?.evaluation_status).toBe("failed");
     const batchDir = path.join(cwd, ".oal", "runs", "cli-live");
     for (const artifact of [
       "batch.json",

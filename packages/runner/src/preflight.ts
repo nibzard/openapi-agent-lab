@@ -303,6 +303,33 @@ export function packReferenceOf(
   return null;
 }
 
+/**
+ * Parsed document of one pack asset, or undefined when absent. The same
+ * path can carry two references, and the first wins in
+ * {@link packReferenceOf}: a text-only participant file ahead of a parsed
+ * schema document. Text copies therefore parse here as JSON.
+ */
+export function packDocumentOf(
+  pack: LoadedPack,
+  path: string
+): Json | undefined {
+  const found = packReferenceOf(pack, path);
+  if (found === null) {
+    return undefined;
+  }
+  if (found.document !== null) {
+    return found.document;
+  }
+  if (found.text === null) {
+    return undefined;
+  }
+  try {
+    return parseJsonStrict(found.text);
+  } catch {
+    return undefined;
+  }
+}
+
 /** Digest over the pack identity plus every referenced asset. */
 export function packFreezeDigest(pack: LoadedPack): string {
   return sha256Hex(
@@ -397,25 +424,8 @@ function compileEvalDocuments(
 
   const resolveText = (reference: string): string | undefined =>
     packReferenceOf(pack, reference)?.text ?? undefined;
-  const resolveDocument = (reference: string): Json | undefined => {
-    const found = packReferenceOf(pack, reference);
-    if (found === null) {
-      return undefined;
-    }
-    if (found.document !== null) {
-      return found.document;
-    }
-    // Text-only references parse here, so a JSON schema asset resolves
-    // even when the pack loader kept it as text.
-    if (found.text === null) {
-      return undefined;
-    }
-    try {
-      return parseJsonStrict(found.text);
-    } catch {
-      return undefined;
-    }
-  };
+  const resolveDocument = (reference: string): Json | undefined =>
+    packDocumentOf(pack, reference);
 
   const loaded = loadEval(declared as Json, {
     resolveText,
@@ -457,7 +467,6 @@ function compileEvalDocuments(
   const cases: EvalCase[] = [];
   if (evaluation.cases !== undefined) {
     const source = packReferenceOf(pack, evaluation.cases.source);
-    const schema = packReferenceOf(pack, evaluation.cases.schema);
     if (source === null || source.text === null) {
       findings.push(
         error(
@@ -468,10 +477,11 @@ function compileEvalDocuments(
       );
       return null;
     }
+    // The pack case schema governs the input object, and loadEval above
+    // already validated every input against it. This pass loads the
+    // lines structurally; the repository eval-case schema governs the
+    // line shape when a caller supplies it.
     const loadedCases = loadEvalCases(source.text, {
-      ...(schema?.document === null || schema?.document === undefined
-        ? {}
-        : { schema: schema.document }),
       documentUri: `${pack.root}/${evaluation.cases.source}`
     });
     findings.push(...loadedCases.diagnostics);

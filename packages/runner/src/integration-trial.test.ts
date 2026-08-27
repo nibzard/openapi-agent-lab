@@ -187,8 +187,9 @@ describe("runner integration: fake-agent trials through the loopback exposure", 
         expect(outcome.apiRequests).toBe(4);
 
         // Golden evaluation. The gateway cannot generate the Steel
-        // session documents (packs/steel-computer/PARITY.md), so the flow
-        // check fails and the report schema reference stays unresolved.
+        // session documents (packs/steel-computer/PARITY.md), so the
+        // flow checks fail. The report schema reference resolves, and
+        // the scripted report matches it.
         const evaluation = await readJsonObject(
           harness.store,
           `${trialRootOf(harness.plan.batchId, outcome.runId)}/evaluation.json`
@@ -197,18 +198,18 @@ describe("runner integration: fake-agent trials through the loopback exposure", 
         expect(evaluation["rubric_sha256"]).toBe(
           "993896d94572a1860738f155774bf6fb8e9b7c0e6cf690068a2d88ec36906e74"
         );
-        expect(evaluation["status"]).toBe("error");
-        expect(evaluation["passed_weight"]).toBe(1);
+        expect(evaluation["status"]).toBe("failed");
+        expect(evaluation["passed_weight"]).toBe(2);
         expect(evaluation["total_weight"]).toBe(9);
-        expect(evaluation["score"]).toBe(1 / 9);
+        expect(evaluation["score"]).toBe(2 / 9);
         expect(evaluation["run_id"]).toBe(outcome.runId);
         expect(evaluation["evaluated_at"]).toBe("2023-11-14T22:13:20.000Z");
         expect(outcome.evaluation).toEqual({
-          status: "error",
-          score: 1 / 9,
-          passedWeight: 1,
+          status: "failed",
+          score: 2 / 9,
+          passedWeight: 2,
           totalWeight: 9,
-          valid: false
+          valid: true
         });
       } finally {
         await harness.clean();
@@ -260,10 +261,10 @@ describe("runner integration: fake-agent trials through the loopback exposure", 
         expect(evaluation["rubric_sha256"]).toBe(
           "00b9237d010083bb5f25efb496b4dd36099c7414475944311f55fafecdc9e28f"
         );
-        expect(evaluation["status"]).toBe("error");
-        expect(evaluation["passed_weight"]).toBe(2);
+        expect(evaluation["status"]).toBe("failed");
+        expect(evaluation["passed_weight"]).toBe(3);
         expect(evaluation["total_weight"]).toBe(12);
-        expect(evaluation["score"]).toBe(2 / 12);
+        expect(evaluation["score"]).toBe(3 / 12);
         const signals = evaluation["signals"];
         expect(signals).toEqual({
           first_call_is_create: true,
@@ -276,12 +277,11 @@ describe("runner integration: fake-agent trials through the loopback exposure", 
   );
 
   it(
-    "keeps the shipped checkpoint-recovery case schema blocked at preflight",
+    "accepts the shipped checkpoint-recovery eval at preflight",
     { timeout: 30000 },
     async () => {
-      // The shipped schema rejects the shipped case inputs, so preflight
-      // refuses the eval before any participant material exists. The pin
-      // keeps the defect visible until the schema and the cases agree.
+      // The shipped cases validate against the shipped case schema, so
+      // preflight freezes a plan without errors for the real pack.
       const adapter = steelAdapter("checkpoint-recovery");
       const scratch = await mkdtemp(path.join(tmpdir(), "oal-it-steel-px-"));
       const store = new ArtifactStore(path.join(scratch, ".oal"));
@@ -289,20 +289,18 @@ describe("runner integration: fake-agent trials through the loopback exposure", 
         const result = await runPreflight({
           packDir: steelPackRoot(),
           evalId: "checkpoint-recovery",
-          batchId: "it-steel-preflight-pin",
+          batchId: "it-steel-preflight-real",
           store,
           adapter,
           paid: false,
           schemaDir: schemaDirectory()
         });
-        expect(result.ok).toBe(false);
-        expect(result.plan).toBeNull();
-        const findings = result.findings
-          .filter((finding) => finding.severity === "error")
-          .map((finding) => `${finding.code}: ${finding.message}`);
-        expect(findings.join("\n")).toContain("OAL-EVAL-INVALID");
-        expect(findings.join("\n")).toContain("seed-brief");
-        expect(() => assertPreflightClean(result)).toThrow(/OAL-EVAL-INVALID/);
+        expect(result.ok).toBe(true);
+        const plan = assertPreflightClean(result);
+        expect(plan.evaluation.evalDoc.cases?.source).toContain(
+          "checkpoint-recovery"
+        );
+        expect(plan.evaluation.resultSchema).not.toBe(null);
       } finally {
         await rm(scratch, { recursive: true, force: true });
       }
