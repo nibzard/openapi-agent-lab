@@ -34,7 +34,7 @@
       "id": "T002",
       "title": "Define shared schemas and data contracts",
       "priority": 1,
-      "status": "doing",
+      "status": "done",
       "details": "Implement versioned schemas and TypeScript types for ContractIR, PackIR, RunProfile, StudyProtocol, PhasePlan, traces, artifacts, diagnostics, and reports.",
       "steps": [
         "Create schema packages for shared data contracts.",
@@ -52,7 +52,7 @@
       "depends_on": [
         "T001"
       ],
-      "updated_at": "2026-08-27T15:51:44.163Z"
+      "updated_at": "2026-08-27T16:31:28.593Z"
     },
     {
       "id": "T003",
@@ -467,7 +467,7 @@
       "id": "T020",
       "title": "Implement normalized trace capture",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Capture one normalized trace exchange for each request, including accepted, rejected, unmatched, documentation, and semantic events.",
       "steps": [
         "Define trace writers and validators.",
@@ -485,13 +485,14 @@
       "depends_on": [
         "T010",
         "T013"
-      ]
+      ],
+      "updated_at": "2026-08-27T16:40:10.748Z"
     },
     {
       "id": "T021",
       "title": "Implement redaction and raw capture policy",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Implement credential classes, delivery, redaction canaries, redaction representation, and optional raw capture controls.",
       "steps": [
         "Classify credential material.",
@@ -510,13 +511,14 @@
       "depends_on": [
         "T011",
         "T020"
-      ]
+      ],
+      "updated_at": "2026-08-27T16:40:10.768Z"
     },
     {
       "id": "T022",
       "title": "Implement artifact store layout",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Write batch, trial, and study artifacts with immutable paths, manifests, frozen input hashes, implementation metadata, and evidence integrity checks.",
       "steps": [
         "Create artifact writer interfaces.",
@@ -534,7 +536,8 @@
       "depends_on": [
         "T013",
         "T020"
-      ]
+      ],
+      "updated_at": "2026-08-27T16:40:10.790Z"
     },
     {
       "id": "T023",

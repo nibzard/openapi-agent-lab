@@ -45,9 +45,29 @@ importers:
 
   packages/agent-generic: {}
 
-  packages/behavior-api: {}
+  packages/behavior-api:
+    dependencies:
+      '@oal/contract-ir':
+        specifier: workspace:*
+        version: link:../contract-ir
+      '@oal/core':
+        specifier: workspace:*
+        version: link:../core
 
-  packages/behavior-runtime: {}
+  packages/behavior-runtime:
+    dependencies:
+      '@oal/behavior-api':
+        specifier: workspace:*
+        version: link:../behavior-api
+      '@oal/contract-ir':
+        specifier: workspace:*
+        version: link:../contract-ir
+      '@oal/core':
+        specifier: workspace:*
+        version: link:../core
+      '@oal/state-store':
+        specifier: workspace:*
+        version: link:../state-store
 
   packages/capability:
     dependencies:
@@ -74,7 +94,14 @@ importers:
 
   packages/evaluator: {}
 
-  packages/evidence: {}
+  packages/evidence:
+    dependencies:
+      '@oal/config':
+        specifier: workspace:*
+        version: link:../config
+      '@oal/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/gateway:
     dependencies:
