@@ -1,0 +1,315 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Notes API",
+    "version": "1.0.0",
+    "description": "Example API for the OpenAPI Agent Lab quickstart. The API stores plain notes. Each note has a title, an optional body, and one tag. Start it with: oal serve examples/quickstart.json",
+    "license": {
+      "name": "Apache-2.0",
+      "identifier": "Apache-2.0"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:4010",
+      "description": "Local mock started by oal serve"
+    }
+  ],
+  "security": [
+    { "bearerAuth": [] }
+  ],
+  "tags": [
+    { "name": "notes", "description": "Create, read, change, and delete notes." }
+  ],
+  "paths": {
+    "/notes": {
+      "get": {
+        "operationId": "listNotes",
+        "summary": "List notes",
+        "description": "Returns one page of notes. Filter by search text or tag. Use page and perPage to walk the full list.",
+        "tags": ["notes"],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Keep only notes whose title or body contains this text.",
+            "schema": { "type": "string", "minLength": 1 },
+            "example": "launch"
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "description": "Keep only notes with this tag.",
+            "schema": { "$ref": "#/components/schemas/Tag" }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number. The first page is 1.",
+            "schema": { "type": "integer", "minimum": 1, "default": 1 }
+          },
+          {
+            "name": "perPage",
+            "in": "query",
+            "description": "Notes per page. The maximum is 100.",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of notes.",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Total number of notes that match the filter.",
+                "schema": { "type": "integer", "minimum": 0 }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/NoteList" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "operationId": "createNote",
+        "summary": "Create a note",
+        "description": "Creates one note. The title must be unique. Two notes with the same title cause a conflict.",
+        "tags": ["notes"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/NewNote" },
+              "examples": {
+                "idea": {
+                  "summary": "A short idea note",
+                  "value": { "title": "Ship the changelog page", "tag": "idea" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The note was created.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Note" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "409": { "$ref": "#/components/responses/Conflict" }
+        }
+      }
+    },
+    "/notes/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "description": "Note identifier.",
+          "schema": { "$ref": "#/components/schemas/NoteId" }
+        }
+      ],
+      "get": {
+        "operationId": "getNote",
+        "summary": "Read one note",
+        "description": "Returns the note with the given identifier.",
+        "tags": ["notes"],
+        "responses": {
+          "200": {
+            "description": "The note.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Note" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "patch": {
+        "operationId": "updateNote",
+        "summary": "Change one note",
+        "description": "Changes the given fields of one note. Fields that are not sent stay unchanged. Send null to clear the body.",
+        "tags": ["notes"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/NotePatch" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The note after the change.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Note" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteNote",
+        "summary": "Delete one note",
+        "description": "Deletes the note with the given identifier. The response has no body.",
+        "tags": ["notes"],
+        "responses": {
+          "204": { "description": "The note was deleted." },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Use the synthetic token that oal serve prints at startup."
+      }
+    },
+    "schemas": {
+      "NoteId": {
+        "type": "string",
+        "description": "Note identifier. It starts with n_ followed by digits.",
+        "pattern": "^n_[0-9]+$",
+        "examples": ["n_101"]
+      },
+      "Tag": {
+        "type": "string",
+        "description": "Note category.",
+        "enum": ["idea", "todo", "reference", "meeting"]
+      },
+      "Timestamp": {
+        "type": "string",
+        "format": "date-time",
+        "description": "RFC 3339 date and time in UTC."
+      },
+      "Note": {
+        "type": "object",
+        "description": "One stored note.",
+        "required": ["id", "title", "tag", "createdAt", "updatedAt"],
+        "properties": {
+          "id": { "$ref": "#/components/schemas/NoteId" },
+          "title": {
+            "type": "string",
+            "description": "Short note title. Titles are unique.",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "body": {
+            "type": ["string", "null"],
+            "description": "Full note text. It is null when the note has no body.",
+            "maxLength": 10000
+          },
+          "tag": { "$ref": "#/components/schemas/Tag" },
+          "createdAt": { "$ref": "#/components/schemas/Timestamp" },
+          "updatedAt": { "$ref": "#/components/schemas/Timestamp" }
+        }
+      },
+      "NewNote": {
+        "type": "object",
+        "description": "Data for a new note.",
+        "required": ["title"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "body": { "type": ["string", "null"], "maxLength": 10000 },
+          "tag": { "$ref": "#/components/schemas/Tag" }
+        }
+      },
+      "NotePatch": {
+        "type": "object",
+        "description": "Fields to change on one note. Send null to clear the body. Omitted fields stay unchanged.",
+        "minProperties": 1,
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "body": { "type": ["string", "null"], "maxLength": 10000 },
+          "tag": { "$ref": "#/components/schemas/Tag" }
+        }
+      },
+      "NoteList": {
+        "type": "object",
+        "description": "One page of notes.",
+        "required": ["items", "page", "perPage", "total"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Note" }
+          },
+          "page": { "type": "integer", "minimum": 1 },
+          "perPage": { "type": "integer", "minimum": 1, "maximum": 100 },
+          "total": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "description": "Error response body.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "Stable error code. It equals the HTTP status code."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable explanation of the failure."
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "The request body is not valid.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "The bearer token is missing or not valid.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "No note has this identifier.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "Another note already uses this title.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      }
+    }
+  }
+}

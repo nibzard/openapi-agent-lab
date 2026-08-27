@@ -67,7 +67,7 @@ One engine serves every treatment. The compiler turns the document into a single
                                         └─────────────────────────┘
 ```
 
-The lab is not only a test harness. It is also a design tool. You do not need a production service to learn how an API behaves in the hands of an agent. Use the loop above to flesh out the final API design before you write the server:
+The lab is not only a test harness. It is also a design tool. You do not need a production service to learn how an API behaves in the hands of an agent. Use the loop above to flesh out the final API design before you write the server. Start with [examples/quickstart.json](examples/quickstart.json) if you want to try the loop before you write your own document:
 
 1. Write a draft OpenAPI document.
 2. Start the mock: `oal serve ./openapi.json`.
@@ -86,6 +86,7 @@ Change the document. Run the session again. When the agent reaches the task goal
 ## Documentation
 
 - [SPEC.md](SPEC.md) — the complete implementation specification.
+- [examples/](examples/) — starter contracts: a hand-written quickstart, the Steel Browser API, and the E2B API.
 
 ## License
 
