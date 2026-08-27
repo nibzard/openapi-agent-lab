@@ -1396,15 +1396,11 @@
                                 ]
                               }
                             },
-                            "required": [
-                              "country"
-                            ],
+                            "required": ["country"],
                             "additionalProperties": false
                           }
                         },
-                        "required": [
-                          "geolocation"
-                        ],
+                        "required": ["geolocation"],
                         "additionalProperties": false
                       },
                       {
@@ -1415,9 +1411,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "server"
-                        ],
+                        "required": ["server"],
                         "additionalProperties": false
                       }
                     ]
@@ -1481,11 +1475,7 @@
                     "sameSite": {
                       "description": "The same site attribute of the cookie",
                       "type": "string",
-                      "enum": [
-                        "Strict",
-                        "Lax",
-                        "None"
-                      ]
+                      "enum": ["Strict", "Lax", "None"]
                     },
                     "size": {
                       "description": "The size of the cookie",
@@ -1508,10 +1498,7 @@
                           "type": "boolean"
                         }
                       },
-                      "required": [
-                        "topLevelSite",
-                        "hasCrossSiteAncestor"
-                      ],
+                      "required": ["topLevelSite", "hasCrossSiteAncestor"],
                       "additionalProperties": false
                     },
                     "session": {
@@ -1521,11 +1508,7 @@
                     "priority": {
                       "description": "The priority of the cookie",
                       "type": "string",
-                      "enum": [
-                        "Low",
-                        "Medium",
-                        "High"
-                      ]
+                      "enum": ["Low", "Medium", "High"]
                     },
                     "sameParty": {
                       "description": "Whether the cookie is a same party cookie",
@@ -1534,21 +1517,14 @@
                     "sourceScheme": {
                       "description": "The source scheme of the cookie",
                       "type": "string",
-                      "enum": [
-                        "Unset",
-                        "NonSecure",
-                        "Secure"
-                      ]
+                      "enum": ["Unset", "NonSecure", "Secure"]
                     },
                     "sourcePort": {
                       "description": "The source port of the cookie",
                       "type": "number"
                     }
                   },
-                  "required": [
-                    "name",
-                    "value"
-                  ],
+                  "required": ["name", "value"],
                   "additionalProperties": false
                 }
               },
@@ -1638,28 +1614,17 @@
                                     }
                                   }
                                 },
-                                "required": [
-                                  "key",
-                                  "value"
-                                ],
+                                "required": ["key", "value"],
                                 "additionalProperties": false
                               }
                             }
                           },
-                          "required": [
-                            "id",
-                            "name",
-                            "records"
-                          ],
+                          "required": ["id", "name", "records"],
                           "additionalProperties": false
                         }
                       }
                     },
-                    "required": [
-                      "id",
-                      "name",
-                      "data"
-                    ],
+                    "required": ["id", "name", "data"],
                     "additionalProperties": false
                   }
                 }
@@ -1700,10 +1665,7 @@
                 "maximum": 9007199254740991
               }
             },
-            "required": [
-              "width",
-              "height"
-            ],
+            "required": ["width", "height"],
             "additionalProperties": false
           },
           "namespace": {
@@ -1807,10 +1769,7 @@
               "device": {
                 "default": "desktop",
                 "type": "string",
-                "enum": [
-                  "desktop",
-                  "mobile"
-                ]
+                "enum": ["desktop", "mobile"]
               }
             },
             "additionalProperties": false
@@ -1859,12 +1818,7 @@
             "type": "array",
             "items": {
               "type": "string",
-              "enum": [
-                "html",
-                "readability",
-                "cleaned_html",
-                "markdown"
-              ]
+              "enum": ["html", "readability", "cleaned_html", "markdown"]
             }
           },
           "screenshot": {
@@ -1887,9 +1841,7 @@
             "description": "The desired region for the action to be performed in"
           }
         },
-        "required": [
-          "url"
-        ],
+        "required": ["url"],
         "additionalProperties": false
       },
       "ScreenshotRequest": {
@@ -1917,9 +1869,7 @@
             "description": "The desired region for the action to be performed in"
           }
         },
-        "required": [
-          "url"
-        ],
+        "required": ["url"],
         "additionalProperties": false
       },
       "PdfRequest": {
@@ -1943,9 +1893,7 @@
             "description": "The desired region for the action to be performed in"
           }
         },
-        "required": [
-          "url"
-        ],
+        "required": ["url"],
         "additionalProperties": false
       },
       "FileUploadRequest": {
@@ -1963,9 +1911,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "file"
-        ],
+        "required": ["file"],
         "additionalProperties": false
       },
       "CredentialCreate": {
@@ -1994,9 +1940,7 @@
             }
           }
         },
-        "required": [
-          "value"
-        ],
+        "required": ["value"],
         "additionalProperties": false
       },
       "CredentialUpdate": {
@@ -2039,9 +1983,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "origin"
-        ],
+        "required": ["origin"],
         "additionalProperties": false
       },
       "Credential": {
@@ -2082,11 +2024,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
           }
         },
-        "required": [
-          "value",
-          "createdAt",
-          "updatedAt"
-        ],
+        "required": ["value", "createdAt", "updatedAt"],
         "additionalProperties": false
       },
       "SolveImageCaptchaRequest": {
@@ -2106,10 +2044,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "imageXPath",
-          "inputXPath"
-        ],
+        "required": ["imageXPath", "inputXPath"],
         "additionalProperties": false
       },
       "SolveCaptchaRequest": {
@@ -2171,12 +2106,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "id",
-          "name",
-          "createdAt",
-          "updatedAt"
-        ],
+        "required": ["id", "name", "createdAt", "updatedAt"],
         "additionalProperties": false
       },
       "Profile": {
@@ -2269,9 +2199,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "user-agent"
-                ],
+                "required": ["user-agent"],
                 "additionalProperties": {}
               },
               "fingerprint": {
@@ -2506,10 +2434,7 @@
                                   "type": "string"
                                 }
                               },
-                              "required": [
-                                "brand",
-                                "version"
-                              ],
+                              "required": ["brand", "version"],
                               "additionalProperties": {}
                             }
                           },
@@ -2522,11 +2447,7 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "brands",
-                          "mobile",
-                          "platform"
-                        ],
+                        "required": ["brands", "mobile", "platform"],
                         "additionalProperties": {}
                       },
                       "maxTouchPoints": {
@@ -2602,10 +2523,7 @@
                         "type": "string"
                       }
                     },
-                    "required": [
-                      "vendor",
-                      "renderer"
-                    ],
+                    "required": ["vendor", "renderer"],
                     "additionalProperties": {}
                   },
                   "mockWebRTC": {
@@ -2688,10 +2606,7 @@
                         }
                       }
                     },
-                    "required": [
-                      "plugins",
-                      "mimeTypes"
-                    ],
+                    "required": ["plugins", "mimeTypes"],
                     "additionalProperties": {}
                   },
                   "videoCodecs": {
@@ -2726,12 +2641,7 @@
                               "type": "string"
                             }
                           },
-                          "required": [
-                            "kind",
-                            "label",
-                            "groupId",
-                            "deviceId"
-                          ],
+                          "required": ["kind", "label", "groupId", "deviceId"],
                           "additionalProperties": {}
                         }
                       },
@@ -2757,12 +2667,7 @@
                               "type": "string"
                             }
                           },
-                          "required": [
-                            "kind",
-                            "label",
-                            "groupId",
-                            "deviceId"
-                          ],
+                          "required": ["kind", "label", "groupId", "deviceId"],
                           "additionalProperties": {}
                         }
                       },
@@ -2788,21 +2693,12 @@
                               "type": "string"
                             }
                           },
-                          "required": [
-                            "kind",
-                            "label",
-                            "groupId",
-                            "deviceId"
-                          ],
+                          "required": ["kind", "label", "groupId", "deviceId"],
                           "additionalProperties": {}
                         }
                       }
                     },
-                    "required": [
-                      "micros",
-                      "webcams",
-                      "speakers"
-                    ],
+                    "required": ["micros", "webcams", "speakers"],
                     "additionalProperties": {}
                   }
                 },
@@ -2822,10 +2718,7 @@
                 "additionalProperties": {}
               }
             },
-            "required": [
-              "headers",
-              "fingerprint"
-            ],
+            "required": ["headers", "fingerprint"],
             "additionalProperties": false
           },
           "userAgent": {
@@ -2845,20 +2738,13 @@
                 "type": "number"
               }
             },
-            "required": [
-              "width",
-              "height"
-            ],
+            "required": ["width", "height"],
             "additionalProperties": false
           },
           "status": {
             "description": "The status of the profile",
             "type": "string",
-            "enum": [
-              "UPLOADING",
-              "READY",
-              "FAILED"
-            ]
+            "enum": ["UPLOADING", "READY", "FAILED"]
           },
           "useProxyConfig": {
             "description": "The proxy configuration associated with the profile",
@@ -2911,10 +2797,7 @@
                 "type": "number"
               }
             },
-            "required": [
-              "width",
-              "height"
-            ],
+            "required": ["width", "height"],
             "additionalProperties": false
           },
           "proxyUrl": {
@@ -2929,9 +2812,7 @@
             "contentEncoding": "binary"
           }
         },
-        "required": [
-          "userDataDir"
-        ],
+        "required": ["userDataDir"],
         "additionalProperties": false
       },
       "ComputerActionRequest": {
@@ -2942,9 +2823,7 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "move_mouse"
-                ]
+                "enum": ["move_mouse"]
               },
               "coordinates": {
                 "description": "X and Y coordinates [x, y]",
@@ -2967,10 +2846,7 @@
                 "type": "boolean"
               }
             },
-            "required": [
-              "action",
-              "coordinates"
-            ],
+            "required": ["action", "coordinates"],
             "additionalProperties": false
           },
           {
@@ -2978,29 +2854,17 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "click_mouse"
-                ]
+                "enum": ["click_mouse"]
               },
               "button": {
                 "description": "Mouse button to click",
                 "type": "string",
-                "enum": [
-                  "left",
-                  "right",
-                  "middle",
-                  "back",
-                  "forward"
-                ]
+                "enum": ["left", "right", "middle", "back", "forward"]
               },
               "click_type": {
                 "description": "Type of click (down, up, or click). Defaults to 'click'",
                 "type": "string",
-                "enum": [
-                  "down",
-                  "up",
-                  "click"
-                ]
+                "enum": ["down", "up", "click"]
               },
               "coordinates": {
                 "description": "X and Y coordinates [x, y]",
@@ -3027,10 +2891,7 @@
                 "type": "boolean"
               }
             },
-            "required": [
-              "action",
-              "button"
-            ],
+            "required": ["action", "button"],
             "additionalProperties": false
           },
           {
@@ -3038,9 +2899,7 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "drag_mouse"
-                ]
+                "enum": ["drag_mouse"]
               },
               "path": {
                 "description": "Array of [x, y] coordinate pairs",
@@ -3066,10 +2925,7 @@
                 "type": "boolean"
               }
             },
-            "required": [
-              "action",
-              "path"
-            ],
+            "required": ["action", "path"],
             "additionalProperties": false
           },
           {
@@ -3077,9 +2933,7 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "scroll"
-                ]
+                "enum": ["scroll"]
               },
               "coordinates": {
                 "description": "X and Y coordinates [x, y]",
@@ -3110,9 +2964,7 @@
                 "type": "boolean"
               }
             },
-            "required": [
-              "action"
-            ],
+            "required": ["action"],
             "additionalProperties": false
           },
           {
@@ -3120,9 +2972,7 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "press_key"
-                ]
+                "enum": ["press_key"]
               },
               "keys": {
                 "description": "Keys to press",
@@ -3140,10 +2990,7 @@
                 "type": "boolean"
               }
             },
-            "required": [
-              "action",
-              "keys"
-            ],
+            "required": ["action", "keys"],
             "additionalProperties": false
           },
           {
@@ -3151,9 +2998,7 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "type_text"
-                ]
+                "enum": ["type_text"]
               },
               "text": {
                 "description": "Text to type",
@@ -3171,10 +3016,7 @@
                 "type": "boolean"
               }
             },
-            "required": [
-              "action",
-              "text"
-            ],
+            "required": ["action", "text"],
             "additionalProperties": false
           },
           {
@@ -3182,9 +3024,7 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "wait"
-                ]
+                "enum": ["wait"]
               },
               "duration": {
                 "description": "Duration to wait in seconds",
@@ -3195,10 +3035,7 @@
                 "type": "boolean"
               }
             },
-            "required": [
-              "action",
-              "duration"
-            ],
+            "required": ["action", "duration"],
             "additionalProperties": false
           },
           {
@@ -3206,14 +3043,10 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "take_screenshot"
-                ]
+                "enum": ["take_screenshot"]
               }
             },
-            "required": [
-              "action"
-            ],
+            "required": ["action"],
             "additionalProperties": false
           },
           {
@@ -3221,14 +3054,10 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": [
-                  "get_cursor_position"
-                ]
+                "enum": ["get_cursor_position"]
               }
             },
-            "required": [
-              "action"
-            ],
+            "required": ["action"],
             "additionalProperties": false
           }
         ]
@@ -3257,18 +3086,12 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "keyword",
-                "params",
-                "message"
-              ],
+              "required": ["keyword", "params", "message"],
               "additionalProperties": false
             }
           }
         },
-        "required": [
-          "message"
-        ],
+        "required": ["message"],
         "additionalProperties": false
       },
       "SuccessResponse": {
@@ -3279,9 +3102,7 @@
             "type": "boolean"
           }
         },
-        "required": [
-          "success"
-        ],
+        "required": ["success"],
         "additionalProperties": false
       },
       "GetSessionEventsResponse": {
@@ -3317,11 +3138,7 @@
                 "status": {
                   "description": "Status of the session",
                   "type": "string",
-                  "enum": [
-                    "live",
-                    "released",
-                    "failed"
-                  ]
+                  "enum": ["live", "released", "failed"]
                 },
                 "duration": {
                   "description": "Duration of the session in milliseconds",
@@ -3358,10 +3175,7 @@
                       "maximum": 9007199254740991
                     }
                   },
-                  "required": [
-                    "width",
-                    "height"
-                  ],
+                  "required": ["width", "height"],
                   "additionalProperties": false
                 },
                 "creditsUsed": {
@@ -3390,10 +3204,7 @@
                   "description": "Source of the proxy used for the session",
                   "nullable": true,
                   "type": "string",
-                  "enum": [
-                    "steel",
-                    "external"
-                  ]
+                  "enum": ["steel", "external"]
                 },
                 "proxyBytesUsed": {
                   "description": "Amount of data transmitted through the proxy",
@@ -3431,14 +3242,7 @@
                 "region": {
                   "description": "The region where the session was created",
                   "type": "string",
-                  "enum": [
-                    "lax",
-                    "ord",
-                    "iad",
-                    "scl",
-                    "fra",
-                    "nrt"
-                  ]
+                  "enum": ["lax", "ord", "iad", "scl", "fra", "nrt"]
                 },
                 "profileId": {
                   "description": "The ID of the profile associated with the session",
@@ -3485,10 +3289,7 @@
                     "device": {
                       "default": "desktop",
                       "type": "string",
-                      "enum": [
-                        "desktop",
-                        "mobile"
-                      ]
+                      "enum": ["desktop", "mobile"]
                     }
                   },
                   "additionalProperties": false
@@ -3547,11 +3348,7 @@
             "maximum": 9007199254740991
           }
         },
-        "required": [
-          "sessions",
-          "nextCursor",
-          "totalCount"
-        ],
+        "required": ["sessions", "nextCursor", "totalCount"],
         "additionalProperties": false
       },
       "SessionResponse": {
@@ -3574,11 +3371,7 @@
           "status": {
             "description": "Status of the session",
             "type": "string",
-            "enum": [
-              "live",
-              "released",
-              "failed"
-            ]
+            "enum": ["live", "released", "failed"]
           },
           "duration": {
             "description": "Duration of the session in milliseconds",
@@ -3615,10 +3408,7 @@
                 "maximum": 9007199254740991
               }
             },
-            "required": [
-              "width",
-              "height"
-            ],
+            "required": ["width", "height"],
             "additionalProperties": false
           },
           "creditsUsed": {
@@ -3647,10 +3437,7 @@
             "description": "Source of the proxy used for the session",
             "nullable": true,
             "type": "string",
-            "enum": [
-              "steel",
-              "external"
-            ]
+            "enum": ["steel", "external"]
           },
           "proxyBytesUsed": {
             "description": "Amount of data transmitted through the proxy",
@@ -3688,14 +3475,7 @@
           "region": {
             "description": "The region where the session was created",
             "type": "string",
-            "enum": [
-              "lax",
-              "ord",
-              "iad",
-              "scl",
-              "fra",
-              "nrt"
-            ]
+            "enum": ["lax", "ord", "iad", "scl", "fra", "nrt"]
           },
           "profileId": {
             "description": "The ID of the profile associated with the session",
@@ -3742,10 +3522,7 @@
               "device": {
                 "default": "desktop",
                 "type": "string",
-                "enum": [
-                  "desktop",
-                  "mobile"
-                ]
+                "enum": ["desktop", "mobile"]
               }
             },
             "additionalProperties": false
@@ -3805,10 +3582,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "success",
-          "message"
-        ],
+        "required": ["success", "message"],
         "additionalProperties": false
       },
       "ReleaseSessionsResponse": {
@@ -3825,10 +3599,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "success",
-          "message"
-        ],
+        "required": ["success", "message"],
         "additionalProperties": false
       },
       "SessionContextResponse": {
@@ -3873,11 +3644,7 @@
                 "sameSite": {
                   "description": "The same site attribute of the cookie",
                   "type": "string",
-                  "enum": [
-                    "Strict",
-                    "Lax",
-                    "None"
-                  ]
+                  "enum": ["Strict", "Lax", "None"]
                 },
                 "size": {
                   "description": "The size of the cookie",
@@ -3900,10 +3667,7 @@
                       "type": "boolean"
                     }
                   },
-                  "required": [
-                    "topLevelSite",
-                    "hasCrossSiteAncestor"
-                  ],
+                  "required": ["topLevelSite", "hasCrossSiteAncestor"],
                   "additionalProperties": false
                 },
                 "session": {
@@ -3913,11 +3677,7 @@
                 "priority": {
                   "description": "The priority of the cookie",
                   "type": "string",
-                  "enum": [
-                    "Low",
-                    "Medium",
-                    "High"
-                  ]
+                  "enum": ["Low", "Medium", "High"]
                 },
                 "sameParty": {
                   "description": "Whether the cookie is a same party cookie",
@@ -3926,21 +3686,14 @@
                 "sourceScheme": {
                   "description": "The source scheme of the cookie",
                   "type": "string",
-                  "enum": [
-                    "Unset",
-                    "NonSecure",
-                    "Secure"
-                  ]
+                  "enum": ["Unset", "NonSecure", "Secure"]
                 },
                 "sourcePort": {
                   "description": "The source port of the cookie",
                   "type": "number"
                 }
               },
-              "required": [
-                "name",
-                "value"
-              ],
+              "required": ["name", "value"],
               "additionalProperties": false
             }
           },
@@ -4030,28 +3783,17 @@
                                 }
                               }
                             },
-                            "required": [
-                              "key",
-                              "value"
-                            ],
+                            "required": ["key", "value"],
                             "additionalProperties": false
                           }
                         }
                       },
-                      "required": [
-                        "id",
-                        "name",
-                        "records"
-                      ],
+                      "required": ["id", "name", "records"],
                       "additionalProperties": false
                     }
                   }
                 },
-                "required": [
-                  "id",
-                  "name",
-                  "data"
-                ],
+                "required": ["id", "name", "data"],
                 "additionalProperties": false
               }
             }
@@ -4228,9 +3970,7 @@
                 "maximum": 9007199254740991
               }
             },
-            "required": [
-              "statusCode"
-            ],
+            "required": ["statusCode"],
             "additionalProperties": false
           },
           "links": {
@@ -4247,10 +3987,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "url",
-                "text"
-              ],
+              "required": ["url", "text"],
               "additionalProperties": false
             }
           },
@@ -4262,9 +3999,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "url"
-            ],
+            "required": ["url"],
             "additionalProperties": false
           },
           "pdf": {
@@ -4275,17 +4010,11 @@
                 "type": "string"
               }
             },
-            "required": [
-              "url"
-            ],
+            "required": ["url"],
             "additionalProperties": false
           }
         },
-        "required": [
-          "content",
-          "metadata",
-          "links"
-        ],
+        "required": ["content", "metadata", "links"],
         "additionalProperties": false
       },
       "ScreenshotResponse": {
@@ -4298,9 +4027,7 @@
             "format": "uri"
           }
         },
-        "required": [
-          "url"
-        ],
+        "required": ["url"],
         "additionalProperties": false
       },
       "PdfResponse": {
@@ -4313,9 +4040,7 @@
             "format": "uri"
           }
         },
-        "required": [
-          "url"
-        ],
+        "required": ["url"],
         "additionalProperties": false
       },
       "DetailsResponse": {
@@ -4326,9 +4051,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "plan"
-        ],
+        "required": ["plan"],
         "additionalProperties": false
       },
       "FileDetails": {
@@ -4350,11 +4073,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
           }
         },
-        "required": [
-          "path",
-          "size",
-          "lastModified"
-        ],
+        "required": ["path", "size", "lastModified"],
         "additionalProperties": false
       },
       "MultipleFiles": {
@@ -4382,18 +4101,12 @@
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
                 }
               },
-              "required": [
-                "path",
-                "size",
-                "lastModified"
-              ],
+              "required": ["path", "size", "lastModified"],
               "additionalProperties": false
             }
           }
         },
-        "required": [
-          "data"
-        ],
+        "required": ["data"],
         "additionalProperties": false
       },
       "CredentialMetadata": {
@@ -4427,10 +4140,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
           }
         },
-        "required": [
-          "createdAt",
-          "updatedAt"
-        ],
+        "required": ["createdAt", "updatedAt"],
         "additionalProperties": false
       },
       "CredentialList": {
@@ -4469,17 +4179,12 @@
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
                 }
               },
-              "required": [
-                "createdAt",
-                "updatedAt"
-              ],
+              "required": ["createdAt", "updatedAt"],
               "additionalProperties": false
             }
           }
         },
-        "required": [
-          "credentials"
-        ],
+        "required": ["credentials"],
         "additionalProperties": false
       },
       "CaptchaState": {
@@ -4512,12 +4217,7 @@
             "type": "number"
           }
         },
-        "required": [
-          "pageId",
-          "url",
-          "isSolvingCaptcha",
-          "tasks"
-        ],
+        "required": ["pageId", "url", "isSolvingCaptcha", "tasks"],
         "additionalProperties": false
       },
       "CaptchaStateResponse": {
@@ -4552,12 +4252,7 @@
               "type": "number"
             }
           },
-          "required": [
-            "pageId",
-            "url",
-            "isSolvingCaptcha",
-            "tasks"
-          ],
+          "required": ["pageId", "url", "isSolvingCaptcha", "tasks"],
           "additionalProperties": false
         }
       },
@@ -4574,9 +4269,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "success"
-        ],
+        "required": ["success"],
         "additionalProperties": false
       },
       "ExtensionList": {
@@ -4607,12 +4300,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id",
-                "name",
-                "createdAt",
-                "updatedAt"
-              ],
+              "required": ["id", "name", "createdAt", "updatedAt"],
               "additionalProperties": false
             }
           },
@@ -4621,10 +4309,7 @@
             "type": "number"
           }
         },
-        "required": [
-          "extensions",
-          "count"
-        ],
+        "required": ["extensions", "count"],
         "additionalProperties": false
       },
       "ExtensionUploadResponse": {
@@ -4648,12 +4333,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "id",
-          "name",
-          "createdAt",
-          "updatedAt"
-        ],
+        "required": ["id", "name", "createdAt", "updatedAt"],
         "additionalProperties": false
       },
       "DeleteResponse": {
@@ -4664,9 +4344,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "message"
-        ],
+        "required": ["message"],
         "additionalProperties": false
       },
       "ProfileListResponse": {
@@ -4765,9 +4443,7 @@
                           "type": "string"
                         }
                       },
-                      "required": [
-                        "user-agent"
-                      ],
+                      "required": ["user-agent"],
                       "additionalProperties": {}
                     },
                     "fingerprint": {
@@ -5002,10 +4678,7 @@
                                         "type": "string"
                                       }
                                     },
-                                    "required": [
-                                      "brand",
-                                      "version"
-                                    ],
+                                    "required": ["brand", "version"],
                                     "additionalProperties": {}
                                   }
                                 },
@@ -5018,11 +4691,7 @@
                                   "type": "string"
                                 }
                               },
-                              "required": [
-                                "brands",
-                                "mobile",
-                                "platform"
-                              ],
+                              "required": ["brands", "mobile", "platform"],
                               "additionalProperties": {}
                             },
                             "maxTouchPoints": {
@@ -5098,10 +4767,7 @@
                               "type": "string"
                             }
                           },
-                          "required": [
-                            "vendor",
-                            "renderer"
-                          ],
+                          "required": ["vendor", "renderer"],
                           "additionalProperties": {}
                         },
                         "mockWebRTC": {
@@ -5184,10 +4850,7 @@
                               }
                             }
                           },
-                          "required": [
-                            "plugins",
-                            "mimeTypes"
-                          ],
+                          "required": ["plugins", "mimeTypes"],
                           "additionalProperties": {}
                         },
                         "videoCodecs": {
@@ -5294,11 +4957,7 @@
                               }
                             }
                           },
-                          "required": [
-                            "micros",
-                            "webcams",
-                            "speakers"
-                          ],
+                          "required": ["micros", "webcams", "speakers"],
                           "additionalProperties": {}
                         }
                       },
@@ -5318,10 +4977,7 @@
                       "additionalProperties": {}
                     }
                   },
-                  "required": [
-                    "headers",
-                    "fingerprint"
-                  ],
+                  "required": ["headers", "fingerprint"],
                   "additionalProperties": false
                 },
                 "userAgent": {
@@ -5341,20 +4997,13 @@
                       "type": "number"
                     }
                   },
-                  "required": [
-                    "width",
-                    "height"
-                  ],
+                  "required": ["width", "height"],
                   "additionalProperties": false
                 },
                 "status": {
                   "description": "The status of the profile",
                   "type": "string",
-                  "enum": [
-                    "UPLOADING",
-                    "READY",
-                    "FAILED"
-                  ]
+                  "enum": ["UPLOADING", "READY", "FAILED"]
                 },
                 "useProxyConfig": {
                   "description": "The proxy configuration associated with the profile",
@@ -5395,10 +5044,7 @@
             "minimum": 0
           }
         },
-        "required": [
-          "profiles",
-          "count"
-        ],
+        "required": ["profiles", "count"],
         "additionalProperties": false
       },
       "Jwks": {
@@ -5442,9 +5088,7 @@
             }
           }
         },
-        "required": [
-          "keys"
-        ],
+        "required": ["keys"],
         "additionalProperties": false
       },
       "ComputerActionResponse": {
@@ -5477,9 +5121,7 @@
       "post": {
         "operationId": "scrape",
         "summary": "Scrape webpage content",
-        "tags": [
-          "Browser Tools"
-        ],
+        "tags": ["Browser Tools"],
         "description": "Extracts content from a specified URL.",
         "requestBody": {
           "content": {
@@ -5518,9 +5160,7 @@
       "post": {
         "operationId": "screenshot",
         "summary": "Capture webpage screenshot",
-        "tags": [
-          "Browser Tools"
-        ],
+        "tags": ["Browser Tools"],
         "description": "Captures a screenshot of a specified webpage.",
         "requestBody": {
           "content": {
@@ -5559,9 +5199,7 @@
       "post": {
         "operationId": "pdf",
         "summary": "Convert webpage to PDF",
-        "tags": [
-          "Browser Tools"
-        ],
+        "tags": ["Browser Tools"],
         "description": "Generates a PDF from a specified webpage.",
         "requestBody": {
           "content": {
@@ -5600,9 +5238,7 @@
       "get": {
         "operationId": "get_sessions",
         "summary": "List all sessions",
-        "tags": [
-          "Sessions"
-        ],
+        "tags": ["Sessions"],
         "description": "Fetches all active sessions for the current organization.",
         "parameters": [
           {
@@ -5629,11 +5265,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "live",
-                "released",
-                "failed"
-              ]
+              "enum": ["live", "released", "failed"]
             },
             "in": "query",
             "name": "status",
@@ -5667,9 +5299,7 @@
       "post": {
         "operationId": "create_session",
         "summary": "Create a session",
-        "tags": [
-          "Sessions"
-        ],
+        "tags": ["Sessions"],
         "description": "Creates a new session with the provided configuration.",
         "requestBody": {
           "content": {
@@ -5728,9 +5358,7 @@
       "post": {
         "operationId": "release_all_sessions",
         "summary": "Release all sessions",
-        "tags": [
-          "Sessions"
-        ],
+        "tags": ["Sessions"],
         "description": "Releases all active sessions for the current organization.",
         "requestBody": {
           "content": {
@@ -5779,9 +5407,7 @@
       "get": {
         "operationId": "get_session",
         "summary": "Get session details",
-        "tags": [
-          "Sessions"
-        ],
+        "tags": ["Sessions"],
         "description": "Retrieves details of a specific session by ID.",
         "parameters": [
           {
@@ -5843,9 +5469,7 @@
       "get": {
         "operationId": "get_session_context",
         "summary": "Get session context",
-        "tags": [
-          "Sessions"
-        ],
+        "tags": ["Sessions"],
         "description": "Fetches the context data of a specific session.",
         "parameters": [
           {
@@ -5897,9 +5521,7 @@
       "get": {
         "operationId": "get_session_events",
         "summary": "Get recorded events",
-        "tags": [
-          "Sessions"
-        ],
+        "tags": ["Sessions"],
         "description": "This endpoint allows you to get the recorded session events in the RRWeb format",
         "parameters": [
           {
@@ -5961,9 +5583,7 @@
       "post": {
         "operationId": "release_session",
         "summary": "Release a session",
-        "tags": [
-          "Sessions"
-        ],
+        "tags": ["Sessions"],
         "description": "Releases a specific session by ID.",
         "requestBody": {
           "content": {
@@ -6034,9 +5654,7 @@
       "get": {
         "operationId": "get_session_live_details",
         "summary": "Get live session details",
-        "tags": [
-          "Sessions"
-        ],
+        "tags": ["Sessions"],
         "description": "Returns the live state of the session, including pages, tabs, and browser state",
         "parameters": [
           {
@@ -6088,9 +5706,7 @@
       "get": {
         "operationId": "get_session_hls_playlist",
         "summary": "Get HLS playlist",
-        "tags": [
-          "Sessions"
-        ],
+        "tags": ["Sessions"],
         "description": "Get HLS playlist for a session recording",
         "parameters": [
           {
@@ -6141,9 +5757,7 @@
       "post": {
         "operationId": "upload_file",
         "summary": "Upload a file",
-        "tags": [
-          "Files"
-        ],
+        "tags": ["Files"],
         "description": "Uploads a file to a session via `multipart/form-data` with a `file` field that accepts either binary data or a URL string to download from, and an optional `path` field for the file storage path.",
         "requestBody": {
           "content": {
@@ -6230,9 +5844,7 @@
       "get": {
         "operationId": "list_files",
         "summary": "List files",
-        "tags": [
-          "Files"
-        ],
+        "tags": ["Files"],
         "description": "List all files from the session in descending order.",
         "parameters": [
           {
@@ -6290,9 +5902,7 @@
       "delete": {
         "operationId": "delete_all_files",
         "summary": "Delete all files",
-        "tags": [
-          "Files"
-        ],
+        "tags": ["Files"],
         "description": "Delete all files from a session",
         "parameters": [
           {
@@ -6345,9 +5955,7 @@
       "get": {
         "operationId": "download_file",
         "summary": "Download a file",
-        "tags": [
-          "Files"
-        ],
+        "tags": ["Files"],
         "description": "Download a file from a session",
         "parameters": [
           {
@@ -6414,9 +6022,7 @@
       "delete": {
         "operationId": "delete_file",
         "summary": "Delete a file",
-        "tags": [
-          "Files"
-        ],
+        "tags": ["Files"],
         "description": "Delete a file from a session",
         "parameters": [
           {
@@ -6477,9 +6083,7 @@
       "get": {
         "operationId": "download_archive",
         "summary": "Download archive",
-        "tags": [
-          "Files"
-        ],
+        "tags": ["Files"],
         "description": "Download all files from the session as a zip archive.",
         "parameters": [
           {
@@ -6540,9 +6144,7 @@
       "post": {
         "operationId": "upload_global_file",
         "summary": "Upload a global file",
-        "tags": [
-          "Files"
-        ],
+        "tags": ["Files"],
         "description": "Uploads a file to global storage via `multipart/form-data` with a `file` field that accepts either binary data or a URL string to download from, and an optional `path` field for the file storage path.",
         "requestBody": {
           "content": {
@@ -6599,9 +6201,7 @@
       "get": {
         "operationId": "list_global_files",
         "summary": "List global files",
-        "tags": [
-          "Files"
-        ],
+        "tags": ["Files"],
         "description": "List all global files for the organization in descending order.",
         "responses": {
           "200": {
@@ -6631,9 +6231,7 @@
       "get": {
         "operationId": "download_global_file",
         "summary": "Download a global file",
-        "tags": [
-          "Files"
-        ],
+        "tags": ["Files"],
         "description": "Download a file from global storage",
         "parameters": [
           {
@@ -6682,9 +6280,7 @@
       "delete": {
         "operationId": "delete_global_file",
         "summary": "Delete a global file",
-        "tags": [
-          "Files"
-        ],
+        "tags": ["Files"],
         "description": "Delete a file from global storage",
         "parameters": [
           {
@@ -6727,9 +6323,7 @@
       "get": {
         "operationId": "list_credentials",
         "summary": "List all credential metadata",
-        "tags": [
-          "Credentials"
-        ],
+        "tags": ["Credentials"],
         "description": "Fetches all credential metadata for the current organization.",
         "parameters": [
           {
@@ -6797,9 +6391,7 @@
       "post": {
         "operationId": "create_credential",
         "summary": "Stores credentials",
-        "tags": [
-          "Credentials"
-        ],
+        "tags": ["Credentials"],
         "description": "Encrypts and stores credentials for an origin",
         "requestBody": {
           "content": {
@@ -6856,9 +6448,7 @@
       "put": {
         "operationId": "update_credential",
         "summary": "Updates credentials",
-        "tags": [
-          "Credentials"
-        ],
+        "tags": ["Credentials"],
         "description": "Encrypts and updates credentials for an origin",
         "requestBody": {
           "content": {
@@ -6915,9 +6505,7 @@
       "delete": {
         "operationId": "delete_credential",
         "summary": "Deletes credentials",
-        "tags": [
-          "Credentials"
-        ],
+        "tags": ["Credentials"],
         "description": "Deletes encrypted credentials from the database",
         "requestBody": {
           "content": {
@@ -6966,9 +6554,7 @@
       "get": {
         "operationId": "get_captcha_status",
         "summary": "Get captcha status",
-        "tags": [
-          "Captchas"
-        ],
+        "tags": ["Captchas"],
         "description": "Gets the current captcha status for a session",
         "parameters": [
           {
@@ -7019,9 +6605,7 @@
       "post": {
         "operationId": "solve_captcha",
         "summary": "Solve captcha(s)",
-        "tags": [
-          "Captchas"
-        ],
+        "tags": ["Captchas"],
         "description": "Solves captcha(s) for the session. If pageId, url, or taskId is provided, solves that specific captcha. If no parameters are provided, solves all detected captchas. Use this when autoCaptchaSolving is disabled in stealthConfig.",
         "requestBody": {
           "content": {
@@ -7081,9 +6665,7 @@
       "post": {
         "operationId": "solve_image_captcha",
         "summary": "Solve image captcha",
-        "tags": [
-          "Captchas"
-        ],
+        "tags": ["Captchas"],
         "description": "Solves an image captcha using XPath selectors",
         "requestBody": {
           "content": {
@@ -7143,9 +6725,7 @@
       "post": {
         "operationId": "upload_extension",
         "summary": "Upload extension",
-        "tags": [
-          "Extensions"
-        ],
+        "tags": ["Extensions"],
         "description": "Upload a Chrome extension (.zip/.crx file or Chrome Web Store URL) for the organization",
         "requestBody": {
           "content": {
@@ -7202,9 +6782,7 @@
       "get": {
         "operationId": "list_extensions",
         "summary": "List extensions",
-        "tags": [
-          "Extensions"
-        ],
+        "tags": ["Extensions"],
         "description": "List all extensions for the organization",
         "responses": {
           "200": {
@@ -7242,9 +6820,7 @@
       "delete": {
         "operationId": "delete_all_extensions",
         "summary": "Delete all extensions",
-        "tags": [
-          "Extensions"
-        ],
+        "tags": ["Extensions"],
         "description": "Delete all extensions for the organization",
         "responses": {
           "200": {
@@ -7284,9 +6860,7 @@
       "get": {
         "operationId": "download_extension",
         "summary": "Download extension",
-        "tags": [
-          "Extensions"
-        ],
+        "tags": ["Extensions"],
         "description": "Download an extension file by extension ID",
         "parameters": [
           {
@@ -7347,9 +6921,7 @@
       "put": {
         "operationId": "update_extension",
         "summary": "Update extension",
-        "tags": [
-          "Extensions"
-        ],
+        "tags": ["Extensions"],
         "description": "Update a Chrome extension (.zip/.crx file or Chrome Web Store URL) for the organization",
         "requestBody": {
           "content": {
@@ -7427,9 +6999,7 @@
       "delete": {
         "operationId": "delete_extension",
         "summary": "Delete extension",
-        "tags": [
-          "Extensions"
-        ],
+        "tags": ["Extensions"],
         "description": "Delete an extension by ID",
         "parameters": [
           {
@@ -7490,9 +7060,7 @@
       "post": {
         "operationId": "createProfile",
         "summary": "Create a profile",
-        "tags": [
-          "Profiles"
-        ],
+        "tags": ["Profiles"],
         "description": "Create a new profile",
         "requestBody": {
           "content": {
@@ -7539,9 +7107,7 @@
       "get": {
         "operationId": "listProfiles",
         "summary": "List all profiles",
-        "tags": [
-          "Profiles"
-        ],
+        "tags": ["Profiles"],
         "description": "Retrieve a list of all profiles",
         "responses": {
           "200": {
@@ -7581,9 +7147,7 @@
       "patch": {
         "operationId": "updateProfile",
         "summary": "Update a profile",
-        "tags": [
-          "Profiles"
-        ],
+        "tags": ["Profiles"],
         "description": "Update an existing profile",
         "requestBody": {
           "content": {
@@ -7651,9 +7215,7 @@
       "get": {
         "operationId": "getProfile",
         "summary": "Get a profile",
-        "tags": [
-          "Profiles"
-        ],
+        "tags": ["Profiles"],
         "description": "Retrieve a profile by ID",
         "parameters": [
           {
@@ -7714,9 +7276,7 @@
       "get": {
         "operationId": "get_well_known_jwks",
         "summary": "Get Public Keys (JWKS)",
-        "tags": [
-          "Auth"
-        ],
+        "tags": ["Auth"],
         "description": "Provides the JSON Web Key Set (JWKS) for verifying JWTs issued by this service.",
         "responses": {
           "200": {
@@ -7746,9 +7306,7 @@
       "post": {
         "operationId": "execute_computer_action",
         "summary": "Execute computer action",
-        "tags": [
-          "Computer"
-        ],
+        "tags": ["Computer"],
         "description": "Execute computer actions like mouse movements, clicks, keyboard input, and more",
         "requestBody": {
           "content": {

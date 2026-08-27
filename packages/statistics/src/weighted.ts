@@ -20,7 +20,7 @@ export interface WeightedProportion {
  */
 export function weightedProportion(
   cells: readonly { rate: number; weight: number }[],
-  level = 0.95,
+  level = 0.95
 ): WeightedProportion | null {
   if (cells.length === 0) {
     return null;
@@ -53,13 +53,13 @@ export function weightedProportion(
     estimate,
     total_weight: weightSum,
     effective_n: effectiveN,
-    interval: wilsonInterval(k, n, level),
+    interval: wilsonInterval(k, n, level)
   };
 }
 
 /** Weighted mean of arbitrary real-valued observations. */
 export function weightedMean(
-  observations: readonly { value: number; weight: number }[],
+  observations: readonly { value: number; weight: number }[]
 ): number | null {
   let weightSum = 0;
   let weightedSum = 0;

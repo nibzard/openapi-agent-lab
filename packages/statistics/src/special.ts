@@ -8,7 +8,7 @@
 const LANCZOS: readonly number[] = [
   0.99999999999980993, 676.5203681218851, -1259.1392167224028,
   771.32342877765313, -176.61502916214059, 12.507343278686905,
-  -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7,
+  -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7
 ];
 
 /** Natural log of the gamma function for x > 0. */
@@ -24,10 +24,7 @@ export function logGamma(x: number): number {
     a += (LANCZOS[i] as number) / (x + i);
   }
   return (
-    0.5 * Math.log(2 * Math.PI) +
-    (x + 0.5) * Math.log(t) -
-    t +
-    Math.log(a)
+    0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a)
   );
 }
 
@@ -97,9 +94,7 @@ export function normalQuantile(p: number): number {
 /** Two-sided normal quantile for a confidence level, for example 0.95. */
 export function twoSidedZ(level: number): number {
   if (level <= 0 || level >= 1) {
-    throw new RangeError(
-      `confidence level must be in (0, 1), got ${level}`
-    );
+    throw new RangeError(`confidence level must be in (0, 1), got ${level}`);
   }
   return normalQuantile(1 - (1 - level) / 2);
 }

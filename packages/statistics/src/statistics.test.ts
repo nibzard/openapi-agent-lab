@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   fisherExactTwoSided,
   newcombeDifferenceInterval,
-  wilsonInterval,
+  wilsonInterval
 } from "./rates.ts";
 import { holmAdjust } from "./multiplicity.ts";
 import { quantile, summarize } from "./summary.ts";
@@ -63,14 +63,21 @@ describe("Newcombe difference interval", () => {
 
 describe("Fisher exact test", () => {
   it("matches the specification vector for [[1,9],[8,2]]", () => {
-    expect(fisherExactTwoSided([[1, 9], [8, 2]])).toBeCloseTo(
-      0.00547749,
-      7,
-    );
+    expect(
+      fisherExactTwoSided([
+        [1, 9],
+        [8, 2]
+      ])
+    ).toBeCloseTo(0.00547749, 7);
   });
 
   it("is 1 for identical rows", () => {
-    expect(fisherExactTwoSided([[5, 5], [5, 5]])).toBeCloseTo(1, 8);
+    expect(
+      fisherExactTwoSided([
+        [5, 5],
+        [5, 5]
+      ])
+    ).toBeCloseTo(1, 8);
   });
 });
 
@@ -109,7 +116,7 @@ describe("weighted estimands", () => {
       { rate: 0.5, weight: 1 },
       { rate: 1, weight: 1 },
       { rate: 0, weight: 1 },
-      { rate: 0.5, weight: 1 },
+      { rate: 0.5, weight: 1 }
     ]);
     expect(result?.estimate).toBeCloseTo(0.5, 12);
     expect(result?.effective_n).toBeCloseTo(4, 12);
@@ -118,7 +125,7 @@ describe("weighted estimands", () => {
   it("respects unequal weights", () => {
     const result = weightedProportion([
       { rate: 0.8, weight: 3 },
-      { rate: 0.2, weight: 1 },
+      { rate: 0.2, weight: 1 }
     ]);
     // (3*0.8 + 1*0.2) / 4 = 0.65
     expect(result?.estimate).toBeCloseTo(0.65, 12);
@@ -131,8 +138,8 @@ describe("weighted estimands", () => {
     expect(
       weightedProportion([
         { rate: 0.5, weight: 0 },
-        { rate: 0.5, weight: 0 },
-      ]),
+        { rate: 0.5, weight: 0 }
+      ])
     ).toBeNull();
   });
 });
@@ -158,7 +165,7 @@ describe("paired binary comparison", () => {
       both: 6,
       onlyFirst: 1,
       onlySecond: 9,
-      neither: 4,
+      neither: 4
     });
     // (1 - 9) / 20 = -0.4
     expect(result?.difference).toBeCloseTo(-0.4, 12);
@@ -169,10 +176,10 @@ describe("paired binary comparison", () => {
   it("matches the hand-computed exact McNemar p-value", () => {
     // b=1, c=9: 2 * sum_{i=0..1} C(10,i) / 2^10 = 2*11/1024
     expect(
-      mcnemarExact({ both: 6, onlyFirst: 1, onlySecond: 9, neither: 4 }),
+      mcnemarExact({ both: 6, onlyFirst: 1, onlySecond: 9, neither: 4 })
     ).toBeCloseTo(0.021484375, 12);
     expect(
-      mcnemarExact({ both: 5, onlyFirst: 0, onlySecond: 0, neither: 5 }),
+      mcnemarExact({ both: 5, onlyFirst: 0, onlySecond: 0, neither: 5 })
     ).toBe(1);
   });
 });

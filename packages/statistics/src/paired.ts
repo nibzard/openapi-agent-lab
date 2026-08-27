@@ -17,17 +17,16 @@ export interface PairedBinary {
 
 /** Marginal success-rate difference, first condition minus second. */
 export function pairedDifference(
-  counts: PairedBinary,
+  counts: PairedBinary
 ): { difference: number; discordant: number; n: number } | null {
-  const n =
-    counts.both + counts.onlyFirst + counts.onlySecond + counts.neither;
+  const n = counts.both + counts.onlyFirst + counts.onlySecond + counts.neither;
   if (n === 0) {
     return null;
   }
   return {
     difference: (counts.onlyFirst - counts.onlySecond) / n,
     discordant: counts.onlyFirst + counts.onlySecond,
-    n,
+    n
   };
 }
 

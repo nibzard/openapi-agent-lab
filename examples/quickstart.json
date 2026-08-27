@@ -15,11 +15,12 @@
       "description": "Local mock started by oal serve"
     }
   ],
-  "security": [
-    { "bearerAuth": [] }
-  ],
+  "security": [{ "bearerAuth": [] }],
   "tags": [
-    { "name": "notes", "description": "Create, read, change, and delete notes." }
+    {
+      "name": "notes",
+      "description": "Create, read, change, and delete notes."
+    }
   ],
   "paths": {
     "/notes": {
@@ -52,7 +53,12 @@
             "name": "perPage",
             "in": "query",
             "description": "Notes per page. The maximum is 100.",
-            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 }
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
           }
         ],
         "responses": {

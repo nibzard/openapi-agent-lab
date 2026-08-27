@@ -10,7 +10,9 @@ export default tseslint.config(
   {
     languageOptions: {
       parserOptions: {
-        projectService: true,
+        projectService: {
+          allowDefaultProject: ["scripts/*.mjs"]
+        },
         tsconfigRootDir: import.meta.dirname
       }
     },
@@ -30,7 +32,25 @@ export default tseslint.config(
     }
   },
   {
-    files: ["*.mjs"],
-    extends: [tseslint.configs.disableTypeChecked]
+    files: ["**/*.mjs"],
+    extends: [tseslint.configs.disableTypeChecked],
+    languageOptions: {
+      globals: {
+        console: "readonly",
+        process: "readonly",
+        URL: "readonly",
+        URLSearchParams: "readonly",
+        TextEncoder: "readonly",
+        TextDecoder: "readonly",
+        Buffer: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        setInterval: "readonly",
+        clearInterval: "readonly",
+        queueMicrotask: "readonly",
+        structuredClone: "readonly",
+        fetch: "readonly"
+      }
+    }
   }
 );

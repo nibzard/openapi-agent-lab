@@ -10,7 +10,7 @@ import { logChoose, twoSidedZ } from "./special.ts";
 export function wilsonInterval(
   k: number,
   n: number,
-  level = 0.95,
+  level = 0.95
 ): { lower: number; upper: number } | null {
   if (n <= 0) {
     return null;
@@ -23,10 +23,11 @@ export function wilsonInterval(
   const z2 = z * z;
   const denominator = 1 + z2 / n;
   const center = (p + z2 / (2 * n)) / denominator;
-  const spread = (z / denominator) * Math.sqrt((p * (1 - p) + z2 / (4 * n)) / n);
+  const spread =
+    (z / denominator) * Math.sqrt((p * (1 - p) + z2 / (4 * n)) / n);
   return {
     lower: Math.max(0, center - spread),
-    upper: Math.min(1, center + spread),
+    upper: Math.min(1, center + spread)
   };
 }
 
@@ -40,7 +41,7 @@ export function newcombeDifferenceInterval(
   n1: number,
   k2: number,
   n2: number,
-  level = 0.95,
+  level = 0.95
 ): { lower: number; upper: number } | null {
   const first = wilsonInterval(k1, n1, level);
   const second = wilsonInterval(k2, n2, level);
@@ -51,14 +52,14 @@ export function newcombeDifferenceInterval(
   const p2 = k2 / n2;
   const difference = p1 - p2;
   const lowerShift = Math.sqrt(
-    (p1 - first.lower) ** 2 + (second.upper - p2) ** 2,
+    (p1 - first.lower) ** 2 + (second.upper - p2) ** 2
   );
   const upperShift = Math.sqrt(
-    (first.upper - p1) ** 2 + (p2 - second.lower) ** 2,
+    (first.upper - p1) ** 2 + (p2 - second.lower) ** 2
   );
   return {
     lower: Math.max(-1, difference - lowerShift),
-    upper: Math.min(1, difference + upperShift),
+    upper: Math.min(1, difference + upperShift)
   };
 }
 
@@ -68,7 +69,7 @@ export function newcombeDifferenceInterval(
  * are no more probable than the observed table.
  */
 export function fisherExactTwoSided(
-  table: [[number, number], [number, number]],
+  table: [[number, number], [number, number]]
 ): number {
   const [[a, b], [c, d]] = table;
   for (const value of [a, b, c, d]) {
@@ -87,7 +88,7 @@ export function fisherExactTwoSided(
     Math.exp(
       logChoose(col1, x) +
         logChoose(total - col1, row1 - x) -
-        logChoose(total, row1),
+        logChoose(total, row1)
     );
   const observed = probability(a);
   const xMin = Math.max(0, col1 - row2);

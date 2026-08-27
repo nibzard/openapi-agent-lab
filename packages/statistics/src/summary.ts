@@ -20,7 +20,7 @@ export const MIN_N_FOR_P95 = 20;
 /** Linear-interpolation quantile (type 7, the R default). */
 export function quantile(
   values: readonly number[],
-  probability: number,
+  probability: number
 ): number | null {
   if (values.length === 0) {
     return null;
@@ -50,7 +50,7 @@ export function summarize(values: readonly number[]): NumericSummary {
       p75: null,
       p95: null,
       min: null,
-      max: null,
+      max: null
     };
   }
   const sorted = [...values].sort((a, b) => a - b);
@@ -61,6 +61,6 @@ export function summarize(values: readonly number[]): NumericSummary {
     p75: quantile(values, 0.75),
     p95: sorted.length >= MIN_N_FOR_P95 ? quantile(values, 0.95) : null,
     min: sorted[0] ?? null,
-    max: sorted[sorted.length - 1] ?? null,
+    max: sorted[sorted.length - 1] ?? null
   };
 }

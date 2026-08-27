@@ -19,7 +19,7 @@ export interface CensorBounds {
 export function worstCaseBounds(
   successes: number,
   failures: number,
-  unknown: number,
+  unknown: number
 ): CensorBounds | null {
   for (const value of [successes, failures, unknown]) {
     if (!Number.isInteger(value) || value < 0) {
@@ -36,6 +36,6 @@ export function worstCaseBounds(
     successes,
     failures,
     unknown,
-    total,
+    total
   };
 }
