@@ -196,7 +196,6 @@ describe("shell behavior", () => {
   it("exits 3 with a clear diagnostic for stub commands", async () => {
     for (const argv of [
       ["serve", "doc.json"],
-      ["eval", "init", "."],
       ["study", "run", "."],
       ["workflow", "run", "."]
     ]) {

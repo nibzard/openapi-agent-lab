@@ -13,6 +13,7 @@
   "dependencies": {
     "@oal/config": "workspace:*",
     "@oal/core": "workspace:*",
+    "@oal/evaluator": "workspace:*",
     "@oal/pack": "workspace:*"
   }
 }

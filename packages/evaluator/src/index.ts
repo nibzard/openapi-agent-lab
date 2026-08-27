@@ -32,6 +32,29 @@ export type {
   SequenceMatch
 } from "./rubric.ts";
 export {
+  EvalDocCode,
+  loadEval,
+  loadEvalCase,
+  loadEvalCases,
+  templateVariablesOf
+} from "./eval-doc.ts";
+export type {
+  Eval,
+  EvalCase,
+  EvalCaseOptions,
+  EvalCaseResult,
+  EvalCases,
+  EvalCasesResult,
+  EvalLoadOptions,
+  EvalLoadResult,
+  EvalParticipantFile,
+  EvalResult,
+  EvalTask,
+  OperationScope,
+  OperationSelector,
+  TemplateEngine
+} from "./eval-doc.ts";
+export {
   DEFAULT_EVALUATOR_LIMITS,
   evaluateRubric,
   toEvaluation

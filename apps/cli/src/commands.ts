@@ -2,6 +2,11 @@ import type { ExitCode } from "@oal/core";
 
 import type { FlagView, OptionSpec } from "./argv.ts";
 import type { RunContext } from "./context.ts";
+import {
+  evalInitCommand,
+  evalListCommand,
+  evalValidateCommand
+} from "./handlers/eval.ts";
 import { inspectCommand } from "./handlers/inspect.ts";
 import { helpCommand, versionCommand } from "./handlers/misc.ts";
 import { packInitCommand, packValidateCommand } from "./handlers/pack.ts";
@@ -163,20 +168,28 @@ export const COMMANDS: readonly CommandSpec[] = [
   },
   {
     name: "eval init",
-    summary: "Create a minimal eval inside a pack.",
-    arguments: [{ name: "pack", description: "Pack directory." }],
-    options: [value("id", "Eval identifier to create.")],
-    handler: stubCommand("eval init")
+    summary: "Scaffold a new eval directory.",
+    arguments: [
+      { name: "directory", description: "Target directory; must be empty." }
+    ],
+    options: [value("id", "Eval identifier; defaults to the directory name.")],
+    handler: evalInitCommand
   },
   {
     name: "eval validate",
-    summary: "Validate one eval inside a pack.",
-    arguments: [{ name: "pack", description: "Pack directory." }],
-    options: [
-      value("eval", "Eval identifier; defaults to every eval."),
-      flag("strict", "Treat warnings as failures.")
+    summary: "Validate one eval document.",
+    arguments: [
+      { name: "path", description: "Eval document or its directory." }
     ],
-    handler: stubCommand("eval validate")
+    options: [flag("strict", "Treat warnings as failures.")],
+    handler: evalValidateCommand
+  },
+  {
+    name: "eval list",
+    summary: "List the evals a pack declares.",
+    arguments: [{ name: "pack", description: "Pack directory." }],
+    options: [],
+    handler: evalListCommand
   },
   {
     name: "run",
