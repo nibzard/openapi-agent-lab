@@ -53,14 +53,15 @@ export function documentationExchangeSequenceId(sequence: number): string {
 /**
  * Allocate the next sequence for one table. Joins the caller's transaction
  * when one is active and otherwise opens its own.
+ *
+ * A rolled-back transaction frees its sequence for reuse, because the row that
+ * claimed it never became visible. Committed rows never reuse a value.
  */
 export function nextSequence(db: DatabaseSync, table: SequenceTable): number {
   return runInTransaction(db, () => {
     const column = SEQUENCE_COLUMNS[table];
     const row = db
-      .prepare(
-        `SELECT COALESCE(MAX(${column}), 0) + 1 AS next FROM ${table}`
-      )
+      .prepare(`SELECT COALESCE(MAX(${column}), 0) + 1 AS next FROM ${table}`)
       .get();
     const next = row === undefined ? undefined : row["next"];
     if (typeof next !== "number" || !Number.isInteger(next) || next < 1) {

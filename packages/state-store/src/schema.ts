@@ -211,20 +211,14 @@ export function applyMigrations(db: DatabaseSync): number {
         `INSERT INTO schema_meta (key, value) VALUES (?, ?)
          ON CONFLICT(key) DO UPDATE SET value = excluded.value`
       );
-      upsert.run(
-        `migration:${migration.version.toString(10)}`,
-        migration.name
-      );
+      upsert.run(`migration:${migration.version.toString(10)}`, migration.name);
     }
     const setVersion = db.prepare(
       `INSERT INTO schema_meta (key, value) VALUES (?, ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value`
     );
     const target = pending[pending.length - 1]?.version ?? floor;
-    setVersion.run(
-      SCHEMA_META_VERSION_KEY,
-      target.toString(10)
-    );
+    setVersion.run(SCHEMA_META_VERSION_KEY, target.toString(10));
     return target;
   });
 }

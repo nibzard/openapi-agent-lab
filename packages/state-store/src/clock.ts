@@ -47,7 +47,9 @@ export class VirtualClock {
         ? VIRTUAL_EPOCH_MS
         : requireIntegerMs(options.initialMs, "initialMs");
     const tickMs =
-      options?.tickMs === undefined ? 1 : requireIntegerMs(options.tickMs, "tickMs");
+      options?.tickMs === undefined
+        ? 1
+        : requireIntegerMs(options.tickMs, "tickMs");
     this.currentMs = initialMs;
     this.tickMs = tickMs;
   }
@@ -97,7 +99,11 @@ export class VirtualClock {
   }
 
   snapshot(): VirtualClockSnapshot {
-    return { nowMs: this.currentMs, now: formatRfc3339(this.currentMs), tickMs: this.tickMs };
+    return {
+      nowMs: this.currentMs,
+      now: formatRfc3339(this.currentMs),
+      tickMs: this.tickMs
+    };
   }
 }
 

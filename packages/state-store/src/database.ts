@@ -70,22 +70,19 @@ export function openDatabase(options: OpenDatabaseOptions): OpenedDatabase {
  * Rethrows whatever `fn` threw after rolling back.
  */
 export function runInTransaction<T>(db: DatabaseSync, fn: () => T): T {
-  if (db.inTransaction) {
+  if (db.isTransaction) {
     return fn();
   }
   db.exec("BEGIN IMMEDIATE");
   try {
     const result = fn();
-    try {
-      db.exec("COMMIT");
-    } catch (commitError) {
-      db.exec("ROLLBACK");
-      throw commitError;
-    }
+    db.exec("COMMIT");
     return result;
   } catch (error) {
-    if (db.inTransaction) {
+    try {
       db.exec("ROLLBACK");
+    } catch {
+      // The transaction already ended; the original error matters more.
     }
     throw error;
   }

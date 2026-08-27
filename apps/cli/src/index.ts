@@ -1,1 +1,4 @@
-export const cliName = "oal";
+#!/usr/bin/env node
+import { runCli } from "./cli.ts";
+
+runCli();

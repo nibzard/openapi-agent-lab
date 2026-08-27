@@ -97,7 +97,10 @@ export function createRunSecrets(key: Uint8Array): RunSecrets {
       new Uint8Array(cipher.update(plaintext)),
       new Uint8Array(cipher.final())
     ]);
-    return { ciphertext: concat([body, new Uint8Array(cipher.getAuthTag())]), nonce };
+    return {
+      ciphertext: concat([body, new Uint8Array(cipher.getAuthTag())]),
+      nonce
+    };
   }
 
   function open(sealed: SealedValue): Uint8Array {
@@ -108,7 +111,9 @@ export function createRunSecrets(key: Uint8Array): RunSecrets {
       );
     }
     if (ciphertext.byteLength < TAG_BYTES) {
-      throw new Error("Sealed ciphertext is shorter than its authentication tag.");
+      throw new Error(
+        "Sealed ciphertext is shorter than its authentication tag."
+      );
     }
     const split = ciphertext.byteLength - TAG_BYTES;
     const decipher = createDecipheriv("aes-256-gcm", encryptionKey, nonce);

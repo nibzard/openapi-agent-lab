@@ -4,7 +4,10 @@
     "name": "OpenAPI Agent Lab",
     "root": "."
   },
-  "source_files": ["README.md", "SPEC.md"],
+  "source_files": [
+    "README.md",
+    "SPEC.md"
+  ],
   "tasks": [
     {
       "id": "T001",
@@ -18,8 +21,13 @@
         "Create the reference repository layout.",
         "Add baseline continuous integration commands."
       ],
-      "tags": ["workspace", "tooling"],
-      "files": ["SPEC.md"],
+      "tags": [
+        "workspace",
+        "tooling"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
       "updated_at": "2026-08-27T15:51:44.142Z"
     },
     {
@@ -34,16 +42,23 @@
         "Add schema validation helpers.",
         "Add golden schema examples."
       ],
-      "tags": ["schemas", "types"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T001"],
+      "tags": [
+        "schemas",
+        "types"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T001"
+      ],
       "updated_at": "2026-08-27T15:51:44.163Z"
     },
     {
       "id": "T003",
       "title": "Implement source resolution and CLI shell",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Build the oal command shell, source resolution rules, stable output rules, and stable exit codes.",
       "steps": [
         "Create the executable entry point.",
@@ -51,9 +66,17 @@
         "Add source resolution for documents, packs, runs, and studies.",
         "Map failures to stable exit codes."
       ],
-      "tags": ["cli"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T001", "T002"]
+      "tags": [
+        "cli"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T001",
+        "T002"
+      ],
+      "updated_at": "2026-08-27T16:17:05.238Z"
     },
     {
       "id": "T004",
@@ -67,9 +90,16 @@
         "Apply size, depth, and resource limits.",
         "Normalize parser diagnostics."
       ],
-      "tags": ["compiler", "openapi"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T002"]
+      "tags": [
+        "compiler",
+        "openapi"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T002"
+      ]
     },
     {
       "id": "T005",
@@ -83,9 +113,16 @@
         "Detect cycles and excessive reference depth.",
         "Emit stable diagnostics for unsupported references."
       ],
-      "tags": ["compiler", "security"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T004"]
+      "tags": [
+        "compiler",
+        "security"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T004"
+      ]
     },
     {
       "id": "T006",
@@ -99,9 +136,16 @@
         "Compile parameters, request bodies, responses, and security.",
         "Preserve unsupported operations in the capability report."
       ],
-      "tags": ["compiler", "contract-ir"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T005"]
+      "tags": [
+        "compiler",
+        "contract-ir"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T005"
+      ]
     },
     {
       "id": "T007",
@@ -115,15 +159,22 @@
         "Report feature coverage at document and operation levels.",
         "Add inspect command output."
       ],
-      "tags": ["compiler", "diagnostics"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T006"]
+      "tags": [
+        "compiler",
+        "diagnostics"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T006"
+      ]
     },
     {
       "id": "T008",
       "title": "Validate OpenAPI request data",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Validate path, query, header, cookie, and body inputs against compiled operation metadata.",
       "steps": [
         "Implement parameter serialization and parsing.",
@@ -131,15 +182,23 @@
         "Validate request media types.",
         "Return explicit validation errors."
       ],
-      "tags": ["gateway", "validation"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T006"]
+      "tags": [
+        "gateway",
+        "validation"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T006"
+      ],
+      "updated_at": "2026-08-27T16:17:05.261Z"
     },
     {
       "id": "T009",
       "title": "Implement deterministic response generation",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Generate schema-valid contract responses from examples, defaults, enums, schemas, and seeded deterministic fallback values.",
       "steps": [
         "Implement response status selection rules.",
@@ -147,15 +206,23 @@
         "Generate JSON schema values deterministically.",
         "Validate generated responses before returning them."
       ],
-      "tags": ["gateway", "contract-backend"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T006"]
+      "tags": [
+        "gateway",
+        "contract-backend"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T006"
+      ],
+      "updated_at": "2026-08-27T16:17:05.284Z"
     },
     {
       "id": "T010",
       "title": "Build the HTTP gateway",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Start a loopback mock server that routes supported operations, handles framework defaults, enforces validation, and records accepted and rejected requests.",
       "steps": [
         "Map ContractIR routes to the server.",
@@ -163,15 +230,24 @@
         "Handle unmatched routes and methods.",
         "Return deterministic errors and responses."
       ],
-      "tags": ["gateway", "http"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T008", "T009"]
+      "tags": [
+        "gateway",
+        "http"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T008",
+        "T009"
+      ],
+      "updated_at": "2026-08-27T16:17:05.308Z"
     },
     {
       "id": "T011",
       "title": "Implement authentication emulation",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Emulate supported OpenAPI security requirements with synthetic per-run credentials and deterministic authorization failures.",
       "steps": [
         "Compile supported security schemes.",
@@ -179,15 +255,24 @@
         "Validate credential delivery locations.",
         "Redact credential material in traces and reports."
       ],
-      "tags": ["auth", "gateway", "security"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T010"]
+      "tags": [
+        "auth",
+        "gateway",
+        "security"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T010"
+      ],
+      "updated_at": "2026-08-27T16:17:05.332Z"
     },
     {
       "id": "T012",
       "title": "Implement content negotiation and HTTP semantics",
       "priority": 2,
-      "status": "todo",
+      "status": "done",
       "details": "Support request and response media negotiation, headers, status rules, wire semantics, and explicit framework defaults.",
       "steps": [
         "Select response media types deterministically.",
@@ -195,15 +280,23 @@
         "Apply response and documentation profiles.",
         "Add tests for HTTP edge cases."
       ],
-      "tags": ["gateway", "http"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T010"]
+      "tags": [
+        "gateway",
+        "http"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T010"
+      ],
+      "updated_at": "2026-08-27T16:17:05.352Z"
     },
     {
       "id": "T013",
       "title": "Create the SQLite state store",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Implement the transactional SQLite source of truth for runs, trials, mutable state, requests, events, artifacts, idempotency, and terminal disposition.",
       "steps": [
         "Create database schema migrations.",
@@ -211,15 +304,23 @@
         "Implement idempotency records.",
         "Add transactional repository helpers."
       ],
-      "tags": ["state", "persistence"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T002"]
+      "tags": [
+        "state",
+        "persistence"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T002"
+      ],
+      "updated_at": "2026-08-27T16:17:05.372Z"
     },
     {
       "id": "T014",
       "title": "Implement deterministic seed and clock services",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Provide deterministic seed derivation, virtual time, request ordering, and concurrency behavior for repeatable runs.",
       "steps": [
         "Implement seed derivation functions.",
@@ -227,9 +328,17 @@
         "Persist request order and state revision data.",
         "Add determinism tests."
       ],
-      "tags": ["determinism", "state"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T013"]
+      "tags": [
+        "determinism",
+        "state"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T013"
+      ],
+      "updated_at": "2026-08-27T16:17:05.392Z"
     },
     {
       "id": "T015",
@@ -243,9 +352,17 @@
         "Build effective PackIR.",
         "Validate pack invariants."
       ],
-      "tags": ["packs", "validation"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T002", "T007"]
+      "tags": [
+        "packs",
+        "validation"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T002",
+        "T007"
+      ]
     },
     {
       "id": "T016",
@@ -259,9 +376,17 @@
         "Validate referenced OpenAPI documents and eval files.",
         "Return clear author diagnostics."
       ],
-      "tags": ["cli", "packs"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T003", "T015"]
+      "tags": [
+        "cli",
+        "packs"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T003",
+        "T015"
+      ]
     },
     {
       "id": "T017",
@@ -275,9 +400,17 @@
         "Support state transitions and semantic events.",
         "Map behavior errors to gateway responses."
       ],
-      "tags": ["behavior", "packs"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T013", "T015"]
+      "tags": [
+        "behavior",
+        "packs"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T013",
+        "T015"
+      ]
     },
     {
       "id": "T018",
@@ -291,9 +424,17 @@
         "Restrict network and filesystem access according to profile.",
         "Record effective isolation level."
       ],
-      "tags": ["behavior", "security", "sandbox"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T017"]
+      "tags": [
+        "behavior",
+        "security",
+        "sandbox"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T017"
+      ]
     },
     {
       "id": "T019",
@@ -307,9 +448,17 @@
         "Persist fault decisions in evidence.",
         "Add replay and determinism tests."
       ],
-      "tags": ["behavior", "determinism"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T014", "T017"]
+      "tags": [
+        "behavior",
+        "determinism"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T014",
+        "T017"
+      ]
     },
     {
       "id": "T020",
@@ -323,9 +472,17 @@
         "Capture documentation exchanges separately.",
         "Capture semantic events from behavior backends."
       ],
-      "tags": ["trace", "evidence"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T010", "T013"]
+      "tags": [
+        "trace",
+        "evidence"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T010",
+        "T013"
+      ]
     },
     {
       "id": "T021",
@@ -339,9 +496,18 @@
         "Implement redaction canary checks.",
         "Gate raw capture by explicit configuration."
       ],
-      "tags": ["redaction", "security", "evidence"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T011", "T020"]
+      "tags": [
+        "redaction",
+        "security",
+        "evidence"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T011",
+        "T020"
+      ]
     },
     {
       "id": "T022",
@@ -355,9 +521,17 @@
         "Write artifact manifests and frozen metadata.",
         "Refuse overwrites of existing evidence paths."
       ],
-      "tags": ["artifacts", "evidence"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T013", "T020"]
+      "tags": [
+        "artifacts",
+        "evidence"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T013",
+        "T020"
+      ]
     },
     {
       "id": "T023",
@@ -371,9 +545,17 @@
         "Freeze the effective run profile.",
         "Return setup and configuration failures before launch."
       ],
-      "tags": ["runner", "validation"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T015", "T022"]
+      "tags": [
+        "runner",
+        "validation"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T015",
+        "T022"
+      ]
     },
     {
       "id": "T024",
@@ -387,9 +569,18 @@
         "Track lifecycle stages durably.",
         "Finalize all terminal dispositions."
       ],
-      "tags": ["runner", "lifecycle"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T010", "T014", "T023"]
+      "tags": [
+        "runner",
+        "lifecycle"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T010",
+        "T014",
+        "T023"
+      ]
     },
     {
       "id": "T025",
@@ -403,9 +594,17 @@
         "Apply contract visibility modes.",
         "Validate final-output schema instructions."
       ],
-      "tags": ["prompts", "runner"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T015", "T024"]
+      "tags": [
+        "prompts",
+        "runner"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T015",
+        "T024"
+      ]
     },
     {
       "id": "T026",
@@ -419,9 +618,16 @@
         "Capture process output and exit status.",
         "Add adapter conformance tests."
       ],
-      "tags": ["adapters", "runner"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T024"]
+      "tags": [
+        "adapters",
+        "runner"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T024"
+      ]
     },
     {
       "id": "T027",
@@ -435,9 +641,15 @@
         "Collect final output and artifacts.",
         "Handle timeouts and cancellation."
       ],
-      "tags": ["adapters"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T026"]
+      "tags": [
+        "adapters"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T026"
+      ]
     },
     {
       "id": "T028",
@@ -451,9 +663,16 @@
         "Collect structured final output.",
         "Add conformance tests without paid model calls."
       ],
-      "tags": ["adapters", "codex"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T026"]
+      "tags": [
+        "adapters",
+        "codex"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T026"
+      ]
     },
     {
       "id": "T029",
@@ -467,9 +686,17 @@
         "Retain failed, timed-out, malformed, zero-request, and interrupted trials.",
         "Write canonical run artifacts."
       ],
-      "tags": ["cli", "runner"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T024", "T026"]
+      "tags": [
+        "cli",
+        "runner"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T024",
+        "T026"
+      ]
     },
     {
       "id": "T030",
@@ -483,9 +710,17 @@
         "Implement documentation discovery routes when selected.",
         "Keep control-plane routes private."
       ],
-      "tags": ["exposure", "http"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T010", "T025"]
+      "tags": [
+        "exposure",
+        "http"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T010",
+        "T025"
+      ]
     },
     {
       "id": "T031",
@@ -499,9 +734,17 @@
         "Validate tool arguments.",
         "Record tool exchanges in normalized trace."
       ],
-      "tags": ["exposure", "tools"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T010", "T020"]
+      "tags": [
+        "exposure",
+        "tools"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T010",
+        "T020"
+      ]
     },
     {
       "id": "T032",
@@ -515,9 +758,18 @@
         "Implement catalog invocation.",
         "Add MCP lifecycle support."
       ],
-      "tags": ["exposure", "tools", "mcp"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T010", "T020"]
+      "tags": [
+        "exposure",
+        "tools",
+        "mcp"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T010",
+        "T020"
+      ]
     },
     {
       "id": "T033",
@@ -531,9 +783,17 @@
         "Render participant-visible workflows when selected.",
         "Align workflow steps with trace events."
       ],
-      "tags": ["workflows", "arazzo"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T015", "T020"]
+      "tags": [
+        "workflows",
+        "arazzo"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T015",
+        "T020"
+      ]
     },
     {
       "id": "T034",
@@ -547,9 +807,17 @@
         "Implement check kinds, scoring, and sequence semantics.",
         "Write evaluation evidence artifacts."
       ],
-      "tags": ["evaluator", "rubric"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T020", "T022"]
+      "tags": [
+        "evaluator",
+        "rubric"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T020",
+        "T022"
+      ]
     },
     {
       "id": "T035",
@@ -563,9 +831,17 @@
         "Run evaluation against existing evidence.",
         "Report malformed final output separately."
       ],
-      "tags": ["cli", "evaluator"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T016", "T034"]
+      "tags": [
+        "cli",
+        "evaluator"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T016",
+        "T034"
+      ]
     },
     {
       "id": "T036",
@@ -579,9 +855,17 @@
         "Implement report formats.",
         "Implement compare output with compatibility drift."
       ],
-      "tags": ["reports", "analysis"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T029", "T034"]
+      "tags": [
+        "reports",
+        "analysis"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T029",
+        "T034"
+      ]
     },
     {
       "id": "T037",
@@ -595,9 +879,17 @@
         "Check dependency and binary versions.",
         "Report actionable diagnostic output."
       ],
-      "tags": ["cli", "diagnostics"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T022", "T036"]
+      "tags": [
+        "cli",
+        "diagnostics"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T022",
+        "T036"
+      ]
     },
     {
       "id": "T038",
@@ -611,9 +903,18 @@
         "Normalize diagnostic categories.",
         "Implement crash recovery behavior."
       ],
-      "tags": ["limits", "failures", "security"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T004", "T024"]
+      "tags": [
+        "limits",
+        "failures",
+        "security"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T004",
+        "T024"
+      ]
     },
     {
       "id": "T039",
@@ -627,9 +928,17 @@
         "Classify evidence integrity.",
         "Add observability tests."
       ],
-      "tags": ["observability", "evidence"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T020", "T022"]
+      "tags": [
+        "observability",
+        "evidence"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T020",
+        "T022"
+      ]
     },
     {
       "id": "T040",
@@ -643,9 +952,16 @@
         "Add feature matrix fixtures.",
         "Add adversarial and real-world shape fixtures."
       ],
-      "tags": ["testing", "openapi"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T004"]
+      "tags": [
+        "testing",
+        "openapi"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T004"
+      ]
     },
     {
       "id": "T041",
@@ -659,9 +975,19 @@
         "Add black-box mock conformance tests.",
         "Add fuzz and property tests for critical parser paths."
       ],
-      "tags": ["testing", "compiler", "gateway"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T007", "T010", "T040"]
+      "tags": [
+        "testing",
+        "compiler",
+        "gateway"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T007",
+        "T010",
+        "T040"
+      ]
     },
     {
       "id": "T042",
@@ -675,9 +1001,19 @@
         "Add evaluator and report tests.",
         "Add security and adversarial tests."
       ],
-      "tags": ["testing", "runner", "evaluator"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T029", "T034", "T040"]
+      "tags": [
+        "testing",
+        "runner",
+        "evaluator"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T029",
+        "T034",
+        "T040"
+      ]
     },
     {
       "id": "T043",
@@ -691,9 +1027,18 @@
         "Implement Steel behavior backend parity.",
         "Document known migration drift."
       ],
-      "tags": ["steel", "packs", "migration"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T017", "T034"]
+      "tags": [
+        "steel",
+        "packs",
+        "migration"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T017",
+        "T034"
+      ]
     },
     {
       "id": "T044",
@@ -707,9 +1052,17 @@
         "Validate the required reference study profile.",
         "Add regression tests for known drift."
       ],
-      "tags": ["steel", "testing"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T036", "T043"]
+      "tags": [
+        "steel",
+        "testing"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T036",
+        "T043"
+      ]
     },
     {
       "id": "T045",
@@ -723,9 +1076,18 @@
         "Create protocol and phase locks.",
         "Refuse analytical runs without valid locks."
       ],
-      "tags": ["study", "research"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T002", "T015", "T036"]
+      "tags": [
+        "study",
+        "research"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T002",
+        "T015",
+        "T036"
+      ]
     },
     {
       "id": "T046",
@@ -739,9 +1101,16 @@
         "Persist primary and replacement slots.",
         "Hash and freeze schedule artifacts."
       ],
-      "tags": ["study", "scheduler"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T045"]
+      "tags": [
+        "study",
+        "scheduler"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T045"
+      ]
     },
     {
       "id": "T047",
@@ -755,9 +1124,17 @@
         "Apply replacement and eligibility rules.",
         "Generate registered analysis outputs."
       ],
-      "tags": ["study", "analysis"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T029", "T046"]
+      "tags": [
+        "study",
+        "analysis"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T029",
+        "T046"
+      ]
     },
     {
       "id": "T048",
@@ -771,9 +1148,16 @@
         "Validate participant-surface compatibility.",
         "Record compatibility keys and drift output."
       ],
-      "tags": ["study", "contracts"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T045"]
+      "tags": [
+        "study",
+        "contracts"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T045"
+      ]
     },
     {
       "id": "T049",
@@ -787,9 +1171,17 @@
         "Separate intended treatment differences from drift.",
         "Fail inferential pooling on incompatible keys."
       ],
-      "tags": ["study", "blinding"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T025", "T045"]
+      "tags": [
+        "study",
+        "blinding"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T025",
+        "T045"
+      ]
     },
     {
       "id": "T050",
@@ -803,9 +1195,18 @@
         "Add release completeness checks.",
         "Add performance budget checks."
       ],
-      "tags": ["ci", "release"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T041", "T042", "T044"]
+      "tags": [
+        "ci",
+        "release"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T041",
+        "T042",
+        "T044"
+      ]
     },
     {
       "id": "T051",
@@ -819,9 +1220,16 @@
         "Document dependency license and security constraints.",
         "Lock dependency governance rules."
       ],
-      "tags": ["architecture", "dependencies"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T001"]
+      "tags": [
+        "architecture",
+        "dependencies"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T001"
+      ]
     },
     {
       "id": "T052",
@@ -835,9 +1243,17 @@
         "Document run, report, compare, replay, and doctor workflows.",
         "Document local exclusions and hosted prerequisites."
       ],
-      "tags": ["docs"],
-      "files": ["README.md", "SPEC.md"],
-      "depends_on": ["T036", "T037"]
+      "tags": [
+        "docs"
+      ],
+      "files": [
+        "README.md",
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T036",
+        "T037"
+      ]
     },
     {
       "id": "T053",
@@ -851,9 +1267,21 @@
         "Fix failing gaps.",
         "Publish acceptance reports."
       ],
-      "tags": ["acceptance", "mvp"],
-      "files": ["SPEC.md"],
-      "depends_on": ["T030", "T032", "T033", "T044", "T047", "T050"]
+      "tags": [
+        "acceptance",
+        "mvp"
+      ],
+      "files": [
+        "SPEC.md"
+      ],
+      "depends_on": [
+        "T030",
+        "T032",
+        "T033",
+        "T044",
+        "T047",
+        "T050"
+      ]
     }
   ]
 }

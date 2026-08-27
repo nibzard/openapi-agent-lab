@@ -25,6 +25,8 @@ export interface GenerationOptions {
   arrayBound?: number;
   /** Bound for unbounded strings. Default 12. */
   stringBound?: number;
+  /** Schema registry resolver for referenced schemas. */
+  lookup?: (ref: string) => Json | undefined;
 }
 
 export class GenerationUnsupportedError extends Error {
@@ -65,6 +67,21 @@ function generateNode(
   }
   if (!isJsonObject(schema)) {
     throw new GenerationUnsupportedError("schema is not an object or boolean");
+  }
+
+  const reference = schema.$ref;
+  if (typeof reference === "string" && options.lookup !== undefined) {
+    const resolved = options.lookup(reference);
+    if (resolved !== undefined) {
+      // Response-side generation strips writeOnly at every level,
+      // including referenced schemas the top-level pass cannot see.
+      return generateNode(
+        stripProperties(resolved, "writeOnly"),
+        options,
+        path,
+        depth + 1
+      );
+    }
   }
 
   const merged = mergeAllOf(schema, options, path, depth);

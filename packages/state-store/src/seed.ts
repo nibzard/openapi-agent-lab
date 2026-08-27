@@ -7,11 +7,7 @@
  * namespace.
  */
 
-import {
-  canonicalJsonSha256,
-  isSha256Hex,
-  type JsonObject
-} from "@oal/core";
+import { canonicalJsonSha256, isSha256Hex, type JsonObject } from "@oal/core";
 
 /** Seed-derivation schema version of the hashed documents. */
 export const SEED_SCHEMA_VERSION = 1;
@@ -91,10 +87,7 @@ function digestRef(ref: DigestRef): JsonObject {
   };
 }
 
-function assignmentBlock(
-  kind: AssignmentKind,
-  index: number
-): JsonObject {
+function assignmentBlock(kind: AssignmentKind, index: number): JsonObject {
   if (!ASSIGNMENT_KINDS.includes(kind)) {
     throw new Error(
       `Assignment kind must be one of ${ASSIGNMENT_KINDS.join(", ")}, got ${JSON.stringify(kind)}.`
@@ -195,7 +188,10 @@ export function deriveTrialSeed(
  * tokens, schema branches, faults, fixtures). Unrelated namespaces never
  * perturb each other.
  */
-export function deriveNamespaceSeed(runSeed: string, namespace: string): string {
+export function deriveNamespaceSeed(
+  runSeed: string,
+  namespace: string
+): string {
   if (namespace.length === 0) {
     throw new Error("PRNG namespace must not be empty.");
   }
