@@ -2,9 +2,13 @@
   "name": "@oal/documentation-facade",
   "version": "0.0.0",
   "private": true,
-  "description": "Participant documentation facade.",
+  "description": "Participant documentation discovery plane.",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@oal/core": "workspace:*",
+    "@oal/evidence": "workspace:*"
   }
 }
