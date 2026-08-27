@@ -392,7 +392,7 @@
       "id": "T017",
       "title": "Implement behavior backend API",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Create the behavior backend interface, request envelope, response contract, state mutation semantics, and behavior error handling.",
       "steps": [
         "Define TypeScript interfaces for behavior backends.",
@@ -410,13 +410,14 @@
       "depends_on": [
         "T013",
         "T015"
-      ]
+      ],
+      "updated_at": "2026-08-27T16:31:04.139Z"
     },
     {
       "id": "T018",
       "title": "Implement behavior runtime isolation",
       "priority": 2,
-      "status": "todo",
+      "status": "done",
       "details": "Run scenario behavior under the declared trust model with explicit isolation levels, process separation, and safe defaults.",
       "steps": [
         "Define execution profiles for behavior code.",
@@ -434,13 +435,14 @@
       ],
       "depends_on": [
         "T017"
-      ]
+      ],
+      "updated_at": "2026-08-27T16:31:04.161Z"
     },
     {
       "id": "T019",
       "title": "Implement deterministic fault injection",
       "priority": 2,
-      "status": "todo",
+      "status": "done",
       "details": "Support deterministic scenario fault schedules for responses, transport failures, delays, and behavior errors.",
       "steps": [
         "Define fault schedule schema support.",
@@ -458,7 +460,8 @@
       "depends_on": [
         "T014",
         "T017"
-      ]
+      ],
+      "updated_at": "2026-08-27T16:31:04.187Z"
     },
     {
       "id": "T020",

@@ -6,5 +6,11 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@oal/behavior-api": "workspace:*",
+    "@oal/core": "workspace:*",
+    "@oal/state-store": "workspace:*",
+    "@oal/contract-ir": "workspace:*"
   }
 }
