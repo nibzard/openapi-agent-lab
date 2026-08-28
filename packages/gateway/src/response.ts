@@ -3,15 +3,16 @@
  * response is checked against the declared contract response before
  * any state commit. The checks are bounded: the status must match a
  * declared selector, required response headers must be present, the
- * selected media type must be declared, and a produced body must
- * satisfy the declared schema with response-side writeOnly handling.
- * An invalid result fails closed as 500 mock_response_invalid.
+ * selected media type must be declared, and a served body must satisfy
+ * the declared schema with response-side writeOnly handling, whatever
+ * produced the value. An invalid result fails closed as 500
+ * mock_response_invalid.
  */
 
 import { SchemaValidator, type Json } from "@oal/core";
 import type { ResponseIR } from "@oal/contract-ir";
 import { findResponseForStatus, type SelectedResponse } from "./select.ts";
-import { stripProperties } from "./validate.ts";
+import { strippingSchemaLookup, stripProperties } from "./validate.ts";
 
 export interface ResponseViolation {
   location: "status" | "header" | "media_type" | "body";
@@ -95,31 +96,35 @@ export function validateResponse(
   }
 
   const media = selected.mediaType;
-  // A pack fixture body is frozen pack data, validated before server
-  // startup (specification section 15.5.1), and may hold text or binary
-  // bytes no JSON schema describes. Fixtures therefore keep the status,
-  // header, and media-type checks above, while the schema check below
-  // governs only values the gateway produced itself.
-  if (
-    media !== null &&
-    selected.body !== undefined &&
-    !selected.provenance.startsWith("fixture:")
-  ) {
+  // A fixture body is frozen pack data, but no pack check validates it
+  // against the operation response schema, and section 15.4 checks every
+  // served body. A fixture body therefore passes the same schema check
+  // as a generated one; an invalid fixture fails closed instead of
+  // serving contract-violating bytes. Fixture violations name the
+  // fixture so a pack author can find the offending entry.
+  if (media !== null && selected.body !== undefined) {
     const content = declared.content.find(
       (entry) => entry.media_type.toLowerCase() === media.toLowerCase()
     );
     if (content !== undefined && content.schema_ref !== null) {
       const schema = schemaLookup(content.schema_ref);
       if (schema !== undefined) {
+        const fixtureId = selected.provenance.startsWith("fixture:")
+          ? selected.provenance.slice("fixture:".length)
+          : null;
         const validator = new SchemaValidator(
-          stripProperties(schema, "writeOnly")
+          stripProperties(schema, "writeOnly"),
+          { resolveRef: strippingSchemaLookup(schemaLookup, "writeOnly") }
         );
         for (const violation of validator.errors(selected.body)) {
           violations.push({
             location: "body",
             pointer: violation.pointer,
             code: violation.code,
-            message: violation.message
+            message:
+              fixtureId === null
+                ? violation.message
+                : `Fixture ${fixtureId} body: ${violation.message}`
           });
         }
       }

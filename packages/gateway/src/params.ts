@@ -69,7 +69,7 @@ export function deserializeParameter(
         typeHint
       );
     case "header":
-      return parseSimple(single(wire), typeHint);
+      return parseSimple(single(wire), parameter.explode, typeHint);
     case "query":
       return parseQuery(
         parameter.name,
@@ -106,7 +106,11 @@ function parsePath(
         message: "Label style requires a leading dot."
       };
     }
-    return parsePairsSimple(segment.slice(1), ".", explode, typeHint);
+    return parsePairsSimple(
+      splitParts(segment.slice(1), "."),
+      explode,
+      typeHint
+    );
   }
   if (style === "matrix") {
     if (!segment.startsWith(";")) {
@@ -151,26 +155,34 @@ function parsePath(
         message: "Matrix style requires ;name= prefix."
       };
     }
-    return parsePairsSimple(first.slice(name.length + 1), ",", false, typeHint);
+    return parsePairsSimple(
+      splitParts(first.slice(name.length + 1), ","),
+      false,
+      typeHint
+    );
   }
   // simple
-  return parsePairsSimple(segment, ",", explode, typeHint);
+  return parsePairsSimple(splitParts(segment, ","), explode, typeHint);
 }
 
 function parseSimple(
   segment: string,
-  typeHint: "object" | "array" | null
-): ParseOutcome {
-  return parsePairsSimple(segment, ",", false, typeHint);
-}
-
-function parsePairsSimple(
-  text: string,
-  delimiter: string,
   explode: boolean,
   typeHint: "object" | "array" | null
 ): ParseOutcome {
-  const parts = text.length === 0 ? [] : text.split(delimiter);
+  return parsePairsSimple(splitCommaList(segment), explode, typeHint);
+}
+
+function parsePairsSimple(
+  parts: string[],
+  explode: boolean,
+  typeHint: "object" | "array" | null
+): ParseOutcome {
+  if (typeHint === "array") {
+    // RFC 6570 joins exploded and non-exploded array elements with the
+    // same delimiter for these styles, so the two wire forms agree.
+    return okValue(parts.map(parseScalar));
+  }
   if (explode && parts.every((part) => part.includes("="))) {
     return okValue(objectFromPairs(parts.map((part) => splitFirst(part, "="))));
   }
@@ -181,13 +193,26 @@ function parsePairsSimple(
       return okValue(positional);
     }
   }
-  if (typeHint === "array" && parts.length > 0) {
-    return okValue(parts.map(parseScalar));
-  }
   if (parts.length === 1) {
     return okValue(parseScalar(parts[0] as string));
   }
   return okValue(parts.map(parseScalar));
+}
+
+/** Split one delimited wire value; an empty value carries no element. */
+function splitParts(text: string, delimiter: string): string[] {
+  return text.length === 0 ? [] : text.split(delimiter);
+}
+
+/**
+ * Split one comma-joined header list and trim every element. Repeated
+ * header lines arrive joined with a comma and a space, and that space
+ * is list framing, not element data. Header lists are the only user:
+ * RFC 6570 adds no framing whitespace in any other style, so query and
+ * cookie elements keep their exact bytes.
+ */
+function splitCommaList(text: string): string[] {
+  return splitParts(text, ",").map((element) => element.trim());
 }
 
 /**
@@ -243,7 +268,9 @@ function parseQuery(
       }
       const only = values[0] as string;
       if (only.includes(",")) {
-        const items = only.split(",");
+        // Form serialization adds no framing whitespace, so every
+        // element byte is participant data.
+        const items = splitParts(only, ",");
         if (typeHint !== "array" && items.every((item) => item.includes("="))) {
           return okValue(
             objectFromPairs(items.map((item) => splitFirst(item, "=")))
@@ -319,7 +346,9 @@ function parseFormCookie(
     return okValue(parseScalar(value));
   }
   if (value.includes(",")) {
-    const items = value.split(",");
+    // Cookie form values keep every element byte: RFC 6570 adds no
+    // framing whitespace here.
+    const items = splitParts(value, ",");
     if (typeHint !== "array" && items.every((item) => item.includes("="))) {
       return okValue(
         objectFromPairs(items.map((item) => splitFirst(item, "=")))

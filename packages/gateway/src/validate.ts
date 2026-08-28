@@ -11,10 +11,176 @@ import { SchemaValidator } from "@oal/core";
 import type {
   MediaContentIR,
   OperationIR,
-  ParameterIR
+  ParameterIR,
+  SchemaIR
 } from "@oal/contract-ir";
 import type { RequestViolation } from "./problem.ts";
 import { deserializeParameter } from "./params.ts";
+
+/** Prefix that binds a document-relative reference to one document. */
+const BOUND_REF_PREFIX = "oal-schema:";
+
+/** Schema lookup over the compiled contract's schema registry. */
+export type SchemaLookup = (ref: string) => Json | undefined;
+
+/**
+ * Build the schema lookup for one compiled contract. Media types,
+ * parameters, and the generator address schemas by UID; the compiler
+ * preserves recursive references as document pointers such as
+ * `#/components/schemas/Node`, which no single registered subtree can
+ * resolve on its own. The lookup therefore rewrites those pointers into
+ * `BOUND_REF_PREFIX` references and serves every form through one index
+ * over the registry, so request validation, response validation, and
+ * generation share the same resolution (sections 15.3, 15.4, and 15.6).
+ */
+export function createContractSchemaLookup(
+  schemas: Record<string, SchemaIR>
+): SchemaLookup {
+  // Key form `<document-uri><source-pointer>` matches the compiler's
+  // cross-file reference form exactly. Two registry keys may name one
+  // document pointer; the smallest registry key wins so the index never
+  // depends on registry iteration order.
+  const ownerOf = new Map<string, string>();
+  for (const [registryKey, entry] of Object.entries(schemas)) {
+    if (entry.source_pointer.length === 0) {
+      continue;
+    }
+    const key = `${entry.document_uri}${entry.source_pointer}`;
+    const incumbent = ownerOf.get(key);
+    if (incumbent === undefined || registryKey < incumbent) {
+      ownerOf.set(key, registryKey);
+    }
+  }
+  const byPointer = new Map<string, Json>();
+  for (const [pointerKey, registryKey] of ownerOf) {
+    byPointer.set(pointerKey, (schemas[registryKey] as SchemaIR).schema);
+  }
+  const bound = new Map<string, Json>();
+
+  const bind = (schema: Json, documentUri: string): Json =>
+    bindRefs(schema, documentUri, new Map());
+
+  return (ref: string): Json | undefined => {
+    const cached = bound.get(ref);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const entry = schemas[ref];
+    if (entry !== undefined) {
+      const value = bind(entry.schema, entry.document_uri);
+      bound.set(ref, value);
+      return value;
+    }
+    const target = targetOf(ref, byPointer);
+    if (target === undefined) {
+      return undefined;
+    }
+    const value = bind(target.schema, target.documentUri);
+    bound.set(ref, value);
+    return value;
+  };
+}
+
+/** Replace `#`-relative references with document-bound sentinels. */
+function bindRefs(
+  schema: Json,
+  documentUri: string,
+  cache: Map<object, Json>
+): Json {
+  if (Array.isArray(schema)) {
+    const out: Json[] = [];
+    cache.set(schema, out);
+    for (const item of schema) {
+      out.push(bindRefs(item, documentUri, cache));
+    }
+    return out;
+  }
+  if (!isJsonObject(schema)) {
+    return schema;
+  }
+  const hit = cache.get(schema);
+  if (hit !== undefined) {
+    return hit;
+  }
+  const out: Record<string, Json> = {};
+  // Register before recursion so recursive subtrees reuse one object.
+  cache.set(schema, out);
+  for (const [key, value] of Object.entries(schema)) {
+    out[key] =
+      key === "$ref" && typeof value === "string" && value.startsWith("#")
+        ? `${BOUND_REF_PREFIX}${documentUri}${value}`
+        : bindRefs(value, documentUri, cache);
+  }
+  return out;
+}
+
+/** A registered schema plus the document that declares it. */
+interface RefTarget {
+  schema: Json;
+  documentUri: string;
+}
+
+/**
+ * Resolve one non-UID reference to a registered schema: a bound
+ * sentinel, a cross-file `<document>#<pointer>` form, or a bare pointer
+ * when exactly one document in the registry declares it.
+ */
+function targetOf(
+  ref: string,
+  byPointer: ReadonlyMap<string, Json>
+): RefTarget | undefined {
+  if (ref.startsWith(BOUND_REF_PREFIX)) {
+    return keyedTarget(ref.slice(BOUND_REF_PREFIX.length), byPointer);
+  }
+  if (ref.startsWith("#")) {
+    return solePointerTarget(ref, byPointer);
+  }
+  if (ref.includes("#")) {
+    return keyedTarget(ref, byPointer);
+  }
+  return undefined;
+}
+
+/**
+ * Resolve a document-keyed reference. Content-addressed registration
+ * keeps one pointer per schema, so a reference to a document whose
+ * identical copy another document already registered finds no exact
+ * key. The pointer alone then identifies the schema when exactly one
+ * document declares it, which is sound because only identical content
+ * merges under one UID.
+ */
+function keyedTarget(
+  key: string,
+  byPointer: ReadonlyMap<string, Json>
+): RefTarget | undefined {
+  const exact = byPointer.get(key);
+  if (exact !== undefined) {
+    return { schema: exact, documentUri: key.slice(0, key.indexOf("#")) };
+  }
+  return solePointerTarget(key.slice(key.indexOf("#")), byPointer);
+}
+
+/**
+ * Resolve a bare pointer to the one document that declares it. Zero or
+ * several declaring documents leave the reference unresolved.
+ */
+function solePointerTarget(
+  pointer: string,
+  byPointer: ReadonlyMap<string, Json>
+): RefTarget | undefined {
+  let matches = 0;
+  let found: RefTarget | undefined;
+  for (const [key, schema] of byPointer) {
+    if (key.endsWith(pointer)) {
+      matches += 1;
+      found = {
+        schema,
+        documentUri: key.slice(0, key.length - pointer.length)
+      };
+    }
+  }
+  return matches === 1 ? found : undefined;
+}
 
 export interface ParsedRequest {
   pathParameters: Record<string, string>;
@@ -71,7 +237,9 @@ export function validateParameters(
     }
     const schema = resolveParameterSchema(parameter, schemaLookup);
     if (schema !== undefined) {
-      const validator = new SchemaValidator(schema);
+      const validator = new SchemaValidator(schema, {
+        resolveRef: schemaLookup
+      });
       const found = validator.errors(parsed.value);
       for (const violation of found) {
         violations.push({
@@ -222,9 +390,14 @@ export function validateBody(
   }
   if (content.schema_ref !== null) {
     const schema = schemaLookup(content.schema_ref);
-    if (schema !== undefined && isJsonObject(request.body)) {
+    if (
+      schema !== undefined &&
+      validatesBodyValue(contentType, schema, request.body)
+    ) {
       const requestSchema = stripProperties(schema, "readOnly");
-      const validator = new SchemaValidator(requestSchema);
+      const validator = new SchemaValidator(requestSchema, {
+        resolveRef: strippingSchemaLookup(schemaLookup, "readOnly")
+      });
       for (const violation of validator.errors(request.body)) {
         violations.push({
           location: "body",
@@ -254,9 +427,46 @@ export function pickContent(
 }
 
 /**
+ * Decide whether a parsed body value falls under schema validation.
+ * Every parsed JSON value is checked for JSON media types: arrays,
+ * scalars, and null must not bypass the declared schema. URL-encoded
+ * forms and multipart bodies also parse into structured values
+ * (objects and arrays), so the declared schema governs them whatever
+ * the media type is. The remaining content types arrive as decoded
+ * text, so only a string schema applies and the behavior stays
+ * deterministic otherwise.
+ */
+function validatesBodyValue(
+  contentType: string,
+  schema: Json,
+  body: Json
+): boolean {
+  if (typeof body !== "string") {
+    return true;
+  }
+  const base = contentType.split(";")[0]?.trim().toLowerCase() ?? "";
+  if (base === "application/json" || base.endsWith("+json")) {
+    return true;
+  }
+  return isStringSchema(schema);
+}
+
+function isStringSchema(schema: Json): boolean {
+  if (!isJsonObject(schema)) {
+    return false;
+  }
+  const type = schema["type"];
+  return type === "string" || (Array.isArray(type) && type.includes("string"));
+}
+
+/**
  * Remove properties marked with the given OpenAPI flag from an object
  * schema so request and response sides validate their own half. The
- * input schema is never mutated.
+ * removal recurses into nested object properties, item schemas, and
+ * combinator branches, so a flagged required property one level down no
+ * longer rejects a conforming value. A `$ref` keeps its reference form:
+ * `strippingSchemaLookup` supplies stripped targets while validation
+ * resolves them. The input schema is never mutated.
  */
 export function stripProperties(
   schema: Json,
@@ -266,33 +476,44 @@ export function stripProperties(
     return schema;
   }
   const clone: Record<string, Json> = { ...schema };
+  const flagged = new Set<string>();
   const properties = clone["properties"];
-  const required = clone["required"];
   if (isJsonObject(properties)) {
     const filtered: Record<string, Json> = {};
-    const keptRequired: Json[] = [];
     for (const [name, property] of Object.entries(properties)) {
       if (isJsonObject(property) && property[flag] === true) {
+        flagged.add(name);
         continue;
       }
-      filtered[name] = property;
-      keptRequired.push(name);
+      filtered[name] = stripProperties(property, flag);
     }
     clone["properties"] = filtered;
-    if (Array.isArray(required)) {
-      const allowed = new Set(keptRequired);
-      clone["required"] = required.filter((name) => {
-        return typeof name === "string" && allowed.has(name);
-      });
-    }
   }
-  // Recurse into nested object schemas.
+  // Only flagged properties leave `required`; a name with no declared
+  // property stays required as it was.
+  const required = clone["required"];
+  if (Array.isArray(required)) {
+    clone["required"] = required.filter(
+      (name) => typeof name === "string" && !flagged.has(name)
+    );
+  }
+  // Recurse into nested object schemas and combinator branches.
   for (const [key, value] of Object.entries(clone)) {
+    if (key === "properties") {
+      continue;
+    }
     if (
-      isJsonObject(value) &&
-      (key === "items" || key === "additionalProperties")
+      (key === "items" || key === "additionalProperties") &&
+      isJsonObject(value)
     ) {
       clone[key] = stripProperties(value, flag);
+      continue;
+    }
+    if (
+      (key === "allOf" || key === "anyOf" || key === "oneOf") &&
+      Array.isArray(value)
+    ) {
+      clone[key] = value.map((branch) => stripProperties(branch, flag));
     }
   }
   const prefixItems = clone["prefixItems"];
@@ -302,4 +523,57 @@ export function stripProperties(
     );
   }
   return clone;
+}
+
+/**
+ * Stripped-variant wrappers per base lookup. `stripProperties` clones
+ * whole referenced subtrees, so one wrapper per flag over one base
+ * lookup is built once and reused by every caller that shares the base
+ * lookup. The caches stay separate per flag, so readOnly and writeOnly
+ * variants never mix, and the cached variants are read-only to
+ * validation.
+ */
+const strippingWrappers = new WeakMap<
+  SchemaLookup,
+  { readOnly?: SchemaLookup; writeOnly?: SchemaLookup }
+>();
+
+/**
+ * Wrap a contract schema lookup so every reference target loses its
+ * flagged properties before validation resolves it. `stripProperties`
+ * cannot see through a `$ref`, so a required readOnly or writeOnly
+ * property one reference away would still reject a conforming value.
+ * The wrapper memoizes per reference: a recursive schema strips once,
+ * shares one stripped subtree, and never follows a reference while
+ * stripping, so cyclic references terminate.
+ */
+export function strippingSchemaLookup(
+  schemaLookup: SchemaLookup,
+  flag: "readOnly" | "writeOnly"
+): SchemaLookup {
+  let wrappers = strippingWrappers.get(schemaLookup);
+  if (wrappers === undefined) {
+    wrappers = {};
+    strippingWrappers.set(schemaLookup, wrappers);
+  }
+  const wrapper = wrappers[flag];
+  if (wrapper !== undefined) {
+    return wrapper;
+  }
+  const stripped = new Map<string, Json>();
+  const built: SchemaLookup = (ref: string): Json | undefined => {
+    const cached = stripped.get(ref);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const target = schemaLookup(ref);
+    if (target === undefined) {
+      return undefined;
+    }
+    const value = stripProperties(target, flag);
+    stripped.set(ref, value);
+    return value;
+  };
+  wrappers[flag] = built;
+  return built;
 }

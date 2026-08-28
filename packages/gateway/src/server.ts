@@ -9,7 +9,11 @@
 import { canonicalJson, type Json } from "@oal/core";
 import { CONTRACT_IR_SCHEMA_VERSION, type ContractIR } from "@oal/contract-ir";
 import type { LimitTable } from "@oal/config";
-import { evaluateSecurity, mintRunCredentials } from "./auth.ts";
+import {
+  evaluateSecurity,
+  mintRunCredentials,
+  type RunCredentials
+} from "./auth.ts";
 import { parseMultipart, type MultipartPart } from "./multipart.ts";
 import { FRAMEWORK_ERRORS, problemDocument } from "./problem.ts";
 import { validateResponse } from "./response.ts";
@@ -18,9 +22,11 @@ import { matchRequestMedia } from "./negotiate.ts";
 import { selectResponse, type ContractFixture } from "./select.ts";
 import type { GatewayState } from "./state.ts";
 import {
+  createContractSchemaLookup,
   validateBody,
   validateParameters,
-  type ParsedRequest
+  type ParsedRequest,
+  type SchemaLookup
 } from "./validate.ts";
 
 /** Raw wire request before any parsing. */
@@ -67,6 +73,53 @@ const HOP_BY_HOP = new Set([
   "transfer-encoding",
   "upgrade"
 ]);
+
+/**
+ * Schema lookups keyed by contract identity. Binding a registry
+ * deep-copies every referenced subtree, so one lookup serves every
+ * request of one contract instead of being rebuilt per request. The
+ * memoized bound schemas are shared read-only: validation and
+ * generation clone before they mutate, so no request observes another
+ * request's state through them.
+ */
+const schemaLookups = new WeakMap<ContractIR, SchemaLookup>();
+
+function contractSchemaLookup(contract: ContractIR): SchemaLookup {
+  const cached = schemaLookups.get(contract);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const lookup = createContractSchemaLookup(contract.schemas);
+  schemaLookups.set(contract, lookup);
+  return lookup;
+}
+
+/**
+ * Run credentials keyed by contract identity and run seed. Minting is
+ * deterministic in the run seed alone, so the shared values equal the
+ * ones a per-request mint would produce, and the pipeline only reads
+ * them. One entry per seed keeps distinct runs of one contract
+ * isolated.
+ */
+const runCredentials = new WeakMap<ContractIR, Map<string, RunCredentials>>();
+
+function credentialsForRun(
+  contract: ContractIR,
+  runSeed: string
+): RunCredentials {
+  let bySeed = runCredentials.get(contract);
+  if (bySeed === undefined) {
+    bySeed = new Map<string, RunCredentials>();
+    runCredentials.set(contract, bySeed);
+  }
+  const cached = bySeed.get(runSeed);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const minted = mintRunCredentials(contract, runSeed);
+  bySeed.set(runSeed, minted);
+  return minted;
+}
 
 /**
  * Handle one request through the full product pipeline. Pure with
@@ -164,7 +217,7 @@ export function handleGatewayRequest(
   }
   const operation = route.match.operation;
 
-  const credentials = mintRunCredentials(contract, options.runSeed);
+  const credentials = credentialsForRun(contract, options.runSeed);
   const request: ParsedRequest = {
     pathParameters: route.match.pathParameters,
     query: parsed.query,
@@ -184,8 +237,11 @@ export function handleGatewayRequest(
     return framework(error, requestId);
   }
 
-  const schemaLookup = (ref: string): Json | undefined =>
-    contract.schemas[ref]?.schema;
+  // One resolver serves parameters, bodies, responses, and generation,
+  // so document-relative references resolve identically everywhere.
+  // The resolver is the contract's shared instance: identical inputs
+  // still produce identical responses.
+  const schemaLookup = contractSchemaLookup(contract);
 
   // Step 7: request media type must be declared.
   if (operation.request_body !== null && request.body !== undefined) {
@@ -229,7 +285,7 @@ export function handleGatewayRequest(
     options.fixtures ?? [],
     {
       seed: `${options.runSeed}:${operation.uid}`,
-      lookup: (ref: string) => contract.schemas[ref]?.schema
+      lookup: schemaLookup
     },
     headerValue(raw.headers, "accept")
   );

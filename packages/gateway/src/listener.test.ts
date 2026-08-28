@@ -17,16 +17,38 @@ import type {
   ContractIR,
   MediaExampleIR,
   OperationIR,
+  ParameterIR,
   ResponseIR,
   SchemaIR
 } from "@oal/contract-ir";
 import { startGatewayListener, type GatewayListener } from "./listener.ts";
+import type { ContractFixture } from "./select.ts";
 import { createGatewayState, type GatewayState } from "./state.ts";
 import { MemoryBlobStore, type BlobStore } from "./trace.ts";
 import type { GatewayOptions } from "./server.ts";
 
 function schema(uid: string, schemaBody: Json): SchemaIR {
   return { uid, schema: schemaBody, source_pointer: "", document_uri: "" };
+}
+
+function headerParameter(name: string, schemaRef: string): ParameterIR {
+  return {
+    name,
+    location: "header",
+    style: "simple",
+    explode: false,
+    allow_reserved: false,
+    required: true,
+    deprecated: false,
+    description: null,
+    schema_ref: schemaRef,
+    content: null,
+    examples: [],
+    default_value: undefined,
+    support: "supported",
+    support_reason_codes: [],
+    source_pointer: ""
+  };
 }
 
 function response(init: Partial<ResponseIR>): ResponseIR {
@@ -81,7 +103,10 @@ function operation(init: Partial<OperationIR>): OperationIR {
   };
 }
 
-function contract(init: { operations: OperationIR[] }): ContractIR {
+function contract(init: {
+  operations: OperationIR[];
+  schemas?: Record<string, SchemaIR>;
+}): ContractIR {
   return {
     $schema: "https://agentlab.dev/schemas/contract-ir.v1.json",
     schema_version: 1,
@@ -98,13 +123,16 @@ function contract(init: { operations: OperationIR[] }): ContractIR {
     },
     api: { title: null, version: null, description: null, servers: [] },
     security_schemes: {},
-    schemas: {
-      sch_thing: schema("sch_thing", {
-        type: "object",
-        required: ["id"],
-        properties: { id: { type: "string" } }
-      })
-    },
+    schemas:
+      init.schemas === undefined
+        ? {
+            sch_thing: schema("sch_thing", {
+              type: "object",
+              required: ["id"],
+              properties: { id: { type: "string" } }
+            })
+          }
+        : init.schemas,
     operations: init.operations,
     webhooks: [],
     diagnostics: [],
@@ -143,6 +171,7 @@ interface ListenerInit {
   limits?: LimitTable;
   state?: GatewayState;
   blobs?: BlobStore;
+  fixtures?: ContractFixture[];
 }
 
 async function withListener(
@@ -153,7 +182,8 @@ async function withListener(
     contract: init.contract ?? contract({ operations: [operation({})] }),
     limits: init.limits ?? LIMIT_DEFAULTS,
     runSeed: "listener_seed_1",
-    ...(init.state === undefined ? {} : { state: init.state })
+    ...(init.state === undefined ? {} : { state: init.state }),
+    ...(init.fixtures === undefined ? {} : { fixtures: init.fixtures })
   };
   const listener = await startGatewayListener({
     gateway: options,
@@ -352,6 +382,204 @@ describe("wire order of duplicate values", () => {
     } finally {
       await listener.close();
     }
+  });
+});
+
+describe("header list parameters on the wire", () => {
+  it("accepts two header lines as one trimmed list", async () => {
+    const flags = operation({
+      parameters: [headerParameter("X-Flags", "sch_flags")]
+    });
+    const source = contract({
+      operations: [flags],
+      schemas: {
+        sch_thing: schema("sch_thing", {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string" } }
+        }),
+        sch_flags: schema("sch_flags", {
+          type: "array",
+          items: { type: "string", enum: ["alpha", "beta"] }
+        })
+      }
+    });
+    const listener = await startGatewayListener({
+      gateway: {
+        contract: source,
+        limits: LIMIT_DEFAULTS,
+        runSeed: "listener_seed_1"
+      }
+    });
+    try {
+      // Two header lines arrive flattened as "alpha, beta"; the space
+      // after the comma is framing, so the second element must still
+      // satisfy the enum.
+      const status = await new Promise<number>((resolve, reject) => {
+        const outgoing = httpRequest(
+          {
+            host: "127.0.0.1",
+            port: listener.port,
+            method: "GET",
+            path: "/things",
+            headers: { "x-flags": ["alpha", "beta"] }
+          },
+          (incoming) => {
+            incoming.resume();
+            incoming.on("end", () => {
+              resolve(incoming.statusCode ?? 0);
+            });
+          }
+        );
+        outgoing.on("error", reject);
+        outgoing.end();
+      });
+      expect(status).toBe(200);
+    } finally {
+      await listener.close();
+    }
+  });
+});
+
+describe("default representation without Accept", () => {
+  it("serves application/json over the alphabetically first type", async () => {
+    // The compiler emits response content alphabetically, so a plain
+    // GET without an Accept header must still receive the documented
+    // application/json preference, not schema-generated binary.
+    const dual = operation({
+      responses: [
+        response({
+          content: [
+            {
+              media_type: "application/octet-stream",
+              schema_ref: null,
+              examples: [],
+              support: "supported",
+              support_reason_codes: []
+            },
+            {
+              media_type: "application/json",
+              schema_ref: "sch_thing",
+              examples: [],
+              support: "supported",
+              support_reason_codes: []
+            }
+          ]
+        })
+      ]
+    });
+    await withListener(
+      { contract: contract({ operations: [dual] }) },
+      async (listener) => {
+        // A raw socket sends no Accept header at all, where fetch would
+        // add a default "accept: */*".
+        const wire = await new Promise<string>((resolve, reject) => {
+          const socket = netConnect(
+            { host: "127.0.0.1", port: listener.port },
+            () => {
+              socket.write(
+                "GET /things HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
+              );
+            }
+          );
+          const chunks: Buffer[] = [];
+          socket.on("data", (chunk) => {
+            chunks.push(chunk);
+          });
+          socket.on("end", () => {
+            resolve(Buffer.concat(chunks).toString("utf8"));
+          });
+          socket.on("error", reject);
+        });
+        expect(wire.startsWith("HTTP/1.1 200")).toBe(true);
+        expect(wire.toLowerCase()).toContain("content-type: application/json");
+      }
+    );
+  });
+});
+
+describe("response write guard", () => {
+  it("drops a fixture header with CR/LF and still serves the response", async () => {
+    await withListener(
+      {
+        fixtures: [
+          {
+            id: "fx_crlf",
+            operation: "path:GET /things",
+            status: 200,
+            media_type: "application/json",
+            headers: { "x-trace": "a\r\nSet-Cookie: pwned=1" },
+            body: { kind: "json_inline", value: { id: "thing_1" } }
+          }
+        ]
+      },
+      async (listener) => {
+        const response = await fetch(
+          `http://127.0.0.1:${listener.port}/things`
+        );
+        expect(response.status).toBe(200);
+        expect(response.headers.get("x-trace")).toBeNull();
+        expect(response.headers.get("set-cookie")).toBeNull();
+        expect(await response.json()).toEqual({ id: "thing_1" });
+        await vi.waitFor(() => {
+          expect(listener.events).toHaveLength(1);
+        });
+        const [event] = listener.events;
+        expect(event?.outcome).toBe("accepted");
+        expect(event?.response?.status).toBe(200);
+        expect(listener.diagnostics).toHaveLength(1);
+        expect(listener.diagnostics[0]?.code).toBe(
+          "OAL-RESPONSE-HEADER-INVALID"
+        );
+        expect(listener.diagnostics[0]?.phase).toBe("serve");
+        // The listener stays alive and keeps serving after the write.
+        const again = await exchange(listener.port, "GET", "/things");
+        expect(again.status).toBe(200);
+      }
+    );
+  });
+
+  it("answers a handled error when a fixture header value is not a string", async () => {
+    await withListener(
+      {
+        fixtures: [
+          {
+            id: "fx_header_type",
+            operation: "path:GET /things",
+            status: 200,
+            media_type: "application/json",
+            // A YAML list reaches the listener as an array; the header
+            // filter cannot test it and must take the handled path.
+            headers: { "x-trace": ["a"] as unknown as string },
+            body: { kind: "json_inline", value: { id: "thing_1" } }
+          }
+        ]
+      },
+      async (listener) => {
+        const response = await fetch(
+          `http://127.0.0.1:${listener.port}/things`
+        );
+        expect(response.status).toBe(500);
+        expect(response.headers.get("content-type")).toBe(
+          "application/problem+json"
+        );
+        expect(await response.json()).toMatchObject({ code: "internal_error" });
+        await vi.waitFor(() => {
+          expect(listener.events).toHaveLength(1);
+        });
+        const [event] = listener.events;
+        expect(event?.outcome).toBe("rejected");
+        expect(event?.response?.status).toBe(500);
+        expect(event?.response?.framework_code).toBe("internal_error");
+        expect(event?.error).toBeNull();
+        expect(listener.diagnostics).toHaveLength(1);
+        expect(listener.diagnostics[0]?.code).toBe("OAL-RESPONSE-WRITE-FAILED");
+        expect(listener.diagnostics[0]?.phase).toBe("serve");
+        // The listener stays alive and keeps answering after the throw.
+        const again = await exchange(listener.port, "GET", "/things");
+        expect(again.status).toBe(500);
+      }
+    );
   });
 });
 

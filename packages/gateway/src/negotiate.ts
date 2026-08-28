@@ -98,8 +98,37 @@ function splitType(type: string): [string, string] {
 }
 
 /**
- * Choose the response media type for a request. A missing or empty
- * Accept header permits the declared preference order unchanged. The
+ * The documented default preference among declared media types
+ * (section 15.7): application/json, then text/plain, then
+ * application/octet-stream, then the lexically smallest type. A
+ * missing Accept header serves this preference, never the alphabetical
+ * declaration order.
+ */
+export function preferredMediaType(declared: readonly string[]): string | null {
+  if (declared.length === 0) {
+    return null;
+  }
+  const preferred = [
+    "application/json",
+    "text/plain",
+    "application/octet-stream"
+  ];
+  for (const type of preferred) {
+    const match = declared.find(
+      (candidate) => candidate.toLowerCase() === type
+    );
+    if (match !== undefined) {
+      return match;
+    }
+  }
+  const sorted = [...declared].sort((a, b) => a.localeCompare(b));
+  return sorted[0] ?? null;
+}
+
+/**
+ * Choose the response media type for a request. A missing Accept
+ * header permits the documented default preference; an Accept header
+ * that yields no preference permits the declared order unchanged. The
  * result is null when the Accept header cannot be satisfied; callers
  * answer 406 responseMediaTypeUnacceptable.
  */
@@ -109,6 +138,9 @@ export function negotiateResponseMedia(
 ): string | null {
   if (declared.length === 0) {
     return null;
+  }
+  if (acceptHeader === null) {
+    return preferredMediaType(declared);
   }
   const preferences = parseAccept(acceptHeader);
   if (preferences.length === 0) {

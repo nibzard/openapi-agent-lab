@@ -11,7 +11,7 @@ import {
   GenerationUnsupportedError,
   type GenerationOptions
 } from "./generate.ts";
-import { negotiateResponseMedia } from "./negotiate.ts";
+import { negotiateResponseMedia, preferredMediaType } from "./negotiate.ts";
 
 export interface ContractFixture {
   id: string;
@@ -145,9 +145,10 @@ function synthesizeResponse(
 ): SelectedResponse | null {
   const declared = response.content.map((entry) => entry.media_type);
   // The body must come from the media type that is actually served.
-  // Without an Accept header the declared preference order stands.
+  // A missing Accept header reaches this function as null, never
+  // undefined; both shapes permit the documented preference order.
   const mediaType =
-    acceptHeader === undefined
+    acceptHeader === null || acceptHeader === undefined
       ? pickMediaType(response)
       : negotiateResponseMedia(declared, acceptHeader);
   let body: Json | undefined;
@@ -214,28 +215,16 @@ export function selectExampleValue(
   return null;
 }
 
-/** Pick the deterministic preferred media type of a response. */
+/**
+ * Pick the deterministic preferred media type of a response: the
+ * documented default preference of section 15.7 over the declared
+ * content entries.
+ */
 export function pickMediaType(response: ResponseIR | null): string | null {
   if (response === null || response.content.length === 0) {
     return null;
   }
-  const preferred = [
-    "application/json",
-    "text/plain",
-    "application/octet-stream"
-  ];
-  for (const type of preferred) {
-    const match = response.content.find(
-      (entry) => entry.media_type.toLowerCase() === type
-    );
-    if (match !== undefined) {
-      return match.media_type;
-    }
-  }
-  const sorted = [...response.content].sort((a, b) =>
-    a.media_type.localeCompare(b.media_type)
-  );
-  return sorted[0]?.media_type ?? null;
+  return preferredMediaType(response.content.map((entry) => entry.media_type));
 }
 
 /** Stable canonical-JSON ordering helper for provenance records. */

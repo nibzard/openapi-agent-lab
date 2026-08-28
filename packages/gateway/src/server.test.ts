@@ -624,6 +624,254 @@ describe("gateway pipeline", () => {
   });
 });
 
+describe("recursive contract schemas", () => {
+  const NODE_POINTER = "#/components/schemas/Node";
+  const recursiveSchemas = (): Record<string, SchemaIR> => ({
+    sch_node: {
+      uid: "sch_node",
+      schema: {
+        type: "object",
+        required: ["name", "children"],
+        properties: {
+          name: { type: "string" },
+          children: { type: "array", items: { $ref: NODE_POINTER } }
+        }
+      },
+      source_pointer: NODE_POINTER,
+      document_uri: "openapi.yaml"
+    }
+  });
+
+  const postNode = (): OperationIR => {
+    return operation({
+      method: "POST",
+      key: "path:POST /things",
+      request_body: {
+        required: true,
+        description: null,
+        content: [jsonContent("sch_node")],
+        source_pointer: ""
+      },
+      responses: [response({ content: [jsonContent("sch_node")] })]
+    });
+  };
+
+  const postBody = (value: Json): RawRequest => {
+    return request({
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: new TextEncoder().encode(JSON.stringify(value))
+    });
+  };
+
+  it("accepts a valid recursive body and serves a generated one", () => {
+    const result = handleGatewayRequest(
+      options({
+        contract: contract({
+          operations: [postNode()],
+          schemas: recursiveSchemas()
+        })
+      }),
+      21,
+      postBody({
+        name: "a",
+        children: [{ name: "b", children: [{ name: "c", children: [] }] }]
+      })
+    );
+    expect(result.status).toBe(200);
+    expect(result.frameworkCode).toBeNull();
+    expect(result.provenance).toBe("schema_generation");
+    const body = JSON.parse(result.body ?? "{}") as {
+      name?: unknown;
+      children?: unknown[];
+    };
+    expect(typeof body.name).toBe("string");
+    expect(Array.isArray(body.children)).toBe(true);
+  });
+
+  it("reports violations inside the referenced schema", () => {
+    const result = handleGatewayRequest(
+      options({
+        contract: contract({
+          operations: [postNode()],
+          schemas: recursiveSchemas()
+        })
+      }),
+      22,
+      postBody({ name: "a", children: [{ name: 5, children: [] }] })
+    );
+    expect(result.status).toBe(422);
+    expect(result.frameworkCode).toBe("request_schema_invalid");
+    const document = JSON.parse(result.body ?? "{}") as {
+      violations?: Array<{ location: string; pointer: string; code: string }>;
+    };
+    expect(document.violations).toContainEqual({
+      location: "body",
+      pointer: "/children/0/name",
+      code: "type",
+      message: 'Expected type "string".'
+    });
+  });
+
+  it("repeats the generated recursive response byte for byte", () => {
+    const init = options({
+      contract: contract({
+        operations: [postNode()],
+        schemas: recursiveSchemas()
+      })
+    });
+    const first = handleGatewayRequest(
+      init,
+      23,
+      postBody({ name: "a", children: [] })
+    );
+    const second = handleGatewayRequest(
+      init,
+      24,
+      postBody({ name: "a", children: [] })
+    );
+    expect(second.body).toBe(first.body);
+    expect(first.status).toBe(200);
+  });
+});
+
+describe("array and scalar request bodies", () => {
+  const postTags = (): OperationIR => {
+    return operation({
+      method: "POST",
+      key: "path:POST /things",
+      request_body: {
+        required: true,
+        description: null,
+        content: [jsonContent("sch_tags")],
+        source_pointer: ""
+      }
+    });
+  };
+
+  it("validates an array body against the declared array schema", () => {
+    const result = handleGatewayRequest(
+      options({
+        contract: contract({
+          operations: [postTags()],
+          schemas: {
+            sch_tags: schema("sch_tags", {
+              type: "array",
+              maxItems: 2,
+              items: { type: "string", maxLength: 3 }
+            })
+          }
+        })
+      }),
+      25,
+      request({
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: new TextEncoder().encode('["toolong1","toolong2","toolong3"]')
+      })
+    );
+    expect(result.status).toBe(422);
+    expect(result.frameworkCode).toBe("request_schema_invalid");
+    const document = JSON.parse(result.body ?? "{}") as {
+      violations?: Array<{ location: string; pointer: string; code: string }>;
+    };
+    const found = document.violations ?? [];
+    expect(found).toContainEqual({
+      location: "body",
+      pointer: "/0",
+      code: "maxLength",
+      message: "String length must be <= 3."
+    });
+    expect(found.some((entry) => entry.code === "maxItems")).toBe(true);
+  });
+
+  it("accepts a valid array body through the pipeline (V2E)", () => {
+    const result = handleGatewayRequest(
+      options({
+        contract: contract({
+          operations: [postTags()],
+          schemas: {
+            sch_tags: schema("sch_tags", {
+              type: "array",
+              maxItems: 2,
+              items: { type: "string", maxLength: 3 }
+            }),
+            sch_thing: schema("sch_thing", {
+              type: "object",
+              required: ["id"],
+              properties: { id: { type: "string" } }
+            })
+          }
+        })
+      }),
+      26,
+      request({
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: new TextEncoder().encode('["ab","cd"]')
+      })
+    );
+    expect(result.status).toBe(200);
+    expect(result.frameworkCode).toBeNull();
+  });
+});
+
+describe("URL-encoded form request bodies (V2A)", () => {
+  const postForm = (): OperationIR => {
+    return operation({
+      method: "POST",
+      key: "path:POST /things",
+      request_body: {
+        required: true,
+        description: null,
+        content: [
+          contentEntry("application/x-www-form-urlencoded", "sch_thing")
+        ],
+        source_pointer: ""
+      }
+    });
+  };
+
+  it("rejects a parsed form body that violates the schema with 422", () => {
+    // The gateway coerces `id=5` to the number 5, which the declared
+    // string schema must reject.
+    const result = handleGatewayRequest(
+      options({ contract: contract({ operations: [postForm()] }) }),
+      27,
+      request({
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new TextEncoder().encode("id=5")
+      })
+    );
+    expect(result.status).toBe(422);
+    expect(result.frameworkCode).toBe("request_schema_invalid");
+    const document = JSON.parse(result.body ?? "{}") as {
+      violations?: Array<{ location: string; pointer: string; code: string }>;
+    };
+    expect(document.violations).toContainEqual({
+      location: "body",
+      pointer: "/id",
+      code: "type",
+      message: 'Expected type "string".'
+    });
+  });
+
+  it("accepts a conforming parsed form body", () => {
+    const result = handleGatewayRequest(
+      options({ contract: contract({ operations: [postForm()] }) }),
+      28,
+      request({
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new TextEncoder().encode("id=thing_1")
+      })
+    );
+    expect(result.status).toBe(200);
+    expect(result.frameworkCode).toBeNull();
+  });
+});
+
 describe("response validation before commit", () => {
   it("rejects a produced body that violates the declared schema", () => {
     const op = operation({
@@ -685,6 +933,92 @@ describe("response validation before commit", () => {
     expect(result.frameworkCode).toBe("mock_response_invalid");
   });
 
+  it("serves a generated response that omits writeOnly behind a ref (V2B)", () => {
+    const op = operation({
+      responses: [response({ content: [jsonContent("sch_report")] })]
+    });
+    const result = handleGatewayRequest(
+      options({
+        contract: contract({
+          operations: [op],
+          schemas: {
+            sch_report: schema("sch_report", {
+              type: "object",
+              required: ["item"],
+              properties: { item: { $ref: "sch_line" } }
+            }),
+            sch_line: schema("sch_line", {
+              type: "object",
+              required: ["label", "secret"],
+              properties: {
+                label: { type: "string" },
+                secret: { type: "string", writeOnly: true }
+              }
+            })
+          }
+        })
+      }),
+      30,
+      request({})
+    );
+    expect(result.status).toBe(200);
+    expect(result.frameworkCode).toBeNull();
+    const body = JSON.parse(result.body ?? "{}") as {
+      item?: { label?: string };
+    };
+    expect(typeof body.item?.label).toBe("string");
+    expect(body.item).not.toHaveProperty("secret");
+  });
+
+  it("accepts a request that omits readOnly behind a ref (V2B)", () => {
+    const op = operation({
+      method: "POST",
+      key: "path:POST /things",
+      request_body: {
+        required: true,
+        description: null,
+        content: [jsonContent("sch_cart")],
+        source_pointer: ""
+      },
+      responses: [response({ content: [jsonContent("sch_thing")] })]
+    });
+    const result = handleGatewayRequest(
+      options({
+        contract: contract({
+          operations: [op],
+          schemas: {
+            sch_cart: schema("sch_cart", {
+              type: "object",
+              required: ["item"],
+              properties: { item: { $ref: "sch_line" } }
+            }),
+            sch_line: schema("sch_line", {
+              type: "object",
+              required: ["id", "quantity"],
+              properties: {
+                id: { type: "string", readOnly: true },
+                quantity: { type: "integer" }
+              }
+            }),
+            sch_thing: schema("sch_thing", {
+              type: "object",
+              required: ["id"],
+              properties: { id: { type: "string" } }
+            })
+          }
+        })
+      }),
+      31,
+      request({
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: new TextEncoder().encode('{"item":{"quantity":2}}')
+      })
+    );
+    expect(result.status).toBe(200);
+    expect(result.frameworkCode).toBeNull();
+  });
+
   it("serves a fixture that satisfies every declared check", () => {
     const op = operation({
       responses: [
@@ -715,10 +1049,55 @@ describe("response validation before commit", () => {
     expect(result.frameworkCode).toBeNull();
   });
 
-  it("serves a fixture body as frozen pack data while enforcing the declared checks", () => {
-    // The pack validates fixture bodies before startup (section 15.5.1),
-    // so a fixture shape that differs from the schema stays serveable;
-    // status, headers, and media type are still enforced above.
+  it("serves a fixture body that satisfies the declared schema (V2D)", () => {
+    // A fixture body is frozen pack data, and it must also satisfy the
+    // declared response schema like every value the gateway serves.
+    const op = operation({
+      responses: [
+        response({
+          content: [contentEntry("application/json", "sch_thing_list")]
+        })
+      ]
+    });
+    const result = handleGatewayRequest(
+      options({
+        contract: contract({
+          operations: [op],
+          schemas: {
+            sch_thing_list: schema("sch_thing_list", {
+              type: "array",
+              items: { $ref: "sch_thing" }
+            }),
+            sch_thing: schema("sch_thing", {
+              type: "object",
+              required: ["id"],
+              properties: { id: { type: "string" } }
+            })
+          }
+        }),
+        fixtures: [
+          {
+            id: "fx_frozen",
+            operation: "path:GET /things",
+            status: 200,
+            media_type: "application/json",
+            body: { kind: "json_inline", value: [{ id: "thing_1" }] }
+          }
+        ]
+      }),
+      18,
+      request({})
+    );
+    expect(result.status).toBe(200);
+    expect(result.provenance).toBe("fixture:fx_frozen");
+    expect(result.frameworkCode).toBeNull();
+    expect(result.headers["content-type"]).toBe(
+      "application/json; charset=utf-8"
+    );
+    expect(JSON.parse(result.body ?? "{}")).toEqual([{ id: "thing_1" }]);
+  });
+
+  it("never serves a fixture body that violates the declared schema", () => {
     const op = operation({
       responses: [
         response({
@@ -752,15 +1131,16 @@ describe("response validation before commit", () => {
           }
         ]
       }),
-      18,
+      29,
       request({})
     );
-    expect(result.status).toBe(200);
-    expect(result.provenance).toBe("fixture:fx_frozen");
-    expect(result.frameworkCode).toBeNull();
-    expect(result.headers["content-type"]).toBe(
-      "application/json; charset=utf-8"
-    );
+    expect(result.status).toBe(500);
+    expect(result.frameworkCode).toBe("mock_response_invalid");
+    expect(result.headers["content-type"]).toBe("application/problem+json");
+    expect(result.body).not.toContain("thing_1");
+    expect(JSON.parse(result.body ?? "{}")).toMatchObject({
+      code: "mock_response_invalid"
+    });
   });
 });
 

@@ -159,6 +159,99 @@ describe("query parameter deserialization", () => {
   });
 });
 
+describe("joined list elements", () => {
+  it("trims the framing space of joined header list elements", () => {
+    // Two header lines arrive flattened as "alpha, beta": the space
+    // after the comma is framing Node added, not element data.
+    expect(
+      parseOk(parameter({ location: "header", name: "x-flags" }), "alpha, beta")
+    ).toEqual(["alpha", "beta"]);
+    expect(
+      parseOk(
+        parameter({ location: "header", name: "x-flags" }),
+        "alpha, beta",
+        "array"
+      )
+    ).toEqual(["alpha", "beta"]);
+  });
+
+  it("trims joined header positional objects", () => {
+    expect(
+      parseOk(
+        parameter({ location: "header", name: "x-obj" }),
+        "id,3, name,x",
+        "object"
+      )
+    ).toEqual({ id: 3, name: "x" });
+  });
+
+  it("keeps query and cookie list element bytes exact", () => {
+    // RFC 6570 form serialization adds no framing whitespace, so the
+    // space after the comma is participant data and must survive. Only
+    // the repeated-header join adds framing, and only headers trim.
+    expect(
+      parseOk(parameter({ location: "query", explode: false }), "a, b", "array")
+    ).toEqual(["a", " b"]);
+    expect(
+      parseOk(
+        parameter({ location: "cookie", explode: false }),
+        "a, b",
+        "array"
+      )
+    ).toEqual(["a", " b"]);
+    expect(
+      parseOk(parameter({ location: "query", explode: false }), "id=3, name=x")
+    ).toEqual({ id: 3, " name": "x" });
+  });
+});
+
+describe("header explode forms", () => {
+  it("parses exploded objects as key-value pairs", () => {
+    expect(
+      parseOk(
+        parameter({ location: "header", name: "X-Obj", explode: true }),
+        "id=3,name=x",
+        "object"
+      )
+    ).toEqual({ id: 3, name: "x" });
+    expect(
+      parseOk(
+        parameter({ location: "header", name: "X-Obj", explode: true }),
+        "id=3,name=x"
+      )
+    ).toEqual({ id: 3, name: "x" });
+  });
+
+  it("parses non-exploded objects as positional keys and values", () => {
+    expect(
+      parseOk(
+        parameter({ location: "header", name: "X-Obj", explode: false }),
+        "id,3,name,x",
+        "object"
+      )
+    ).toEqual({ id: 3, name: "x" });
+  });
+
+  it("parses exploded and non-exploded arrays alike", () => {
+    expect(
+      parseOk(
+        parameter({ location: "header", name: "X-Flags", explode: true }),
+        "3,4,5",
+        "array"
+      )
+    ).toEqual([3, 4, 5]);
+    // Elements that contain "=" stay array elements even when
+    // exploded; the key-value form belongs to objects only.
+    expect(
+      parseOk(
+        parameter({ location: "header", name: "X-Flags", explode: true }),
+        "a=b,c=d",
+        "array"
+      )
+    ).toEqual(["a=b", "c=d"]);
+  });
+});
+
 describe("framework errors", () => {
   it("maps every condition to its table status and code", () => {
     expect(FRAMEWORK_ERRORS.requestMalformed.status).toBe(400);

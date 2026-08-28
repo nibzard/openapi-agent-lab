@@ -86,6 +86,17 @@ function generateNode(
 
   const merged = mergeAllOf(schema, options, path, depth);
 
+  // Response-value precedence (section 15.5): a schema example outranks
+  // const, then default, then the first enum member. The 3.0 compiler
+  // folds a singular `example` into `examples`, so both forms appear.
+  const examples = merged.examples;
+  if (Array.isArray(examples) && examples.length > 0) {
+    return examples[0] as Json;
+  }
+  const example = merged.example;
+  if (example !== undefined) {
+    return example;
+  }
   if (merged.const !== undefined) {
     return merged.const;
   }
@@ -99,15 +110,6 @@ function generateNode(
       canonicalJson(a) < canonicalJson(b) ? -1 : 1
     );
     return sorted[0] as Json;
-  }
-
-  const examples = merged.examples;
-  if (Array.isArray(examples) && examples.length > 0) {
-    return examples[0] as Json;
-  }
-  const example = merged.example;
-  if (example !== undefined) {
-    return example;
   }
 
   const variant = pickVariant(merged, options, path, depth);
@@ -282,8 +284,16 @@ function generateObject(
     typeof schema.minProperties === "number" ? schema.minProperties : 0;
   // Stable property order: lexicographic by name.
   const names = [...Object.keys(properties)].sort();
+  const maxDepth = options.maxDepth ?? 24;
   for (const name of names) {
     if (required.size === 0 || required.has(name)) {
+      // Optional properties stop just above the depth bound so a
+      // recursive schema still produces a finite valid value; required
+      // properties keep recursing and fail closed at the bound. One
+      // extra level covers a reference hop inside the property schema.
+      if (!required.has(name) && depth + 2 > maxDepth) {
+        continue;
+      }
       result[name] = generateNode(
         properties[name] as Json,
         options,
@@ -337,14 +347,43 @@ function generateArray(
     return [];
   }
   const bound = options.arrayBound ?? 2;
-  const minItems = typeof schema.minItems === "number" ? schema.minItems : 1;
+  const declaredMinItems =
+    typeof schema.minItems === "number" ? schema.minItems : null;
+  if (declaredMinItems === null && depth + 2 > (options.maxDepth ?? 24)) {
+    // An array with no declared minimum may be empty; cutting the items
+    // just above the depth bound (one level for the item schema, one
+    // for a reference hop) lets recursive schemas terminate (15.6).
+    return [];
+  }
+  const minItems = declaredMinItems ?? 1;
   const maxItems =
     typeof schema.maxItems === "number" ? schema.maxItems : bound;
-  const count = Math.max(0, Math.min(Math.max(minItems, 1), maxItems));
   const items = schema.items;
   const prefixItems = Array.isArray(schema.prefixItems)
     ? schema.prefixItems
     : [];
+  let count: number;
+  if (prefixItems.length > 0) {
+    // A tuple fills every prefix position, so the count floor is the
+    // prefix length, not 1. A declared minItems raises the floor past
+    // the prefix, and the rest schema supplies the extra items. With
+    // no count the bounds admit, fail closed instead of emitting a
+    // body that violates the schema.
+    const floor = Math.max(minItems, prefixItems.length);
+    if (items === false && floor > prefixItems.length) {
+      throw new GenerationUnsupportedError(
+        `minItems ${floor} exceeds the ${prefixItems.length} prefix items with no rest schema`
+      );
+    }
+    if (maxItems < floor) {
+      throw new GenerationUnsupportedError(
+        `the count bound ${maxItems} is below the ${floor} items the tuple requires`
+      );
+    }
+    count = floor;
+  } else {
+    count = Math.max(0, Math.min(Math.max(minItems, 1), maxItems));
+  }
   const values: Json[] = [];
   for (let i = 0; i < count; i += 1) {
     const template =
@@ -506,63 +545,69 @@ function generateNumber(schema: Json): Json {
     return 0;
   }
   const isInteger = schema.type === "integer";
-  const minimum = numericBound(schema, "minimum", "exclusiveMinimum");
-  const maximum = numericBound(schema, "maximum", "exclusiveMaximum");
+  const minimum = typeof schema.minimum === "number" ? schema.minimum : null;
+  const maximum = typeof schema.maximum === "number" ? schema.maximum : null;
+  // Draft 2020-12 carries exclusive bounds as numbers, which is the
+  // compiler's normalized form; the OpenAPI 3.0 boolean form combines
+  // with the inclusive bound it qualifies.
+  const exclusiveMinimum =
+    typeof schema.exclusiveMinimum === "number"
+      ? schema.exclusiveMinimum
+      : schema.exclusiveMinimum === true && minimum !== null
+        ? minimum
+        : null;
+  const exclusiveMaximum =
+    typeof schema.exclusiveMaximum === "number"
+      ? schema.exclusiveMaximum
+      : schema.exclusiveMaximum === true && maximum !== null
+        ? maximum
+        : null;
   const multipleOf =
     typeof schema.multipleOf === "number" ? schema.multipleOf : null;
+  const lower = minimum ?? exclusiveMinimum;
+  const upper = maximum ?? exclusiveMaximum;
+  const belowLower = (candidate: number): boolean =>
+    (minimum !== null && candidate < minimum) ||
+    (exclusiveMinimum !== null && candidate <= exclusiveMinimum);
+  const aboveUpper = (candidate: number): boolean =>
+    (maximum !== null && candidate > maximum) ||
+    (exclusiveMaximum !== null && candidate >= exclusiveMaximum);
+
   let value: number;
-  if (minimum !== null && maximum !== null) {
-    value = minimum === maximum ? minimum : (minimum + maximum) / 2;
-  } else if (minimum !== null) {
-    value = minimum;
-  } else if (maximum !== null) {
-    value = Math.min(maximum, 0);
+  if (lower !== null && upper !== null) {
+    value = lower === upper ? lower : (lower + upper) / 2;
+  } else if (lower !== null) {
+    value = minimum !== null ? minimum : lower + 1;
+  } else if (upper !== null) {
+    value = Math.min(maximum !== null ? maximum : upper - 1, 0);
   } else {
     value = 1;
   }
-  if (
-    schema.exclusiveMinimum === true &&
-    typeof minimum === "number" &&
-    value === minimum
-  ) {
-    value += 1;
-  }
-  if (
-    schema.exclusiveMaximum === true &&
-    typeof maximum === "number" &&
-    value === maximum
-  ) {
-    value -= 1;
-  }
   if (multipleOf !== null && multipleOf > 0) {
     value = Math.round(value / multipleOf) * multipleOf;
-    if (minimum !== null && value < minimum) {
+    if (belowLower(value)) {
       value += multipleOf;
     }
-    if (maximum !== null && value > maximum) {
+    if (aboveUpper(value)) {
       value -= multipleOf;
+    }
+  } else {
+    if (belowLower(value)) {
+      value += 1;
+    }
+    if (aboveUpper(value)) {
+      value -= 1;
     }
   }
   if (isInteger) {
-    return Math.round(value);
+    value = Math.round(value);
+  }
+  if (belowLower(value) || aboveUpper(value)) {
+    throw new GenerationUnsupportedError(
+      "numeric bounds admit no representable value"
+    );
   }
   return value;
-}
-
-function numericBound(
-  schema: Record<string, Json>,
-  key: "minimum" | "maximum",
-  exclusiveKey: "exclusiveMinimum" | "exclusiveMaximum"
-): number | null {
-  const direct = schema[key];
-  if (typeof direct === "number") {
-    return direct;
-  }
-  const exclusive = schema[exclusiveKey];
-  if (typeof exclusive === "number") {
-    return exclusive;
-  }
-  return null;
 }
 
 function effectiveType(schema: Record<string, Json>): string | null {

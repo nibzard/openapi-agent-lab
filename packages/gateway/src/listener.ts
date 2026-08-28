@@ -82,6 +82,50 @@ export interface GatewayListener {
 const CLIENT_DISCONNECTED = "client_disconnected";
 
 /**
+ * Test one header value the way Node does before it writes: only
+ * horizontal tab, printable ASCII, and 8-bit bytes are accepted.
+ * Anything else, most notably CR and LF, makes the write throw.
+ */
+function writableHeaderValue(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    const allowed =
+      code === 0x09 ||
+      (code >= 0x20 && code <= 0x7e) ||
+      (code >= 0x80 && code <= 0xff);
+    if (!allowed) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** RFC 9110 token characters; every outbound header name must match. */
+const HEADER_TOKEN = /^[!#$%&'*+\-.^_|~0-9A-Za-z]+$/;
+
+/**
+ * Drop the header lines HTTP forbids instead of letting the write
+ * throw. Fixture header values reach the wire unvalidated, so this is
+ * the deterministic guard. Returns the writable lines and the dropped
+ * names in stable declaration order.
+ */
+function outboundHeaders(headers: Record<string, string>): {
+  headers: Record<string, string>;
+  dropped: string[];
+} {
+  const writable: Record<string, string> = {};
+  const dropped: string[] = [];
+  for (const [name, value] of Object.entries(headers)) {
+    if (HEADER_TOKEN.test(name) && writableHeaderValue(value)) {
+      writable[name] = value;
+    } else {
+      dropped.push(name);
+    }
+  }
+  return { headers: writable, dropped };
+}
+
+/**
  * Start one loopback gateway listener on an ephemeral 127.0.0.1 port.
  * The listener is the serving path for trials and conformance tests.
  */
@@ -182,6 +226,69 @@ export async function startGatewayListener(
       }
     });
 
+    // The write is the last place a header line that HTTP forbids can
+    // be stopped: Node throws on it, and the throw would escape this
+    // listener as an unhandled rejection. The header filter runs inside
+    // the same guard because fixture header values arrive untyped, so a
+    // value it cannot test takes the handled path too. Invalid lines
+    // are dropped deterministically with one stable diagnostic, and any
+    // other write failure becomes a settled framework error, so the
+    // client still receives one response and the process stays alive.
+    const writeResponse = (candidate: GatewayResponse): void => {
+      try {
+        const writable = outboundHeaders(candidate.headers);
+        if (writable.dropped.length > 0) {
+          diagnostics.push(
+            diagnostic({
+              severity: "warning",
+              phase: "serve",
+              code: "OAL-RESPONSE-HEADER-INVALID",
+              message:
+                "Response header lines with characters that HTTP forbids were not sent.",
+              details: {
+                request_id: requestId,
+                headers: writable.dropped
+              }
+            })
+          );
+        }
+        outgoing.writeHead(candidate.status, writable.headers);
+        outgoing.end(candidate.body);
+      } catch {
+        const error = FRAMEWORK_ERRORS.internalError;
+        response = {
+          status: error.status,
+          headers: { "content-type": "application/problem+json" },
+          body: JSON.stringify(problemDocument(error, requestId)),
+          requestId,
+          provenance: null,
+          frameworkCode: error.code
+        };
+        diagnostics.push(
+          diagnostic({
+            severity: "error",
+            phase: "serve",
+            code: "OAL-RESPONSE-WRITE-FAILED",
+            message: "Writing the response failed; an internal error was sent.",
+            details: { request_id: requestId }
+          })
+        );
+        try {
+          outgoing.writeHead(response.status, response.headers);
+          outgoing.end(response.body);
+        } catch {
+          // Nothing more can be written; settle the socket so the
+          // exchange still ends with exactly one trace event.
+          outgoing.destroy();
+          record();
+          return;
+        }
+      }
+      outgoing.on("finish", () => {
+        record();
+      });
+    };
+
     void (async () => {
       try {
         for await (const chunk of incoming) {
@@ -231,11 +338,7 @@ export async function startGatewayListener(
       }
 
       response = computed;
-      outgoing.writeHead(computed.status, computed.headers);
-      outgoing.end(computed.body);
-      outgoing.on("finish", () => {
-        record();
-      });
+      writeResponse(computed);
     })();
   };
 

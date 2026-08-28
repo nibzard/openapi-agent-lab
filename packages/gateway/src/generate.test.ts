@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { SchemaValidator, type Json } from "@oal/core";
-import type { ResponseIR } from "@oal/contract-ir";
+import type { ResponseIR, SchemaIR } from "@oal/contract-ir";
 import { generateValue, GenerationUnsupportedError } from "./generate.ts";
 import {
   chooseSuccessResponse,
@@ -9,6 +9,7 @@ import {
   selectExampleValue,
   selectResponse
 } from "./select.ts";
+import { createContractSchemaLookup } from "./validate.ts";
 
 function response(init: Partial<ResponseIR>): ResponseIR {
   return {
@@ -31,6 +32,77 @@ describe("deterministic generation", () => {
     expect(generateValue({ enum: ["zebra", "apple", "apple"] }, options)).toBe(
       "apple"
     );
+  });
+
+  it("applies the section 15.5 order: example, const, default, enum", () => {
+    expect(
+      generateValue(
+        {
+          examples: ["from-examples"],
+          example: "from-example",
+          const: "pinned",
+          default: "fallback",
+          enum: ["member"]
+        },
+        options
+      )
+    ).toBe("from-examples");
+    expect(
+      generateValue({ example: "from-example", const: "pinned" }, options)
+    ).toBe("from-example");
+    expect(generateValue({ const: "pinned", default: 41 }, options)).toBe(
+      "pinned"
+    );
+    expect(generateValue({ default: 41, enum: [7, 41] }, options)).toBe(41);
+  });
+
+  it("honors numeric exclusive bounds for integers and numbers", () => {
+    const cases: Json[] = [
+      { type: "integer", exclusiveMinimum: 1 },
+      { type: "integer", exclusiveMaximum: 0 },
+      { type: "integer", minimum: 5, exclusiveMinimum: true },
+      { type: "number", exclusiveMinimum: 0, maximum: 10 },
+      { type: "number", exclusiveMinimum: 0.5, exclusiveMaximum: 1.5 },
+      { type: "integer", exclusiveMinimum: 0, maximum: 10, multipleOf: 4 },
+      { type: "number", minimum: 0.3, multipleOf: 0.1 }
+    ];
+    for (const schema of cases) {
+      const value = generateValue(schema, options);
+      expect(
+        new SchemaValidator(schema).errors(value),
+        JSON.stringify(schema)
+      ).toEqual([]);
+    }
+    expect(
+      generateValue({ type: "integer", exclusiveMinimum: 1 }, options)
+    ).toBe(2);
+    expect(
+      generateValue(
+        { type: "integer", minimum: 5, exclusiveMinimum: true },
+        options
+      )
+    ).toBe(6);
+    expect(
+      generateValue(
+        { type: "integer", exclusiveMinimum: 0, maximum: 10, multipleOf: 4 },
+        options
+      )
+    ).toBe(4);
+  });
+
+  it("fails closed when the numeric bounds admit no value", () => {
+    expect(() =>
+      generateValue(
+        { type: "integer", exclusiveMinimum: 1, exclusiveMaximum: 2 },
+        options
+      )
+    ).toThrow(GenerationUnsupportedError);
+    expect(() =>
+      generateValue(
+        { type: "integer", minimum: 3, maximum: 3, exclusiveMinimum: 3 },
+        options
+      )
+    ).toThrow(GenerationUnsupportedError);
   });
 
   it("generates bounded strings and numbers within bounds", () => {
@@ -93,6 +165,96 @@ describe("deterministic generation", () => {
     ) as Json[];
     const keys = unique.map((item) => JSON.stringify(item));
     expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("generates a tuple that fits the count bound from prefixItems", () => {
+    const schema = {
+      type: "array",
+      prefixItems: [{ type: "string" }, { type: "integer" }],
+      items: false
+    };
+    const value = generateValue(schema, options) as Json[];
+    expect(value).toHaveLength(2);
+    expect(typeof value[0]).toBe("string");
+    expect(typeof value[1]).toBe("number");
+    expect(new SchemaValidator(schema).errors(value)).toHaveLength(0);
+  });
+
+  it("fails closed when a closed tuple exceeds the count bound", () => {
+    // The V2U normalization maps a 3.0 tuple with `additionalItems:
+    // false` to `prefixItems` plus `items: false`.
+    const schema = {
+      type: "array",
+      minItems: 3,
+      prefixItems: [
+        { type: "string" },
+        { type: "integer" },
+        { type: "string" }
+      ],
+      items: false
+    };
+    expect(() => generateValue(schema, options)).toThrow(
+      GenerationUnsupportedError
+    );
+  });
+
+  it("extends a tuple past its prefix from the rest schema", () => {
+    const schema = {
+      type: "array",
+      minItems: 5,
+      prefixItems: [{ type: "string" }, { type: "integer" }],
+      items: { type: "boolean" }
+    };
+    const value = generateValue(schema, {
+      seed: "op_test",
+      arrayBound: 8
+    }) as Json[];
+    expect(value).toHaveLength(5);
+    expect(typeof value[0]).toBe("string");
+    expect(typeof value[1]).toBe("number");
+    expect(value.slice(2)).toEqual([false, false, false]);
+    expect(new SchemaValidator(schema).errors(value)).toHaveLength(0);
+  });
+
+  it("fails closed when a declared minimum exceeds the closed prefix", () => {
+    const schema = {
+      type: "array",
+      minItems: 4,
+      prefixItems: [{ type: "string" }, { type: "integer" }],
+      items: false
+    };
+    expect(() =>
+      generateValue(schema, { seed: "op_test", arrayBound: 8 })
+    ).toThrow(GenerationUnsupportedError);
+  });
+
+  it("fails closed when maxItems undercuts the prefix length", () => {
+    const schema = {
+      type: "array",
+      maxItems: 2,
+      prefixItems: [{ type: "string" }, { type: "integer" }, { type: "string" }]
+    };
+    expect(() => generateValue(schema, options)).toThrow(
+      GenerationUnsupportedError
+    );
+  });
+
+  it("keeps the count cap for plain item arrays", () => {
+    const capped = generateValue(
+      { type: "array", items: { type: "integer" }, minItems: 3 },
+      options
+    ) as Json[];
+    expect(capped).toHaveLength(2);
+    const bounded = generateValue(
+      { type: "array", items: { type: "integer" }, minItems: 3, maxItems: 5 },
+      options
+    ) as Json[];
+    expect(bounded).toHaveLength(3);
+    const single = generateValue(
+      { type: "array", items: { type: "integer" } },
+      options
+    ) as Json[];
+    expect(single).toHaveLength(1);
   });
 
   it("produces reserved-domain values for formats", () => {
@@ -177,6 +339,48 @@ describe("deterministic generation", () => {
     const left = generateValue(schema, { seed: "op_a" });
     const right = generateValue(schema, { seed: "op_b" });
     expect(left).not.toEqual(right);
+  });
+
+  it("generates a finite valid value for a recursive schema", () => {
+    const nodePointer = "#/components/schemas/Node";
+    const nodeSchema = {
+      type: "object",
+      required: ["name", "children"],
+      properties: {
+        name: { type: "string" },
+        children: { type: "array", items: { $ref: nodePointer } }
+      }
+    };
+    const registry: Record<string, SchemaIR> = {
+      sch_node: {
+        uid: "sch_node",
+        schema: nodeSchema,
+        source_pointer: nodePointer,
+        document_uri: "openapi.yaml"
+      }
+    };
+    const lookup = createContractSchemaLookup(registry);
+    const generationOptions = { seed: "op_recursive", lookup };
+
+    const value = generateValue({ $ref: "sch_node" }, generationOptions);
+    expect(generateValue({ $ref: "sch_node" }, generationOptions)).toEqual(
+      value
+    );
+    expect(
+      new SchemaValidator(lookup("sch_node") as Json, {
+        resolveRef: lookup
+      }).errors(value)
+    ).toEqual([]);
+
+    // The recursion descends and terminates in an empty children array.
+    let node = value as { children?: Json[] };
+    let depth = 0;
+    while (Array.isArray(node.children) && node.children.length > 0) {
+      node = node.children[0] as { children?: Json[] };
+      depth += 1;
+    }
+    expect(depth).toBeGreaterThan(1);
+    expect(depth).toBeLessThan(24);
   });
 });
 

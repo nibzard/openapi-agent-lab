@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { Json } from "@oal/core";
+import { SchemaValidator, type Json } from "@oal/core";
 import type {
   ContractIR,
   OperationIR,
@@ -137,6 +137,156 @@ function contract(): ContractIR {
 
 const SEED = "a".repeat(64);
 
+/** Pointer form the compiler keeps for a preserved recursive reference. */
+const NODE_POINTER = "#/components/schemas/Node";
+
+/**
+ * A contract whose response schema is recursive. The compiler preserves
+ * the nested reference as a document pointer, so response generation
+ * resolves it through the contract's schema registry.
+ */
+function recursiveContract(): ContractIR {
+  const nodeSchema: Json = {
+    type: "object",
+    required: ["name", "children"],
+    properties: {
+      name: { type: "string" },
+      children: { type: "array", items: { $ref: NODE_POINTER } }
+    }
+  };
+  return {
+    ...contract(),
+    schemas: {
+      sch_node: {
+        uid: "sch_node",
+        schema: nodeSchema,
+        source_pointer: NODE_POINTER,
+        document_uri: "openapi.yaml"
+      }
+    },
+    operations: [
+      operation({
+        responses: [
+          response({
+            content: [
+              {
+                media_type: "application/json",
+                schema_ref: "sch_node",
+                examples: [],
+                support: "supported",
+                support_reason_codes: []
+              }
+            ]
+          })
+        ]
+      })
+    ]
+  };
+}
+
+/** A contract whose success response declares two media types. */
+function dualMediaContract(): ContractIR {
+  return {
+    ...contract(),
+    operations: [
+      operation({
+        responses: [
+          response({
+            content: [
+              {
+                media_type: "application/json",
+                schema_ref: "sch_computer",
+                examples: [],
+                support: "supported",
+                support_reason_codes: []
+              },
+              {
+                media_type: "text/plain",
+                schema_ref: null,
+                examples: [],
+                support: "supported",
+                support_reason_codes: []
+              }
+            ]
+          })
+        ]
+      })
+    ]
+  };
+}
+
+/**
+ * A contract whose success response is a closed tuple that no valid
+ * item count can satisfy: three prefix positions against the default
+ * array bound of two. This is the V2U-normalized form of a 3.0 tuple
+ * with `additionalItems: false`.
+ */
+function closedTupleContract(): ContractIR {
+  return {
+    ...contract(),
+    schemas: {
+      sch_tuple: schema("sch_tuple", {
+        type: "array",
+        minItems: 3,
+        prefixItems: [
+          { type: "string" },
+          { type: "integer" },
+          { type: "string" }
+        ],
+        items: false
+      })
+    },
+    operations: [
+      operation({
+        responses: [
+          response({
+            content: [
+              {
+                media_type: "application/json",
+                schema_ref: "sch_tuple",
+                examples: [],
+                support: "supported",
+                support_reason_codes: []
+              }
+            ]
+          })
+        ]
+      })
+    ]
+  };
+}
+
+/** A contract whose success response is a tuple that fits the bound. */
+function boundedTupleContract(): ContractIR {
+  return {
+    ...contract(),
+    schemas: {
+      sch_tuple: schema("sch_tuple", {
+        type: "array",
+        prefixItems: [{ type: "string" }, { type: "integer" }],
+        items: false
+      })
+    },
+    operations: [
+      operation({
+        responses: [
+          response({
+            content: [
+              {
+                media_type: "application/json",
+                schema_ref: "sch_tuple",
+                examples: [],
+                support: "supported",
+                support_reason_codes: []
+              }
+            ]
+          })
+        ]
+      })
+    ]
+  };
+}
+
 function candidate(source: ContractIR, operationKey: string): MockRespondInput {
   return {
     contract: source,
@@ -216,6 +366,50 @@ describe("BuiltinMockAdapter", () => {
     expect(selected?.mediaType).toBe("application/json");
   });
 
+  it("serves a fixture under its declared media type, not a relabeled one", () => {
+    const adapter = new BuiltinMockAdapter([
+      {
+        id: "fx_json",
+        operation: "path:POST /v1/computers",
+        status: 200,
+        media_type: "application/json",
+        headers: {},
+        body: { kind: "json_inline", value: { id: "computer_fixture" } }
+      }
+    ]);
+    const served = adapter.respond({
+      ...candidate(dualMediaContract(), "path:POST /v1/computers"),
+      request: {
+        ...candidate(dualMediaContract(), "path:POST /v1/computers").request,
+        accept: "text/plain"
+      }
+    });
+    expect(served?.mediaType).toBe("application/json");
+    expect(served?.body).toEqual({ id: "computer_fixture" });
+    expect(served?.provenance).toBe("fixture:fx_json");
+  });
+
+  it("keeps negotiating when no fixture is selected", () => {
+    const adapter = new BuiltinMockAdapter();
+    const input = candidate(dualMediaContract(), "path:POST /v1/computers");
+    const served = adapter.respond({
+      ...input,
+      request: { ...input.request, accept: "text/plain" }
+    });
+    expect(served?.mediaType).toBe("text/plain");
+    expect(served?.provenance).toBe("none");
+  });
+
+  it("serves the documented default media type without accept", () => {
+    const adapter = new BuiltinMockAdapter();
+    const input = candidate(dualMediaContract(), "path:POST /v1/computers");
+    const served = adapter.respond({
+      ...input,
+      request: { ...input.request, accept: null }
+    });
+    expect(served?.mediaType).toBe("application/json");
+  });
+
   it("returns null for an operation outside the contract", () => {
     const adapter = new BuiltinMockAdapter();
     expect(
@@ -234,6 +428,84 @@ describe("BuiltinMockAdapter", () => {
         }
       })
     ).toBeNull();
+  });
+
+  it("resolves preserved recursive references like the gateway (V2X)", () => {
+    const source = recursiveContract();
+    const adapter = new BuiltinMockAdapter();
+    const served = adapter.respond(
+      candidate(source, "path:POST /v1/computers")
+    );
+    expect(served).not.toBeNull();
+    expect(served?.provenance).toBe("schema_generation");
+    expect(served?.mediaType).toBe("application/json");
+
+    // The recursion descends and terminates in an empty children array,
+    // exactly as the gateway pipeline generates the same schema.
+    let node = served?.body as { name?: Json; children?: Json[] };
+    let depth = 0;
+    while (Array.isArray(node.children) && node.children.length > 0) {
+      node = node.children[0] as { name?: Json; children?: Json[] };
+      depth += 1;
+    }
+    expect(depth).toBeGreaterThan(1);
+    expect(depth).toBeLessThan(24);
+
+    const nodeSchema = source.schemas.sch_node?.schema;
+    if (nodeSchema === undefined) {
+      throw new Error("the compiled source did not register sch_node");
+    }
+    // The validator resolves `#` references against its root schema, so
+    // the registry is mounted as a document-shaped root for the check.
+    const documentRoot: Json = {
+      $ref: NODE_POINTER,
+      components: { schemas: { Node: nodeSchema } }
+    };
+    const servedBody = served?.body;
+    if (servedBody === undefined) {
+      throw new Error("the mock served no body to validate");
+    }
+    expect(new SchemaValidator(documentRoot).errors(servedBody)).toEqual([]);
+  });
+
+  it("returns null when tuple generation admits no valid count", () => {
+    const adapter = new BuiltinMockAdapter();
+    expect(
+      adapter.respond(
+        candidate(closedTupleContract(), "path:POST /v1/computers")
+      )
+    ).toBeNull();
+  });
+
+  it("serves a generated tuple that fits the count bound", () => {
+    const source = boundedTupleContract();
+    const adapter = new BuiltinMockAdapter();
+    const served = adapter.respond(
+      candidate(source, "path:POST /v1/computers")
+    );
+    expect(served?.provenance).toBe("schema_generation");
+
+    const body = served?.body as Json[];
+    expect(body).toHaveLength(2);
+    expect(typeof body[0]).toBe("string");
+    expect(typeof body[1]).toBe("number");
+
+    const tupleSchema = source.schemas.sch_tuple?.schema;
+    if (tupleSchema === undefined) {
+      throw new Error("the compiled source did not register sch_tuple");
+    }
+    expect(new SchemaValidator(tupleSchema).errors(body)).toEqual([]);
+  });
+
+  it("serves the recursive schema byte-identically on repeat calls", () => {
+    const adapter = new BuiltinMockAdapter();
+    const input = candidate(recursiveContract(), "path:POST /v1/computers");
+    const first = adapter.respond(input);
+    const second = adapter.respond(input);
+    expect(second).not.toBeNull();
+    expect(serializeMockResponse(second as NonNullable<typeof first>)).toBe(
+      serializeMockResponse(first as NonNullable<typeof first>)
+    );
   });
 
   it("is byte-identical across double invocation", () => {
