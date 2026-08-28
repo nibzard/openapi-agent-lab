@@ -364,6 +364,86 @@ describe("event log", () => {
     store.close();
   });
 
+  it("keeps the byte total exact across one thousand appends", () => {
+    const path = storePath();
+    const store = openStore(path);
+    const request = store.beginRequest({ ingressObservedAt: OBSERVED_AT });
+    let expected = 0;
+    for (let index = 0; index < 1000; index += 1) {
+      const eventJson = { index, note: "x".repeat(index % 97) };
+      store.appendSemanticEvent({
+        requestSequence: request.sequence,
+        eventName: "computer.created",
+        schemaVersion: 1,
+        eventJson
+      });
+      expected += Buffer.byteLength(canonicalJson(eventJson), "utf8");
+    }
+    expect(store.eventLogBytes()).toBe(expected);
+    const raw = new DatabaseSync(path);
+    try {
+      const sumBytes = (table: string): number =>
+        Number(
+          raw
+            .prepare(
+              `SELECT COALESCE(SUM(LENGTH(CAST(event_json AS BLOB))), 0) AS n FROM ${table}`
+            )
+            .get()?.["n"]
+        );
+      expect(
+        sumBytes("events") +
+          sumBytes("semantic_events") +
+          sumBytes("documentation_exchanges")
+      ).toBe(expected);
+    } finally {
+      raw.close();
+    }
+    store.close();
+    const reopened = openStore(path);
+    try {
+      expect(reopened.eventLogBytes()).toBe(expected);
+    } finally {
+      reopened.close();
+    }
+  });
+
+  it("restores a derived byte total after a rolled-back transaction", () => {
+    const store = openStore(storePath());
+    const request = store.beginRequest({ ingressObservedAt: OBSERVED_AT });
+    const committed = { type: "semantic.event", kept: true };
+    store.appendSemanticEvent({
+      requestSequence: request.sequence,
+      eventName: "computer.created",
+      schemaVersion: 1,
+      eventJson: committed
+    });
+    const before = store.eventLogBytes();
+    expect(() =>
+      store.transaction(() => {
+        store.appendSemanticEvent({
+          requestSequence: request.sequence,
+          parentEventId: null,
+          eventName: "computer.started",
+          schemaVersion: 1,
+          eventJson: { type: "semantic.event", kept: false }
+        });
+        throw new Error("rollback after the append");
+      })
+    ).toThrowError("rollback after the append");
+    expect(store.eventLogBytes()).toBe(before);
+    const later = { type: "semantic.event", kept: true, later: true };
+    store.appendSemanticEvent({
+      requestSequence: request.sequence,
+      eventName: "computer.updated",
+      schemaVersion: 1,
+      eventJson: later
+    });
+    expect(store.eventLogBytes()).toBe(
+      before + Buffer.byteLength(canonicalJson(later), "utf8")
+    );
+    store.close();
+  });
+
   it("links semantic events to their request and parent", () => {
     const store = openStore(storePath());
     const request = store.beginRequest({ ingressObservedAt: OBSERVED_AT });

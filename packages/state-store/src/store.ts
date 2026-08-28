@@ -366,6 +366,13 @@ export class StateStore {
   private readonly db: DatabaseSync;
   private readonly secrets: RunSecrets;
   private closed = false;
+  /**
+   * Persisted event JSON bytes across the event tables, or null before
+   * the first derivation. Maintained incrementally by the append
+   * methods; invalidated whenever a transaction rolls back, because a
+   * rollback can revert rows the total already counted.
+   */
+  private eventLogByteTotal: number | null = null;
 
   private constructor(options: StateStoreOptions) {
     const opened = openDatabase({
@@ -410,7 +417,15 @@ export class StateStore {
 
   /** Run `fn` in one transaction, rolling back when it throws. */
   transaction<T>(fn: () => T): T {
-    return runInTransaction(this.db, fn);
+    try {
+      return runInTransaction(this.db, fn);
+    } catch (error) {
+      // The rollback may have reverted event rows the running byte
+      // total already counted, so forget the cached total; the next
+      // read derives it from the tables again.
+      this.eventLogByteTotal = null;
+      throw error;
+    }
   }
 
   // ---------------------------------------------------------------- run meta
@@ -731,6 +746,7 @@ export class StateStore {
           canonical,
           canonicalJsonSha256(input.eventJson)
         );
+      this.countEventAppend(canonical);
       return { sequence: input.sequence, eventId, event: input.eventJson };
     });
   }
@@ -759,6 +775,7 @@ export class StateStore {
           canonical,
           canonicalJsonSha256(input.eventJson)
         );
+      this.countEventAppend(canonical);
       return { ...input, semanticSequence, eventId };
     });
   }
@@ -816,6 +833,7 @@ export class StateStore {
           canonical,
           canonicalJsonSha256(input.eventJson)
         );
+      this.countEventAppend(canonical);
       return {
         documentationSequence: sequence,
         exchangeId,
@@ -830,8 +848,20 @@ export class StateStore {
     });
   }
 
-  /** Persisted event JSON bytes across all event tables. */
+  /**
+   * Persisted event JSON bytes across all event tables. Derived from
+   * the tables once, then advanced by each append, so N appends cost
+   * O(N) instead of rescanning every stored row on every append.
+   */
   eventLogBytes(): number {
+    if (this.eventLogByteTotal === null) {
+      this.eventLogByteTotal = this.sumEventJsonBytes();
+    }
+    return this.eventLogByteTotal;
+  }
+
+  /** Sum the stored event JSON bytes of the three event tables. */
+  private sumEventJsonBytes(): number {
     return (
       this.scalarInteger(
         "SELECT COALESCE(SUM(LENGTH(CAST(event_json AS BLOB))), 0) AS n FROM events"
@@ -843,6 +873,17 @@ export class StateStore {
         "SELECT COALESCE(SUM(LENGTH(CAST(event_json AS BLOB))), 0) AS n FROM documentation_exchanges"
       )
     );
+  }
+
+  /**
+   * Fold one appended event into the running byte total. A null total
+   * stays null: the next read derives it from the tables, which
+   * already include the new row.
+   */
+  private countEventAppend(canonical: string): void {
+    if (this.eventLogByteTotal !== null) {
+      this.eventLogByteTotal += utf8Bytes(canonical);
+    }
   }
 
   // ---------------------------------------------------------------- state

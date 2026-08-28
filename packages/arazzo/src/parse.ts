@@ -17,9 +17,11 @@
 
 import {
   diagnostic,
+  parseBlockYaml,
   parseJsonStrict,
   SAFE_ID_PATTERN,
   StrictJsonError,
+  type BlockYamlFailure,
   type Diagnostic,
   type Json,
   type JsonObject
@@ -198,7 +200,7 @@ export function parseArazzo(
     }
   } else {
     try {
-      root = new YamlSubset(text, limits).parse();
+      root = parseWorkflowYaml(text, limits);
     } catch (caught) {
       if (caught instanceof YamlSubsetError) {
         diagnostics.push(
@@ -888,684 +890,102 @@ class YamlSubsetError extends Error {
   }
 }
 
-interface SourceLine {
-  /** Content after the leading indentation. */
-  readonly text: string;
-  readonly indent: number;
-  readonly number: number;
-  readonly blank: boolean;
+function yamlSubsetCode(failure: BlockYamlFailure): YamlSubsetCode {
+  switch (failure.situation) {
+    case "duplicate-key":
+      return "duplicate-key";
+    case "node-limit":
+      return "node-limit";
+    case "depth-limit":
+      return "depth-limit";
+    case "tab-indent":
+    case "directive":
+    case "multiple-documents":
+    case "trailing-content":
+    case "compact-sequence":
+    case "anchors":
+    case "flow-unsupported":
+      return "unsupported";
+    default:
+      return "invalid";
+  }
 }
 
-interface YamlLimits {
-  readonly maxNodes: number;
-  readonly maxDepth: number;
-}
-
-const BLOCK_HEADER = /^([|>])([+-]?\d*|\d+[+-]?)$/;
-const PLAIN_INTEGER = /^[+-]?[0-9]+$/;
-const PLAIN_NUMBER = /^[+-]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][+-]?[0-9]+)?$/;
-
-function isSpace(ch: string): boolean {
-  return ch === " " || ch === "\t";
-}
-
-function isSequenceEntry(text: string): boolean {
-  return text === "-" || text.startsWith("- ");
-}
-
-/** Read one quoted scalar that starts on `quote`. */
-function readQuoted(
-  text: string,
-  start: number
-): {
-  value: string;
-  next: number;
-} | null {
-  const quote = text.charAt(start);
-  let out = "";
-  let i = start + 1;
-  while (i < text.length) {
-    const ch = text.charAt(i);
-    if (ch === quote) {
-      if (quote === "'" && text.charAt(i + 1) === "'") {
-        out += "'";
-        i += 2;
-        continue;
-      }
-      return { value: out, next: i + 1 };
-    }
-    if (quote === '"' && ch === "\\") {
-      const escape = text.charAt(i + 1);
-      let mapped: string | null = null;
-      if (escape === '"' || escape === "\\" || escape === "/") {
-        mapped = escape;
-      } else if (escape === "n") {
-        mapped = "\n";
-      } else if (escape === "t") {
-        mapped = "\t";
-      } else if (escape === "r") {
-        mapped = "\r";
-      } else if (escape === "u") {
-        const hex = text.slice(i + 2, i + 6);
-        if (/^[0-9a-fA-F]{4}$/.test(hex)) {
-          out += String.fromCharCode(Number.parseInt(hex, 16));
-          i += 6;
-          continue;
-        }
-      }
-      if (mapped === null) {
-        return null;
-      }
-      out += mapped;
-      i += 2;
-      continue;
-    }
-    out += ch;
-    i += 1;
+function yamlSubsetMessage(failure: BlockYamlFailure): string {
+  switch (failure.situation) {
+    case "tab-indent":
+      return "Tab characters are not allowed in indentation.";
+    case "directive":
+      return "YAML directives are not supported.";
+    case "multiple-documents":
+      return "Multiple YAML documents are not supported.";
+    case "trailing-content":
+      return "Unexpected content after the document.";
+    case "sequence-indent":
+      return "Unexpected indentation in a block sequence.";
+    case "compact-sequence":
+      return "Compact nested sequences are not supported.";
+    case "mapping-indent":
+      return "Unexpected indentation in a block mapping.";
+    case "expected-entry":
+      return "Expected a 'key: value' mapping entry.";
+    case "empty-key":
+      return "Mapping keys must not be empty.";
+    case "duplicate-key":
+      return `Duplicate mapping key '${failure.key}'.`;
+    case "node-limit":
+      return "The workflow document exceeds the node limit.";
+    case "depth-limit":
+      return "The workflow document exceeds the nesting depth limit.";
+    case "anchors":
+      return "Anchors, aliases, and tags are not supported.";
+    case "flow-unsupported":
+      return "Flow collections are not supported.";
+    case "quoted-scalar":
+      return "Unterminated or trailing quoted scalar.";
+    case "flow-trailing":
+      return "Trailing content after a flow collection.";
+    case "flow-unterminated":
+      return "Unterminated flow collection.";
+    case "flow-quoted":
+      return "Unterminated quoted scalar in a flow collection.";
+    case "flow-key":
+      return "Unterminated quoted key in a flow mapping.";
+    case "flow-colon":
+      return "Expected ':' in a flow mapping.";
+    case "flow-empty-key":
+      return "Empty key in a flow mapping.";
+    case "flow-separator":
+      return `Expected ',' or '${failure.close}' in a flow collection.`;
+    default:
+      return "The workflow document is not valid YAML.";
   }
-  return null;
-}
-
-/** Resolve one plain scalar to null, a boolean, a number, or a string. */
-function resolvePlain(input: string): Json {
-  const value = input.trim();
-  if (
-    value === "" ||
-    value === "null" ||
-    value === "Null" ||
-    value === "NULL" ||
-    value === "~"
-  ) {
-    return null;
-  }
-  if (value === "true" || value === "True" || value === "TRUE") {
-    return true;
-  }
-  if (value === "false" || value === "False" || value === "FALSE") {
-    return false;
-  }
-  if (PLAIN_INTEGER.test(value) || PLAIN_NUMBER.test(value)) {
-    const numeric = Number(value);
-    if (Number.isFinite(numeric)) {
-      return numeric;
-    }
-  }
-  return value;
-}
-
-/** Cut a trailing comment that starts outside quotes. */
-function stripComment(text: string): string {
-  let quote: string | null = null;
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text.charAt(i);
-    if (quote !== null) {
-      if (ch === quote) {
-        quote = null;
-      }
-      continue;
-    }
-    if (ch === '"' || ch === "'") {
-      quote = ch;
-      continue;
-    }
-    if (ch === "#" && (i === 0 || isSpace(text.charAt(i - 1)))) {
-      return text.slice(0, i).trimEnd();
-    }
-  }
-  return text.trimEnd();
-}
-
-/** Split `key: rest` outside quotes and flow collections. */
-function splitEntry(text: string): { key: string; rest: string } | null {
-  const first = text.charAt(0);
-  if (first === '"' || first === "'") {
-    const scalar = readQuoted(text, 0);
-    if (scalar === null) {
-      return null;
-    }
-    let i = scalar.next;
-    while (i < text.length && isSpace(text.charAt(i))) {
-      i += 1;
-    }
-    if (text.charAt(i) !== ":") {
-      return null;
-    }
-    return { key: scalar.value, rest: text.slice(i + 1) };
-  }
-  let depth = 0;
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text.charAt(i);
-    if (ch === "#" && i > 0 && isSpace(text.charAt(i - 1))) {
-      return null;
-    }
-    if (ch === "[" || ch === "{") {
-      depth += 1;
-      continue;
-    }
-    if (ch === "]" || ch === "}") {
-      depth -= 1;
-      continue;
-    }
-    if (depth !== 0) {
-      continue;
-    }
-    const after = text.charAt(i + 1);
-    if (ch === ":" && (after === "" || isSpace(after))) {
-      return { key: text.slice(0, i).trim(), rest: text.slice(i + 1) };
-    }
-  }
-  return null;
 }
 
 /**
- * Bounded YAML subset reader. One instance parses exactly one document.
+ * Parse one workflow document with the shared line-based YAML engine, using
+ * the dialect that reproduces the historical Arazzo subset exactly.
  */
-class YamlSubset {
-  private readonly lines: readonly SourceLine[];
-  private readonly limits: YamlLimits;
-  private index = 0;
-  private nodes = 0;
-
-  constructor(text: string, limits: YamlLimits) {
-    this.limits = limits;
-    this.lines = text.split("\n").map((raw, position) => {
-      const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
-      let indent = 0;
-      while (indent < line.length && line.charAt(indent) === " ") {
-        indent += 1;
-      }
-      const content = line.slice(indent);
-      return {
-        text: content,
-        indent,
-        number: position + 1,
-        blank: content === "" || content.startsWith("#")
-      };
-    });
-  }
-
-  parse(): Json {
-    this.skipDocumentHead();
-    const first = this.peek();
-    if (first === null) {
-      return null;
-    }
-    if (first.text.startsWith("%")) {
+function parseWorkflowYaml(
+  text: string,
+  limits: { readonly maxNodes: number; readonly maxDepth: number }
+): Json {
+  return parseBlockYaml(text, {
+    fail(failure) {
       throw new YamlSubsetError(
-        "unsupported",
-        "YAML directives are not supported.",
-        first.number
+        yamlSubsetCode(failure),
+        yamlSubsetMessage(failure),
+        failure.line
       );
-    }
-    const value = this.parseNode(0);
-    const trailing = this.peek();
-    if (trailing !== null) {
-      throw new YamlSubsetError(
-        "unsupported",
-        trailing.text.startsWith("---")
-          ? "Multiple YAML documents are not supported."
-          : "Unexpected content after the document.",
-        trailing.number
-      );
-    }
-    return value;
-  }
-
-  private skipDocumentHead(): void {
-    while (true) {
-      const line = this.peek();
-      if (line === null) {
-        return;
-      }
-      if (line.text.startsWith("%")) {
-        throw new YamlSubsetError(
-          "unsupported",
-          "YAML directives are not supported.",
-          line.number
-        );
-      }
-      if (line.text === "---") {
-        this.index += 1;
-        continue;
-      }
-      return;
-    }
-  }
-
-  /** Next significant line, or null at the end of the document. */
-  private peek(): SourceLine | null {
-    while (this.index < this.lines.length) {
-      const line = this.lines[this.index];
-      if (line === undefined || !line.blank) {
-        if (line !== undefined && line.text.startsWith("\t")) {
-          throw new YamlSubsetError(
-            "unsupported",
-            "Tab characters are not allowed in indentation.",
-            line.number
-          );
-        }
-        return line ?? null;
-      }
-      this.index += 1;
-    }
-    return null;
-  }
-
-  private count(line: number): void {
-    this.nodes += 1;
-    if (this.nodes > this.limits.maxNodes) {
-      throw new YamlSubsetError(
-        "node-limit",
-        "The workflow document exceeds the node limit.",
-        line
-      );
-    }
-  }
-
-  private parseNode(depth: number): Json {
-    if (depth > this.limits.maxDepth) {
-      const line = this.peek();
-      throw new YamlSubsetError(
-        "depth-limit",
-        "The workflow document exceeds the nesting depth limit.",
-        line?.number ?? 1
-      );
-    }
-    const line = this.peek();
-    if (line === null) {
-      return null;
-    }
-    if (isSequenceEntry(line.text)) {
-      return this.parseSequence(line.indent, depth);
-    }
-    return this.parseMapping(line.indent, depth, null);
-  }
-
-  private parseSequence(indent: number, depth: number): Json[] {
-    const items: Json[] = [];
-    while (true) {
-      const line = this.peek();
-      if (
-        line === null ||
-        line.indent < indent ||
-        !isSequenceEntry(line.text)
-      ) {
-        return items;
-      }
-      if (line.indent > indent) {
-        throw new YamlSubsetError(
-          "invalid",
-          "Unexpected indentation in a block sequence.",
-          line.number
-        );
-      }
-      this.index += 1;
-      this.count(line.number);
-      const rest = line.text === "-" ? "" : line.text.slice(2);
-      items.push(this.parseDashValue(rest, line, depth));
-    }
-  }
-
-  private parseDashValue(rest: string, dash: SourceLine, depth: number): Json {
-    if (rest === "") {
-      const nested = this.peek();
-      if (nested !== null && nested.indent > dash.indent) {
-        return this.parseNode(depth + 1);
-      }
-      return null;
-    }
-    if (isSequenceEntry(rest)) {
-      throw new YamlSubsetError(
-        "unsupported",
-        "Compact nested sequences are not supported.",
-        dash.number
-      );
-    }
-    const content = stripComment(rest).trim();
-    if (splitEntry(content) !== null) {
-      const offset = dash.text.length - rest.length;
-      return this.parseMapping(dash.indent + offset, depth, {
-        content,
-        line: dash.number
-      });
-    }
-    return this.parseInline(content, dash.number);
-  }
-
-  private parseMapping(
-    indent: number,
-    depth: number,
-    pending: { content: string; line: number } | null
-  ): JsonObject {
-    const result: JsonObject = {};
-    let first = pending;
-    while (true) {
-      let content: string;
-      let lineNumber: number;
-      if (first !== null) {
-        content = first.content;
-        lineNumber = first.line;
-        first = null;
-      } else {
-        const line = this.peek();
-        if (line === null || line.indent < indent) {
-          return result;
-        }
-        if (line.indent > indent) {
-          throw new YamlSubsetError(
-            "invalid",
-            "Unexpected indentation in a block mapping.",
-            line.number
-          );
-        }
-        if (isSequenceEntry(line.text)) {
-          return result;
-        }
-        this.index += 1;
-        content = line.text;
-        lineNumber = line.number;
-      }
-      const entry = splitEntry(content);
-      if (entry === null) {
-        throw new YamlSubsetError(
-          "invalid",
-          "Expected a 'key: value' mapping entry.",
-          lineNumber
-        );
-      }
-      if (entry.key === "") {
-        throw new YamlSubsetError(
-          "invalid",
-          "Mapping keys must not be empty.",
-          lineNumber
-        );
-      }
-      this.count(lineNumber);
-      if (Object.hasOwn(result, entry.key)) {
-        throw new YamlSubsetError(
-          "duplicate-key",
-          `Duplicate mapping key '${entry.key}'.`,
-          lineNumber
-        );
-      }
-      result[entry.key] = this.parseValue(
-        entry.rest,
-        indent,
-        lineNumber,
-        depth
-      );
-    }
-  }
-
-  private parseValue(
-    rest: string,
-    indent: number,
-    lineNumber: number,
-    depth: number
-  ): Json {
-    const header = stripComment(rest).trim();
-    if (header === "") {
-      const next = this.peek();
-      if (next === null) {
-        return null;
-      }
-      if (next.indent > indent) {
-        return this.parseNode(depth + 1);
-      }
-      if (next.indent === indent && isSequenceEntry(next.text)) {
-        return this.parseSequence(indent, depth + 1);
-      }
-      return null;
-    }
-    if (BLOCK_HEADER.test(header)) {
-      return this.parseBlockScalar(header, indent);
-    }
-    return this.parseInline(header, lineNumber);
-  }
-
-  private parseBlockScalar(header: string, indent: number): string {
-    const style = header.charAt(0);
-    const indicators = header.slice(1);
-    const chomp = indicators.includes("-")
-      ? "strip"
-      : indicators.includes("+")
-        ? "keep"
-        : "clip";
-    const explicit = /^[0-9]/.test(indicators)
-      ? indent + Number(indicators.replace(/[^0-9]/g, ""))
-      : null;
-
-    const collected: SourceLine[] = [];
-    while (this.index < this.lines.length) {
-      const line = this.lines[this.index];
-      if (line === undefined) {
-        break;
-      }
-      if (line.blank) {
-        collected.push(line);
-        this.index += 1;
-        continue;
-      }
-      if (line.indent <= indent) {
-        break;
-      }
-      collected.push(line);
-      this.index += 1;
-    }
-    while (collected.length > 0) {
-      const last = collected[collected.length - 1];
-      if (last !== undefined && last.text !== "") {
-        break;
-      }
-      collected.pop();
-    }
-    const firstContent = collected.find((line) => line.text !== "");
-    const contentIndent =
-      explicit ?? (firstContent === undefined ? indent : firstContent.indent);
-
-    const rendered = collected.map((line) =>
-      line.text === ""
-        ? ""
-        : line.text.slice(Math.max(0, line.indent - contentIndent))
-    );
-    let body: string;
-    if (style === "|") {
-      body = rendered.join("\n");
-    } else {
-      const folded: string[] = [];
-      let buffer = "";
-      for (const line of rendered) {
-        if (line === "") {
-          folded.push(buffer);
-          buffer = "";
-          continue;
-        }
-        buffer = buffer === "" ? line : `${buffer} ${line}`;
-      }
-      folded.push(buffer);
-      body = folded.join("\n");
-    }
-    if (chomp === "strip") {
-      return body;
-    }
-    if (chomp === "keep") {
-      return `${body}\n`;
-    }
-    return body === "" ? "" : `${body}\n`;
-  }
-
-  private parseInline(text: string, lineNumber: number): Json {
-    if (text === "") {
-      return null;
-    }
-    const first = text.charAt(0);
-    if (first === "&" || first === "*" || first === "!") {
-      throw new YamlSubsetError(
-        "unsupported",
-        "Anchors, aliases, and tags are not supported.",
-        lineNumber
-      );
-    }
-    if (first === '"' || first === "'") {
-      const scalar = readQuoted(text, 0);
-      if (scalar === null || scalar.next !== text.length) {
-        throw new YamlSubsetError(
-          "invalid",
-          "Unterminated or trailing quoted scalar.",
-          lineNumber
-        );
-      }
-      this.count(lineNumber);
-      return scalar.value;
-    }
-    if (first === "[" || first === "{") {
-      const flow = this.parseFlow(text, 0, lineNumber);
-      if (flow.next !== text.length) {
-        throw new YamlSubsetError(
-          "invalid",
-          "Trailing content after a flow collection.",
-          lineNumber
-        );
-      }
-      return flow.value;
-    }
-    this.count(lineNumber);
-    return resolvePlain(text);
-  }
-
-  private parseFlow(
-    text: string,
-    start: number,
-    lineNumber: number
-  ): { value: Json; next: number } {
-    const open = text.charAt(start);
-    const close = open === "[" ? "]" : "}";
-    let i = skipFlowSpace(text, start + 1);
-    const items: Json[] = [];
-    const map: JsonObject = {};
-    while (true) {
-      if (i >= text.length) {
-        throw new YamlSubsetError(
-          "invalid",
-          "Unterminated flow collection.",
-          lineNumber
-        );
-      }
-      if (text.charAt(i) === close) {
-        return {
-          value: open === "[" ? items : map,
-          next: i + 1
-        };
-      }
-      this.count(lineNumber);
-      if (open === "[") {
-        const item = this.parseFlowValue(text, i, lineNumber);
-        items.push(item.value);
-        i = item.next;
-      } else {
-        const key = this.parseFlowKey(text, i, lineNumber);
-        i = skipFlowSpace(text, key.next);
-        if (text.charAt(i) !== ":") {
-          throw new YamlSubsetError(
-            "invalid",
-            "Expected ':' in a flow mapping.",
-            lineNumber
-          );
-        }
-        const value = this.parseFlowValue(text, i + 1, lineNumber);
-        if (Object.hasOwn(map, key.value)) {
-          throw new YamlSubsetError(
-            "duplicate-key",
-            `Duplicate mapping key '${key.value}'.`,
-            lineNumber
-          );
-        }
-        map[key.value] = value.value;
-        i = value.next;
-      }
-      i = skipFlowSpace(text, i);
-      const separator = text.charAt(i);
-      if (separator === ",") {
-        i = skipFlowSpace(text, i + 1);
-        continue;
-      }
-      if (separator === close) {
-        return { value: open === "[" ? items : map, next: i + 1 };
-      }
-      throw new YamlSubsetError(
-        "invalid",
-        `Expected ',' or '${close}' in a flow collection.`,
-        lineNumber
-      );
-    }
-  }
-
-  private parseFlowValue(
-    text: string,
-    start: number,
-    lineNumber: number
-  ): { value: Json; next: number } {
-    const i = skipFlowSpace(text, start);
-    const ch = text.charAt(i);
-    if (ch === "[" || ch === "{") {
-      return this.parseFlow(text, i, lineNumber);
-    }
-    if (ch === '"' || ch === "'") {
-      const scalar = readQuoted(text, i);
-      if (scalar === null) {
-        throw new YamlSubsetError(
-          "invalid",
-          "Unterminated quoted scalar in a flow collection.",
-          lineNumber
-        );
-      }
-      return { value: scalar.value, next: scalar.next };
-    }
-    let end = i;
-    while (end < text.length && !",]}".includes(text.charAt(end))) {
-      end += 1;
-    }
-    return { value: resolvePlain(text.slice(i, end)), next: end };
-  }
-
-  private parseFlowKey(
-    text: string,
-    start: number,
-    lineNumber: number
-  ): { value: string; next: number } {
-    const i = skipFlowSpace(text, start);
-    const ch = text.charAt(i);
-    if (ch === '"' || ch === "'") {
-      const scalar = readQuoted(text, i);
-      if (scalar === null) {
-        throw new YamlSubsetError(
-          "invalid",
-          "Unterminated quoted key in a flow mapping.",
-          lineNumber
-        );
-      }
-      return { value: scalar.value, next: scalar.next };
-    }
-    let end = i;
-    while (end < text.length && !",}:".includes(text.charAt(end))) {
-      end += 1;
-    }
-    const value = text.slice(i, end).trim();
-    if (value === "") {
-      throw new YamlSubsetError(
-        "invalid",
-        "Empty key in a flow mapping.",
-        lineNumber
-      );
-    }
-    return { value, next: end };
-  }
-}
-
-function skipFlowSpace(text: string, start: number): number {
-  let i = start;
-  while (i < text.length && isSpace(text.charAt(i))) {
-    i += 1;
-  }
-  return i;
+    },
+    skipDirectives: false,
+    tabCheck: "read",
+    flow: true,
+    limits: { maxNodes: limits.maxNodes, maxDepth: limits.maxDepth },
+    extendedEscapes: false,
+    blankIsContent: true,
+    chompFormulation: "body",
+    flowSkipsBreaks: false,
+    flowKeyBreaksOnBracket: false
+  });
 }

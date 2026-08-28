@@ -92,3 +92,10 @@ export type {
   SchemaValidatorOptions,
   SchemaViolation
 } from "./schema/validator.ts";
+export {
+  CREDENTIAL_KEY_FRAGMENTS,
+  CREDENTIAL_KEY_PATTERN,
+  isCredentialKey,
+  normalizeCredentialKey
+} from "./sensitive.ts";
+export * from "./yaml.ts";
