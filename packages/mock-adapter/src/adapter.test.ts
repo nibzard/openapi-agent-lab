@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   collectingSink,
+  REDACTED_MARKER,
   validateAgentSessionEvent,
   type AgentCapabilities,
   type AgentRunContext,
@@ -25,6 +26,11 @@ const schemaPath = fileURLToPath(
 );
 
 const MOCK_KEY = "mock-key-canary-0002";
+/** Values shaped like the ones the runner mints into the tool environment. */
+const RUN_BEARER = "oal_5f3a91c07d2e4b68a1c9e0b2";
+const RUN_API_KEY = "oal_7b2d94f16e8a40c3b5d7f2a1";
+const RUN_BASIC_USERNAME = "oal_1a2b3c4d5e6f7a8b9c0d1e2f";
+const RUN_BASIC_PASSWORD = "oal_9c4e27d80f1a5b6c3d4e5f60";
 const NO_SIGNAL = (): AbortSignal => new AbortController().signal;
 
 const CAPABILITIES: AgentCapabilities = {
@@ -223,6 +229,10 @@ describe("MockAgentAdapter.run", () => {
       expect(previews(events, "stdout")).toEqual(["creating computer"]);
       expect(kindsOn(events, "jsonrpc")).toEqual(["thread.started"]);
       expect(events.at(-1)?.type).toBe("agent.exited");
+      const note = events.find(
+        (event) => streamPayload(event)?.kind === "mock.note"
+      );
+      expect(streamPayload(note)?.redacted).toBe(false);
     } finally {
       await rm(state.root, { recursive: true, force: true });
     }
@@ -416,6 +426,110 @@ describe("MockAgentAdapter.run", () => {
     }
   });
 
+  it("redacts credentials the script echoes without a sink redactor", async () => {
+    const state = await harness(
+      {
+        events: [
+          { channel: "stdout", text: `Authorization: Bearer ${RUN_BEARER}` },
+          {
+            channel: "stderr",
+            text: `x-api-key ${RUN_API_KEY} basic password ${RUN_BASIC_PASSWORD}`
+          },
+          { channel: "adapter", text: `note token ${RUN_BEARER}` }
+        ]
+      },
+      {
+        exposure: {
+          mode: "raw-http",
+          baseUrl: "http://127.0.0.1:8099/api",
+          credentialNames: [
+            "OAL_AUTH_BEARER",
+            "OAL_AUTH_X_API_KEY",
+            "OAL_AUTH_BASIC_PASSWORD"
+          ]
+        },
+        toolEnvironment: {
+          OAL_AUTH_BEARER: RUN_BEARER,
+          OAL_AUTH_X_API_KEY: RUN_API_KEY,
+          OAL_AUTH_BASIC_PASSWORD: RUN_BASIC_PASSWORD
+        }
+      }
+    );
+    try {
+      const { result, events } = await runScript(state);
+      expect(result.status).toBe("completed");
+      expect(previews(events, "stdout")).toEqual([
+        `Authorization: Bearer ${REDACTED_MARKER}`
+      ]);
+      expect(previews(events, "stderr")).toEqual([
+        `x-api-key ${REDACTED_MARKER} basic password ${REDACTED_MARKER}`
+      ]);
+      const note = events.find(
+        (event) =>
+          "channel" in event.payload &&
+          event.payload.channel === "adapter" &&
+          event.payload.kind === "mock.note"
+      );
+      expect(note?.extensions.text).toBe(`note token ${REDACTED_MARKER}`);
+      expect(streamPayload(note)?.redacted).toBe(true);
+      const recorded = JSON.stringify(events);
+      expect(recorded).not.toContain(RUN_BEARER);
+      expect(recorded).not.toContain(RUN_API_KEY);
+      expect(recorded).not.toContain(RUN_BASIC_PASSWORD);
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("redacts the basic username written under a scheme alias", async () => {
+    const state = await harness(
+      {
+        events: [
+          { channel: "stdout", text: `login user=${RUN_BASIC_USERNAME}` },
+          {
+            channel: "adapter",
+            text: `adapter login user=${RUN_BASIC_USERNAME}`,
+            kind: "mock.note"
+          }
+        ]
+      },
+      {
+        exposure: {
+          mode: "raw-http",
+          baseUrl: "http://127.0.0.1:8099/api",
+          credentialNames: [
+            "OAL_AUTH_BEARER",
+            "OAL_AUTH_INTERNAL_AUTH",
+            "OAL_AUTH_BASIC_USERNAME",
+            "OAL_AUTH_BASIC_PASSWORD"
+          ]
+        },
+        toolEnvironment: {
+          OAL_AUTH_BEARER: RUN_BEARER,
+          OAL_AUTH_INTERNAL_AUTH_USERNAME: RUN_BASIC_USERNAME,
+          OAL_AUTH_INTERNAL_AUTH_PASSWORD: RUN_BASIC_PASSWORD
+        }
+      }
+    );
+    try {
+      const { events } = await runScript(state);
+      expect(previews(events, "stdout")).toEqual([
+        `login user=${REDACTED_MARKER}`
+      ]);
+      const note = events.find(
+        (event) => streamPayload(event)?.kind === "mock.note"
+      );
+      expect(note?.extensions.text).toBe(
+        `adapter login user=${REDACTED_MARKER}`
+      );
+      const recorded = JSON.stringify(events);
+      expect(recorded).not.toContain(RUN_BASIC_USERNAME);
+      expect(recorded).not.toContain(RUN_BASIC_PASSWORD);
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+
   it("rejects a script that escapes the workspace", async () => {
     const state = await harness({
       files: [{ path: "../escape.txt", content: "no" }]
@@ -507,6 +621,16 @@ function previews(
     }
   }
   return out;
+}
+
+/** Stream payload of one event, or null when the event carries none. */
+function streamPayload(
+  event: AgentSessionEvent | undefined
+): AgentStreamPayload | null {
+  if (event === undefined || !("channel" in event.payload)) {
+    return null;
+  }
+  return event.payload;
 }
 
 /** Adapter-declared kinds recorded on one stream channel. */

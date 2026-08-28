@@ -274,6 +274,77 @@ describe("runPreflight", () => {
     }
   });
 
+  it("refuses a zero trial wall time before any launch", async () => {
+    // A zero timeout would fire the launch guard immediately and abort
+    // every trial, so preflight must reject it as a configuration defect.
+    const pack = await loadSteelPack();
+    const { store, clean } = await newStore();
+    try {
+      const result = await runPreflight({
+        packDir: pack.root,
+        evalId: "basic-lifecycle",
+        batchId: "b-zero-timeout",
+        store,
+        adapter: new MockAgentAdapter(),
+        paid: false,
+        trialWallTimeMs: 0,
+        schemaDir: SCHEMA_DIR
+      });
+      expect(result.ok).toBe(false);
+      expect(result.plan).toBe(null);
+      const finding = result.findings.find(
+        (f) => f.code === PreflightCode.PlanInvalid
+      );
+      expect(finding?.details).toEqual({ trial_wall_time_ms: 0 });
+    } finally {
+      await clean();
+    }
+  });
+
+  it("refuses a negative trial wall time", async () => {
+    const pack = await loadSteelPack();
+    const { store, clean } = await newStore();
+    try {
+      const result = await runPreflight({
+        packDir: pack.root,
+        evalId: "basic-lifecycle",
+        batchId: "b-negative-timeout",
+        store,
+        adapter: new MockAgentAdapter(),
+        paid: false,
+        trialWallTimeMs: -1000,
+        schemaDir: SCHEMA_DIR
+      });
+      expect(result.ok).toBe(false);
+      expect(result.findings.map((f) => f.code)).toContain(
+        PreflightCode.PlanInvalid
+      );
+    } finally {
+      await clean();
+    }
+  });
+
+  it("accepts an explicit positive trial wall time", async () => {
+    const pack = await loadSteelPack();
+    const { store, clean } = await newStore();
+    try {
+      const result = await runPreflight({
+        packDir: pack.root,
+        evalId: "basic-lifecycle",
+        batchId: "b-positive-timeout",
+        store,
+        adapter: new MockAgentAdapter(),
+        paid: false,
+        trialWallTimeMs: 60_000,
+        schemaDir: SCHEMA_DIR
+      });
+      expect(result.ok).toBe(true);
+      expect(result.plan?.trialWallTimeMs).toBe(60_000);
+    } finally {
+      await clean();
+    }
+  });
+
   it("falls back to raw-http when the adapter serves no MCP", async () => {
     const pack = await loadSteelPack();
     const { store, clean } = await newStore();

@@ -361,10 +361,15 @@ export async function runTrial(
   const terminalTurnKind =
     options.terminalTurnKind ?? DEFAULT_TERMINAL_TURN_KIND;
   const stages = new StageQueue(setup.lifecycle, now);
-  const sessionSink = await store.openSink(
-    `${relativeRoot}/session/events.redacted.jsonl`
-  );
-  const session = new SessionWriter(sessionSink);
+  let session: SessionWriter;
+  try {
+    session = new SessionWriter(
+      await store.openSink(`${relativeRoot}/session/events.redacted.jsonl`)
+    );
+  } catch (cause) {
+    await setup.exposure.close().catch(() => undefined);
+    throw cause;
+  }
   const facts: SessionFacts = {
     spawned: false,
     modelStarted: false,
@@ -406,14 +411,16 @@ export async function runTrial(
   } finally {
     clearTimeout(guard);
     options.signal?.removeEventListener("abort", onOperatorAbort);
+    // Finalization step 1 and 5, on every exit route: adapter throw,
+    // launch failure, timeout, cancellation, or completion. Closing here
+    // keeps the port from leaking when the run above throws.
+    await setup.exposure.close().catch(() => undefined);
   }
 
   if (result.status === "timed_out" && signals.timeoutFiredAtMs === null) {
     signals.timeoutFiredAtMs = now();
   }
 
-  // Finalization step 1 and 5: stop accepting participant activity.
-  await setup.exposure.close().catch(() => undefined);
   await stages.flush();
   await session.flush();
 

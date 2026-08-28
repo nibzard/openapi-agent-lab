@@ -1,4 +1,5 @@
 import {
+  cp,
   mkdir,
   mkdtemp,
   readFile,
@@ -17,6 +18,7 @@ import {
   EXIT_UNSUPPORTED,
   type ExitCode
 } from "@oal/core";
+import { deriveManualRunSeed } from "@oal/state-store";
 
 import { main } from "./cli.ts";
 import {
@@ -160,9 +162,79 @@ describe("compileServeSource", () => {
       pack.root,
       10 * 1024 * 1024
     );
-    const first = deriveServeRunSeed(compiled.contract, "run-a");
+    const first = deriveServeRunSeed(compiled.contract, compiled.pack, "run-a");
     expect(first).toMatch(/^[a-f0-9]{64}$/);
-    expect(deriveServeRunSeed(compiled.contract, "run-b")).not.toBe(first);
+    expect(
+      deriveServeRunSeed(compiled.contract, compiled.pack, "run-b")
+    ).not.toBe(first);
+  });
+
+  it("derives the seed with the shared manual derivation", async () => {
+    const pack = await loadSteelPack();
+    const compiled = await compileServeSource(
+      pack.root,
+      pack.root,
+      10 * 1024 * 1024
+    );
+    // The inputs must be exactly the ones serveRunIdentity records, so
+    // one contract change moves the seed and the identity together.
+    const identity = serveRunIdentity(
+      compiled.contract,
+      compiled.pack,
+      "f".repeat(64)
+    );
+    expect(
+      deriveServeRunSeed(compiled.contract, compiled.pack, "run-seed-a")
+    ).toBe(
+      deriveManualRunSeed({
+        runId: "run-seed-a",
+        contractExecutionSha256: compiled.contract.source.execution_sha256,
+        packSha256: identity.packSha256 ?? null,
+        scenarioSha256: null,
+        backendSha256: identity.backendSha256
+      })
+    );
+  });
+
+  it("moves the seed and identity when only a pack fixture body changes", async () => {
+    const cwd = await newWorkspace();
+    const root = path.join(cwd, "steel");
+    await cp((await loadSteelPack()).root, root, { recursive: true });
+    const fixturePath = path.join(root, "fixtures", "sessions-list.json");
+    const body = await readFile(fixturePath, "utf8");
+    const compiled = await compileServeSource(root, root, 10 * 1024 * 1024);
+    expect(compiled.pack).not.toBeNull();
+    const seed = deriveServeRunSeed(compiled.contract, compiled.pack, "run-x");
+    const identity = serveRunIdentity(
+      compiled.contract,
+      compiled.pack,
+      "f".repeat(64)
+    );
+    expect(identity.packSha256).toMatch(/^[a-f0-9]{64}$/);
+
+    // A whitespace-only edit changes the fixture reference digest, so a
+    // pack-only change moves the seed and fails a later resume check.
+    await writeFile(fixturePath, `${body}\n`);
+    const edited = await compileServeSource(root, root, 10 * 1024 * 1024);
+    expect(deriveServeRunSeed(edited.contract, edited.pack, "run-x")).not.toBe(
+      seed
+    );
+    expect(
+      serveRunIdentity(edited.contract, edited.pack, "f".repeat(64)).packSha256
+    ).not.toBe(identity.packSha256);
+  });
+
+  it("keeps the bare-document identity free of a pack digest", async () => {
+    const cwd = await newWorkspace();
+    const document = path.join(cwd, "openapi.json");
+    await writeFile(document, JSON.stringify(BARE_CONTRACT));
+    const compiled = await compileServeSource(document, cwd, 10 * 1024 * 1024);
+    expect(compiled.pack).toBeNull();
+    const identity = serveRunIdentity(compiled.contract, null, "f".repeat(64));
+    expect(identity.packSha256).toBeNull();
+    expect(deriveServeRunSeed(compiled.contract, null, "run-a")).toMatch(
+      /^[a-f0-9]{64}$/
+    );
   });
 });
 
@@ -202,6 +274,45 @@ describe("manual credentials", () => {
 });
 
 describe("oal serve", () => {
+  it("serves the response fixtures the pack declares", async () => {
+    const cwd = await newWorkspace();
+    const pack = await loadSteelPack();
+    const compiled = await compileServeSource(
+      pack.root,
+      pack.root,
+      10 * 1024 * 1024
+    );
+    const runSeed = "a".repeat(64);
+    const controlDir = path.join(cwd, ".oal", "serve", "serve-fixtures");
+    const session = await startServe({
+      contract: compiled.contract,
+      capabilityReport: compiled.capabilityReport,
+      pack: compiled.pack,
+      host: "127.0.0.1",
+      port: 0,
+      runId: "serve-fixtures",
+      runSeed,
+      controlDir,
+      credentialsOut: null,
+      identity: serveRunIdentity(compiled.contract, compiled.pack, runSeed),
+      resumed: false
+    });
+    try {
+      // The Steel session list is optional-auth, and the recorded
+      // fixture is the only shape this endpoint answers with.
+      const response = await fetch(`${session.handle.baseUrl}/v1/sessions`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        sessions: [],
+        nextCursor: "",
+        totalCount: 0
+      });
+    } finally {
+      await session.handle.close();
+      session.store.close();
+    }
+  });
+
   it("refuses scenario mode with exit 4", async () => {
     const cwd = await newWorkspace();
     const io = new MemoryIo();
@@ -451,13 +562,14 @@ describe("oal serve --resume", () => {
     const session = await startServe({
       contract: compiled.contract,
       capabilityReport: compiled.capabilityReport,
+      pack: compiled.pack,
       host: "127.0.0.1",
       port: 0,
       runId,
       runSeed,
       controlDir,
       credentialsOut: null,
-      identity: serveRunIdentity(compiled.contract, runSeed),
+      identity: serveRunIdentity(compiled.contract, compiled.pack, runSeed),
       resumed: false
     });
     await session.handle.close();
@@ -513,6 +625,52 @@ describe("oal serve --resume", () => {
     expect(io.stderrText()).toContain(ServeCliCode.ResumeMismatch);
   });
 
+  it("refuses a resume after only a pack fixture body changed", async () => {
+    const cwd = await newWorkspace();
+    const root = path.join(cwd, "steel");
+    await cp((await loadSteelPack()).root, root, { recursive: true });
+    const compiled = await compileServeSource(root, root, 10 * 1024 * 1024);
+    const runSeed = "d".repeat(64);
+    const controlDir = path.join(cwd, ".oal", "serve", "resume-pack");
+    const session = await startServe({
+      contract: compiled.contract,
+      capabilityReport: compiled.capabilityReport,
+      pack: compiled.pack,
+      host: "127.0.0.1",
+      port: 0,
+      runId: "resume-pack",
+      runSeed,
+      controlDir,
+      credentialsOut: null,
+      identity: serveRunIdentity(compiled.contract, compiled.pack, runSeed),
+      resumed: false
+    });
+    await session.handle.close();
+    session.store.close();
+    // The recorded server pid names a process that already exited, so
+    // the control tree reads as one interrupted serve.
+    const dead = spawn(process.execPath, ["-e", "process.exit(0)"]);
+    const deadPid = dead.pid;
+    await new Promise<void>((resolve) => {
+      dead.on("exit", () => {
+        resolve();
+      });
+    });
+    await writeFile(
+      path.join(controlDir, "SERVER.pid"),
+      `${deadPid?.toString(10) ?? "1"}\n`
+    );
+
+    const fixturePath = path.join(root, "fixtures", "sessions-list.json");
+    await writeFile(fixturePath, `${await readFile(fixturePath, "utf8")}\n`);
+    const io = new MemoryIo();
+    const code = await main(["serve", root, "--resume", controlDir], io, {
+      cwd
+    });
+    expect(code).toBe(EXIT_UNSUPPORTED);
+    expect(io.stderrText()).toContain(ServeCliCode.ResumeMismatch);
+  });
+
   it("refuses a resume of a finalized serve", async () => {
     const cwd = await newWorkspace();
     const { controlDir } = await crashedServe(cwd, BARE_CONTRACT, "resume-fin");
@@ -552,13 +710,14 @@ describe("oal serve --resume", () => {
     const session = await startServe({
       contract: compiled.contract,
       capabilityReport: compiled.capabilityReport,
+      pack: compiled.pack,
       host: "127.0.0.1",
       port: 0,
       runId: "resume-mode",
       runSeed,
       controlDir,
       credentialsOut: null,
-      identity: serveRunIdentity(compiled.contract, runSeed),
+      identity: serveRunIdentity(compiled.contract, compiled.pack, runSeed),
       resumed: false
     });
     try {

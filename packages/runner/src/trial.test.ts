@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { ArtifactStore } from "@oal/evidence";
 import { sha256Hex } from "@oal/core";
+import type { AgentAdapter } from "@oal/agent-adapter";
 import { MockAgentAdapter } from "@oal/mock-adapter";
 import { findRepoRoot, loadSteelPack } from "@oal/testkit";
 import type { LoadedPack } from "@oal/pack";
@@ -73,6 +74,32 @@ function scriptedAdapter(): MockAgentAdapter {
     finalText: FINAL_TEXT,
     usage: { input_tokens: 12, output_tokens: 6, tool_calls: 2 }
   });
+}
+
+/** A socket-free treatment that counts how often it was closed. */
+class CountedExposure implements ExposureHandle {
+  public closeCount = 0;
+  readonly baseUrl = "http://127.0.0.1:9";
+  readonly credentialNames: readonly string[] = [];
+  readonly documentationUrl = null;
+  readonly mcpUrl = null;
+  readonly serverRecord = { kind: "CountedExposure" };
+  readonly factory: ExposureFactory = () => Promise.resolve(this);
+
+  close(): Promise<void> {
+    this.closeCount += 1;
+    return Promise.resolve();
+  }
+}
+
+/** An adapter whose run always rejects, so the trial itself throws. */
+function explodingRunAdapter(base: MockAgentAdapter): AgentAdapter {
+  return {
+    id: base.id,
+    probe: () => base.probe(),
+    prepare: (context) => base.prepare(context),
+    run: () => Promise.reject(new Error("adapter exploded during run"))
+  };
 }
 
 interface Fixture {
@@ -308,6 +335,66 @@ describe("runTrial", () => {
       });
       expect(outcome.disposition).toBe("timed_out");
       expect(outcome.turnCompleted).toBe(false);
+    } finally {
+      await clean();
+    }
+  });
+
+  it("closes the exposure when the adapter throws", async () => {
+    // The disposal path must cover every exit route: a throwing run
+    // releases the treatment exactly once before the error propagates.
+    const adapter = explodingRunAdapter(scriptedAdapter());
+    const { plan, pack, store, clean } = await fixture(
+      "oal-trial-8-",
+      scriptedAdapter(),
+      "b-adapter-throw"
+    );
+    const exposure = new CountedExposure();
+    try {
+      const failure = runTrial({
+        store,
+        plan,
+        pack,
+        adapter,
+        index: 0,
+        exposure: exposure.factory,
+        now: CLOCK
+      });
+      await expect(failure).rejects.toThrowError(/adapter exploded/u);
+      expect(exposure.closeCount).toBe(1);
+      // The evidence written before the throw survives.
+      const runId = plan.trialRunIds[0];
+      if (runId === undefined) {
+        throw new Error("frozen batch holds no run id");
+      }
+      const root = `runs/${plan.batchId}/trials/${runId}`;
+      expect(await store.exists(`${root}/run.started.json`)).toBe(true);
+      expect(await store.exists(`${root}/lifecycle.jsonl`)).toBe(true);
+    } finally {
+      await clean();
+    }
+  });
+
+  it("closes the exposure exactly once on the completion route", async () => {
+    const adapter = scriptedAdapter();
+    const { plan, pack, store, clean } = await fixture(
+      "oal-trial-9-",
+      adapter,
+      "b-adapter-clean"
+    );
+    const exposure = new CountedExposure();
+    try {
+      const outcome = await runTrial({
+        store,
+        plan,
+        pack,
+        adapter,
+        index: 0,
+        exposure: exposure.factory,
+        now: CLOCK
+      });
+      expect(outcome.disposition).toBe("completed");
+      expect(exposure.closeCount).toBe(1);
     } finally {
       await clean();
     }

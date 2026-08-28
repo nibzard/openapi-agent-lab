@@ -98,6 +98,58 @@ export async function main(
   }
 }
 
+/**
+ * Minimum stream surface the drain wait depends on. Any buffered writable
+ * stream satisfies it, including the process standard streams.
+ */
+export interface DrainableStream {
+  /** Bytes written but not yet handed to the destination. */
+  readonly writableLength: number;
+  once(event: "drain" | "close" | "error", listener: () => void): unknown;
+}
+
+/**
+ * Resolve once one stream reported every queued byte flushed, or once
+ * the destination went away. A pipe that closes while bytes are still
+ * queued never reports `drain`, so `close` and `error` (EPIPE) also
+ * release the wait and the exit path always terminates.
+ */
+export function drained(stream: DrainableStream): Promise<void> {
+  if (stream.writableLength === 0) {
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = (): void => {
+      if (!settled) {
+        settled = true;
+        resolve();
+      }
+    };
+    stream.once("drain", finish);
+    stream.once("close", finish);
+    stream.once("error", finish);
+  });
+}
+
+/**
+ * Wait for piped stdout and stderr to flush, then exit. `process.exit`
+ * truncates queued writes, so piped JSON output would lose its tail; the
+ * streams drain first and one more turn lets the final write callbacks
+ * run before the exit.
+ */
+export async function exitWhenDrained(
+  code: ExitCode,
+  streams: readonly DrainableStream[] = [process.stdout, process.stderr]
+): Promise<void> {
+  process.exitCode = code;
+  await Promise.all(streams.map((stream) => drained(stream)));
+  await new Promise<void>((resolve) => {
+    setImmediate(resolve);
+  });
+  process.exit(code);
+}
+
 /** Binary entry point: wires process IO and signal handling, then exits. */
 export function runCli(argv: readonly string[] = process.argv.slice(2)): void {
   const io = createProcessIo();
@@ -105,9 +157,9 @@ export function runCli(argv: readonly string[] = process.argv.slice(2)): void {
   installSignalHandlers(guard);
   void main(argv, io, { guard })
     .then((code: ExitCode) => {
-      process.exit(code);
+      void exitWhenDrained(code);
     })
     .catch(() => {
-      process.exit(EXIT_INFRASTRUCTURE);
+      void exitWhenDrained(EXIT_INFRASTRUCTURE);
     });
 }

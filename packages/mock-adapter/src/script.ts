@@ -12,7 +12,7 @@ import type { AgentCapabilities } from "@oal/agent-adapter";
 export interface MockEventSpec {
   /** Channel the line is recorded on. */
   readonly channel: "stdout" | "stderr" | "jsonrpc" | "adapter";
-  /** Text of the line. The sink redactor runs before the text is stored. */
+  /** Text of the line. The session redactor runs before the text is stored. */
   readonly text: string;
   /** Machine-readable kind recorded with the line. */
   readonly kind?: string | undefined;

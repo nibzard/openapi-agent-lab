@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { ArtifactStore } from "@oal/evidence";
-import { canonicalJson, type Json } from "@oal/core";
+import { canonicalJson, sha256Hex, type Json } from "@oal/core";
 import { compileOpenApi } from "@oal/openapi";
 import { MockAgentAdapter } from "@oal/mock-adapter";
 import { findRepoRoot, loadSteelPack } from "@oal/testkit";
@@ -162,6 +162,54 @@ describe("setupTrial", () => {
       const root = `runs/${plan.batchId}/trials/${first.runId}`;
       const text = await store.read(`${root}/run.started.json`);
       expect(text.trim()).toBe(canonicalJson(first.runStarted));
+    } finally {
+      await clean();
+    }
+  });
+
+  it("records the per-text prompt digests batch.json names", async () => {
+    // batch.json freezes sha256 over each rendered role text of the
+    // placeholder preview. The start record must name the same two
+    // digests, so the records stay comparable, and must additionally pin
+    // the live-rendered texts this trial actually used.
+    const { plan, pack, store, clean } = await fixture("oal-setup-6-");
+    const exposure = new FakeExposure();
+    try {
+      const setup = await setupTrial({
+        store,
+        plan,
+        pack: pack.loaded,
+        index: 0,
+        exposure: exposure.factory,
+        now: CLOCK
+      });
+      const root = `runs/${plan.batchId}/trials/${setup.runId}`;
+      const started = JSON.parse(
+        await store.read(`${root}/run.started.json`)
+      ) as {
+        inputs: Record<string, string>;
+      };
+      expect(started.inputs["instructions_sha256"]).toBe(
+        sha256Hex(plan.promptPreview.prompts.instructions.text)
+      );
+      expect(started.inputs["task_sha256"]).toBe(
+        sha256Hex(plan.promptPreview.prompts.task.text)
+      );
+      expect(started.inputs["instructions_live_sha256"]).toBe(
+        sha256Hex(setup.prompts.prompts.instructions.text)
+      );
+      expect(started.inputs["task_live_sha256"]).toBe(
+        sha256Hex(setup.prompts.prompts.task.text)
+      );
+      // The pack interpolates the live base URL into the instructions, so
+      // the live digest differs from the canonical preview digest there,
+      // while the literal task text renders identically.
+      expect(started.inputs["instructions_live_sha256"]).not.toBe(
+        started.inputs["instructions_sha256"]
+      );
+      expect(started.inputs["task_live_sha256"]).toBe(
+        started.inputs["task_sha256"]
+      );
     } finally {
       await clean();
     }

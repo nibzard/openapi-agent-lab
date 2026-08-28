@@ -18,6 +18,8 @@ import type {
 } from "@oal/contract-ir";
 import { EventStream, JsonlSink, type TraceEvent } from "@oal/evidence";
 import { mintRunCredentials } from "@oal/gateway";
+import { compileOpenApi } from "@oal/openapi";
+import { loadPack } from "@oal/pack";
 
 import {
   compileDocumentationProfile,
@@ -29,17 +31,23 @@ import {
 import {
   createLoopbackExposure,
   createRawHttpExposure,
+  EXCHANGE_GATEWAY_FAILED,
+  EXCHANGE_INGRESS_FAILED,
+  EXCHANGE_PERSIST_FAILED,
   ExposureProfileError,
   serverRecordSurfaceDigest,
   syntheticCredentialInstructions,
+  type RawHttpExposureHandle,
   type RawHttpExposureOptions
 } from "./exposure.ts";
+import { steelPackRoot } from "./integration-fixtures.ts";
 import type {
   ExposureHandle,
   ExposureFactory,
   ExposureRequest,
   TraceWriter
 } from "./setup.ts";
+import { packResponseFixtures } from "./types.ts";
 
 const CLOCK = (): number => 1_700_000_000_000;
 
@@ -436,6 +444,34 @@ function portOf(handle: ExposureHandle): number {
     throw new Error("The server record carries no port.");
   }
   return port;
+}
+
+/**
+ * Fail one exchange attempt that never settles, instead of hanging
+ * until the test timeout.
+ */
+async function settleWithin<T>(
+  pending: Promise<T>,
+  message: string
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(message));
+    }, 2000);
+  });
+  try {
+    return await Promise.race([pending, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** The provenance class one trace event records for the response. */
+function provenanceOf(event: Record<string, unknown>): unknown {
+  return (event["backend"] as Record<string, unknown> | null)?.[
+    "response_provenance"
+  ];
 }
 
 /** The connect target of one socket connect call, whatever its shape. */
@@ -1576,6 +1612,318 @@ describe("determinism", () => {
       expect(apiEvents(server.trace).length).toBe(1);
     } finally {
       await server.handle.close();
+    }
+  });
+});
+
+describe("response fixtures", () => {
+  it("serves a declared fixture ahead of generated values", async () => {
+    const server = await startServer(
+      {},
+      {
+        fixtures: [
+          {
+            id: "things-empty",
+            operation: "path:GET /things",
+            status: 200,
+            media_type: "application/json",
+            headers: {},
+            body: { kind: "json_inline", value: { id: "from-the-fixture" } }
+          }
+        ]
+      }
+    );
+    try {
+      const response = await exchange(server.handle, "GET", "/things");
+      expect(response.status).toBe(200);
+      expect(response.body).toBe('{"id":"from-the-fixture"}');
+      expect(provenanceOf(firstApiEvent(server.trace))).toBe("fixture");
+    } finally {
+      await server.handle.close();
+    }
+  });
+
+  it("answers the same fixture bytes on every replay", async () => {
+    const options: RawHttpExposureOptions = {
+      fixtures: [
+        {
+          id: "things-empty",
+          operation: "path:GET /things",
+          status: 200,
+          media_type: "application/json",
+          headers: {},
+          body: { kind: "json_inline", value: { id: "from-the-fixture" } }
+        }
+      ]
+    };
+    const server = await startServer({}, options);
+    try {
+      const first = await exchange(server.handle, "GET", "/things");
+      const second = await exchange(server.handle, "GET", "/things");
+      expect(second.body).toBe(first.body);
+      expect(provenanceOf(firstApiEvent(server.trace))).toBe("fixture");
+    } finally {
+      await server.handle.close();
+    }
+  });
+
+  it("serves the Steel pack session list from its recorded fixture", async () => {
+    const pack = await loadPack(steelPackRoot());
+    const entry = pack.references.find(
+      (reference) => reference.role === "contract_entrypoint"
+    );
+    if (entry === undefined) {
+      throw new Error("The Steel pack declares no contract entrypoint.");
+    }
+    const documents: Record<string, string> = {
+      [entry.path]: await readFile(entry.absolutePath, "utf8")
+    };
+    const compiled = compileOpenApi({ documents, entrypoint: entry.path });
+    const fixtures = packResponseFixtures(pack);
+    expect(fixtures.map((fixture) => fixture.id)).toContain(
+      "sessions-list-empty"
+    );
+    const server = await startServer(
+      { contract: compiled.contract },
+      { fixtures }
+    );
+    try {
+      const apiKey =
+        mintRunCredentials(compiled.contract, "trial-seed-1").apiKeys[
+          "apiKey"
+        ] ?? "";
+      const response = await exchange(server.handle, "GET", "/v1/sessions", {
+        headers: { "steel-api-key": apiKey }
+      });
+      expect(response.status).toBe(200);
+      expect(JSON.parse(response.body)).toEqual({
+        sessions: [],
+        nextCursor: "",
+        totalCount: 0
+      });
+      expect(provenanceOf(firstApiEvent(server.trace))).toBe("fixture");
+    } finally {
+      await server.handle.close();
+    }
+  });
+});
+
+describe("exchange persistence failures", () => {
+  /** A trace sink whose append always fails, like a full disk. */
+  class FailingTrace implements EventSink {
+    readonly events: unknown[] = [];
+    private next = 1;
+
+    reserve(): { sequence: number; event_id: string } {
+      const sequence = this.next;
+      this.next += 1;
+      return {
+        sequence,
+        event_id: `req_${sequence.toString(10).padStart(8, "0")}`
+      };
+    }
+
+    complete(): Promise<void> {
+      return Promise.reject(new Error("append failed: no space left"));
+    }
+  }
+
+  it("settles the socket, frees admission, and keeps the process alive", async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandled);
+    const server = await startServer(
+      {
+        trace: new FailingTrace(),
+        limits: { maxConcurrentConnectionsPerRun: 1 }
+      },
+      {}
+    );
+    try {
+      const first = await settleWithin(
+        exchange(server.handle, "GET", "/things"),
+        "the participant socket never settled"
+      );
+      expect(first.status).toBe(500);
+      expect(problemCode(first.body)).toBe("internal_error");
+      expect(first.headers["content-type"]).toBe("application/problem+json");
+
+      // The single concurrency slot came back, so the next request is
+      // served and fails the same way instead of being refused.
+      const second = await settleWithin(
+        exchange(server.handle, "GET", "/things"),
+        "the participant socket never settled"
+      );
+      expect(problemCode(second.body)).toBe("internal_error");
+
+      const handle = server.handle as RawHttpExposureHandle;
+      expect(handle.exchangeFailureCount).toBe(2);
+      expect(handle.exchangeFailures.map((record) => record.requestId)).toEqual(
+        ["req_00000001", "req_00000002"]
+      );
+      expect(handle.exchangeFailures[0]?.code).toBe(EXCHANGE_PERSIST_FAILED);
+      expect(handle.exchangeFailures[0]?.observedAt).toBe(
+        "2023-11-14T22:13:20.000Z"
+      );
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+      // A close that waits for open connections would hang forever
+      // when the assertion above already failed on an unsettled
+      // socket, so bound the wait and drop the connections.
+      await Promise.race([
+        server.handle.close(),
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, 1000);
+        })
+      ]);
+    }
+  });
+});
+
+describe("internal exchange failures", () => {
+  /** A trace that persists through the production event stream. */
+  class StreamTrace implements EventSink {
+    readonly events: unknown[] = [];
+
+    constructor(private readonly stream: EventStream) {}
+
+    reserve(): { sequence: number; event_id: string } {
+      return this.stream.reserve();
+    }
+
+    async complete(event: TraceEvent): Promise<void> {
+      await this.stream.complete(
+        event as unknown as Parameters<EventStream["complete"]>[0]
+      );
+      this.events.push(event);
+    }
+  }
+
+  it("keeps later trace writes flushing after a gateway failure", async () => {
+    const scratch = await mkdtemp(path.join(tmpdir(), "oal-exposure-fail-"));
+    const sink = await JsonlSink.open(path.join(scratch, "trace.jsonl"));
+    const trace = new StreamTrace(EventStream.open(sink, "req"));
+    // The fixture status getter throws inside handleGatewayRequest for
+    // the one operation it names, so the gateway stage fails mid-run.
+    const server = await startServer(
+      { trace },
+      {
+        fixtures: [
+          {
+            id: "things-broken",
+            operation: "path:GET /things",
+            headers: {},
+            get status(): number {
+              throw new Error("fixture defect");
+            }
+          }
+        ]
+      }
+    );
+    try {
+      const failed = await settleWithin(
+        exchange(server.handle, "GET", "/things"),
+        "the participant socket never settled"
+      );
+      expect(failed.status).toBe(500);
+      expect(problemCode(failed.body)).toBe("internal_error");
+
+      const later = await exchange(server.handle, "GET", "/things/1");
+      expect(later.status).toBe(200);
+
+      const handle = server.handle as RawHttpExposureHandle;
+      expect(handle.exchangeFailureCount).toBe(1);
+      expect(handle.exchangeFailures[0]?.code).toBe(EXCHANGE_GATEWAY_FAILED);
+      expect(handle.exchangeFailures[0]?.requestId).toBe("req_00000001");
+
+      // The failed sequence is completed with the bounded 500, so the
+      // next event flushes in order instead of buffering forever.
+      const recorded = (
+        await readFile(path.join(scratch, "trace.jsonl"), "utf8")
+      )
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as Record<string, unknown>);
+      expect(recorded.map((event) => event["sequence"])).toEqual([1, 2]);
+      expect(recorded[0]?.["type"]).toBe("api.exchange");
+      expect(
+        (recorded[0]?.["response"] as Record<string, unknown>)["status"]
+      ).toBe(500);
+      expect((recorded[0]?.["error"] as Record<string, unknown>)["code"]).toBe(
+        EXCHANGE_GATEWAY_FAILED
+      );
+      expect(
+        (recorded[0]?.["replay"] as Record<string, unknown>)["classification"]
+      ).toBe("unavailable");
+      expect(
+        (recorded[1]?.["operation"] as Record<string, unknown>)["matched"]
+      ).toBe(true);
+    } finally {
+      await Promise.race([
+        server.handle.close(),
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, 1000);
+        })
+      ]);
+      await rm(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it("settles the socket and leaves admission free when reservation throws", async () => {
+    /** A trace whose ingress reservation always fails. */
+    class RefusingTrace implements EventSink {
+      readonly events: unknown[] = [];
+
+      reserve(): { sequence: number; event_id: string } {
+        throw new Error("no sequence available");
+      }
+
+      complete(): Promise<void> {
+        return Promise.resolve();
+      }
+    }
+
+    const server = await startServer(
+      {
+        trace: new RefusingTrace(),
+        limits: { maxConcurrentConnectionsPerRun: 1 }
+      },
+      {}
+    );
+    try {
+      const first = await settleWithin(
+        exchange(server.handle, "GET", "/things"),
+        "the participant socket never settled"
+      );
+      expect(first.status).toBe(500);
+      expect(problemCode(first.body)).toBe("internal_error");
+
+      // No admission slot stays held, so the next request is served and
+      // fails the same way instead of being refused as concurrent.
+      const second = await settleWithin(
+        exchange(server.handle, "GET", "/things"),
+        "the participant socket never settled"
+      );
+      expect(second.status).toBe(500);
+      expect(problemCode(second.body)).toBe("internal_error");
+
+      const handle = server.handle as RawHttpExposureHandle;
+      expect(handle.exchangeFailureCount).toBe(2);
+      expect(handle.exchangeFailures[0]?.code).toBe(EXCHANGE_INGRESS_FAILED);
+      expect(handle.exchangeFailures[0]?.requestId).toBe(null);
+      expect(handle.exchangeFailures[0]?.observedAt).toBe(
+        "2023-11-14T22:13:20.000Z"
+      );
+    } finally {
+      await Promise.race([
+        server.handle.close(),
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, 1000);
+        })
+      ]);
     }
   });
 });

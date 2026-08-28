@@ -268,6 +268,16 @@ export const runCommand: CommandHandler = async (args, io) => {
         "a number with an ms, s, m, or h unit, for example 10m"
       );
     }
+    // Zero parses, but a trial that may run for no time is invalid
+    // setup. Reject it here, so the operator sees the reason at parse
+    // time instead of a downstream preflight code.
+    if (parsed === 0) {
+      throw invalidOptionValue(
+        "--timeout",
+        timeoutRaw,
+        "a duration greater than zero, for example 10m"
+      );
+    }
     timeoutMs = parsed;
   }
 

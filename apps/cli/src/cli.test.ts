@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { PassThrough } from "node:stream";
 import {
   diagnostic,
   EXIT_EVAL_THRESHOLD,
@@ -13,7 +14,13 @@ import {
   unsupported
 } from "@oal/core";
 
-import { main, type MainOptions } from "./cli.ts";
+import {
+  drained,
+  exitWhenDrained,
+  main,
+  type DrainableStream,
+  type MainOptions
+} from "./cli.ts";
 import { emitDiagnostics } from "./diagnostics.ts";
 import {
   COMMAND_REGISTRY,
@@ -41,6 +48,36 @@ function failingCommand(action: () => unknown): CommandSpec[] {
 }
 
 const PROBE_REGISTRY = createCommandRegistry(failingCommand(() => undefined));
+
+/**
+ * A queued fake pipe: "drain" fires only when the test flushes it, and
+ * "close" fires when the test closes the destination instead.
+ */
+class QueuedPipe implements DrainableStream {
+  public writableLength = 1;
+  private readonly listeners = new Map<string, () => void>();
+
+  once(event: "drain" | "close" | "error", listener: () => void): this {
+    this.listeners.set(event, listener);
+    return this;
+  }
+
+  flush(): void {
+    this.writableLength = 0;
+    this.emit("drain");
+  }
+
+  /** The destination went away with bytes still queued. */
+  close(): void {
+    this.emit("close");
+  }
+
+  private emit(event: "drain" | "close" | "error"): void {
+    const listener = this.listeners.get(event);
+    this.listeners.delete(event);
+    listener?.();
+  }
+}
 
 describe("exit code mapping", () => {
   it("returns 0 on success", async () => {
@@ -139,6 +176,125 @@ describe("exit code mapping", () => {
     const io = new MemoryIo();
     const code = await main(["probe"], io, options);
     expect(code).toBe(EXIT_SIGINT);
+  });
+});
+
+describe("process exit drain", () => {
+  it("resolves immediately when the stream holds no queued bytes", async () => {
+    const stream = new QueuedPipe();
+    stream.writableLength = 0;
+    await expect(drained(stream)).resolves.toBe(undefined);
+  });
+
+  it("waits for a queued stream to report drain", async () => {
+    const stream = new QueuedPipe();
+    let resolved = false;
+    void drained(stream).then(() => {
+      resolved = true;
+    });
+    await Promise.resolve();
+    expect(resolved).toBe(false);
+    stream.flush();
+    await Promise.resolve();
+    expect(resolved).toBe(true);
+  });
+
+  it("holds a large piped payload until the reader consumes it", async () => {
+    // A PassThrough with no reader buffers like a slow pipe, so the drain
+    // wait must hold until the payload is consumed.
+    const stream = new PassThrough();
+    stream.write(`${"x".repeat(64 * 1024)}\n`);
+    expect(stream.writableLength).toBeGreaterThan(0);
+    let resolved = false;
+    void drained(stream).then(() => {
+      resolved = true;
+    });
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(resolved).toBe(false);
+    stream.resume();
+    await drained(stream);
+    expect(resolved).toBe(true);
+  });
+
+  it("resolves when the destination closes with bytes still queued", async () => {
+    // A closed pipe reports no drain event, so the exit path must also
+    // accept the close of the destination.
+    const stream = new QueuedPipe();
+    let resolved = false;
+    void drained(stream).then(() => {
+      resolved = true;
+    });
+    await Promise.resolve();
+    expect(resolved).toBe(false);
+    stream.close();
+    await Promise.resolve();
+    expect(resolved).toBe(true);
+  });
+
+  it("resolves when a destroyed pipe closes instead of draining", async () => {
+    const stream = new PassThrough();
+    stream.write(`${"x".repeat(64 * 1024)}\n`);
+    expect(stream.writableLength).toBeGreaterThan(0);
+    const closing = drained(stream);
+    stream.destroy();
+    await expect(closing).resolves.toBe(undefined);
+  });
+
+  it("exits only after the queued stream drained", async () => {
+    const exit = vi
+      .spyOn(process, "exit")
+      .mockImplementation(() => undefined as never);
+    const stream = new QueuedPipe();
+    try {
+      const finishing = exitWhenDrained(EXIT_OK, [stream]);
+      let finished = false;
+      void finishing.then(() => {
+        finished = true;
+      });
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      });
+      expect(finished).toBe(false);
+      expect(exit).not.toHaveBeenCalled();
+      stream.flush();
+      await finishing;
+      expect(finished).toBe(true);
+      expect(exit).toHaveBeenCalledTimes(1);
+      expect(exit).toHaveBeenCalledWith(EXIT_OK);
+      expect(process.exitCode).toBe(EXIT_OK);
+    } finally {
+      exit.mockRestore();
+      process.exitCode = undefined;
+    }
+  });
+
+  it("exits after a destination that closed early instead of draining", async () => {
+    const exit = vi
+      .spyOn(process, "exit")
+      .mockImplementation(() => undefined as never);
+    const stream = new QueuedPipe();
+    try {
+      const finishing = exitWhenDrained(EXIT_OK, [stream]);
+      let finished = false;
+      void finishing.then(() => {
+        finished = true;
+      });
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      });
+      expect(finished).toBe(false);
+      expect(exit).not.toHaveBeenCalled();
+      stream.close();
+      await finishing;
+      expect(finished).toBe(true);
+      expect(exit).toHaveBeenCalledTimes(1);
+      expect(exit).toHaveBeenCalledWith(EXIT_OK);
+    } finally {
+      exit.mockRestore();
+      process.exitCode = undefined;
+    }
   });
 });
 

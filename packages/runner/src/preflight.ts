@@ -827,6 +827,18 @@ export async function runPreflight(
       )
     );
   }
+  // A zero or negative wall time would fire the launch guard immediately
+  // and abort every trial, so it is a configuration failure here, before
+  // any launch happens.
+  if (!Number.isInteger(trialWallTimeMs) || trialWallTimeMs < 1) {
+    findings.push(
+      error(
+        PreflightCode.PlanInvalid,
+        "Trial wall time must be an integer of at least 1 millisecond.",
+        { trial_wall_time_ms: trialWallTimeMs }
+      )
+    );
+  }
   if (trialWallTimeMs > limits.trialWallTimeMs) {
     findings.push(
       error(

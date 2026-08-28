@@ -11,8 +11,10 @@ import {
   canonicalJson,
   canonicalJsonSha256,
   formatRfc3339,
+  parseJsonStrict,
   prefixedId24,
   sha256Hex,
+  toOalError,
   type Json,
   type JsonObject
 } from "@oal/core";
@@ -22,12 +24,20 @@ import type { LoadedPack } from "@oal/pack";
 
 import {
   classifyCensorClass,
+  evidenceIntegrityOf,
   type CensorClass,
   type EvidenceRequirement
 } from "./disposition.ts";
-import type { Clock, LifecycleStage } from "./lifecycle.ts";
+import {
+  ORDERED_STAGES,
+  snapshotOfRecords,
+  stageRecordsOf,
+  type Clock,
+  type LifecycleEvent,
+  type LifecycleStage
+} from "./lifecycle.ts";
 import { contractSettings, type FrozenPlan } from "./preflight.ts";
-import { createLoopbackExposure, createRawHttpExposure } from "./exposure.ts";
+import { createRawHttpExposure } from "./exposure.ts";
 import type { ExposureFactory } from "./setup.ts";
 import {
   credentialEnvironmentNames,
@@ -39,6 +49,7 @@ import {
   type TrialEvent,
   type TrialOutcome
 } from "./trial.ts";
+import { packResponseFixtures } from "./types.ts";
 
 /** Stable reason codes of the batch runner. */
 export const RunCode = {
@@ -46,7 +57,12 @@ export const RunCode = {
   BatchDefect: "OAL-RUN-BATCH-DEFECT",
   BatchAborted: "OAL-RUN-BATCH-ABORTED",
   InputsFrozen: "OAL-RUN-INPUTS-FROZEN",
-  NotStarted: "OAL-RUN-NOT-STARTED"
+  NotStarted: "OAL-RUN-NOT-STARTED",
+  /**
+   * Taxonomy persistence code (section 32.2): the assignment ledger could
+   * not be written, so the evidence is infrastructure-invalid.
+   */
+  LedgerWriteFailed: "OAL-ARTIFACT-WRITE-FAILED"
 } as const;
 
 /** Operator-visible progress of one batch. */
@@ -145,6 +161,9 @@ export async function createBatchSkeleton(
   }
   await store.initBatch(plan.batchId);
 
+  // The per-text instructions and task digests cover the placeholder
+  // preview, the same canonical texts every run.started.json of this
+  // batch digests, so the records stay comparable.
   const inputs: Record<string, string> = {
     pack_sha256: plan.pack.packSha256,
     contract_original_sha256: plan.contract.entrypointSha256,
@@ -318,6 +337,7 @@ interface AssignmentEvent {
 class AssignmentLedger {
   private sequence = 0;
   private chain: Promise<void> = Promise.resolve();
+  private failure: unknown = null;
 
   constructor(
     private readonly sink: JsonlSink,
@@ -349,33 +369,46 @@ class AssignmentLedger {
     this.chain = this.chain.then(async () => {
       await this.sink.appendJson(record);
     });
-    this.chain = this.chain.catch(() => undefined);
+    // Keep the chain alive for later appends, but remember the first
+    // write failure: flush surfaces it instead of dropping the events.
+    this.chain = this.chain.catch((error: unknown) => {
+      if (this.failure === null) {
+        this.failure = error;
+      }
+      return undefined;
+    });
   }
 
   async flush(): Promise<void> {
     await this.chain;
+    if (this.failure !== null) {
+      throw toOalError(this.failure);
+    }
   }
 }
 
 /**
- * The default exposure treatment of one batch. `discoverable` visibility
- * serves the sanitized contract through the conventional documentation
- * candidates, so the facade hands out the same bytes the `file`
- * treatment would copy into the workspace.
+ * The default exposure treatment of one batch. The response fixtures
+ * the loaded pack declares reach the gateway on every branch, and
+ * `discoverable` visibility serves the sanitized contract through the
+ * conventional documentation candidates, so the facade hands out the
+ * same bytes the `file` treatment would copy into the workspace.
  */
 function defaultExposure(plan: FrozenPlan, pack: LoadedPack): ExposureFactory {
+  const fixtures = packResponseFixtures(pack);
   if (plan.contractVisibility !== "discoverable") {
-    return createLoopbackExposure;
+    return createRawHttpExposure({ fixtures });
   }
   const entry = pack.references.find(
     (reference) => reference.role === "contract_entrypoint"
   )?.document;
   if (entry === undefined || entry === null) {
-    return createLoopbackExposure;
+    return createRawHttpExposure({ fixtures });
   }
   const settings = contractSettings(pack);
   return createRawHttpExposure({
     visibility: "discoverable",
+    fixtures,
     documentation: {
       sanitizedContract: (baseUrl: string) =>
         sanitizeParticipantContract(entry, settings, baseUrl, {
@@ -406,6 +439,9 @@ export async function runBatch(
     { length: plan.count },
     (): TrialOutcome | null => null
   );
+  // Trial indices whose launch the ledger already recorded. A launch that
+  // then fails must never be reported as not started.
+  const launchedIndices = new Set<number>();
   let nextIndex = 0;
   // A holder, not two captured `let` bindings, so the narrowing the batch
   // applies after the workers join stays sound.
@@ -437,6 +473,7 @@ export async function runBatch(
       },
       now
     );
+    launchedIndices.add(index);
     try {
       const outcome = await runTrial({
         store,
@@ -513,19 +550,53 @@ export async function runBatch(
   );
   await Promise.all(lanes);
 
-  const launched = outcomes
-    .map((outcome, index) => ({ outcome, index }))
-    .filter((entry) => entry.outcome !== null);
   const notStartedRunIds: string[] = [];
   for (let index = 0; index < outcomes.length; index += 1) {
     if (outcomes[index] !== null) {
       continue;
     }
     const runId = plan.trialRunIds[index];
-    if (runId !== undefined) {
-      notStartedRunIds.push(runId);
+    if (runId === undefined) {
+      continue;
     }
+    if (!launchedIndices.has(index)) {
+      notStartedRunIds.push(runId);
+      continue;
+    }
+    // A trial that launched and then failed keeps an accurate terminal
+    // record, derived from its persisted lifecycle facts (section 32.4):
+    // harness aborted, never a not_started claim that contradicts the
+    // launched event the ledger already holds. Its evidence stays.
+    const aborted = await abortedTrialOutcome(
+      store,
+      plan,
+      index,
+      runId,
+      defect.code === null ? RunCode.BatchAborted : defect.code,
+      now
+    );
+    outcomes[index] = aborted;
+    ledger.append(
+      {
+        kind: "terminal",
+        runId,
+        disposition: aborted.disposition,
+        censorClass: aborted.censorClass,
+        evidenceIntegrity: aborted.evidenceIntegrity,
+        reasonCode: aborted.reasonCode
+      },
+      now
+    );
+    options.onEvent?.({
+      type: "trial.finished",
+      runId,
+      disposition: aborted.disposition,
+      reasonCode: aborted.reasonCode
+    });
   }
+  const launched = outcomes
+    .map((outcome, index) => ({ outcome, index }))
+    .filter((entry) => entry.outcome !== null);
   for (const notStartedRunId of notStartedRunIds) {
     ledger.append(
       {
@@ -544,7 +615,15 @@ export async function runBatch(
       reasonCode: defect.code !== null ? defect.code : RunCode.BatchAborted
     });
   }
-  await ledger.flush();
+  try {
+    await ledger.flush();
+  } catch (cause) {
+    // Section 32.2 persistence: a ledger the batch cannot write is
+    // infrastructure-invalid evidence, so the run fails with the taxonomy
+    // code instead of silently dropping the assignment events.
+    defect.code = RunCode.LedgerWriteFailed;
+    defect.message = cause instanceof Error ? cause.message : String(cause);
+  }
 
   const terminal = launched.map((entry) => entry.outcome as TrialOutcome);
   const cohort =
@@ -610,6 +689,118 @@ export async function runBatch(
     defectCode: defect.code,
     defectMessage: defect.message
   };
+}
+
+/**
+ * Terminal outcome of a trial that launched and then failed before its
+ * own terminal record landed. Stage facts come from the persisted
+ * lifecycle ledger; a missing or unreadable ledger leaves every fact
+ * unset, so derivation never guesses control that no evidence shows.
+ */
+async function abortedTrialOutcome(
+  store: ArtifactStore,
+  plan: FrozenPlan,
+  index: number,
+  runId: string,
+  reasonCode: string,
+  now: Clock
+): Promise<TrialOutcome> {
+  const relativeRoot = `runs/${plan.batchId}/trials/${runId}`;
+  const stages = await recoveredStages(store, relativeRoot);
+  const requirements: EvidenceRequirement[] = PRIMARY_REQUIREMENT_IDS.map(
+    (id) => ({ id, status: "missing" })
+  );
+  const censor = classifyCensorClass({
+    disposition: "harness_aborted",
+    controlStarted: stages.has("participant_control_started"),
+    requirements
+  });
+  return {
+    runId,
+    batchId: plan.batchId,
+    index,
+    disposition: "harness_aborted",
+    reasonCode,
+    censorClass: censor.censorClass,
+    censorReasonCode: censor.reasonCode,
+    evidenceIntegrity: evidenceIntegrityOf(requirements),
+    controlStarted: stages.has("participant_control_started"),
+    spawned: stages.has("participant_spawned"),
+    turnCompleted: stages.has("turn_completed"),
+    reportStatus: "unavailable_due_to_infrastructure",
+    reportSha256: null,
+    evaluation: null,
+    usageObserved: false,
+    apiRequests: 0,
+    agentToolCalls: null,
+    exit: null,
+    startedAtMs: 0,
+    finishedAtMs: now()
+  };
+}
+
+/** Stage facts recovered from one trial's persisted lifecycle ledger. */
+async function recoveredStages(
+  store: ArtifactStore,
+  relativeRoot: string
+): Promise<ReadonlySet<string>> {
+  const text = await settledLifecycleText(store, relativeRoot);
+  if (text === null) {
+    return new Set<string>();
+  }
+  try {
+    const events: LifecycleEvent[] = [];
+    for (const line of text.split("\n")) {
+      if (line.length === 0) {
+        continue;
+      }
+      events.push(parseJsonStrict(line) as unknown as LifecycleEvent);
+    }
+    return snapshotOfRecords(stageRecordsOf(events)).stages;
+  } catch {
+    return new Set<string>();
+  }
+}
+
+/**
+ * Read one trial's lifecycle ledger after its queued appends land. The
+ * throw route of a trial ends before its own stage-queue flush, and the
+ * store exposes no drain for the writes still in flight, so a slow disk
+ * can leave each append several event-loop turns away when the batch
+ * derives the recovered disposition. One macrotask round trip of quiet
+ * is not enough, because it can fall inside a gap between two appends
+ * that are still in flight: the text counts as settled only after it
+ * stays equal across two consecutive round trips, each one immediate
+ * queue plus one timer turn. A trial that already threw stops growing,
+ * and the turn bound below ends a ledger that never goes quiet.
+ */
+async function settledLifecycleText(
+  store: ArtifactStore,
+  relativeRoot: string
+): Promise<string | null> {
+  const read = (): Promise<string | null> =>
+    store.read(`${relativeRoot}/lifecycle.jsonl`).catch(() => null);
+  // The bound covers every write-once stage plus the confirming reads,
+  // so the loop terminates even if the ledger never settles.
+  const bound = ORDERED_STAGES.length + 2;
+  // Consecutive round trips of unchanged text that mark the ledger quiet.
+  const quietRounds = 2;
+  let previous = await read();
+  let confirmed = 0;
+  for (let turn = 0; turn < bound; turn += 1) {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    // Quiescence spans a full macrotask round trip, not only the
+    // immediate queue: appends that are turns in flight land during the
+    // timer wait, so equal reads compare across genuine quiet.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const current = await read();
+    confirmed = current === previous ? confirmed + 1 : 0;
+    previous = current;
+    if (confirmed >= quietRounds) {
+      return current;
+    }
+  }
+  return previous;
 }
 
 /** Build the batch cohort evaluation of section 27.3. */
@@ -694,8 +885,11 @@ export function buildCohortEvaluation(
   const usageObserved = outcomes.filter(
     (outcome) => outcome.usageObserved
   ).length;
+  // Section 27.3 defines the agreement denominator as trials reaching
+  // turn_completed, so a valid report without a completed turn never
+  // counts and a completed turn with a malformed report still does.
   const reportAgreement = outcomes.filter(
-    (outcome) => outcome.reportStatus === "valid"
+    (outcome) => outcome.turnCompleted
   ).length;
   const warnings: string[] = [];
   if (outcomes.some((outcome) => outcome.evidenceIntegrity !== "intact")) {

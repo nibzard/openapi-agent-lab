@@ -16,6 +16,7 @@ import {
   isJsonObject,
   jsonClone,
   resolveJsonPointer,
+  sha256Hex,
   type Json,
   type JsonObject
 } from "@oal/core";
@@ -891,7 +892,11 @@ export async function setupTrial(
       OAL_BATCH_ID: plan.batchId
     };
 
-    // Step 14: the write-once start record.
+    // Step 14: the write-once start record. The canonical instructions
+    // and task digests cover the same placeholder-rendered preview
+    // batch.json froze, so the two records digest one canonical text and
+    // stay comparable (section 24.3 write-once inputs). The live fields
+    // pin what this trial rendered against its own base URL.
     const inputs: Record<string, string> = {
       pack_sha256: plan.pack.packSha256,
       contract_original_sha256: plan.contract.entrypointSha256,
@@ -900,8 +905,12 @@ export async function setupTrial(
       capability_report_sha256: plan.contract.capabilityReportSha256,
       run_profile_sha256: canonicalJsonSha256(plan.profile as unknown as Json),
       prompt_sha256: prompts.frozenSha256,
-      instructions_sha256: plan.promptPreview.frozenSha256,
-      task_sha256: plan.promptPreview.frozenSha256,
+      instructions_sha256: sha256Hex(
+        plan.promptPreview.prompts.instructions.text
+      ),
+      task_sha256: sha256Hex(plan.promptPreview.prompts.task.text),
+      instructions_live_sha256: sha256Hex(prompts.prompts.instructions.text),
+      task_live_sha256: sha256Hex(prompts.prompts.task.text),
       rubric_sha256: plan.evaluation.rubricSha256,
       ...(plan.evaluation.resultSchemaSha256 === null
         ? {}

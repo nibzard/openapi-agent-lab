@@ -40,6 +40,7 @@ import {
   handleGatewayRequest,
   matchRoute,
   problemDocument,
+  type ContractFixture,
   type FrameworkError,
   type GatewayResponse,
   type RouteResult
@@ -74,6 +75,45 @@ export const DEFAULT_EXPOSURE_HOST = "127.0.0.1";
 const BURST_WINDOW_MS = 1000;
 
 /**
+ * Stable codes of one exchange the exposure could not complete, one per
+ * failure class of the taxonomy in specification section 32.2. A
+ * persistence failure invalidates evidence, gateway and plane failures
+ * are mock-pipeline defects, and an ingress failure never reached a
+ * reserved sequence.
+ */
+export const EXCHANGE_PERSIST_FAILED = "OAL-EXPOSURE-EXCHANGE-PERSIST-FAILED";
+export const EXCHANGE_GATEWAY_FAILED = "OAL-EXPOSURE-EXCHANGE-GATEWAY-FAILED";
+export const EXCHANGE_PLANE_FAILED = "OAL-EXPOSURE-EXCHANGE-PLANE-FAILED";
+export const EXCHANGE_INGRESS_FAILED = "OAL-EXPOSURE-EXCHANGE-INGRESS-FAILED";
+
+/** One stable exchange-failure code. */
+export type ExchangeFailureCode =
+  | typeof EXCHANGE_PERSIST_FAILED
+  | typeof EXCHANGE_GATEWAY_FAILED
+  | typeof EXCHANGE_PLANE_FAILED
+  | typeof EXCHANGE_INGRESS_FAILED;
+
+/**
+ * The stage of {@link startRawHttpExposure} one failure escaped from.
+ * The stage names the failure class, so the record carries the code of
+ * the layer that failed instead of one hard-coded cause.
+ */
+type ExchangeFailureStage = "ingress" | "plane" | "gateway" | "persist";
+
+/** Stable code of one failure stage (section 32.2 categories). */
+const FAILURE_CODES: Readonly<
+  Record<ExchangeFailureStage, ExchangeFailureCode>
+> = {
+  ingress: EXCHANGE_INGRESS_FAILED,
+  plane: EXCHANGE_PLANE_FAILED,
+  gateway: EXCHANGE_GATEWAY_FAILED,
+  persist: EXCHANGE_PERSIST_FAILED
+};
+
+/** Failure records one exposure handle keeps; the list stays bounded. */
+const MAX_RECORDED_EXCHANGE_FAILURES = 16;
+
+/**
  * A documentation profile that failed validation. The diagnostics are
  * preflight-style OAL records, so the caller can surface them before
  * any participant material exists.
@@ -88,6 +128,30 @@ export class ExposureProfileError extends Error {
     super(message);
     this.name = "ExposureProfileError";
   }
+}
+
+/**
+ * Diagnostic record of one exchange the exposure could not complete.
+ * The participant saw the bounded generic 500 of section 15.2; the
+ * record keeps the correlation id and time, never failure text. The
+ * correlation id is null when the failure preceded ingress reservation.
+ */
+export interface ExposureFailureRecord {
+  readonly code: ExchangeFailureCode;
+  readonly requestId: string | null;
+  readonly observedAt: string;
+}
+
+/**
+ * The raw HTTP exposure handle. It extends the generic handle with the
+ * exchange-failure diagnostics of this treatment, so a caller that
+ * needs them reads them without changing the shared interface.
+ */
+export interface RawHttpExposureHandle extends ExposureHandle {
+  /** Exchanges that failed after ingress, shielded from the caller. */
+  readonly exchangeFailureCount: number;
+  /** First failure records in ingress order; the list is bounded. */
+  readonly exchangeFailures: readonly ExposureFailureRecord[];
 }
 
 /** Documentation options of {@link createRawHttpExposure}. */
@@ -112,6 +176,12 @@ export interface RawHttpExposureOptions {
    * machinery, so the listener serves no documentation route.
    */
   readonly visibility?: ContractVisibility;
+  /**
+   * Response fixtures of the loaded pack, served ahead of example and
+   * schema generation (specification section 15.5). The list is copied
+   * once when the listener starts; the default serves none.
+   */
+  readonly fixtures?: readonly ContractFixture[];
   /**
    * Declare the documentation plane. Required for `discoverable`; any
    * other visibility freezes the same inventory with every candidate
@@ -372,6 +442,26 @@ function settle(
   outgoing.end(response.body ?? "");
 }
 
+/**
+ * Settle one socket after an internal failure (sections 15.2 and
+ * 17.1). The participant receives the bounded generic 500 problem
+ * document; no internal detail of the failure crosses the wire. A
+ * socket that already sent its headers only ends its body.
+ */
+function settleInternalFailure(
+  outgoing: ServerResponse,
+  requestId: string
+): void {
+  if (outgoing.headersSent) {
+    outgoing.end();
+    return;
+  }
+  settle(
+    outgoing,
+    frameworkResponse(FRAMEWORK_ERRORS.internalError, requestId)
+  );
+}
+
 function listen(server: Server, request: ExposureRequest): Promise<number> {
   return new Promise<number>((resolve, reject) => {
     server.once("error", reject);
@@ -419,7 +509,7 @@ export const createLoopbackExposure: ExposureFactory = (request) =>
 async function startRawHttpExposure(
   request: ExposureRequest,
   options: RawHttpExposureOptions
-): Promise<ExposureHandle> {
+): Promise<RawHttpExposureHandle> {
   // The contract schema version is checked before the listener binds,
   // so an unsupported contract fails the trial at startup (section
   // 42.2, AC-012). The producer types the field narrowly; a contract
@@ -449,36 +539,168 @@ async function startRawHttpExposure(
       keyPatterns: [...request.sensitiveKeyPatterns]
     }
   });
+  // The fixture list is copied once, so no request can mutate what a
+  // later request of the same run serves (section 15.5).
+  const fixtures: ContractFixture[] =
+    options.fixtures === undefined ? [] : [...options.fixtures];
   const admission = new AdmissionControl(request.limits);
+  const exchangeFailures: ExposureFailureRecord[] = [];
+  let exchangeFailureTotal = 0;
   let plane: DocumentationPlane | null = null;
+
+  /**
+   * Record one exchange the exposure could not complete. The record
+   * keeps no failure text: cause messages vary by host, and the run
+   * record must stay a function of the request stream alone.
+   */
+  const recordExchangeFailure = (
+    requestId: string | null,
+    stage: ExchangeFailureStage,
+    observedAt: number
+  ): void => {
+    exchangeFailureTotal += 1;
+    if (exchangeFailures.length < MAX_RECORDED_EXCHANGE_FAILURES) {
+      exchangeFailures.push({
+        code: FAILURE_CODES[stage],
+        requestId,
+        observedAt: formatRfc3339(observedAt)
+      });
+    }
+  };
 
   const answer = async (
     incoming: IncomingMessage,
     outgoing: ServerResponse,
     collector: BodyCollector
   ): Promise<void> => {
-    const startedAt = request.now();
     const method = (incoming.method ?? "GET").toUpperCase();
     const target = incoming.url ?? "/";
-    const path = pathOf(target);
-    const query = queryOf(target);
-    const bytes = collector.storedBytes();
-    const reserved = trace.reserve();
-    const requestId = sequenceId("req", reserved.sequence);
+    // How far this exchange got. The failure path needs every piece to
+    // settle the socket, give the admission slot back, and keep the
+    // event stream moving, whatever stage failed.
+    let startedAt: number | null = null;
+    let reserved: { sequence: number; event_id: string } | null = null;
+    let stage: ExchangeFailureStage = "ingress";
+    // True while this request holds one concurrent-connection slot, so
+    // the failure path below can give the slot back exactly once.
+    let holdsAdmission = false;
+    /**
+     * The clock of the failure record. A clock that throws must not
+     * stop the failure path, so fall back to the ingress reading.
+     */
+    const failureNow = (): number => {
+      try {
+        return request.now();
+      } catch {
+        return startedAt ?? 0;
+      }
+    };
+    try {
+      startedAt = request.now();
+      reserved = trace.reserve();
+      const requestId = sequenceId("req", reserved.sequence);
 
-    // Section 31.3: validate every limit before any dispatch or state
-    // change. A limit event stays visible in evidence.
-    const refusal = admission.admit(request.now());
-    const overTarget =
-      Buffer.byteLength(target, "utf8") > request.limits.maxRequestTargetBytes;
-    if (refusal !== null || overTarget || collector.overflowed) {
-      const error =
-        refusal !== null
-          ? FRAMEWORK_ERRORS.requestQuotaExceeded
-          : overTarget
-            ? FRAMEWORK_ERRORS.requestTargetTooLarge
-            : FRAMEWORK_ERRORS.requestBodyTooLarge;
-      const response = frameworkResponse(error, requestId);
+      const path = pathOf(target);
+      const query = queryOf(target);
+      const bytes = collector.storedBytes();
+
+      // Section 31.3: validate every limit before any dispatch or state
+      // change. A limit event stays visible in evidence.
+      const refusal = admission.admit(request.now());
+      holdsAdmission = refusal === null;
+      const overTarget =
+        Buffer.byteLength(target, "utf8") >
+        request.limits.maxRequestTargetBytes;
+      if (refusal !== null || overTarget || collector.overflowed) {
+        const error =
+          refusal !== null
+            ? FRAMEWORK_ERRORS.requestQuotaExceeded
+            : overTarget
+              ? FRAMEWORK_ERRORS.requestTargetTooLarge
+              : FRAMEWORK_ERRORS.requestBodyTooLarge;
+        const response = frameworkResponse(error, requestId);
+        stage = "persist";
+        await completeApiExchange(request, trace, redactor, {
+          method,
+          target,
+          headers: incoming.headers,
+          collector,
+          response,
+          reserved,
+          startedAt,
+          routed: false
+        });
+        settle(outgoing, response);
+        if (holdsAdmission) {
+          admission.release();
+          holdsAdmission = false;
+        }
+        return;
+      }
+
+      // Section 15.1: the documentation-candidate inventory is checked
+      // before product route matching and never enters it.
+      const candidate = plane?.match(method, path) ?? null;
+      if (candidate !== null && plane !== null) {
+        stage = "plane";
+        const result = plane.serve(candidate, {
+          method,
+          path,
+          headers: incoming.headers,
+          query,
+          requestId
+        });
+        const exchange: DocumentationExchange = {
+          schema_version: 1,
+          type: "documentation.exchange",
+          event_id: sequenceId("doc", reserved.sequence),
+          sequence: reserved.sequence,
+          participant_ingress_sequence: reserved.sequence,
+          observed_at: formatRfc3339(startedAt),
+          batch_id: request.batchId,
+          run_id: request.runId,
+          actor: "participant",
+          request: { method, path },
+          candidate: {
+            profile: plane.profileId,
+            route_id: result.candidate.route_id
+          },
+          authentication: { status: result.authenticationStatus },
+          visibility: plane.visibility,
+          outcome: result.outcome,
+          response: {
+            status: result.serving.status,
+            content_type: result.serving.headers["content-type"] ?? null,
+            bytes: result.bytes,
+            body_sha256: result.bodySha256
+          },
+          duration_ms: Math.max(0, request.now() - startedAt),
+          extensions: {}
+        };
+        stage = "persist";
+        await trace.complete(exchange as unknown as TraceEvent);
+        settle(outgoing, result.serving);
+        admission.release();
+        holdsAdmission = false;
+        return;
+      }
+
+      const headers: Record<string, string | string[]> = {};
+      for (const [name, value] of Object.entries(incoming.headers)) {
+        headers[name] = value ?? [];
+      }
+      stage = "gateway";
+      const response = handleGatewayRequest(
+        {
+          contract: request.contract,
+          limits: request.limits,
+          fixtures,
+          runSeed: request.trialSeed
+        },
+        reserved.sequence,
+        { method, target, headers, body: bytes }
+      );
+      stage = "persist";
       await completeApiExchange(request, trace, redactor, {
         method,
         target,
@@ -487,84 +709,50 @@ async function startRawHttpExposure(
         response,
         reserved,
         startedAt,
-        routed: false
+        routed: true
       });
       settle(outgoing, response);
-      if (refusal === null) {
-        admission.release();
-      }
-      return;
-    }
-
-    // Section 15.1: the documentation-candidate inventory is checked
-    // before product route matching and never enters it.
-    const candidate = plane?.match(method, path) ?? null;
-    if (candidate !== null && plane !== null) {
-      const result = plane.serve(candidate, {
-        method,
-        path,
-        headers: incoming.headers,
-        query,
-        requestId
-      });
-      const exchange: DocumentationExchange = {
-        schema_version: 1,
-        type: "documentation.exchange",
-        event_id: sequenceId("doc", reserved.sequence),
-        sequence: reserved.sequence,
-        participant_ingress_sequence: reserved.sequence,
-        observed_at: formatRfc3339(startedAt),
-        batch_id: request.batchId,
-        run_id: request.runId,
-        actor: "participant",
-        request: { method, path },
-        candidate: {
-          profile: plane.profileId,
-          route_id: result.candidate.route_id
-        },
-        authentication: { status: result.authenticationStatus },
-        visibility: plane.visibility,
-        outcome: result.outcome,
-        response: {
-          status: result.serving.status,
-          content_type: result.serving.headers["content-type"] ?? null,
-          bytes: result.bytes,
-          body_sha256: result.bodySha256
-        },
-        duration_ms: Math.max(0, request.now() - startedAt),
-        extensions: {}
-      };
-      await trace.complete(exchange as unknown as TraceEvent);
-      settle(outgoing, result.serving);
       admission.release();
-      return;
+      holdsAdmission = false;
+    } catch {
+      // Sections 15.2 and 17.1: an internal failure settles the
+      // participant socket with the bounded generic 500, returns the
+      // admission slot, and leaves the process alive. The reserved
+      // sequence is completed with a minimal event, so the stream keeps
+      // advancing and later events of the run flush instead of
+      // buffering forever. The record carries no internal detail of the
+      // failure, only the stable code of the stage that failed.
+      const reservedSlot = reserved;
+      const requestId =
+        reservedSlot === null
+          ? sequenceId("req", 0)
+          : sequenceId("req", reservedSlot.sequence);
+      settleInternalFailure(outgoing, requestId);
+      if (holdsAdmission) {
+        admission.release();
+        holdsAdmission = false;
+      }
+      const observedAt = failureNow();
+      if (reservedSlot !== null && startedAt !== null) {
+        try {
+          await completeFailedExchange(request, trace, {
+            reserved: reservedSlot,
+            startedAt,
+            observedAt,
+            requestBytes: collector.totalBytes,
+            stage
+          });
+        } catch {
+          // The sink already refused the original append; the sequence
+          // was consumed, so the stream still advances.
+        }
+      }
+      recordExchangeFailure(
+        reservedSlot === null ? null : sequenceId("req", reservedSlot.sequence),
+        stage,
+        observedAt
+      );
     }
-
-    const headers: Record<string, string | string[]> = {};
-    for (const [name, value] of Object.entries(incoming.headers)) {
-      headers[name] = value ?? [];
-    }
-    const response = handleGatewayRequest(
-      {
-        contract: request.contract,
-        limits: request.limits,
-        runSeed: request.trialSeed
-      },
-      reserved.sequence,
-      { method, target, headers, body: bytes }
-    );
-    await completeApiExchange(request, trace, redactor, {
-      method,
-      target,
-      headers: incoming.headers,
-      collector,
-      response,
-      reserved,
-      startedAt,
-      routed: true
-    });
-    settle(outgoing, response);
-    admission.release();
   };
 
   const server: Server = createServer((incoming, outgoing) => {
@@ -573,7 +761,10 @@ async function startRawHttpExposure(
       collector.add(chunk);
     });
     incoming.on("end", () => {
-      void answer(incoming, outgoing, collector);
+      // The handler settles every request itself, failures included,
+      // so it never rejects; this guard only keeps a programmer error
+      // from becoming an unhandled rejection that kills the process.
+      answer(incoming, outgoing, collector).catch(() => undefined);
     });
     incoming.on("error", () => undefined);
     outgoing.on("error", () => undefined);
@@ -660,7 +851,7 @@ async function startRawHttpExposure(
   };
 
   let closed = false;
-  return {
+  const handle: RawHttpExposureHandle = {
     baseUrl,
     credentialNames: Object.freeze([...names]),
     documentationUrl: visibility === "discoverable" ? baseUrl : null,
@@ -672,8 +863,15 @@ async function startRawHttpExposure(
       }
       closed = true;
       await stop(server);
+    },
+    get exchangeFailureCount(): number {
+      return exchangeFailureTotal;
+    },
+    get exchangeFailures(): readonly ExposureFailureRecord[] {
+      return Object.freeze([...exchangeFailures]);
     }
   };
+  return handle;
 }
 
 interface ApiExchangeInput {
@@ -819,6 +1017,106 @@ async function completeApiExchange(
     duration_ms: Math.max(0, request.now() - input.startedAt),
     resource_usage: {
       request_bytes: input.collector.totalBytes,
+      response_bytes: Buffer.byteLength(response.body ?? "", "utf8")
+    },
+    extensions: {}
+  };
+  await trace.complete(event);
+}
+
+/** Inputs of {@link completeFailedExchange}. */
+interface FailedExchangeInput {
+  readonly reserved: { sequence: number; event_id: string };
+  readonly startedAt: number;
+  /** Safe clock reading taken on the failure path. */
+  readonly observedAt: number;
+  readonly requestBytes: number;
+  readonly stage: ExchangeFailureStage;
+}
+
+/**
+ * Complete one reserved sequence the exposure could not finish as a
+ * minimal api.exchange: the participant saw the bounded generic 500.
+ * The builder reads no contract, plane, or redaction state, so a
+ * failure anywhere else in the pipeline cannot stop the event stream
+ * from advancing past this sequence.
+ */
+async function completeFailedExchange(
+  request: ExposureRequest,
+  trace: TraceWriter,
+  input: FailedExchangeInput
+): Promise<void> {
+  const code = FAILURE_CODES[input.stage];
+  const response = frameworkResponse(
+    FRAMEWORK_ERRORS.internalError,
+    sequenceId("req", input.reserved.sequence)
+  );
+  const event: TraceEvent = {
+    schema_version: 1,
+    type: "api.exchange",
+    event_id: input.reserved.event_id,
+    sequence: input.reserved.sequence,
+    participant_ingress_sequence: input.reserved.sequence,
+    observed_at: formatRfc3339(input.startedAt),
+    logical_time: null,
+    batch_id: request.batchId,
+    run_id: request.runId,
+    eval_id: request.evalId,
+    actor: "participant",
+    transport: { kind: "http", request_id: null, connection_id: null },
+    operation: {
+      matched: false,
+      key: null,
+      uid: null,
+      operation_id: null,
+      method: null,
+      path_template: null,
+      support: "unsupported"
+    },
+    request: null,
+    authentication: {
+      status: "unauthenticated",
+      alternative_index: null,
+      schemes: [],
+      principal_ref: null
+    },
+    validation: {
+      request: { status: "not_evaluated", violations: [] },
+      response: { status: "not_evaluated", violations: [] }
+    },
+    backend: {
+      mode: "contract",
+      name: null,
+      outcome: "skipped",
+      duration_ms: 0,
+      response_provenance: "generated",
+      effects: [],
+      observations: {}
+    },
+    response: {
+      completed_at: formatRfc3339(input.observedAt),
+      status: response.status,
+      headers: Object.entries(response.headers).map(([name, value]) => ({
+        name: name.toLowerCase(),
+        values: [value],
+        redacted: false
+      })),
+      content_type: response.headers["content-type"] ?? null,
+      body: bodyOf(Buffer.from(response.body ?? "", "utf8"))
+    },
+    state: null,
+    idempotency: { status: "not_requested", record_ref: null },
+    replay: { classification: "unavailable", reason_code: code },
+    error: {
+      layer: input.stage === "persist" ? "persistence" : "internal",
+      code,
+      message: "The exposure settled the exchange with the generic error.",
+      retryable: false,
+      details: {}
+    },
+    duration_ms: Math.max(0, input.observedAt - input.startedAt),
+    resource_usage: {
+      request_bytes: input.requestBytes,
       response_bytes: Buffer.byteLength(response.body ?? "", "utf8")
     },
     extensions: {}

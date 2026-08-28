@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createHash } from "node:crypto";
 
-import { canonicalJson, isSha256Hex } from "@oal/core";
+import { canonicalJson, canonicalJsonSha256, isSha256Hex } from "@oal/core";
 
 import {
   deriveManualRunSeed,
@@ -199,6 +199,61 @@ describe("manual serve seed", () => {
     ).not.toBe(
       "b2f31163ce1cff040e02bba5e3ec52a8f008230608f90855be36e5d51212326a"
     );
+  });
+
+  it("is the single canonical manual tuple of section 17.5", () => {
+    // The document is spelled out independently, so any other
+    // implementation (the `oal serve` default) must hash exactly this
+    // object; a joined-string derivation cannot match it.
+    expect(
+      deriveManualRunSeed({
+        runId: "manual-20231114-221320",
+        contractExecutionSha256: D.contractExecution,
+        packSha256: D.pack,
+        scenarioSha256: D.scenario,
+        backendSha256: D.backend
+      })
+    ).toBe(
+      canonicalJsonSha256({
+        schema_version: 1,
+        kind: "manual_serve",
+        run_id: "manual-20231114-221320",
+        contract_execution_sha256: D.contractExecution,
+        pack_sha256: D.pack,
+        scenario_sha256: D.scenario,
+        backend_sha256: D.backend
+      })
+    );
+  });
+
+  it("domain-separates every tuple field", () => {
+    const base = {
+      runId: "manual-run",
+      contractExecutionSha256: D.contractExecution,
+      packSha256: D.pack,
+      scenarioSha256: D.scenario,
+      backendSha256: D.backend
+    };
+    const reference = deriveManualRunSeed(base);
+    expect(deriveManualRunSeed({ ...base, runId: "manual-run-2" })).not.toBe(
+      reference
+    );
+    expect(
+      deriveManualRunSeed({
+        ...base,
+        contractExecutionSha256: D.behavior
+      })
+    ).not.toBe(reference);
+    expect(deriveManualRunSeed({ ...base, packSha256: null })).not.toBe(
+      reference
+    );
+    expect(deriveManualRunSeed({ ...base, scenarioSha256: null })).not.toBe(
+      reference
+    );
+    expect(
+      deriveManualRunSeed({ ...base, backendSha256: D.scenario })
+    ).not.toBe(reference);
+    expect(deriveManualRunSeed(base)).toBe(reference);
   });
 });
 

@@ -16,6 +16,7 @@ import { dirname, relative, resolve } from "node:path";
 
 import {
   buildSpawnEnvironment,
+  createSessionRedactor,
   SessionEventRecorder,
   type AgentAdapter,
   type AgentCapabilities,
@@ -126,10 +127,12 @@ export class MockAgentAdapter implements AgentAdapter {
     const run = prepared as MockPreparedAgent;
     const context = run.context;
     const startedAt = Date.now();
+    const redact = createSessionRedactor(context);
     const recorder = new SessionEventRecorder({
       runId: context.runId,
       adapter: this.id,
-      sink
+      sink,
+      redact
     });
     const deadline = startedAt + context.timeoutMs;
     const outcome: { status?: AgentRunResult["status"]; errorCode?: string } =
@@ -236,6 +239,8 @@ function emitScriptEvent(
   event: MockEventSpec
 ): void {
   if (event.channel === "adapter") {
+    // The note text can echo tool output, so the recorder redacts it before
+    // it lands in the event extensions.
     recorder.adapterEvent(event.kind ?? "mock.note", { text: event.text });
     return;
   }

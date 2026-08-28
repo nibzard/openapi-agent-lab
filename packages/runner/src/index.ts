@@ -190,7 +190,13 @@ export {
   type TraceWriter,
   type TrialSetup
 } from "./setup.ts";
-export { DEFAULT_EXPOSURE_HOST, createLoopbackExposure } from "./exposure.ts";
+export {
+  DEFAULT_EXPOSURE_HOST,
+  createLoopbackExposure,
+  createRawHttpExposure,
+  type RawHttpExposureOptions
+} from "./exposure.ts";
+export { packResponseFixtures } from "./types.ts";
 export {
   API_REQUEST_EVENT_KIND,
   DEFAULT_TERMINAL_TURN_KIND,

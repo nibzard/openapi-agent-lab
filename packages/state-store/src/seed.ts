@@ -134,7 +134,10 @@ export function deriveRunSeed(input: RunSeedInput): string {
 /**
  * Run seed for manual `oal serve` without `--run-seed`: a separate canonical
  * tuple of the contract execution digest, pack/scenario/backend digests, and
- * run ID. A cohort seed is never used here.
+ * run ID. A cohort seed is never used here. This function is the only
+ * manual-serve derivation: section 17.5 hashes a canonical JSON object, so
+ * every caller (the run and `oal serve` alike) derives the default seed
+ * here instead of hashing a private joined string.
  */
 export function deriveManualRunSeed(input: ManualRunSeedInput): string {
   const document: JsonObject = {

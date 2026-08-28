@@ -30,15 +30,18 @@ import { mintRunCredentials } from "@oal/gateway";
 import { compileOpenApi } from "@oal/openapi";
 import { loadPack, type LoadedPack } from "@oal/pack";
 import {
+  deriveManualRunSeed,
   RUN_IDENTITY_MISMATCH_CODE,
   SCHEMA_VERSION,
   StateStore,
   type RunMetaInput
 } from "@oal/state-store";
 import {
-  createLoopbackExposure,
+  createRawHttpExposure,
   credentialEnvironmentName,
   DEFAULT_EXPOSURE_HOST,
+  packFreezeDigest,
+  packResponseFixtures,
   type ExposureHandle
 } from "@oal/runner";
 
@@ -128,15 +131,31 @@ export async function compileServeSource(
   };
 }
 
-/** Derive the manual run seed from the contract and the run identity. */
+/**
+ * Derive the manual run seed from the contract, the loaded pack, and
+ * the run identity. The inputs are exactly the ones
+ * {@link serveRunIdentity} records, so one contract or pack change
+ * moves the seed and the identity together.
+ */
 export function deriveServeRunSeed(
   contract: ContractIR,
+  pack: LoadedPack | null,
   runId: string
 ): string {
-  return sha256Hex(
-    `${contract.source.semantic_sha256}:${contract.source.execution_sha256}` +
-      `:contract:${runId}`
-  );
+  return deriveManualRunSeed({
+    runId,
+    contractExecutionSha256: contract.source.execution_sha256,
+    packSha256: packSha256Of(pack),
+    scenarioSha256: null,
+    backendSha256: sha256Hex(
+      `contract-backend:${contract.source.semantic_sha256}`
+    )
+  });
+}
+
+/** Digest of the served pack, or null for a bare document. */
+function packSha256Of(pack: LoadedPack | null): string | null {
+  return pack === null ? null : packFreezeDigest(pack);
 }
 
 /** Default manual run identifier from one wall-clock instant. */
@@ -328,11 +347,13 @@ export interface ServeRunRecord {
 /**
  * The run identity of one manual serve, exactly as the state store
  * records it (section 16.3): contract digests, the sorted source
- * inventory, the contract-backend and implementation bundles, the
- * seed, and the state schema version.
+ * inventory, the pack digest when the source is a pack, the
+ * contract-backend and implementation bundles, the seed, and the state
+ * schema version.
  */
 export function serveRunIdentity(
   contract: ContractIR,
+  pack: LoadedPack | null,
   runSeed: string
 ): RunMetaInput {
   const inventory = [...contract.source.documents].sort((left, right) =>
@@ -343,7 +364,7 @@ export function serveRunIdentity(
     contractSemanticSha256: contract.source.semantic_sha256,
     contractExecutionSha256: contract.source.execution_sha256,
     sourceInventorySha256: canonicalJsonSha256(inventory as unknown as Json),
-    packSha256: null,
+    packSha256: packSha256Of(pack),
     scenarioSha256: null,
     contractVariantSha256: null,
     backendSha256: sha256Hex(
@@ -435,6 +456,8 @@ export interface ServeSession {
 export async function startServe(options: {
   readonly contract: ContractIR;
   readonly capabilityReport: Json;
+  /** Loaded pack behind the contract, or null for a bare document. */
+  readonly pack: LoadedPack | null;
   readonly host: string;
   readonly port: number;
   readonly runId: string;
@@ -461,7 +484,9 @@ export async function startServe(options: {
   } else {
     store.initializeRun(options.identity);
   }
-  const handle = await createLoopbackExposure({
+  const handle = await createRawHttpExposure({
+    fixtures: options.pack === null ? [] : packResponseFixtures(options.pack)
+  })({
     batchId: "manual",
     runId: options.runId,
     evalId: "manual",
@@ -750,7 +775,7 @@ export const serveCommand: CommandHandler = async (args, io) => {
   const runSeed =
     resumed?.run_seed ??
     args.flags.string("run-seed") ??
-    deriveServeRunSeed(contract, runId);
+    deriveServeRunSeed(contract, compiledSource.pack, runId);
 
   const runDirFlag = args.flags.string("run-dir");
   const controlDir =
@@ -769,12 +794,13 @@ export const serveCommand: CommandHandler = async (args, io) => {
     );
   }
 
-  const identity = serveRunIdentity(contract, runSeed);
+  const identity = serveRunIdentity(contract, compiledSource.pack, runSeed);
   let session: ServeSession;
   try {
     session = await startServe({
       contract,
       capabilityReport: compiledSource.capabilityReport,
+      pack: compiledSource.pack,
       host,
       port,
       runId,
