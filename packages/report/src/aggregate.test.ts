@@ -38,7 +38,7 @@ describe("censor classes (section 27.2)", () => {
     );
     expect(
       censorClassFor("infrastructure_failed_post_control", true, "intact")
-    ).toBe("instrumentation_censor");
+    ).toBe("none");
     expect(censorClassFor("provider_failed_pre_control", false, "intact")).toBe(
       "pre_control_nonparticipant"
     );

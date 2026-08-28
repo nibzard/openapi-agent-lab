@@ -281,7 +281,7 @@ describe("authentication emulation", () => {
     const other = mintRunCredentials(c, "seed_b");
     expect(left).toEqual(right);
     expect(left.bearer).not.toEqual(other.bearer);
-    expect(left.bearer).toMatch(/^oal_[0-9a-f]{24}$/);
+    expect(left.bearer).toMatch(/^oal_[0-9a-f]{64}$/);
   });
 
   it("verifies api keys in the declared location", () => {

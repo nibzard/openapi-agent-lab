@@ -22,6 +22,7 @@ import {
 } from "@oal/core";
 import type {
   ArtifactStore,
+  DocumentationExchange,
   EvidenceIntegrityFlag,
   JsonlSink,
   LifecycleEvidenceSource,
@@ -66,6 +67,7 @@ import {
   type ExposureFactory,
   type TrialSetup
 } from "./setup.ts";
+import { verifyWorkspaceFiles } from "./workspace.ts";
 
 /** Stable reason codes of the trial runner. */
 export const TrialCode = {
@@ -74,6 +76,7 @@ export const TrialCode = {
   EvaluationSkipped: "OAL-RUN-TRIAL-EVALUATION-SKIPPED",
   EvaluationFailed: "OAL-RUN-TRIAL-EVALUATION-FAILED",
   WorkspaceFailed: "OAL-RUN-TRIAL-WORKSPACE-FAILED",
+  ExposurePersistFailed: "OAL-EXPOSURE-EXCHANGE-PERSIST-FAILED",
   NotStarted: "OAL-RUN-NOT-STARTED"
 } as const;
 
@@ -434,6 +437,44 @@ export async function runTrial(
     }
   );
   const reportText = report.status === "ok" ? report.text : (report.text ?? "");
+  const allowedWorkspaceOutputs =
+    plan.evaluation.evalDoc.result.source === "workspace_file" &&
+    typeof plan.evaluation.evalDoc.result.filename === "string"
+      ? [plan.evaluation.evalDoc.result.filename]
+      : [];
+  let workspaceProblem: { code: string; message: string } | null = null;
+  try {
+    await verifyWorkspaceFiles(
+      setup.layout.workspaceDir,
+      setup.workspace.files,
+      allowedWorkspaceOutputs,
+      true
+    );
+  } catch (cause) {
+    const problem = toOalError(cause);
+    workspaceProblem = { code: problem.code, message: problem.message };
+  }
+  await store.atomicWrite(
+    `${relativeRoot}/participant-surface-verification.json`,
+    `${canonicalJson({
+      schema_version: 1,
+      kind: "ParticipantSurfaceVerification",
+      run_id: runId,
+      manifest_sha256: setup.surface.manifestSha256,
+      template_sha256: plan.surface.templateSha256,
+      ok: workspaceProblem === null,
+      problems:
+        workspaceProblem === null
+          ? []
+          : [
+              {
+                code: workspaceProblem.code,
+                path: "workspace",
+                message: workspaceProblem.message
+              }
+            ]
+    } as unknown as Json)}\n`
+  );
   if (reportText.length > 0) {
     stages.offer("report_present", "runner", {
       source: report.status === "ok" ? report.source : report.problem.code
@@ -449,6 +490,10 @@ export async function runTrial(
   await stages.flush();
 
   const trace = await readTraceEvents(store, relativeRoot);
+  const documentationEvents = await readDocumentationEvents(
+    store,
+    relativeRoot
+  );
   const usage = usageNumbersOf(result);
   const apiRequests = trace.events.length;
 
@@ -522,7 +567,10 @@ export async function runTrial(
 
   // Finalization step 10: disposition, integrity, and censor class.
   const snapshot = setup.lifecycle.snapshot();
-  const failure = failureFactOf(result);
+  const exposureFailed = (setup.exposure.exchangeFailureCount ?? 0) > 0;
+  const failure: FailureFact | null = exposureFailed
+    ? { kind: "infrastructure", code: TrialCode.ExposurePersistFailed }
+    : failureFactOf(result);
   const classified = classifyDisposition({
     snapshot: { stages: snapshot.stages },
     operatorSignal: signals.operator,
@@ -547,7 +595,7 @@ export async function runTrial(
     store,
     relativeRoot,
     setup,
-    trace.corrupt
+    trace.corrupt || exposureFailed
   );
   const censor = classifyCensorClass({
     disposition: classified.disposition,
@@ -580,10 +628,12 @@ export async function runTrial(
     censor_reasons: [censor.reasonCode],
     failed_requirement_ids: [...censor.failedRequirements],
     artifact_manifest_sha256: sha256Hex(manifestText),
+    manifest_path: `${relativeRoot}/artifact-manifest.json`,
+    manifest_sha256: sha256Hex(manifestText),
     missing_artifacts: missingArtifactsOf(requirements) as unknown as Json,
     counts: {
       api_requests: apiRequests,
-      documentation_requests: 0,
+      documentation_requests: documentationEvents.length,
       semantic_events: 0,
       agent_tool_calls:
         typeof usage["tool_calls"] === "number" ? usage["tool_calls"] : null
@@ -719,6 +769,8 @@ async function finalizeSetupFailure(
       censor_reasons: [censor.reasonCode],
       failed_requirement_ids: [...censor.failedRequirements],
       artifact_manifest_sha256: sha256Hex(manifestText),
+      manifest_path: `${relativeRoot}/artifact-manifest.json`,
+      manifest_sha256: sha256Hex(manifestText),
       missing_artifacts: missingArtifactsOf(requirements),
       counts: {
         api_requests: 0,
@@ -981,6 +1033,36 @@ async function readTraceEvents(
     }
   }
   return { events, corrupt: false };
+}
+
+/** Read the documentation stream without adding its events to API metrics. */
+async function readDocumentationEvents(
+  store: ArtifactStore,
+  relativeRoot: string
+): Promise<readonly DocumentationExchange[]> {
+  const text = await store
+    .read(`${relativeRoot}/documentation.jsonl`)
+    .catch(() => "");
+  const events: DocumentationExchange[] = [];
+  for (const line of text.split("\n")) {
+    if (line.length === 0) {
+      continue;
+    }
+    try {
+      const parsed = parseJsonStrict(line) as unknown;
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        (parsed as { type?: unknown }).type === "documentation.exchange" &&
+        (parsed as { schema_version?: unknown }).schema_version === 1
+      ) {
+        events.push(parsed as DocumentationExchange);
+      }
+    } catch {
+      // Documentation corruption does not turn the content into an API event.
+    }
+  }
+  return events;
 }
 
 /**

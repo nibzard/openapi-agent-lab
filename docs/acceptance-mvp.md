@@ -91,3 +91,8 @@ Run only the acceptance map checks:
 ```bash
 npx vitest run tests/acceptance.test.ts
 ```
+# AC-060 limit coverage deviation
+
+AC-060 is partial. Compiler, request, connection, state, and configuration
+ceilings have bounded tests. Study surface, log, disk, and full wall-time
+enforcement remain incomplete.

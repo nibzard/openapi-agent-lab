@@ -27,7 +27,17 @@ import {
 import { LIMIT_DEFAULTS } from "@oal/config";
 import type { ContractIR } from "@oal/contract-ir";
 import { mintRunCredentials } from "@oal/gateway";
-import { compileOpenApi } from "@oal/openapi";
+import {
+  EventStream,
+  JsonlSink,
+  type DocumentationExchange,
+  type TraceEvent
+} from "@oal/evidence";
+import {
+  compileOpenApi,
+  loadDocumentSet,
+  resolveCompilerLimits
+} from "@oal/openapi";
 import { loadPack, type LoadedPack } from "@oal/pack";
 import {
   deriveManualRunSeed,
@@ -107,10 +117,15 @@ export async function compileServeSource(
         `Pack ${absolute} declares no contract entrypoint.`
       );
     }
-    const documents: Record<string, string> = {
-      [entry.path]: await readFile(entry.absolutePath, "utf8")
-    };
-    const compiled = compileOpenApi({ documents, entrypoint: entry.path });
+    const loaded = await loadDocumentSet(
+      absolute,
+      entry.path,
+      resolveCompilerLimits({ maxSourceOpenapiBytes: maxBytes })
+    );
+    const compiled = compileOpenApi({
+      documents: Object.fromEntries(loaded.documents),
+      entrypoint: loaded.entrypoint
+    });
     return {
       contract: compiled.contract,
       capabilityReport: compiled.report as unknown as Json,
@@ -118,11 +133,15 @@ export async function compileServeSource(
     };
   }
   const resolved = await resolveSourceArgument(source, { cwd, maxBytes });
-  const text = await readFile(resolved.entrypoint, "utf8");
   const entrypoint = path.basename(resolved.entrypoint);
+  const loaded = await loadDocumentSet(
+    path.dirname(resolved.entrypoint),
+    entrypoint,
+    resolveCompilerLimits({ maxSourceOpenapiBytes: maxBytes })
+  );
   const compiled = compileOpenApi({
-    documents: { [entrypoint]: text },
-    entrypoint
+    documents: Object.fromEntries(loaded.documents),
+    entrypoint: loaded.entrypoint
   });
   return {
     contract: compiled.contract,
@@ -322,14 +341,10 @@ export function awaitInterruption(signal: AbortSignal): Promise<void> {
   });
 }
 
-/** A trace writer that records nothing; manual serve keeps no evidence. */
-const DISCARD_TRACE = {
-  reserve: (): { sequence: number; event_id: string } => ({
-    sequence: 0,
-    event_id: "manual"
-  }),
-  complete: (): Promise<void> => Promise.resolve()
-};
+async function eventCount(file: string): Promise<number> {
+  const text = await readFile(file, "utf8").catch(() => "");
+  return text.split("\n").filter((line) => line.trim().length > 0).length;
+}
 
 /** Marker files of the private serve control directory (section 23.4). */
 const RUN_ID_FILE = "RUN_ID";
@@ -445,6 +460,8 @@ export interface ServeSession {
   readonly store: StateStore;
   /** Absolute control directory the markers and state live in. */
   readonly controlDir: string;
+  /** Absolute evidence directory for redacted request artifacts. */
+  readonly evidenceDir: string;
 }
 
 /**
@@ -463,6 +480,8 @@ export async function startServe(options: {
   readonly runId: string;
   readonly runSeed: string;
   readonly controlDir: string;
+  /** Public evidence directory. Defaults to controlDir for API compatibility. */
+  readonly evidenceDir?: string;
   readonly credentialsOut: string | null;
   /** Run identity of the serve; reused verbatim on resume. */
   readonly identity: RunMetaInput;
@@ -470,6 +489,8 @@ export async function startServe(options: {
   readonly resumed: boolean;
 }): Promise<ServeSession> {
   await mkdir(options.controlDir, { recursive: true });
+  const evidenceDir = options.evidenceDir ?? options.controlDir;
+  await mkdir(evidenceDir, { recursive: true });
   const store = StateStore.open({
     path: path.join(options.controlDir, "state.sqlite"),
     runId: options.runId
@@ -484,6 +505,19 @@ export async function startServe(options: {
   } else {
     store.initializeRun(options.identity);
   }
+  const tracePath = path.join(evidenceDir, "trace.jsonl");
+  const documentationPath = path.join(evidenceDir, "documentation.jsonl");
+  const traceStream = EventStream.open(
+    await JsonlSink.open(tracePath),
+    "req",
+    (await eventCount(tracePath)) + 1
+  );
+  const documentationStream = EventStream.open(
+    await JsonlSink.open(documentationPath),
+    "doc",
+    (await eventCount(documentationPath)) + 1
+  );
+  const minted = mintRunCredentials(options.contract, options.runSeed);
   const handle = await createRawHttpExposure({
     fixtures: options.pack === null ? [] : packResponseFixtures(options.pack)
   })({
@@ -496,7 +530,24 @@ export async function startServe(options: {
     host: options.host,
     port: options.port,
     now: (): number => Date.now(),
-    trace: DISCARD_TRACE,
+    trace: {
+      reserve: () => traceStream.reserve(),
+      complete: (event: TraceEvent) =>
+        traceStream.complete(event as unknown as Json & { sequence: number })
+    },
+    documentationTrace: {
+      reserve: () => documentationStream.reserve(),
+      complete: (event: DocumentationExchange) =>
+        documentationStream.complete(
+          event as unknown as Json & { sequence: number }
+        )
+    },
+    secrets: [
+      ...Object.values(minted.apiKeys),
+      minted.basic.username,
+      minted.basic.password,
+      minted.bearer
+    ],
     sensitiveHeaderNames: ["authorization"],
     sensitiveKeyPatterns: []
   });
@@ -522,10 +573,7 @@ export async function startServe(options: {
       `${stableJsonStringify(credentials as unknown as Json)}\n`
     );
   }
-  const capabilitiesPath = path.join(
-    options.controlDir,
-    "capability-report.json"
-  );
+  const capabilitiesPath = path.join(evidenceDir, "capability-report.json");
   await writeFile(
     capabilitiesPath,
     `${stableJsonStringify(options.capabilityReport)}\n`
@@ -568,7 +616,8 @@ export async function startServe(options: {
     capabilitiesPath,
     readiness,
     store,
-    controlDir: options.controlDir
+    controlDir: options.controlDir,
+    evidenceDir
   };
 }
 
@@ -778,19 +827,22 @@ export const serveCommand: CommandHandler = async (args, io) => {
     deriveServeRunSeed(contract, compiledSource.pack, runId);
 
   const runDirFlag = args.flags.string("run-dir");
+  const evidenceDir =
+    runDirFlag === undefined
+      ? path.resolve(args.context.cwd, ".oal", "runs", runId)
+      : path.resolve(args.context.cwd, runDirFlag);
   const controlDir =
     resumeDir ??
-    (runDirFlag === undefined
-      ? path.resolve(args.context.cwd, ".oal", "serve", runId)
-      : path.resolve(args.context.cwd, runDirFlag));
+    path.resolve(args.context.cwd, ".oal", "control", "serve", runId);
   if (
     resumeDir === null &&
-    runDirFlag !== undefined &&
-    (await stat(controlDir).catch(() => null)) !== null
+    resumed === null &&
+    ((await stat(evidenceDir).catch(() => null)) !== null ||
+      (await stat(controlDir).catch(() => null)) !== null)
   ) {
     throw unsupported(
       ServeCliCode.ReadyStale,
-      `Run directory already exists: ${controlDir}.`
+      `Run directory already exists: ${evidenceDir}.`
     );
   }
 
@@ -806,6 +858,7 @@ export const serveCommand: CommandHandler = async (args, io) => {
       runId,
       runSeed,
       controlDir,
+      evidenceDir,
       credentialsOut,
       identity,
       resumed: resumed !== null

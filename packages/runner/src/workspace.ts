@@ -256,7 +256,9 @@ interface WorkspaceProblem {
  */
 export async function verifyWorkspaceFiles(
   workspaceDir: string,
-  files: readonly WorkspaceFilePlan[]
+  files: readonly WorkspaceFilePlan[],
+  allowedOutputPaths: readonly string[] = [],
+  allowUndeclaredFiles = false
 ): Promise<void> {
   const root = path.resolve(workspaceDir);
   const declared = new Map(
@@ -266,6 +268,7 @@ export async function verifyWorkspaceFiles(
     ])
   );
   const present = new Set<string>();
+  const allowedOutputs = new Set(allowedOutputPaths);
   const problems: WorkspaceProblem[] = [];
   await walk(root, "", async (relative, absolute) => {
     present.add(relative);
@@ -283,6 +286,9 @@ export async function verifyWorkspaceFiles(
     }
     const expected = declared.get(relative);
     if (expected === undefined) {
+      if (allowedOutputs.has(relative) || allowUndeclaredFiles) {
+        return;
+      }
       problems.push({
         code: WorkspaceCode.UndeclaredFile,
         path: relative,

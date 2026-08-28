@@ -100,12 +100,6 @@ const FAILURE_DISPOSITIONS: ReadonlySet<Disposition> = new Set([
   "invalid_setup"
 ]);
 
-/** Dispositions that mean infrastructure broke after participant control. */
-const POST_CONTROL_FAILURES: ReadonlySet<Disposition> = new Set([
-  "provider_failed_post_control",
-  "infrastructure_failed_post_control"
-]);
-
 /** Required denominator set of section 27.3. */
 export interface Denominators {
   primary_assignment_count: number;
@@ -156,6 +150,8 @@ export interface TrialInput {
   readonly final_state?: TrialFinalStateInput | null | undefined;
   /** Verification input for integrity reason codes (section 33.3). */
   readonly integrity?: IntegrityInput | undefined;
+  /** Final censor class persisted by the runner. */
+  readonly censor_class?: CensorClass | undefined;
 }
 
 /** Frozen schedule numbers the run evidence cannot know. */
@@ -220,10 +216,7 @@ export function censorClassFor(
   if (controlStarted && disposition === "operator_interrupted") {
     return "administrative_censor";
   }
-  if (
-    controlStarted &&
-    (integrity !== "intact" || POST_CONTROL_FAILURES.has(disposition))
-  ) {
+  if (controlStarted && integrity !== "intact") {
     return "instrumentation_censor";
   }
   if (!controlStarted) {
@@ -379,7 +372,9 @@ export function buildTrialFacts(trial: TrialInput): TrialFacts {
       event.type === "lifecycle.stage" &&
       event.payload.stage === "turn_completed"
   );
-  const censorClass = censorClassFor(disposition, controlStarted, integrity);
+  const censorClass =
+    trial.censor_class ??
+    censorClassFor(disposition, controlStarted, integrity);
   const evaluation = trial.evaluation ?? null;
   const taskOutcome = taskOutcomeFor(evaluation);
   const eligibleForSlot = controlStarted && censorClass === "none";
@@ -903,9 +898,7 @@ function buildDenominators(
     primary_agent_outcome_count: slots.filter((slot) => slot.resolved).length,
     api_behavior_count: facts.filter(
       (fact) =>
-        fact.row.participant_control_started &&
-        fact.integrity === "intact" &&
-        fact.row.request_total > 0
+        fact.row.participant_control_started && fact.integrity === "intact"
     ).length,
     task_evaluation_count: facts.filter(
       (fact) =>

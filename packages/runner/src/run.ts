@@ -395,6 +395,11 @@ class AssignmentLedger {
  * same bytes the `file` treatment would copy into the workspace.
  */
 function defaultExposure(plan: FrozenPlan, pack: LoadedPack): ExposureFactory {
+  if (plan.behaviorMode !== "contract" || plan.exposureMode !== "raw-http") {
+    throw new Error(
+      `The default runner exposure cannot execute ${plan.behaviorMode}/${plan.exposureMode}.`
+    );
+  }
   const fixtures = packResponseFixtures(pack);
   if (plan.contractVisibility !== "discoverable") {
     return createRawHttpExposure({ fixtures });
@@ -877,7 +882,8 @@ export function buildCohortEvaluation(
     (outcome) => outcome.controlStarted
   ).length;
   const apiBehavior = outcomes.filter(
-    (outcome) => outcome.apiRequests > 0
+    (outcome) =>
+      outcome.controlStarted && outcome.evidenceIntegrity === "intact"
   ).length;
   const taskEvaluation = outcomes.filter(
     (outcome) => outcome.evaluation !== null

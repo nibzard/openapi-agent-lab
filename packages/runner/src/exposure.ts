@@ -11,6 +11,7 @@
 import { createHash } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { Socket } from "node:net";
 
 import {
   canonicalJsonSha256,
@@ -29,6 +30,7 @@ import { CONTRACT_IR_SCHEMA_VERSION, type ContractIR } from "@oal/contract-ir";
 import type { LimitTable } from "@oal/config";
 import {
   Redactor,
+  redactPath,
   traceHeaders,
   traceQuery,
   type DocumentationExchange,
@@ -290,14 +292,27 @@ class BodyCollector {
   private stored = 0;
   private total = 0;
   private digest: string | null = null;
+  private readonly secrets: readonly string[];
+  private secretTail = "";
+  private hasSecret = false;
 
-  constructor(limit: number) {
+  constructor(limit: number, secrets: readonly string[] = []) {
     this.limit = limit;
+    this.secrets = secrets.filter((secret) => secret.length > 0);
   }
 
   add(chunk: Buffer): void {
     this.total += chunk.byteLength;
     this.hash.update(chunk);
+    if (!this.hasSecret && this.secrets.length > 0) {
+      const text = `${this.secretTail}${chunk.toString("utf8")}`;
+      this.hasSecret = this.secrets.some((secret) => text.includes(secret));
+      const overlap = Math.max(
+        0,
+        ...this.secrets.map((secret) => secret.length - 1)
+      );
+      this.secretTail = overlap === 0 ? "" : text.slice(-overlap);
+    }
     if (this.stored < this.limit) {
       const room = this.limit - this.stored;
       const piece = chunk.byteLength > room ? chunk.subarray(0, room) : chunk;
@@ -312,6 +327,10 @@ class BodyCollector {
 
   get totalBytes(): number {
     return this.total;
+  }
+
+  get containsSecret(): boolean {
+    return this.hasSecret;
   }
 
   get sha256(): string {
@@ -380,18 +399,24 @@ function pathOf(target: string): string {
 
 function bodyOf(
   bytes: Uint8Array,
+  redactor: Redactor,
   sizeBytes?: number,
-  sha256?: string | null
+  sha256?: string | null,
+  containsSecret = false
 ): TraceBody {
   const size = sizeBytes ?? bytes.byteLength;
   if (size === 0) {
     return { kind: "none" };
   }
   if (size > MAX_TRACE_JSON_BYTES || bytes.byteLength < size) {
+    const text = new TextDecoder().decode(bytes);
     return {
       kind: "binary",
       size_bytes: size,
-      sha256: sha256 ?? sha256HexBytes(bytes),
+      sha256:
+        containsSecret || redactor.containsSecret(text)
+          ? null
+          : (sha256 ?? sha256HexBytes(bytes)),
       blob_ref: null
     };
   }
@@ -400,15 +425,18 @@ function bodyOf(
     return {
       kind: "json",
       size_bytes: size,
-      value: JSON.parse(text) as Json,
+      value: redactor.redactJson(JSON.parse(text) as Json),
       truncated: false
     };
   } catch {
     return {
       kind: "text",
       size_bytes: size,
-      sha256: sha256 ?? sha256HexBytes(bytes),
-      text,
+      sha256:
+        containsSecret || redactor.containsSecret(text)
+          ? null
+          : (sha256 ?? sha256HexBytes(bytes)),
+      text: redactor.redactText(text),
       truncated: false
     };
   }
@@ -478,12 +506,12 @@ function listen(server: Server, request: ExposureRequest): Promise<number> {
 
 async function stop(server: Server): Promise<void> {
   server.closeIdleConnections();
+  server.closeAllConnections();
   await new Promise<void>((resolve) => {
     server.close(() => {
       resolve();
     });
   });
-  server.closeAllConnections();
 }
 
 /**
@@ -532,10 +560,40 @@ async function startRawHttpExposure(
     documentation?.authentication ?? "required";
 
   const trace = request.trace;
+  const documentationTrace = request.documentationTrace ?? {
+    reserve: (): { sequence: number; event_id: string } => {
+      const reserved = trace.reserve();
+      return {
+        sequence: reserved.sequence,
+        event_id: sequenceId("doc", reserved.sequence)
+      };
+    },
+    complete: (event: DocumentationExchange): Promise<void> =>
+      trace.complete(event as unknown as TraceEvent)
+  };
+  const sensitiveHeaderNames = new Set(request.sensitiveHeaderNames);
+  const sensitiveCookieNames = new Set<string>();
+  const sensitiveQueryNames = new Set<string>();
+  for (const scheme of Object.values(request.contract.security_schemes)) {
+    if (scheme.type !== "apiKey" || scheme.wire_name === null) {
+      continue;
+    }
+    if (scheme.location === "header") {
+      sensitiveHeaderNames.add(scheme.wire_name);
+    } else if (scheme.location === "cookie") {
+      sensitiveCookieNames.add(scheme.wire_name);
+    } else if (scheme.location === "query") {
+      sensitiveQueryNames.add(scheme.wire_name);
+    }
+  }
+  sensitiveHeaderNames.add("authorization");
   const redactor = new Redactor({
     hmacKey: Buffer.from(request.trialSeed, "utf8"),
+    secrets: request.secrets ?? [],
     config: {
-      sensitiveHeaderNames: [...request.sensitiveHeaderNames],
+      sensitiveHeaderNames: [...sensitiveHeaderNames],
+      sensitiveCookieNames: [...sensitiveCookieNames],
+      sensitiveQueryNames: [...sensitiveQueryNames],
       keyPatterns: [...request.sensitiveKeyPatterns]
     }
   });
@@ -546,6 +604,7 @@ async function startRawHttpExposure(
   const admission = new AdmissionControl(request.limits);
   const exchangeFailures: ExposureFailureRecord[] = [];
   let exchangeFailureTotal = 0;
+  let participantIngressSequence = 0;
   let plane: DocumentationPlane | null = null;
 
   /**
@@ -571,7 +630,10 @@ async function startRawHttpExposure(
   const answer = async (
     incoming: IncomingMessage,
     outgoing: ServerResponse,
-    collector: BodyCollector
+    collector: BodyCollector,
+    ingressSequence: number,
+    ingressStartedAt: number,
+    connectionOverLimit: boolean
   ): Promise<void> => {
     const method = (incoming.method ?? "GET").toUpperCase();
     const target = incoming.url ?? "/";
@@ -580,6 +642,7 @@ async function startRawHttpExposure(
     // event stream moving, whatever stage failed.
     let startedAt: number | null = null;
     let reserved: { sequence: number; event_id: string } | null = null;
+    let documentationExchange = false;
     let stage: ExchangeFailureStage = "ingress";
     // True while this request holds one concurrent-connection slot, so
     // the failure path below can give the slot back exactly once.
@@ -596,18 +659,26 @@ async function startRawHttpExposure(
       }
     };
     try {
-      startedAt = request.now();
-      reserved = trace.reserve();
-      const requestId = sequenceId("req", reserved.sequence);
+      startedAt = ingressStartedAt;
 
       const path = pathOf(target);
       const query = queryOf(target);
       const bytes = collector.storedBytes();
 
+      const candidate = plane?.match(method, path) ?? null;
+      documentationExchange = candidate !== null && plane !== null;
+      reserved = documentationExchange
+        ? documentationTrace.reserve()
+        : trace.reserve();
+      const requestId = sequenceId("req", ingressSequence);
+
       // Section 31.3: validate every limit before any dispatch or state
       // change. A limit event stays visible in evidence.
-      const refusal = admission.admit(request.now());
-      holdsAdmission = refusal === null;
+      const admitted = admission.admit(request.now());
+      holdsAdmission = admitted === null;
+      const refusal: Refusal | null = connectionOverLimit
+        ? "concurrent"
+        : admitted;
       const overTarget =
         Buffer.byteLength(target, "utf8") >
         request.limits.maxRequestTargetBytes;
@@ -627,6 +698,7 @@ async function startRawHttpExposure(
           collector,
           response,
           reserved,
+          ingressSequence,
           startedAt,
           routed: false
         });
@@ -640,7 +712,6 @@ async function startRawHttpExposure(
 
       // Section 15.1: the documentation-candidate inventory is checked
       // before product route matching and never enters it.
-      const candidate = plane?.match(method, path) ?? null;
       if (candidate !== null && plane !== null) {
         stage = "plane";
         const result = plane.serve(candidate, {
@@ -653,9 +724,9 @@ async function startRawHttpExposure(
         const exchange: DocumentationExchange = {
           schema_version: 1,
           type: "documentation.exchange",
-          event_id: sequenceId("doc", reserved.sequence),
+          event_id: reserved.event_id,
           sequence: reserved.sequence,
-          participant_ingress_sequence: reserved.sequence,
+          participant_ingress_sequence: ingressSequence,
           observed_at: formatRfc3339(startedAt),
           batch_id: request.batchId,
           run_id: request.runId,
@@ -678,7 +749,7 @@ async function startRawHttpExposure(
           extensions: {}
         };
         stage = "persist";
-        await trace.complete(exchange as unknown as TraceEvent);
+        await documentationTrace.complete(exchange);
         settle(outgoing, result.serving);
         admission.release();
         holdsAdmission = false;
@@ -708,6 +779,7 @@ async function startRawHttpExposure(
         collector,
         response,
         reserved,
+        ingressSequence,
         startedAt,
         routed: true
       });
@@ -733,14 +805,19 @@ async function startRawHttpExposure(
         holdsAdmission = false;
       }
       const observedAt = failureNow();
-      if (reservedSlot !== null && startedAt !== null) {
+      if (
+        reservedSlot !== null &&
+        startedAt !== null &&
+        !documentationExchange
+      ) {
         try {
           await completeFailedExchange(request, trace, {
             reserved: reservedSlot,
             startedAt,
             observedAt,
             requestBytes: collector.totalBytes,
-            stage
+            stage,
+            ingressSequence
           });
         } catch {
           // The sink already refused the original append; the sequence
@@ -755,20 +832,98 @@ async function startRawHttpExposure(
     }
   };
 
+  const recordDisconnected = async (
+    collector: BodyCollector,
+    ingressSequence: number,
+    startedAt: number
+  ): Promise<void> => {
+    let reserved: { sequence: number; event_id: string } | null = null;
+    try {
+      reserved = trace.reserve();
+      const observedAt = request.now();
+      await completeFailedExchange(request, trace, {
+        reserved,
+        startedAt,
+        observedAt,
+        requestBytes: collector.totalBytes,
+        stage: "ingress",
+        ingressSequence
+      });
+    } catch {
+      recordExchangeFailure(
+        reserved === null ? null : sequenceId("req", ingressSequence),
+        reserved === null ? "ingress" : "persist",
+        startedAt
+      );
+    }
+  };
+
   const server: Server = createServer((incoming, outgoing) => {
-    const collector = new BodyCollector(request.limits.maxRequestBodyBytes);
+    const collector = new BodyCollector(
+      request.limits.maxRequestBodyBytes,
+      request.secrets ?? []
+    );
+    participantIngressSequence += 1;
+    const ingressSequence = participantIngressSequence;
+    let ingressStartedAt = 0;
+    try {
+      ingressStartedAt = request.now();
+    } catch {
+      settleInternalFailure(outgoing, sequenceId("req", ingressSequence));
+      recordExchangeFailure(null, "ingress", 0);
+      return;
+    }
+    let handled = false;
     incoming.on("data", (chunk: Buffer) => {
       collector.add(chunk);
     });
     incoming.on("end", () => {
+      if (handled) {
+        return;
+      }
+      handled = true;
       // The handler settles every request itself, failures included,
       // so it never rejects; this guard only keeps a programmer error
       // from becoming an unhandled rejection that kills the process.
-      answer(incoming, outgoing, collector).catch(() => undefined);
+      answer(
+        incoming,
+        outgoing,
+        collector,
+        ingressSequence,
+        ingressStartedAt,
+        rejectedConnections.has(incoming.socket)
+      ).catch(() => undefined);
     });
-    incoming.on("error", () => undefined);
+    const disconnect = (): void => {
+      if (handled) {
+        return;
+      }
+      handled = true;
+      recordDisconnected(collector, ingressSequence, ingressStartedAt).catch(
+        () => undefined
+      );
+    };
+    incoming.on("aborted", disconnect);
+    incoming.on("error", disconnect);
     outgoing.on("error", () => undefined);
   });
+  const connections = new Set<Socket>();
+  const rejectedConnections = new Set<Socket>();
+  server.on("connection", (socket: Socket) => {
+    if (connections.size >= request.limits.maxConcurrentConnectionsPerRun) {
+      rejectedConnections.add(socket);
+    }
+    connections.add(socket);
+    socket.once("close", () => {
+      connections.delete(socket);
+      rejectedConnections.delete(socket);
+    });
+  });
+  server.requestTimeout = Math.max(
+    1,
+    Math.min(request.limits.trialWallTimeMs, 30_000)
+  );
+  server.headersTimeout = server.requestTimeout;
 
   const port = await listen(server, request);
   const baseUrl = `http://${request.host}:${port}`;
@@ -862,6 +1017,9 @@ async function startRawHttpExposure(
         return;
       }
       closed = true;
+      for (const socket of connections) {
+        socket.destroy();
+      }
       await stop(server);
     },
     get exchangeFailureCount(): number {
@@ -881,6 +1039,7 @@ interface ApiExchangeInput {
   readonly collector: BodyCollector;
   readonly response: GatewayResponse;
   readonly reserved: { sequence: number; event_id: string };
+  readonly ingressSequence: number;
   readonly startedAt: number;
   readonly routed: boolean;
 }
@@ -893,11 +1052,12 @@ async function completeApiExchange(
   input: ApiExchangeInput
 ): Promise<void> {
   const { method, target, response } = input;
-  const path = pathOf(target);
+  const rawPath = pathOf(target);
+  const path = redactPath(rawPath, redactor);
   const query = queryOf(target);
   const bytes = input.collector.storedBytes();
   const route: RouteResult = input.routed
-    ? matchRoute(request.contract.operations, method, path)
+    ? matchRoute(request.contract.operations, method, rawPath)
     : { match: null, allowedMethods: [], pathExists: false };
   const headerPairs = Object.entries(input.headers).flatMap(([name, value]) =>
     value === undefined
@@ -909,6 +1069,13 @@ async function completeApiExchange(
   const queryEntries: Array<[string, string[]]> = [...query.entries()].map(
     ([name, value]) => [name, [value]]
   );
+  const redactedQuery = traceQuery(queryEntries, redactor);
+  const redactedQueryString = new URLSearchParams();
+  for (const parameter of redactedQuery) {
+    for (const value of parameter.values) {
+      redactedQueryString.append(parameter.name, value);
+    }
+  }
   const contentType = input.headers["content-type"];
   const complete = bytes.byteLength === input.collector.totalBytes;
   const requestSha = complete ? null : input.collector.sha256;
@@ -918,7 +1085,7 @@ async function completeApiExchange(
     type: "api.exchange",
     event_id: input.reserved.event_id,
     sequence: input.reserved.sequence,
-    participant_ingress_sequence: input.reserved.sequence,
+    participant_ingress_sequence: input.ingressSequence,
     observed_at: formatRfc3339(input.startedAt),
     logical_time: null,
     batch_id: request.batchId,
@@ -939,9 +1106,18 @@ async function completeApiExchange(
       received_at: formatRfc3339(input.startedAt),
       method,
       path,
-      query_string: query.toString(),
-      query: traceQuery(queryEntries, redactor),
-      path_parameters: route.match?.pathParameters ?? {},
+      query_string: redactedQueryString.toString(),
+      query: redactedQuery,
+      path_parameters: Object.fromEntries(
+        Object.entries(route.match?.pathParameters ?? {}).map(
+          ([name, value]) => [
+            name,
+            redactor.isSensitiveKey(name) || redactor.containsSecret(value)
+              ? redactor.redactPathValue(value)
+              : value
+          ]
+        )
+      ),
       headers: traceHeaders(headerPairs, redactor),
       credential_present:
         input.headers["authorization"] !== undefined ||
@@ -951,7 +1127,13 @@ async function completeApiExchange(
           )
         ),
       content_type: typeof contentType === "string" ? contentType : null,
-      body: bodyOf(bytes, input.collector.totalBytes, requestSha)
+      body: bodyOf(
+        bytes,
+        redactor,
+        input.collector.totalBytes,
+        requestSha,
+        input.collector.containsSecret
+      )
     },
     authentication: {
       status:
@@ -993,13 +1175,15 @@ async function completeApiExchange(
     response: {
       completed_at: formatRfc3339(request.now()),
       status: response.status,
-      headers: Object.entries(response.headers).map(([name, value]) => ({
-        name: name.toLowerCase(),
-        values: [value],
-        redacted: false
-      })),
+      headers: traceHeaders(
+        Object.entries(response.headers).map(([name, value]) => [
+          name,
+          [value]
+        ]),
+        redactor
+      ),
       content_type: response.headers["content-type"] ?? null,
-      body: bodyOf(Buffer.from(response.body ?? "", "utf8"))
+      body: bodyOf(Buffer.from(response.body ?? "", "utf8"), redactor)
     },
     state: null,
     idempotency: { status: "not_requested", record_ref: null },
@@ -1032,6 +1216,7 @@ interface FailedExchangeInput {
   readonly observedAt: number;
   readonly requestBytes: number;
   readonly stage: ExchangeFailureStage;
+  readonly ingressSequence: number;
 }
 
 /**
@@ -1056,7 +1241,7 @@ async function completeFailedExchange(
     type: "api.exchange",
     event_id: input.reserved.event_id,
     sequence: input.reserved.sequence,
-    participant_ingress_sequence: input.reserved.sequence,
+    participant_ingress_sequence: input.ingressSequence,
     observed_at: formatRfc3339(input.startedAt),
     logical_time: null,
     batch_id: request.batchId,
@@ -1102,7 +1287,10 @@ async function completeFailedExchange(
         redacted: false
       })),
       content_type: response.headers["content-type"] ?? null,
-      body: bodyOf(Buffer.from(response.body ?? "", "utf8"))
+      body: bodyOf(
+        Buffer.from(response.body ?? "", "utf8"),
+        new Redactor({ hmacKey: Buffer.from(request.trialSeed, "utf8") })
+      )
     },
     state: null,
     idempotency: { status: "not_requested", record_ref: null },

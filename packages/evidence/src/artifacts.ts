@@ -9,7 +9,9 @@ import { createHash } from "node:crypto";
 import {
   type FileHandle,
   mkdir,
+  lstat,
   open,
+  readlink,
   readdir,
   readFile,
   rename,
@@ -49,6 +51,10 @@ export interface ManifestEntry {
   producer: { component: string; version: string };
   sensitivity: "redacted" | "operator" | "sensitive" | "public";
   child_manifest?: boolean;
+  /** A symlink is recorded as inert metadata. Verification never follows it. */
+  entry_type?: "file" | "symlink";
+  /** The literal link target for an inert symlink entry. */
+  link_target?: string;
 }
 
 export interface ArtifactManifest {
@@ -288,6 +294,24 @@ export class ArtifactStore {
       ) {
         continue;
       }
+      if (child.isSymbolicLink()) {
+        const linkTarget = await readlink(join(absolute, child.name));
+        const bytes = Buffer.from(linkTarget, "utf8");
+        entries.push({
+          path: relative,
+          bytes: bytes.length,
+          sha256: createHash("sha256").update(bytes).digest("hex"),
+          media_type: "application/vnd.oal.symlink",
+          producer: {
+            component: EVIDENCE_COMPONENT,
+            version: EVIDENCE_VERSION
+          },
+          sensitivity: sensitivityFor(relative),
+          entry_type: "symlink",
+          link_target: linkTarget
+        });
+        continue;
+      }
       const bytes = await readFile(join(absolute, child.name));
       entries.push({
         path: relative,
@@ -296,6 +320,7 @@ export class ArtifactStore {
         media_type: mediaTypeFor(child.name),
         producer: { component: EVIDENCE_COMPONENT, version: EVIDENCE_VERSION },
         sensitivity: sensitivityFor(relative),
+        entry_type: "file",
         child_manifest: child.name === MANIFEST_NAME
       });
     }
@@ -307,11 +332,20 @@ export class ArtifactStore {
    * digest must match on disk (section 24.4).
    */
   async verify(pointerPath: string): Promise<VerificationResult> {
-    const pointerText = await this.read(pointerPath);
-    const pointer = JSON.parse(pointerText) as {
+    const pointerText = await this.read(pointerPath).catch(() => null);
+    if (pointerText === null) {
+      return { ok: false, problems: ["completion pointer is missing"] };
+    }
+    let pointer: {
       manifest_path?: string;
       manifest_sha256?: string;
+      artifact_manifest_sha256?: string;
     };
+    try {
+      pointer = JSON.parse(pointerText) as typeof pointer;
+    } catch {
+      return { ok: false, problems: ["completion pointer is not valid JSON"] };
+    }
     const problems: string[] = [];
     if (typeof pointer.manifest_path !== "string") {
       return {
@@ -319,7 +353,9 @@ export class ArtifactStore {
         problems: ["completion pointer has no manifest_path"]
       };
     }
-    if (!isSha256Hex(pointer.manifest_sha256 ?? "")) {
+    const pointerDigest =
+      pointer.manifest_sha256 ?? pointer.artifact_manifest_sha256;
+    if (!isSha256Hex(pointerDigest ?? "")) {
       problems.push("completion pointer has no manifest_sha256 digest");
     }
     const manifestText = await this.read(pointer.manifest_path).catch(
@@ -331,20 +367,99 @@ export class ArtifactStore {
     const actualDigest = createHash("sha256")
       .update(manifestText)
       .digest("hex");
-    if (pointer.manifest_sha256 !== actualDigest) {
+    if (pointerDigest !== actualDigest) {
       problems.push("manifest digest does not match the completion pointer");
     }
-    const manifest = JSON.parse(manifestText) as ArtifactManifest;
+    let parsedManifest: unknown;
+    try {
+      parsedManifest = JSON.parse(manifestText) as unknown;
+    } catch {
+      return {
+        ok: false,
+        problems: [...problems, "artifact manifest is not valid JSON"]
+      };
+    }
+    if (
+      !isUnknownRecord(parsedManifest) ||
+      parsedManifest["schema_version"] !== 1 ||
+      parsedManifest["kind"] !== "ArtifactManifest" ||
+      !Array.isArray(parsedManifest["entries"])
+    ) {
+      return {
+        ok: false,
+        problems: [...problems, "artifact manifest has an invalid schema"]
+      };
+    }
+    const manifestEntries = parsedManifest["entries"];
     const scopeDir = posix.dirname(toPosix(pointer.manifest_path));
-    for (const entry of manifest.entries) {
-      const entryText = await this.read(`${scopeDir}/${entry.path}`).catch(
-        () => null
-      );
-      if (entryText === null) {
+    for (const rawEntry of manifestEntries) {
+      if (!isUnknownRecord(rawEntry)) {
+        problems.push("artifact manifest contains an invalid entry");
+        continue;
+      }
+      const entry = {
+        path: rawEntry["path"],
+        bytes: rawEntry["bytes"],
+        sha256: rawEntry["sha256"],
+        entry_type: rawEntry["entry_type"],
+        link_target: rawEntry["link_target"]
+      };
+      if (
+        typeof entry.path !== "string" ||
+        typeof entry.bytes !== "number" ||
+        !Number.isSafeInteger(entry.bytes) ||
+        entry.bytes < 0 ||
+        typeof entry.sha256 !== "string" ||
+        !isSha256Hex(entry.sha256)
+      ) {
+        problems.push("artifact manifest contains an invalid entry");
+        continue;
+      }
+      try {
+        assertSafeRelativePath(entry.path, "manifest entry path");
+      } catch {
+        problems.push(`${entry.path} is not a safe manifest path`);
+        continue;
+      }
+      let entryPath: string;
+      try {
+        entryPath = this.resolve(`${scopeDir}/${entry.path}`);
+      } catch {
+        problems.push(`${entry.path} escapes the artifact store`);
+        continue;
+      }
+      const entryStats = await lstat(entryPath).catch(() => null);
+      if (entryStats === null) {
         problems.push(`${entry.path} is missing`);
         continue;
       }
-      const bytes = Buffer.from(entryText, "utf8");
+      if (entry.entry_type === "symlink") {
+        if (!entryStats.isSymbolicLink()) {
+          problems.push(`${entry.path} is not the recorded symlink`);
+          continue;
+        }
+        const linkTarget = await readlink(entryPath);
+        if (
+          typeof entry.link_target !== "string" ||
+          linkTarget !== entry.link_target
+        ) {
+          problems.push(`${entry.path} link target mismatch`);
+        }
+        const bytes = Buffer.from(linkTarget, "utf8");
+        const digest = createHash("sha256").update(bytes).digest("hex");
+        if (digest !== entry.sha256) {
+          problems.push(`${entry.path} digest mismatch`);
+        }
+        if (bytes.length !== entry.bytes) {
+          problems.push(`${entry.path} size mismatch`);
+        }
+        continue;
+      }
+      if (!entryStats.isFile()) {
+        problems.push(`${entry.path} is not a regular file`);
+        continue;
+      }
+      const bytes = await readFile(entryPath);
       const digest = createHash("sha256").update(bytes).digest("hex");
       if (digest !== entry.sha256) {
         problems.push(`${entry.path} digest mismatch`);
@@ -386,6 +501,10 @@ async function openExclusive(target: string): Promise<FileHandle | null> {
 export interface VerificationResult {
   ok: boolean;
   problems: string[];
+}
+
+function isUnknownRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function toPosix(path: string): string {

@@ -767,6 +767,15 @@ export async function runPreflight(
       )
     );
   }
+  if (behaviorMode === "scenario" && scenarioIds.includes(scenarioId)) {
+    findings.push(
+      error(
+        PreflightCode.ScenarioIncomplete,
+        "This runner has no scenario backend bridge. It refuses the run before it starts an exposure.",
+        { scenario_id: scenarioId, behavior_mode: behaviorMode }
+      )
+    );
+  }
   if (behaviorMode === "contract" && options.scenarioId !== undefined) {
     findings.push(
       warn(
@@ -917,6 +926,15 @@ export async function runPreflight(
         )
       );
     }
+  }
+  if (exposureMode !== "raw-http") {
+    findings.push(
+      error(
+        PreflightCode.ExposureIncompatible,
+        `This runner has no ${exposureMode} bridge. It refuses the run before it starts an HTTP exposure.`,
+        { exposure_mode: exposureMode }
+      )
+    );
   }
   if (exposureMode === "direct-tools") {
     for (const reason of capability.recommendations.direct_tools.reason_codes) {

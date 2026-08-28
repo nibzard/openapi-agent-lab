@@ -263,7 +263,7 @@ describe("Steel parity: API key behavior", () => {
     );
     const options = parityGatewayOptions(contract, fixtures);
     const apiKey = parityApiKey(contract);
-    expect(apiKey).toMatch(/^oal_[0-9a-f]{24}$/u);
+    expect(apiKey).toMatch(/^oal_[0-9a-f]{64}$/u);
     expect(mintRunCredentials(contract, "seed-a").apiKeys["apiKey"]).toBe(
       mintRunCredentials(contract, "seed-a").apiKeys["apiKey"]
     );

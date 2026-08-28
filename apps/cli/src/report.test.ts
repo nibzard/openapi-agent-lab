@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   EXIT_INVALID,
+  EXIT_INFRASTRUCTURE,
   EXIT_OK,
   EXIT_UNSUPPORTED,
   type ExitCode
@@ -194,7 +195,19 @@ describe("oal report", () => {
     await writeFile(path.join(runDir, first, "state.summary.json"), "{}\n");
     const io = new MemoryIo();
     const code = await main(["report", batchDir], io, { cwd });
-    expect(code).toBe(EXIT_INVALID);
+    expect(code).toBe(EXIT_INFRASTRUCTURE);
+    expect(io.stderrText()).toContain(ReportCliCode.EvidenceDrift);
+  });
+
+  it("refuses drift in a frozen batch input", async () => {
+    const { cwd, batchDir } = await recordedBatch("cli-report-input-drift");
+    await writeFile(
+      path.join(batchDir, "inputs", "rubric.frozen.yaml"),
+      "tampered: true\n"
+    );
+    const io = new MemoryIo();
+    const code = await main(["report", batchDir], io, { cwd });
+    expect(code).toBe(EXIT_INFRASTRUCTURE);
     expect(io.stderrText()).toContain(ReportCliCode.EvidenceDrift);
   });
 });

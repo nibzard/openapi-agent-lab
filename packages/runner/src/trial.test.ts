@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -40,7 +40,7 @@ const FINAL_TEXT = JSON.stringify({
 });
 
 /** A socket-free treatment: one fixed handle per trial. */
-function fakeExposureLog(): {
+function fakeExposureLog(exchangeFailureCount = 0): {
   factory: ExposureFactory;
   requests: ExposureRequest[];
 } {
@@ -51,6 +51,7 @@ function fakeExposureLog(): {
     documentationUrl: null,
     mcpUrl: null,
     serverRecord: { kind: "FakeExposure", base_url: "http://127.0.0.1:9" },
+    exchangeFailureCount,
     close: () => Promise.resolve()
   };
   return {
@@ -475,6 +476,75 @@ describe("runTrial", () => {
       });
       const request = exchange.request as Record<string, unknown>;
       expect(request.credential_present).toBe(false);
+    } finally {
+      await clean();
+    }
+  });
+
+  it("marks exposure persistence failures as invalid infrastructure evidence", async () => {
+    const adapter = scriptedAdapter();
+    const { plan, pack, store, clean } = await fixture(
+      "oal-trial-persist-",
+      adapter,
+      "b-persist-failure"
+    );
+    try {
+      const outcome = await runTrial({
+        store,
+        plan,
+        pack,
+        adapter,
+        index: 0,
+        exposure: fakeExposureLog(1).factory,
+        now: CLOCK
+      });
+      expect(outcome.disposition).toBe("infrastructure_failed_post_control");
+      expect(outcome.evidenceIntegrity).toBe("corrupt");
+      expect(outcome.censorClass).toBe("instrumentation_censor");
+    } finally {
+      await clean();
+    }
+  });
+
+  it("detects a participant symlink after execution without dereferencing it", async () => {
+    const base = scriptedAdapter();
+    const adapter: AgentAdapter = {
+      id: base.id,
+      probe: () => base.probe(),
+      prepare: (context) => base.prepare(context),
+      run: async (prepared, sink, signal) => {
+        await symlink(
+          "/etc/hosts",
+          path.join(prepared.workingDirectory, "outside-link")
+        );
+        return await base.run(prepared, sink, signal);
+      }
+    };
+    const { plan, pack, store, clean } = await fixture(
+      "oal-trial-symlink-",
+      base,
+      "b-symlink"
+    );
+    try {
+      const outcome = await runTrial({
+        store,
+        plan,
+        pack,
+        adapter,
+        index: 0,
+        exposure: fakeExposureLog().factory,
+        now: CLOCK
+      });
+      expect(outcome.evidenceIntegrity).toBe("corrupt");
+      const root = `runs/${plan.batchId}/trials/${outcome.runId}`;
+      const manifest = JSON.parse(
+        await store.read(`${root}/artifact-manifest.json`)
+      ) as { entries: Array<Record<string, unknown>> };
+      expect(
+        manifest.entries.find(
+          (entry) => entry["path"] === "workspace/outside-link"
+        )?.["entry_type"]
+      ).toBe("symlink");
     } finally {
       await clean();
     }

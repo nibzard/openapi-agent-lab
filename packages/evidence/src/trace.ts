@@ -220,8 +220,15 @@ export class EventStream {
     private readonly idPrefix: string
   ) {}
 
-  static open(sink: JsonlSink, idPrefix: string): EventStream {
-    return new EventStream(sink, idPrefix);
+  static open(
+    sink: JsonlSink,
+    idPrefix: string,
+    nextSequence = 1
+  ): EventStream {
+    const stream = new EventStream(sink, idPrefix);
+    stream.nextSequence = nextSequence;
+    stream.writeUpTo = nextSequence;
+    return stream;
   }
 
   /** Reserve the next sequence at ingress time. */
@@ -483,13 +490,16 @@ export function traceHeaders(
 ): TraceHeader[] {
   const records: TraceHeader[] = [];
   for (const [name, values] of headers) {
-    const redacted = redactor.isSensitiveKey(name);
+    const sensitiveName = redactor.isSensitiveKey(name);
+    const safeValues = sensitiveName
+      ? values.map(() => "[REDACTED]")
+      : values.map((value) => redactor.redactHeaderValue(name, value));
     records.push({
       name: name.toLowerCase(),
-      values: redacted
-        ? values.map(() => "[REDACTED]")
-        : values.map((value) => redactor.redactHeaderValue(name, value)),
-      redacted
+      values: safeValues,
+      redacted:
+        sensitiveName ||
+        safeValues.some((value, index) => value !== values[index])
     });
   }
   return records;

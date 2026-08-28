@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { ArtifactStore } from "@oal/evidence";
 import { MockAgentAdapter } from "@oal/mock-adapter";
+import type { AgentAdapter } from "@oal/agent-adapter";
 import { findRepoRoot, loadSteelPack } from "@oal/testkit";
 
 import {
@@ -385,6 +386,42 @@ describe("runPreflight", () => {
       });
       expect(result.ok).toBe(false);
       expect(result.findings.map((f) => f.code)).toContain(
+        PreflightCode.ExposureIncompatible
+      );
+    } finally {
+      await clean();
+    }
+  });
+
+  it("refuses an unwired tool mode even when the adapter reports MCP", async () => {
+    const pack = await loadSteelPack();
+    const { store, clean } = await newStore();
+    const base = new MockAgentAdapter();
+    const adapter: AgentAdapter = {
+      id: base.id,
+      prepare: (context) => base.prepare(context),
+      run: (prepared, sink, signal) => base.run(prepared, sink, signal),
+      probe: async () => {
+        const probe = await base.probe();
+        return {
+          ...probe,
+          capabilities: { ...probe.capabilities, mcp: true }
+        };
+      }
+    };
+    try {
+      const result = await runPreflight({
+        packDir: pack.root,
+        evalId: "basic-lifecycle",
+        batchId: "b-mcp-unwired",
+        store,
+        adapter,
+        paid: false,
+        exposureMode: "catalog-tools",
+        schemaDir: SCHEMA_DIR
+      });
+      expect(result.ok).toBe(false);
+      expect(result.findings.map((finding) => finding.code)).toContain(
         PreflightCode.ExposureIncompatible
       );
     } finally {

@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdtemp, readFile, rm, writeFile, mkdir } from "node:fs/promises";
+import {
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+  mkdir,
+  symlink
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -171,6 +178,41 @@ describe("manifests and verification", () => {
     const verification = await store.verify(`${trial}/run.completed.json`);
     expect(verification.ok).toBe(false);
     expect(verification.problems.join(" ")).toContain("run.started.json");
+  });
+
+  it("verifies binary bytes and records symlinks without reading targets", async () => {
+    await store.initTrial("batch-01", "run-01");
+    const trial = "runs/batch-01/trials/run-01";
+    await writeFile(
+      store.resolve(`${trial}/state.sqlite`),
+      Buffer.from([0xff, 0xfe, 0x00, 0x80])
+    );
+    const external = join(dir, "external-secret.txt");
+    await writeFile(external, "must-not-enter-the-manifest");
+    await symlink(external, store.resolve(`${trial}/workspace/link`));
+    const manifest = await store.writeManifest({
+      scopeDir: trial,
+      level: "trial",
+      id: "run-01",
+      createdAt: "2026-08-27T12:00:00.000Z"
+    });
+    const link = manifest.entries.find(
+      (entry) => entry.path === "workspace/link"
+    );
+    expect(link?.entry_type).toBe("symlink");
+    expect(JSON.stringify(manifest)).not.toContain("must-not-enter");
+    const manifestPath = `${trial}/${MANIFEST_NAME}`;
+    const digest = createHash("sha256")
+      .update(await store.read(manifestPath))
+      .digest("hex");
+    await store.atomicWrite(
+      `${trial}/run.completed.json`,
+      `{"manifest_path":"${manifestPath}","manifest_sha256":"${digest}"}\n`
+    );
+    expect(await store.verify(`${trial}/run.completed.json`)).toEqual({
+      ok: true,
+      problems: []
+    });
   });
 
   it("detects a missing manifest from the completion pointer", async () => {

@@ -16,7 +16,12 @@ import type {
   SchemaIR,
   SecuritySchemeIR
 } from "@oal/contract-ir";
-import { EventStream, JsonlSink, type TraceEvent } from "@oal/evidence";
+import {
+  EventStream,
+  JsonlSink,
+  type DocumentationExchange,
+  type TraceEvent
+} from "@oal/evidence";
 import { mintRunCredentials } from "@oal/gateway";
 import { compileOpenApi } from "@oal/openapi";
 import { loadPack } from "@oal/pack";
@@ -45,6 +50,7 @@ import type {
   ExposureHandle,
   ExposureFactory,
   ExposureRequest,
+  DocumentationWriter,
   TraceWriter
 } from "./setup.ts";
 import { packResponseFixtures } from "./types.ts";
@@ -245,6 +251,25 @@ class RecordingTrace implements EventSink {
   }
 }
 
+class RecordingDocumentation implements DocumentationWriter {
+  readonly events: DocumentationExchange[] = [];
+  private next = 1;
+
+  reserve(): { sequence: number; event_id: string } {
+    const sequence = this.next;
+    this.next += 1;
+    return {
+      sequence,
+      event_id: `doc_${sequence.toString(10).padStart(8, "0")}`
+    };
+  }
+
+  complete(event: DocumentationExchange): Promise<void> {
+    this.events.push(event);
+    return Promise.resolve();
+  }
+}
+
 /** A trace that holds the first completion until the test opens it. */
 class GatedTrace implements EventSink {
   readonly events: unknown[] = [];
@@ -370,6 +395,8 @@ async function startServer(
     contract?: ContractIR;
     limits?: Partial<LimitTable>;
     trace?: EventSink;
+    documentationTrace?: DocumentationWriter;
+    secrets?: readonly string[];
   } = {},
   options: RawHttpExposureOptions = {},
   factory: ExposureFactory = createRawHttpExposure(options)
@@ -386,6 +413,10 @@ async function startServer(
     port: 0,
     now: CLOCK,
     trace,
+    ...(init.documentationTrace === undefined
+      ? {}
+      : { documentationTrace: init.documentationTrace }),
+    secrets: init.secrets ?? [],
     sensitiveHeaderNames: ["authorization"],
     sensitiveKeyPatterns: []
   };
@@ -1217,6 +1248,52 @@ describe("runtime controls", () => {
     }
   });
 
+  it("closes within the bound when a client leaves a body incomplete", async () => {
+    const server = await startServer({
+      limits: { maxConcurrentConnectionsPerRun: 1 }
+    });
+    const socket = net.createConnection(portOf(server.handle), "127.0.0.1");
+    await new Promise<void>((resolve, reject) => {
+      socket.once("connect", resolve);
+      socket.once("error", reject);
+    });
+    socket.write(
+      "POST /things HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 100\r\n\r\nx"
+    );
+    try {
+      await settleWithin(
+        server.handle.close(),
+        "exposure close waited for an incomplete request"
+      );
+    } finally {
+      socket.destroy();
+    }
+  });
+
+  it("records one event when a client disconnects during its body", async () => {
+    const server = await startServer();
+    const socket = net.createConnection(portOf(server.handle), "127.0.0.1");
+    await new Promise<void>((resolve, reject) => {
+      socket.once("connect", resolve);
+      socket.once("error", reject);
+    });
+    socket.write(
+      "POST /things HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 100\r\n\r\nx"
+    );
+    socket.destroy();
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(apiEvents(server.trace)).toHaveLength(1);
+      expect(
+        (firstApiEvent(server.trace)["error"] as Record<string, unknown>)[
+          "code"
+        ]
+      ).toBe(EXCHANGE_INGRESS_FAILED);
+    } finally {
+      await server.handle.close();
+    }
+  });
+
   it("records exactly one unmatched exchange for an unknown path", async () => {
     const server = await startServer();
     try {
@@ -1521,6 +1598,51 @@ describe("credential instructions", () => {
       await server.handle.close();
     }
   });
+
+  it("redacts registered secrets from every persisted exchange field", async () => {
+    const secret = "neutral-value-78231";
+    const base = postingContract();
+    const securedPosting: ContractIR = {
+      ...base,
+      security_schemes: {
+        keyAuth: scheme({
+          name: "keyAuth",
+          type: "apiKey",
+          location: "query",
+          wire_name: "api_key"
+        })
+      }
+    };
+    const server = await startServer(
+      { contract: securedPosting, secrets: [secret] },
+      {
+        fixtures: [
+          {
+            id: "secret-response",
+            operation: "path:POST /things",
+            status: 201,
+            media_type: "application/json",
+            headers: { "x-result": secret },
+            body: { kind: "json_inline", value: { id: secret } }
+          }
+        ]
+      }
+    );
+    try {
+      await exchange(
+        server.handle,
+        "POST",
+        `/things?api_key=${encodeURIComponent(secret)}&note=${encodeURIComponent(secret)}`,
+        {
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ note: secret })
+        }
+      );
+      expect(JSON.stringify(firstApiEvent(server.trace))).not.toContain(secret);
+    } finally {
+      await server.handle.close();
+    }
+  });
 });
 
 describe("determinism", () => {
@@ -1586,8 +1708,9 @@ describe("determinism", () => {
   });
 
   it("records documentation exchanges with their own stream identity", async () => {
+    const documentation = new RecordingDocumentation();
     const server = await startServer(
-      {},
+      { documentationTrace: documentation },
       {
         visibility: "discoverable",
         documentation: {
@@ -1600,16 +1723,14 @@ describe("determinism", () => {
       await exchange(server.handle, "GET", "/openapi.json");
       await exchange(server.handle, "GET", "/openapi.json");
       await exchange(server.handle, "GET", "/things");
-      const records = server.trace.events.flatMap((event) => {
-        const doc = eventOf(event, "documentation.exchange");
-        return doc === null ? [] : [doc];
-      });
+      const records = documentation.events;
       expect(records.length).toBe(2);
       expect(records[0]?.["event_id"]).toBe("doc_00000001");
       expect(records[1]?.["event_id"]).toBe("doc_00000002");
       expect(records[1]?.["sequence"]).toBe(2);
       expect(records[0]?.["outcome"]).toBe("contract_served");
       expect(apiEvents(server.trace).length).toBe(1);
+      expect(documentationEvents(server.trace)).toBe(0);
     } finally {
       await server.handle.close();
     }

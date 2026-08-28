@@ -27,6 +27,7 @@ import { splitRef } from "@oal/openapi";
 import {
   EventStream,
   type ArtifactStore,
+  type DocumentationExchange,
   type JsonlSink,
   type TraceEvent,
   type TrialLayout
@@ -88,11 +89,26 @@ export interface TraceWriter {
   complete(event: TraceEvent): Promise<void>;
 }
 
+/** One reserved slot in the documentation event stream. */
+export interface DocumentationWriter {
+  reserve(): { sequence: number; event_id: string };
+  complete(event: DocumentationExchange): Promise<void>;
+}
+
 function traceWriterOf(sink: JsonlSink): TraceWriter {
   const stream = EventStream.open(sink, "req");
   return {
     reserve: (): { sequence: number; event_id: string } => stream.reserve(),
     complete: (event: TraceEvent): Promise<void> =>
+      stream.complete(event as unknown as Json & { sequence: number })
+  };
+}
+
+function documentationWriterOf(sink: JsonlSink): DocumentationWriter {
+  const stream = EventStream.open(sink, "doc");
+  return {
+    reserve: (): { sequence: number; event_id: string } => stream.reserve(),
+    complete: (event: DocumentationExchange): Promise<void> =>
       stream.complete(event as unknown as Json & { sequence: number })
   };
 }
@@ -115,6 +131,8 @@ export interface ExposureHandle {
   readonly mcpUrl: string | null;
   /** Server facts recorded verbatim in `server.json`. */
   readonly serverRecord: JsonObject;
+  /** Number of exchanges that the exposure could not persist or complete. */
+  readonly exchangeFailureCount?: number;
   /** Stop the exposure and release its port. Idempotent. */
   close(): Promise<void>;
 }
@@ -136,6 +154,10 @@ export interface ExposureRequest {
   readonly now: Clock;
   /** The trial trace stream the exposure appends its exchanges to. */
   readonly trace: TraceWriter;
+  /** The separate documentation stream. It never contributes to API metrics. */
+  readonly documentationTrace?: DocumentationWriter;
+  /** Exact run credential values. The redactor uses them before persistence. */
+  readonly secrets?: readonly string[];
   /** Header names whose values the trace must redact. */
   readonly sensitiveHeaderNames: readonly string[];
   /** Key pattern strings whose matching names the trace must redact. */
@@ -695,6 +717,10 @@ export async function setupTrial(
   const trace = traceWriterOf(
     await store.openSink(`${relativeRoot}/trace.jsonl`)
   );
+  await store.writeOnce(`${relativeRoot}/documentation.jsonl`, "");
+  const documentationTrace = documentationWriterOf(
+    await store.openSink(`${relativeRoot}/documentation.jsonl`)
+  );
 
   // Step 8: start the exposure before any participant material exists.
   let exposure: ExposureHandle | null = null;
@@ -719,6 +745,13 @@ export async function setupTrial(
       port: options.port ?? 0,
       now,
       trace,
+      documentationTrace,
+      secrets: [
+        ...Object.values(credentials.apiKeys),
+        credentials.basic.username,
+        credentials.basic.password,
+        credentials.bearer
+      ],
       sensitiveHeaderNames: headerNames.filter(
         (name): name is string => typeof name === "string"
       ),

@@ -29,6 +29,19 @@ interface AcceptanceEntry {
   };
 }
 
+/** Criteria that need proof through the real writer or command path. */
+const RUNTIME_PROOFS: Readonly<Record<string, readonly RegExp[]>> = {
+  "AC-054": [
+    /packages\/runner\/src\/trial\.test\.ts/u,
+    /disposition\.test\.ts/u
+  ],
+  "AC-056": [/packages\/runner\/src\/exposure\.test\.ts/u],
+  "AC-057": [/packages\/runner\/src\/exposure\.test\.ts/u],
+  "AC-058": [/packages\/runner\/src\/exposure\.test\.ts/u],
+  "AC-060": [/packages\/openapi\/tests/u, /packages\/runner\/src\/exposure/u],
+  "AC-071": [/apps\/cli\/src\/report\.test\.ts/u]
+};
+
 /** The Raw-HTTP MVP gate of section 42. */
 function isMvp(id: string): boolean {
   const number = Number(id.slice(3));
@@ -144,6 +157,21 @@ describe("the acceptance map", () => {
       }
       if (!titles.has(title)) {
         absent.push(test);
+      }
+    }
+    expect(absent).toEqual([]);
+  });
+
+  it("requires real runtime proof for cross-layer claims", async () => {
+    const entries = await entriesPromise;
+    const byId = new Map(entries.map((entry) => [entry.id, entry]));
+    const absent: string[] = [];
+    for (const [id, patterns] of Object.entries(RUNTIME_PROOFS)) {
+      const tests = byId.get(id)?.tests ?? [];
+      for (const pattern of patterns) {
+        if (!tests.some((test) => pattern.test(test))) {
+          absent.push(`${id}: ${pattern.source}`);
+        }
       }
     }
     expect(absent).toEqual([]);

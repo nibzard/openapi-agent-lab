@@ -423,11 +423,17 @@ describe("oal serve", () => {
     }
     const code = await pending;
     expect(code).toBe(130);
-    const controlDir = path.join(cwd, ".oal", "serve", "bare-serve");
+    const controlDir = path.join(cwd, ".oal", "runs", "bare-serve");
     expect(await exists(path.join(controlDir, "capability-report.json"))).toBe(
       true
     );
     expect(await exists(path.join(controlDir, "credentials.json"))).toBe(false);
+    const trace = (await readFile(path.join(controlDir, "trace.jsonl"), "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { type: string });
+    expect(trace).toHaveLength(2);
+    expect(trace.every((event) => event.type === "api.exchange")).toBe(true);
     expect(io.stdoutChunks).toHaveLength(1);
   });
 

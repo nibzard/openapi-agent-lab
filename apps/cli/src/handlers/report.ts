@@ -10,6 +10,7 @@ import path from "node:path";
 
 import {
   EXIT_INVALID,
+  EXIT_INFRASTRUCTURE,
   EXIT_OK,
   EXIT_UNSUPPORTED,
   diagnostic,
@@ -59,7 +60,7 @@ import {
   loadRunOrBatch,
   scopeOf,
   trialsOf,
-  verifyTrialArtifacts,
+  verifyScopeArtifacts,
   type LoadedTrial,
   type RunOrBatch
 } from "./run-tree.ts";
@@ -110,6 +111,10 @@ export function trialInputOf(
       ...(assignment.terminal === null ? [] : [assignment.terminal])
     ],
     trace: [...trial.trace],
+    documentation: [...trial.documentation],
+    ...(isCensorClass(trial.completed?.["censor_class"])
+      ? { censor_class: trial.completed["censor_class"] }
+      : {}),
     ...(evaluation === null ? {} : { evaluation }),
     ...(reportStatus === null
       ? {}
@@ -124,6 +129,21 @@ export function trialInputOf(
         ? null
         : { state_sha256: stateSha, summary: summary as Json }
   };
+}
+
+function isCensorClass(
+  value: unknown
+): value is
+  | "none"
+  | "pre_control_nonparticipant"
+  | "administrative_censor"
+  | "instrumentation_censor" {
+  return (
+    value === "none" ||
+    value === "pre_control_nonparticipant" ||
+    value === "administrative_censor" ||
+    value === "instrumentation_censor"
+  );
 }
 
 /**
@@ -399,22 +419,20 @@ export const reportCommand: CommandHandler = async (args, io) => {
   const trials = trialsOf(subject);
 
   const drift: Diagnostic[] = [];
-  for (const trial of trials) {
-    for (const finding of await verifyTrialArtifacts(trial)) {
-      drift.push(
-        diagnostic({
-          severity: "error",
-          phase: "report",
-          code: ReportCliCode.EvidenceDrift,
-          message: `Artifact verification failed for ${finding.path}: ${finding.detail}`,
-          details: { run_id: trial.runId, path: finding.path }
-        })
-      );
-    }
+  for (const finding of await verifyScopeArtifacts(subject)) {
+    drift.push(
+      diagnostic({
+        severity: "error",
+        phase: "report",
+        code: ReportCliCode.EvidenceDrift,
+        message: `Artifact verification failed for ${finding.path}: ${finding.detail}`,
+        details: { path: finding.path }
+      })
+    );
   }
   if (drift.length > 0) {
     emitDiagnostics(io, args.context, drift);
-    return EXIT_INVALID;
+    return EXIT_INFRASTRUCTURE;
   }
 
   const regrade = args.flags.has("regrade");

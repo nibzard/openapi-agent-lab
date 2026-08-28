@@ -41,7 +41,7 @@ export type AuthOutcome =
 /** Credential alphabet: unmistakably synthetic, no real secrets. */
 function syntheticToken(kind: string, name: string, runSeed: string): string {
   const digest = canonicalJsonSha256({ kind, name, runSeed });
-  return `oal_${digest.slice(0, 24)}`;
+  return `oal_${digest}`;
 }
 
 /**

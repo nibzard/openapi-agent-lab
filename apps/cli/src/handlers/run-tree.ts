@@ -14,7 +14,12 @@ import {
   type Json,
   type JsonObject
 } from "@oal/core";
-import type { LifecycleEvent, TraceEvent } from "@oal/evidence";
+import {
+  ArtifactStore,
+  type DocumentationExchange,
+  type LifecycleEvent,
+  type TraceEvent
+} from "@oal/evidence";
 import type { Evaluation } from "@oal/evaluator";
 
 /** Stable diagnostic codes of the run-tree readers. */
@@ -37,6 +42,7 @@ export interface LoadedTrial {
   /** Redacted adapter session events of section 33.1. */
   readonly session: readonly LifecycleEvent[];
   readonly trace: readonly TraceEvent[];
+  readonly documentation: readonly DocumentationExchange[];
   readonly evaluation: Evaluation | null;
   readonly participantText: string | null;
   readonly usage: JsonObject | null;
@@ -165,6 +171,9 @@ export async function loadTrial(runDir: string): Promise<LoadedTrial> {
     trace: (await readJsonLines(
       path.join(runDir, "trace.jsonl")
     )) as unknown as TraceEvent[],
+    documentation: (await readJsonLines(
+      path.join(runDir, "documentation.jsonl")
+    )) as unknown as DocumentationExchange[],
     evaluation:
       evaluationObject === null
         ? null
@@ -436,6 +445,43 @@ export async function verifyTrialArtifacts(
   trial: LoadedTrial
 ): Promise<readonly ArtifactDrift[]> {
   return await verifyArtifactsOf(trial.root);
+}
+
+/** Verify a run or batch from its write-once completion pointer. */
+export async function verifyScopeArtifacts(
+  subject: RunOrBatch
+): Promise<readonly ArtifactDrift[]> {
+  const trial = subject.kind === "run" ? subject.trials[0] : undefined;
+  if (subject.kind === "run" && trial === undefined) {
+    return [
+      {
+        root: "",
+        path: "run.completed.json",
+        detail: "the run scope has no trial"
+      }
+    ];
+  }
+  const scopeRoot =
+    subject.kind === "batch" ? subject.batch.root : (trial?.root ?? "");
+  const storeRoot =
+    subject.kind === "batch"
+      ? path.resolve(scopeRoot, "../..")
+      : trial?.batchId === null
+        ? path.dirname(scopeRoot)
+        : path.resolve(scopeRoot, "../../../..");
+  const pointerPath = path.relative(
+    storeRoot,
+    path.join(
+      scopeRoot,
+      subject.kind === "batch" ? "batch.completed.json" : "run.completed.json"
+    )
+  );
+  const result = await new ArtifactStore(storeRoot).verify(pointerPath);
+  return result.problems.map((detail) => ({
+    root: scopeRoot,
+    path: pointerPath,
+    detail
+  }));
 }
 
 /** Verify the artifact manifest of one run or batch directory. */

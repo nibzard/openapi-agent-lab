@@ -1,8 +1,12 @@
 import { writeFile } from "node:fs/promises";
+import path from "node:path";
 
 import {
   EXIT_OK,
+  EXIT_UNSUPPORTED,
+  invalidInput,
   infrastructure,
+  isJsonObject,
   stableJsonStringify,
   type ExitCode
 } from "@oal/core";
@@ -10,19 +14,14 @@ import {
 import type { CommandArgs } from "../commands.ts";
 import type { Io } from "../io.ts";
 import { resolveSourceArgument } from "../source.ts";
+import { compileServeSource } from "./serve.ts";
 import {
   invalidOptionValue,
   missingArgument,
   tooManyArguments
 } from "../usage.ts";
 
-/** Documented inspect artifact keys, in report order. */
-const REPORT_KEYS = ["entrypoint", "media_type", "sha256", "bytes"] as const;
-
-/**
- * Minimal working inspect: source resolution only. The full capability
- * report lands with the compiler and capability tasks.
- */
+/** Compile a source and report its semantic and capability surfaces. */
 export async function inspectCommand(
   args: CommandArgs,
   io: Io
@@ -41,23 +40,100 @@ export async function inspectCommand(
       "one of: terminal, json"
     );
   }
-  const resolved = await resolveSourceArgument(source, {
-    cwd: args.context.cwd,
-    maxBytes: args.context.maxSourceBytes,
-    ...(io.stdin === undefined ? {} : { stdin: io.stdin })
-  });
+  const resolved =
+    source === "-"
+      ? await resolveSourceArgument(source, {
+          cwd: args.context.cwd,
+          maxBytes: args.context.maxSourceBytes,
+          ...(io.stdin === undefined ? {} : { stdin: io.stdin })
+        })
+      : null;
+  const compiled = await compileServeSource(
+    resolved?.entrypoint ?? source,
+    resolved === null ? args.context.cwd : "/",
+    args.context.maxSourceBytes
+  );
+  const report = isJsonObject(compiled.capabilityReport)
+    ? compiled.capabilityReport
+    : {};
+  const operationSelector = args.flags.string("operation");
+  const operations = compiled.contract.operations.filter(
+    (operation) =>
+      operationSelector === undefined ||
+      operation.key === operationSelector ||
+      operation.operation_id === operationSelector
+  );
+  if (operationSelector !== undefined && operations.length === 0) {
+    throw invalidInput(
+      "OAL-INSPECT-OPERATION-UNKNOWN",
+      `No operation has the ID or key ${operationSelector}.`,
+      { operation: operationSelector }
+    );
+  }
+  const operationKeys = new Set(operations.map((operation) => operation.key));
+  const capabilityOperations = Array.isArray(report["operations"])
+    ? report["operations"].filter(
+        (operation) =>
+          isJsonObject(operation) &&
+          typeof operation["key"] === "string" &&
+          operationKeys.has(operation["key"])
+      )
+    : [];
+  const sourceEntrypoint =
+    compiled.pack === null
+      ? pathOf(resolved?.entrypoint ?? source, args.context.cwd)
+      : path.resolve(compiled.pack.root, compiled.contract.source.entrypoint);
   const artifact = {
-    entrypoint: resolved.entrypoint,
-    media_type: resolved.media_type,
-    sha256: resolved.sha256,
-    bytes: resolved.bytes
+    schema_version: 1,
+    kind: "InspectReport",
+    entrypoint: sourceEntrypoint,
+    openapi_version: compiled.contract.source.openapi_version,
+    source_format: compiled.contract.source.media_type,
+    source_sha256: compiled.contract.source.sha256,
+    semantic_sha256: compiled.contract.source.semantic_sha256,
+    execution_sha256: compiled.contract.source.execution_sha256,
+    referenced_documents: compiled.contract.source.documents,
+    operation_count: operations.length,
+    missing_operation_ids: operations.filter(
+      (operation) => operation.operation_id === null
+    ).length,
+    duplicate_operation_ids: report["duplicate_operation_ids"] ?? [],
+    tool_name_collisions: report["tool_name_collisions"] ?? [],
+    counts: report["counts"] ?? {},
+    operations: capabilityOperations,
+    features: report["features"] ?? [],
+    recommendations: report["recommendations"] ?? {},
+    diagnostics: report["diagnostics"] ?? [],
+    pack_eval_compatibility:
+      compiled.pack === null
+        ? null
+        : {
+            eval_ids: Array.isArray(compiled.pack.manifest["evals"])
+              ? compiled.pack.manifest["evals"].flatMap((entry) =>
+                  isJsonObject(entry) && typeof entry["id"] === "string"
+                    ? [entry["id"]]
+                    : []
+                )
+              : []
+          }
   };
+  const strictFailure =
+    args.flags.has("strict") &&
+    operations.some((operation) => operation.support.level !== "supported");
   if (args.context.format === "json") {
     io.stdout(stableJsonStringify(artifact));
   } else {
-    for (const key of REPORT_KEYS) {
-      io.stdout(`${key}: ${artifact[key]}`);
-    }
+    const recommendedExposure = isJsonObject(artifact.recommendations)
+      ? artifact.recommendations["recommended_exposure"]
+      : null;
+    io.stdout(`OpenAPI version: ${artifact.openapi_version}`);
+    io.stdout(`Source: ${artifact.entrypoint}`);
+    io.stdout(`Source SHA-256: ${artifact.source_sha256}`);
+    io.stdout(`Semantic SHA-256: ${artifact.semantic_sha256}`);
+    io.stdout(`Operations: ${artifact.operation_count}`);
+    io.stdout(
+      `Recommended exposure: ${typeof recommendedExposure === "string" ? recommendedExposure : "none"}`
+    );
   }
   const outPath = args.context.outPath;
   if (outPath !== null) {
@@ -70,7 +146,11 @@ export async function inspectCommand(
       }
     );
   }
-  return EXIT_OK;
+  return strictFailure ? EXIT_UNSUPPORTED : EXIT_OK;
+}
+
+function pathOf(source: string, cwd: string): string {
+  return source === "-" ? source : path.resolve(cwd, source);
 }
 
 function describe(error: unknown): string {

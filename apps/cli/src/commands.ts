@@ -121,7 +121,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   },
   {
     name: "inspect",
-    summary: "Report source identity: path, media type, digest, size.",
+    summary: "Report OpenAPI capabilities and source identity.",
     arguments: [
       {
         name: "source",
@@ -129,14 +129,8 @@ export const COMMANDS: readonly CommandSpec[] = [
       }
     ],
     options: [
-      flag(
-        "strict",
-        "Fail when any operation is not fully supported. Reserved."
-      ),
-      value(
-        "operation",
-        "Limit the report to one operation ID or key. Reserved."
-      )
+      flag("strict", "Fail when any operation is not fully supported."),
+      value("operation", "Limit the report to one operation ID or key.")
     ],
     handler: inspectCommand
   },

@@ -184,7 +184,9 @@
     "milestone": "raw-http-mvp",
     "status": "covered",
     "tests": [
-      "packages/runner/src/exposure.test.ts > records exactly one unmatched exchange for a wrong method"
+      "packages/runner/src/exposure.test.ts > records exactly one unmatched exchange for a wrong method",
+      "packages/runner/src/exposure.test.ts > records one event when a client disconnects during its body",
+      "apps/cli/src/serve.test.ts > serves a bare contract on an ephemeral port and answers fetches"
     ]
   },
   {
@@ -613,7 +615,13 @@
     "milestone": "raw-http-mvp",
     "status": "covered",
     "tests": [
-      "packages/runner/src/integration-trial.test.ts > completes a trial whose participant makes no api request"
+      "packages/runner/src/integration-trial.test.ts > completes a trial whose participant makes no api request",
+      "packages/runner/src/trial.test.ts > classifies an adapter failure after control as agent_failed",
+      "packages/runner/src/trial.test.ts > classifies a reported timeout as timed_out",
+      "packages/runner/src/trial.test.ts > records invalid_setup when the exposure cannot start",
+      "packages/runner/src/disposition.test.ts > rule 1: an operator signal before any fired limit wins",
+      "packages/runner/src/disposition.test.ts > rules 2 and 3: fired limits",
+      "packages/runner/src/disposition.test.ts > rule 5: provider and infrastructure split at control start"
     ]
   },
   {
@@ -635,6 +643,7 @@
     "tests": [
       "packages/evidence/src/redaction.test.ts > never exposes the secret through any output path",
       "packages/evidence/src/trace.test.ts > drops the digest when a text body contains a registered secret",
+      "packages/runner/src/exposure.test.ts > redacts registered secrets from every persisted exchange field",
       "packages/report/src/redact.test.ts > carries no registered secret anywhere in its canonical JSON",
       "packages/agent-generic/src/adapter.test.ts > redacts a registered secret through the sink redactor",
       "packages/runner/src/integration-isolation.test.ts > shares no port, credential, workspace, or evidence between trials"
@@ -650,7 +659,8 @@
       "packages/evidence/src/redaction.test.ts > redacts header values for sensitive names and secret contents",
       "packages/evidence/src/redaction.test.ts > gives query values stable fingerprints for sensitive names",
       "packages/evidence/src/trace.test.ts > keeps lowercase names, wire order, and redaction flags",
-      "packages/evidence/src/trace.test.ts > fingerprints sensitive query values"
+      "packages/evidence/src/trace.test.ts > fingerprints sensitive query values",
+      "packages/runner/src/exposure.test.ts > redacts registered secrets from every persisted exchange field"
     ]
   },
   {
@@ -662,7 +672,8 @@
     "tests": [
       "packages/evidence/src/redaction.test.ts > redacts registered secret values inside JSON strings",
       "packages/evidence/src/redaction.test.ts > redacts registered secrets anywhere in free text",
-      "packages/evidence/src/trace.test.ts > drops the digest when a text body contains a registered secret"
+      "packages/evidence/src/trace.test.ts > drops the digest when a text body contains a registered secret",
+      "packages/runner/src/exposure.test.ts > redacts registered secrets from every persisted exchange field"
     ]
   },
   {
@@ -681,12 +692,22 @@
     "group": "42.6",
     "claim": "Parser node, depth, ref, and operation limits plus study, request, queue, state, log, disk, and wall-time limits have bounded failure tests.",
     "milestone": "raw-http-mvp",
-    "status": "covered",
+    "status": "partial",
+    "deviation": {
+      "summary": "The compiler, request, connection, state, and configured ceiling paths have bounded tests. Study surface, log, disk, and full wall-time enforcement remain incomplete.",
+      "spec_ref": "SPEC.md section 42.6 AC-060",
+      "enforced": "The acceptance gate requires tests through the real compiler, exposure, and behavior execution paths."
+    },
     "tests": [
       "packages/config/src/limits.test.ts > pins every default and every hard ceiling",
       "packages/config/src/limits.test.ts > keeps every default at or below its ceiling",
       "packages/config/src/limits.test.ts > refuses an override above its hard ceiling",
-      "packages/config/src/limits.test.ts > pins the profile limit defaults"
+      "packages/config/src/limits.test.ts > pins the profile limit defaults",
+      "packages/openapi/tests/yaml.test.ts > enforces explicit node, depth, alias, and byte limits",
+      "packages/openapi/tests/compile.test.ts > enforces the operation limit",
+      "packages/runner/src/exposure.test.ts > answers 413 when the body exceeds the limit",
+      "packages/runner/src/exposure.test.ts > closes within the bound when a client leaves a body incomplete",
+      "packages/behavior-api/src/execute.test.ts > rejects a nextState beyond the byte bound"
     ]
   },
   {
@@ -819,7 +840,9 @@
     "tests": [
       "packages/report/src/aggregate.test.ts > reports integrity and unresolved-slot warnings",
       "packages/evidence/src/artifacts.test.ts > detects tampering after finalization",
-      "packages/evidence/src/integrity.test.ts > classifies input mutation as invalid evidence"
+      "packages/evidence/src/integrity.test.ts > classifies input mutation as invalid evidence",
+      "apps/cli/src/report.test.ts > refuses a run tree whose artifact hashes drifted",
+      "apps/cli/src/report.test.ts > refuses drift in a frozen batch input"
     ]
   },
   {
@@ -1052,7 +1075,7 @@
     "milestone": "raw-http-mvp",
     "status": "covered",
     "tests": [
-      "apps/cli/src/inspect.test.ts > prints a stable-key JSON artifact with exactly the documented keys",
+      "apps/cli/src/inspect.test.ts > prints the documented semantic and capability fields",
       "apps/cli/src/serve.test.ts > serves a bare contract on an ephemeral port and answers fetches",
       "apps/cli/src/pack.test.ts > scaffolds a pack that validates cleanly",
       "apps/cli/src/pack.test.ts > prints a summary and exits 0 for a valid pack",
@@ -1102,7 +1125,8 @@
     "status": "covered",
     "tests": [
       "packages/runner/src/setup.test.ts > bundles a two-file contract into a self-contained copy",
-      "packages/runner/src/integration-trial.test.ts > copies a two-file contract into the workspace fully bundled"
+      "packages/runner/src/integration-trial.test.ts > copies a two-file contract into the workspace fully bundled",
+      "apps/cli/src/inspect.test.ts > loads referenced sibling documents and filters one operation"
     ]
   },
   {
