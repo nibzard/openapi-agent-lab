@@ -1,5 +1,0 @@
-# Follow-up items
-
-- Add runtime coverage for the full study surface.
-- Add log, disk, and full wall-time limit enforcement.
-- Complete AC-060 after those runtime paths exist.
