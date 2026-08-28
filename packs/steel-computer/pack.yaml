@@ -58,12 +58,12 @@ contract:
       body:
         kind: json_inline
         value:
-          pageId: ""
-          url: ""
-          isSolvingCaptcha: false
-          tasks: []
-          created: 0
-          lastUpdated: 0
+          - pageId: ""
+            url: ""
+            isSolvingCaptcha: false
+            tasks: []
+            created: 0
+            lastUpdated: 0
 
 server:
   host: 127.0.0.1

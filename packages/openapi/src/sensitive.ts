@@ -1,14 +1,18 @@
-import type { Json } from "@oal/core";
+import { CREDENTIAL_KEY_PATTERN, type Json } from "@oal/core";
 
 /**
  * Credential-shape recognition from specification sections 30.1 and 30.3.
  * These patterns classify locations and shapes; they never capture or echo
  * the matched value.
+ *
+ * Key names delegate to the canonical credential-key list in `@oal/core`,
+ * which every redaction sink shares. The value shapes below stay local on
+ * purpose: they are the strict ingestion-time shapes, while the evidence
+ * Redactor uses looser defensive shapes that only trigger replacement.
  */
 
-/** Case-insensitive key pattern for credential-shaped names. */
-export const SENSITIVE_KEY_PATTERN =
-  /(api.?key|token|secret|password|authorization|credential|private.?key|cookie|session.?id|access.?key)/i;
+/** Canonical case-insensitive pattern for credential-shaped key names. */
+export const SENSITIVE_KEY_PATTERN: RegExp = CREDENTIAL_KEY_PATTERN;
 
 /** Annotation a pack author uses to mark a value as sensitive. */
 export const SENSITIVE_ANNOTATION = "x-agent-lab-sensitive";

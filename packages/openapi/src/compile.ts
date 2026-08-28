@@ -51,7 +51,11 @@ import {
   mediaSupport,
   SOURCE_MEDIA_TYPES
 } from "./media.ts";
-import { normalizeSchema, type OpenApiDialect } from "./normalize.ts";
+import {
+  normalizeSchema,
+  type OpenApiDialect,
+  type PreservedRefTarget
+} from "./normalize.ts";
 import {
   DEFAULT_REF_POLICY,
   discoverExternalRefs,
@@ -207,6 +211,8 @@ export class OpenApiCompiler {
   private entryUri = "";
   private readonly options: CompileOptions;
   private readonly resolver: ReferenceResolver;
+  /** Pointers already registered, so preserved targets register once. */
+  private readonly registeredPointers = new Set<string>();
 
   constructor(input: CompileInput, options: CompileOptions = {}) {
     const set: DocumentSet = toDocumentSet(input);
@@ -500,7 +506,53 @@ export class OpenApiCompiler {
       resolved.pointer,
       resolved.uri
     );
+    this.registeredPointers.add(`${resolved.uri}${resolved.pointer}`);
+    this.registerPreservedTargets(normalized.preservedRefTargets);
     return { uid, normalized: normalized.schema };
+  }
+
+  /**
+   * Register every schema that a preserved reference points at. A
+   * recursive schema can be reachable only through another schema's
+   * inlined copy, so no usage site registers it under its own pointer and
+   * consumers that resolve preserved pointers through the registry would
+   * find no entry. Registration walks breadth-first over newly discovered
+   * targets in sorted key order, so the result is deterministic and every
+   * target registers at most once.
+   */
+  private registerPreservedTargets(
+    targets: readonly PreservedRefTarget[]
+  ): void {
+    const queue = new Map<string, PreservedRefTarget>();
+    const enqueue = (target: PreservedRefTarget): void => {
+      const key = `${target.uri}${target.pointer}`;
+      if (!this.registeredPointers.has(key) && !queue.has(key)) {
+        queue.set(key, target);
+      }
+    };
+    for (const target of targets) {
+      enqueue(target);
+    }
+    while (queue.size > 0) {
+      // Taking the smallest key keeps registration order independent of
+      // the order the walk discovered the targets in.
+      const key = [...queue.keys()].sort()[0] as string;
+      const target = queue.get(key) as PreservedRefTarget;
+      queue.delete(key);
+      this.registeredPointers.add(key);
+      const resolved = this.resolver.resolve(target.uri, target.pointer);
+      const normalized = normalizeSchema(
+        resolved,
+        this.resolver,
+        this.dialect,
+        this.limits,
+        (diagnostic) => this.fail(diagnostic)
+      );
+      this.registry.register(normalized.schema, resolved.pointer, resolved.uri);
+      for (const next of normalized.preservedRefTargets) {
+        enqueue(next);
+      }
+    }
   }
 
   private compileServers(node: Json | undefined): ServerIR[] {
@@ -1805,7 +1857,7 @@ function ambiguousRoute(
     severity: "error",
     phase: "compile",
     code: DiagnosticCode.RouteAmbiguous,
-    message: `Templated routes ${left.path_template} and ${right.path_template} are equivalent.`,
+    message: `Templated routes ${left.path_template} and ${right.path_template} can match the same request path.`,
     document_uri: uri,
     json_pointer: `#/paths/${escapeToken(left.path_template)}`,
     operation_key: left.key,

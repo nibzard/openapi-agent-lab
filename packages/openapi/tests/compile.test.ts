@@ -332,6 +332,168 @@ describe("dialect normalization", () => {
     );
   });
 
+  it("normalizes 3.0 tuple items arrays to prefixItems", () => {
+    const tuple = JSON.stringify({
+      openapi: "3.0.3",
+      info: { title: "Tuples", version: "1.0.0" },
+      paths: {
+        "/pairs": {
+          get: {
+            operationId: "listPairs",
+            responses: {
+              "200": {
+                description: "ok",
+                content: {
+                  "application/json": {
+                    schema: { $ref: "#/components/schemas/Pair" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      components: {
+        schemas: {
+          Pair: {
+            type: "array",
+            items: [
+              { type: "string", minLength: 2 },
+              { type: "integer", minimum: 5 }
+            ],
+            additionalItems: { type: "string", maxLength: 3 }
+          }
+        }
+      }
+    });
+    const { contract } = compile({ "tuple.json": tuple }, "tuple.json");
+    const pair = Object.values(contract.schemas).find(
+      (schema) => schema.source_pointer === "#/components/schemas/Pair"
+    );
+    expect(pair?.schema).toEqual({
+      type: "array",
+      prefixItems: [
+        { type: "string", minLength: 2 },
+        { type: "integer", minimum: 5 }
+      ],
+      items: { type: "string", maxLength: 3 }
+    });
+  });
+
+  it("normalizes 3.0 additionalItems false and leaves plain items alone", () => {
+    const response = (ref: string): unknown => ({
+      "200": {
+        description: "ok",
+        content: {
+          "application/json": {
+            schema: { $ref: `#/components/schemas/${ref}` }
+          }
+        }
+      }
+    });
+    const closed = JSON.stringify({
+      openapi: "3.0.3",
+      info: { title: "Closed tuple", version: "1.0.0" },
+      paths: {
+        "/cells": {
+          get: { operationId: "listCells", responses: response("Cell") }
+        },
+        "/tags": {
+          get: { operationId: "listTags", responses: response("Tags") }
+        }
+      },
+      components: {
+        schemas: {
+          Cell: {
+            type: "array",
+            items: [{ type: "string" }],
+            additionalItems: false
+          },
+          Tags: {
+            type: "array",
+            items: { type: "string" }
+          }
+        }
+      }
+    });
+    const { contract } = compile({ "closed.json": closed }, "closed.json");
+    const byPointer = new Map(
+      Object.values(contract.schemas).map((schema) => [
+        schema.source_pointer,
+        schema.schema
+      ])
+    );
+    expect(byPointer.get("#/components/schemas/Cell")).toEqual({
+      type: "array",
+      prefixItems: [{ type: "string" }],
+      items: false
+    });
+    expect(byPointer.get("#/components/schemas/Tags")).toEqual({
+      type: "array",
+      items: { type: "string" }
+    });
+  });
+
+  it("treats 3.0 tuples and 3.1 prefixItems as equivalent", () => {
+    const build = (openapi: string, tuple: Record<string, unknown>): string =>
+      JSON.stringify({
+        openapi,
+        info: { title: "Tuple dialects", version: "1.0.0" },
+        paths: {
+          "/readings": {
+            get: {
+              operationId: "listReadings",
+              responses: {
+                "200": {
+                  description: "ok",
+                  content: {
+                    "application/json": {
+                      schema: { $ref: "#/components/schemas/Reading" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        components: {
+          schemas: {
+            Reading: { type: "array", ...tuple }
+          }
+        }
+      });
+    const left = compile(
+      {
+        "tuple30.json": build("3.0.3", {
+          items: [{ type: "string" }],
+          additionalItems: { type: "integer" }
+        })
+      },
+      "tuple30.json"
+    );
+    const right = compile(
+      {
+        "tuple31.json": build("3.1.0", {
+          prefixItems: [{ type: "string" }],
+          items: { type: "integer" }
+        })
+      },
+      "tuple31.json"
+    );
+    const normalize = (schemas: typeof left.contract.schemas): unknown => {
+      const byPointer = new Map(
+        Object.values(schemas).map((schema) => [
+          schema.source_pointer,
+          schema.schema
+        ])
+      );
+      return [...byPointer.entries()].sort();
+    };
+    expect(normalize(left.contract.schemas)).toEqual(
+      normalize(right.contract.schemas)
+    );
+  });
+
   it("compiles webhooks as data-only surfaces", () => {
     const { contract, report } = compile(petstore, "openapi/webhooks.json");
     expect(contract.operations).toEqual([]);

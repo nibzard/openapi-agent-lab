@@ -69,9 +69,13 @@ export function parsePathTemplate(template: string): RouteSegment[] {
 
 /**
  * True when two templates on the same method can match the same concrete
- * path while neither is a strict literal specialization of the other.
- * Literal beats parameter, so `/a/{x}` and `/a/b` do not conflict; two
- * parameter names in the same position do.
+ * path while the router cannot prefer either one. A position is
+ * compatible when both literals are equal or either side is a
+ * parameter, so `/a/{x}/c` and `/a/b/{y}` overlap on `/a/b/c`.
+ * Distinct literals at one position, as in `/a/{x}/c` and `/a/b/d`,
+ * never match the same path. A template built only from literals wins
+ * at match time before any templated route, so `/a/{x}` and `/a/b` do
+ * not conflict.
  */
 export function templatesConflict(
   a: readonly RouteSegment[],
@@ -80,25 +84,27 @@ export function templatesConflict(
   if (a.length !== b.length) {
     return false;
   }
-  let parameterMismatch = false;
+  if (isAllLiterals(a) || isAllLiterals(b)) {
+    return false;
+  }
   for (let i = 0; i < a.length; i += 1) {
     const left = a[i] as RouteSegment;
     const right = b[i] as RouteSegment;
-    if (left.kind !== right.kind) {
-      // Literal wins over parameter at the same depth.
-      return false;
-    }
     if (left.kind === "literal" && right.kind === "literal") {
       if (left.value !== right.value) {
         return false;
       }
       continue;
     }
-    if (left.value !== right.value) {
-      parameterMismatch = true;
-    }
+    // A parameter on either side matches whatever the other template
+    // requires at this position.
   }
-  return parameterMismatch;
+  return true;
+}
+
+/** True when every segment of the template is a literal. */
+function isAllLiterals(segments: readonly RouteSegment[]): boolean {
+  return segments.every((segment) => segment.kind === "literal");
 }
 
 /** Render a template back from segments, for diagnostics. */

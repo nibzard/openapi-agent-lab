@@ -112,8 +112,11 @@ them was corrected, per the locked decision.
     waits for the scenario backend of drift item 17.
 19. **Captcha endpoints model an external solver.** The captcha routes
     assume a solver service. The idle fixture answers with epoch-zero
-    timestamps and an empty task list, which is schema-valid but not
-    realistic.
+    timestamps and an empty task list, which is not realistic. The
+    prototype served the idle state as a bare object, but the published
+    contract types the response as an array of captcha states, so the
+    pack wraps the fixture body in a one-element array to stay
+    schema-valid under `response_validation: error`.
 20. **Paused-stop drift (`paused-stop-precondition`).** SPEC section
     39.6 records that the broader Steel contract permits stopping a
     running or paused computer while the prototype handler accepted

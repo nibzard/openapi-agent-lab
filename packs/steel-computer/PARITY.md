@@ -156,3 +156,13 @@ credential material only, never for study labels.
   the behavior signals that contract mode cannot express: invalid
   transition, argv versus shell exec, and streaming.
 - Cover the three remaining digest roles once the pack IR records them.
+- Serve the pack fixtures through the runner defaults. The raw HTTP
+  exposure now carries the loaded pack's response fixtures into the
+  gateway pipeline, and its suite answers the session list over a real
+  listener with `fixture:sessions-list-empty` provenance
+  (`packages/runner/src/exposure.test.ts`), the same answer the golden
+  path above records. The default exposure of `runBatch` and of
+  `oal serve` serves the same declared fixtures on every branch, pinned
+  by `packages/runner/src/run-exposure.test.ts` and
+  `apps/cli/src/serve.test.ts`, so a participant of the runner chain
+  reads the recorded fixture surface end to end.

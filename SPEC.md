@@ -2044,8 +2044,19 @@ Rules:
 - No implicit HEAD, OPTIONS, CORS, health, documentation, or admin route is
   added.
 - Literal segments win over parameter segments at the same depth.
-- Templates differing only in parameter names, such as /pets/{id} and
-  /pets/{name}, are ambiguous and fail compilation.
+- Two templates of the same method are ambiguous and fail compilation
+  when they have the same depth, neither template is all-literal, and
+  every position agrees: both literals are equal, or either side is a
+  parameter. This covers templates that differ only in parameter names,
+  such as /pets/{id} and /pets/{name}, and templates whose parameter
+  position covers a literal position of the other, such as /a/{x}/c and
+  /a/b/{y}.
+- Templates of different depths, such as /a/{x} and /a/{x}/b, and
+  templates with distinct literals at one position, such as /a/{x}/c
+  and /a/b/d, never match the same request path. An all-literal
+  template never conflicts either: /a/{x} and /a/b compile together,
+  and matching prefers the literal route, so the pair is never
+  ambiguous.
 - Every template parameter must have an effective required path parameter
   declaration.
 - Invalid percent encoding is rejected at runtime before behavior.
@@ -2104,10 +2115,10 @@ Diagnostic codes are stable API; wording is not.
 {
   "severity": "error",
   "code": "OAL-OAS-ROUTE-AMBIGUOUS",
-  "message": "Templated routes /pets/{id} and /pets/{name} are equivalent.",
+  "message": "Templated routes /pets/{id} and /pets/{name} can match the same request path.",
   "document_uri": "pack://example/contract/openapi.yaml",
   "json_pointer": "#/paths/~1pets~1{id}",
-  "operation_key": null,
+  "operation_key": "path:GET /pets/{id}",
   "retryable": false,
   "related": [
     {
@@ -2115,12 +2126,15 @@ Diagnostic codes are stable API; wording is not.
       "json_pointer": "#/paths/~1pets~1{name}"
     }
   ],
-  "details": {}
+  "details": {
+    "method": "GET",
+    "templates": ["/pets/{id}", "/pets/{name}"]
+  }
 }
 ```
 
 Severity is info, warning, or error. Fatal compiler errors include unresolved
-approved references, ambiguous equivalent routes, invalid path parameter
+approved references, ambiguous templated routes, invalid path parameter
 declarations, malformed parameter serialization, missing required response
 objects, and configured resource-limit violations.
 
@@ -2479,8 +2493,8 @@ Status precedence:
 5. 204.
 6. Lowest other explicit 2xx status.
 7. A declared 2XX range, emitted as concrete status 200.
-8. Startup failure in strict mode or 501 **mock_generation_unsupported** in
-   partial mode.
+8. Startup failure in strict mode or 501 **mock_behavior_unavailable**
+   (section 15.2) in partial mode.
 
 A default response is not intrinsically success and is never selected as an
 automatic success. A pack fixture may choose a concrete status whose schema is

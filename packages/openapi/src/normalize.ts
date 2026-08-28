@@ -19,6 +19,21 @@ export interface NormalizedSchema {
   schema: Json;
   /** Non-fatal diagnostics recorded while normalizing. */
   diagnostics: Diagnostic[];
+  /**
+   * Targets of every reference that was preserved instead of inlined. A
+   * preserved reference closes a cycle, so each target is itself a
+   * recursive schema that consumers must be able to resolve through the
+   * contract's schema registry.
+   */
+  preservedRefTargets: PreservedRefTarget[];
+}
+
+/** Document position of one schema that a preserved reference points at. */
+export interface PreservedRefTarget {
+  /** Document that declares the referenced schema. */
+  uri: string;
+  /** Pointer of the referenced schema inside that document. */
+  pointer: string;
 }
 
 interface WalkContext {
@@ -28,6 +43,8 @@ interface WalkContext {
   readonly rootUri: string;
   readonly diagnostics: Diagnostic[];
   readonly fail: (diagnostic: Diagnostic) => never;
+  /** Record one preserved reference target, deduplicated in walk order. */
+  readonly preserve: (target: PreservedRefTarget) => void;
 }
 
 /**
@@ -44,15 +61,24 @@ export function normalizeSchema(
   fail: (diagnostic: Diagnostic) => never
 ): NormalizedSchema {
   const diagnostics: Diagnostic[] = [];
+  const preserved: PreservedRefTarget[] = [];
+  const preservedKeys = new Set<string>();
   const schema = walk(root.value, root.uri, root.pointer, 0, new Set(), {
     resolver,
     dialect,
     limits,
     rootUri: root.uri,
     diagnostics,
-    fail
+    fail,
+    preserve: (target) => {
+      const key = `${target.uri}${target.pointer}`;
+      if (!preservedKeys.has(key)) {
+        preservedKeys.add(key);
+        preserved.push(target);
+      }
+    }
   });
-  return { schema, diagnostics };
+  return { schema, diagnostics, preservedRefTargets: preserved };
 }
 
 function walk(
@@ -103,6 +129,7 @@ function walk(
     const resolved = ctx.resolver.resolve(uri, ref, pointer);
     const key = `${resolved.uri}${resolved.pointer}`;
     if (stack.has(key)) {
+      ctx.preserve({ uri: resolved.uri, pointer: resolved.pointer });
       return {
         ...to31(siblings, uri, pointer, ctx),
         $ref: canonicalRef(uri, ref, ctx.rootUri)
@@ -138,8 +165,9 @@ function walk(
 }
 
 /**
- * Convert OpenAPI 3.0 schema semantics into Draft 2020-12 form. OpenAPI 3.1
- * values pass through unchanged.
+ * Convert OpenAPI 3.0 schema semantics into Draft 2020-12 form. OpenAPI
+ * 3.1 values pass through unchanged apart from the tuple-form rewrite,
+ * which both dialects share.
  */
 function to31(
   schema: JsonObject,
@@ -148,17 +176,16 @@ function to31(
   ctx: WalkContext
 ): JsonObject {
   const source = canonicalEnumOrder(schema);
+  const out: JsonObject = { ...source };
+  normalizeArrayItems(out, ctx);
   if (ctx.dialect !== "3.0") {
-    const discriminator = source.discriminator;
+    const discriminator = out.discriminator;
     if (isJsonObject(discriminator)) {
-      const out = { ...source };
       delete out.discriminator;
       out["x-oal-discriminator"] = discriminator;
-      return out;
     }
-    return source;
+    return out;
   }
-  const out: JsonObject = { ...source };
   const nullable = out.nullable;
   delete out.nullable;
   if (nullable === true && typeof out.type === "string") {
@@ -196,6 +223,34 @@ function to31(
     delete out.discriminator;
   }
   return out;
+}
+
+/**
+ * Rewrite the draft-07 tuple keywords into Draft 2020-12 form. OpenAPI
+ * 3.0 declares per-position schemas as an `items` array and the rest
+ * schema as `additionalItems`; Draft 2020-12 spells them `prefixItems`
+ * and `items`. A 3.1 document that declares the same tuple form is not
+ * valid Draft 2020-12, but the compiler accepts it leniently so the
+ * per-item constraints keep enforcing. Under draft-07 rules
+ * `additionalItems` next to a single-schema `items` has no effect at
+ * all, so it is dropped instead of carried into the result as a dead
+ * draft-07 keyword.
+ */
+function normalizeArrayItems(out: JsonObject, ctx: WalkContext): void {
+  const items = out.items;
+  const additionalItems = out.additionalItems;
+  if (Array.isArray(items)) {
+    out.prefixItems = items;
+    delete out.items;
+    if (additionalItems !== undefined) {
+      out.items = additionalItems;
+    }
+    delete out.additionalItems;
+    return;
+  }
+  if (ctx.dialect === "3.0" && additionalItems !== undefined) {
+    delete out.additionalItems;
+  }
 }
 
 /**
