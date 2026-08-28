@@ -53,6 +53,8 @@ export {
 } from "./events.ts";
 export type { SessionEventRecorderOptions } from "./events.ts";
 
+export { createSessionRedactor, sessionSecrets } from "./redaction.ts";
+
 export {
   BoundedCapture,
   buildSpawnEnvironment,

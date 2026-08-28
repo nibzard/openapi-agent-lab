@@ -115,6 +115,262 @@ describe("matchFault", () => {
     ).toBeNull();
   });
 
+  it("matches parameter objects regardless of key order", () => {
+    const rules = [
+      rule({
+        id: "a",
+        match: { predicate: { parameters: { meta: { b: 2, a: 1 } } } }
+      })
+    ];
+    expect(
+      matchFault(
+        rules,
+        input({ parameters: { meta: { a: 1, b: 2 } } }),
+        new FaultCounters()
+      )
+    ).not.toBeNull();
+  });
+
+  it("matches body predicates regardless of key order", () => {
+    const rules = [
+      rule({
+        id: "a",
+        match: {
+          predicate: { body: { filter: { page: 2, name: "red" } } }
+        }
+      })
+    ];
+    expect(
+      matchFault(
+        rules,
+        input({
+          body: { filter: { name: "red", page: 2 }, extra: true }
+        }),
+        new FaultCounters()
+      )
+    ).not.toBeNull();
+  });
+
+  it("matches nested reordered keys at every depth", () => {
+    const rules = [
+      rule({
+        id: "a",
+        match: {
+          predicate: {
+            parameters: { payload: { z: { y: 1, x: { w: 4, v: 3 } } } }
+          }
+        }
+      })
+    ];
+    expect(
+      matchFault(
+        rules,
+        input({
+          parameters: { payload: { z: { x: { v: 3, w: 4 }, y: 1 } } }
+        }),
+        new FaultCounters()
+      )
+    ).not.toBeNull();
+  });
+
+  it("keeps array order significant", () => {
+    const rules = [
+      rule({
+        id: "a",
+        match: { predicate: { parameters: { ids: [1, 2] } } }
+      })
+    ];
+    expect(
+      matchFault(
+        rules,
+        input({ parameters: { ids: [1, 2] } }),
+        new FaultCounters()
+      )
+    ).not.toBeNull();
+    expect(
+      matchFault(
+        rules,
+        input({ parameters: { ids: [2, 1] } }),
+        new FaultCounters()
+      )
+    ).toBeNull();
+  });
+
+  it("compares scalars and rejects type changes", () => {
+    const rules = [
+      rule({
+        id: "a",
+        match: { predicate: { parameters: { team: "blue", count: 3 } } }
+      })
+    ];
+    expect(
+      matchFault(
+        rules,
+        input({ parameters: { team: "blue", count: 3 } }),
+        new FaultCounters()
+      )
+    ).not.toBeNull();
+    expect(
+      matchFault(
+        rules,
+        input({ parameters: { team: "blue", count: "3" } }),
+        new FaultCounters()
+      )
+    ).toBeNull();
+  });
+
+  it("never treats an absent value as the declared null", () => {
+    const rules = [
+      rule({ id: "a", match: { predicate: { parameters: { token: null } } } })
+    ];
+    expect(
+      matchFault(
+        rules,
+        input({ parameters: { token: null } }),
+        new FaultCounters()
+      )
+    ).not.toBeNull();
+    expect(
+      matchFault(rules, input({ parameters: {} }), new FaultCounters())
+    ).toBeNull();
+  });
+
+  it("decides instead of throwing on an infinite parameter", () => {
+    const rules = [
+      rule({ id: "a", match: { predicate: { parameters: { limit: 5 } } } })
+    ];
+    expect(
+      matchFault(
+        rules,
+        input({ parameters: { limit: Number.POSITIVE_INFINITY } }),
+        new FaultCounters()
+      )
+    ).toBeNull();
+    expect(
+      matchFault(
+        rules,
+        input({ parameters: { limit: Number.NEGATIVE_INFINITY } }),
+        new FaultCounters()
+      )
+    ).toBeNull();
+  });
+
+  it("decides instead of throwing on a NaN parameter", () => {
+    const rules = [
+      rule({ id: "a", match: { predicate: { parameters: { limit: 5 } } } })
+    ];
+    expect(
+      matchFault(
+        rules,
+        input({ parameters: { limit: Number.NaN } }),
+        new FaultCounters()
+      )
+    ).toBeNull();
+  });
+
+  it("decides instead of throwing on a non-finite from a lenient decode", () => {
+    // JSON.parse("1e999") resolves to Infinity on every host.
+    const parsed = JSON.parse('{"ratio": 1e999}') as Json;
+    const rules = [
+      rule({ id: "a", match: { predicate: { body: { ratio: 1 } } } })
+    ];
+    expect(
+      matchFault(rules, input({ body: parsed }), new FaultCounters())
+    ).toBeNull();
+    const nested = [
+      rule({
+        id: "b",
+        match: { predicate: { parameters: { payload: { ratio: 1 } } } }
+      })
+    ];
+    expect(
+      matchFault(
+        nested,
+        input({ parameters: { payload: { ratio: Number.POSITIVE_INFINITY } } }),
+        new FaultCounters()
+      )
+    ).toBeNull();
+  });
+
+  it("matches two non-finite values only of the same kind", () => {
+    const counters = new FaultCounters();
+    const rules = [
+      rule({
+        id: "a",
+        match: {
+          predicate: { parameters: { limit: Number.POSITIVE_INFINITY } }
+        }
+      })
+    ];
+    expect(
+      matchFault(
+        rules,
+        input({ parameters: { limit: Number.POSITIVE_INFINITY } }),
+        counters
+      )
+    ).not.toBeNull();
+    expect(
+      matchFault(
+        rules,
+        input({ parameters: { limit: Number.NEGATIVE_INFINITY } }),
+        counters
+      )
+    ).toBeNull();
+    expect(
+      matchFault(rules, input({ parameters: { limit: Number.NaN } }), counters)
+    ).toBeNull();
+  });
+
+  it("matches a NaN parameter against a NaN predicate", () => {
+    const rules = [
+      rule({
+        id: "a",
+        match: { predicate: { parameters: { limit: Number.NaN } } }
+      })
+    ];
+    expect(
+      matchFault(
+        rules,
+        input({ parameters: { limit: Number.NaN } }),
+        new FaultCounters()
+      )
+    ).not.toBeNull();
+    expect(
+      matchFault(
+        rules,
+        input({ parameters: { limit: Number.POSITIVE_INFINITY } }),
+        new FaultCounters()
+      )
+    ).toBeNull();
+  });
+
+  it("keeps finite number comparisons unchanged", () => {
+    const rules = [
+      rule({ id: "a", match: { predicate: { parameters: { limit: 5 } } } })
+    ];
+    expect(
+      matchFault(
+        rules,
+        input({ parameters: { limit: 5 } }),
+        new FaultCounters()
+      )
+    ).not.toBeNull();
+    expect(
+      matchFault(
+        rules,
+        input({ parameters: { limit: 5.0 } }),
+        new FaultCounters()
+      )
+    ).not.toBeNull();
+    expect(
+      matchFault(
+        rules,
+        input({ parameters: { limit: 6 } }),
+        new FaultCounters()
+      )
+    ).toBeNull();
+  });
+
   it("uses an inclusive virtual-time window", () => {
     const rules = [
       rule({ id: "a", match: { windowMs: { from: 100, to: 200 } } })

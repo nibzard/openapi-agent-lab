@@ -128,6 +128,186 @@ describe("SessionEventRecorder", () => {
     });
   });
 
+  it("reports no redaction for a clean adapter detail record", () => {
+    const collector = collectingSink();
+    const recorder = new SessionEventRecorder({
+      runId: "run_000001",
+      adapter: "generic",
+      sink: collector.sink,
+      redact: createSecretRedactor(["verysecretvalue"]),
+      now: () => "2026-08-27T10:00:00.000Z"
+    });
+    recorder.adapterEvent("turn.completed", {
+      usage: "reported",
+      turns: 2,
+      nested: { model: "mock" }
+    });
+    expect(collector.events[0]?.payload).toMatchObject({
+      channel: "adapter",
+      redacted: false,
+      kind: "turn.completed"
+    });
+    expect(collector.events[0]?.extensions).toEqual({
+      usage: "reported",
+      turns: 2,
+      nested: { model: "mock" }
+    });
+  });
+
+  it("redacts adapter detail strings and reports the change", async () => {
+    const schema = await loadSchema();
+    const collector = collectingSink();
+    const recorder = new SessionEventRecorder({
+      runId: "run_000001",
+      adapter: "mock-agent",
+      sink: collector.sink,
+      redact: createSecretRedactor(["sk-live-secret-value"]),
+      now: () => "2026-08-27T10:00:00.000Z"
+    });
+    recorder.adapterEvent("mock.note", {
+      text: "token=sk-live-secret-value done",
+      turns: 1,
+      echoes: ["sk-live-secret-value", "clean"]
+    });
+    expect(collector.events[0]?.payload).toMatchObject({
+      channel: "adapter",
+      redacted: true,
+      kind: "mock.note"
+    });
+    expect(collector.events[0]?.extensions).toEqual({
+      text: `token=${REDACTED_MARKER} done`,
+      turns: 1,
+      echoes: [REDACTED_MARKER, "clean"]
+    });
+    expect(validateAgentSessionEvent(collector.events[0], schema)).toEqual([]);
+    expect(
+      JSON.stringify(collector.events).includes("sk-live-secret-value")
+    ).toBe(false);
+  });
+
+  it("keeps an own __proto__ detail key as a data property", async () => {
+    const collector = collectingSink();
+    const recorder = new SessionEventRecorder({
+      runId: "run_000001",
+      adapter: "mock-agent",
+      sink: collector.sink,
+      redact: createSecretRedactor(["sk-live-secret-value"]),
+      now: () => "2026-08-27T10:00:00.000Z"
+    });
+    const detail = JSON.parse(
+      '{"__proto__": {"polluted": true}, "note": "token=sk-live-secret-value done", "safe": 1}'
+    ) as Record<string, unknown>;
+    recorder.adapterEvent("mock.proto", detail);
+
+    const extensions = collector.events[0]?.extensions;
+    expect(extensions).toBeDefined();
+    expect(Object.prototype.hasOwnProperty.call(extensions, "__proto__")).toBe(
+      true
+    );
+    expect(Object.getPrototypeOf(extensions)).toBe(Object.prototype);
+    expect(
+      Object.getOwnPropertyDescriptor(extensions, "__proto__")?.value
+    ).toEqual({ polluted: true });
+    expect(Object.entries(extensions ?? {})).toEqual([
+      ["__proto__", { polluted: true }],
+      ["note", `token=${REDACTED_MARKER} done`],
+      ["safe", 1]
+    ]);
+    expect(JSON.stringify(extensions)).toBe(
+      `{"__proto__":{"polluted":true},"note":"token=${REDACTED_MARKER} done","safe":1}`
+    );
+    expect(collector.events[0]?.payload).toMatchObject({
+      channel: "adapter",
+      redacted: true,
+      kind: "mock.proto"
+    });
+    expect(
+      validateAgentSessionEvent(collector.events[0], await loadSchema())
+    ).toEqual([]);
+  });
+
+  it("keeps a string __proto__ detail key and redacts its value", () => {
+    const collector = collectingSink();
+    const recorder = new SessionEventRecorder({
+      runId: "run_000001",
+      adapter: "mock-agent",
+      sink: collector.sink,
+      redact: createSecretRedactor(["sk-live-secret-value"]),
+      now: () => "2026-08-27T10:00:00.000Z"
+    });
+    const detail = JSON.parse(
+      '{"__proto__": "token=sk-live-secret-value done"}'
+    ) as Record<string, unknown>;
+    recorder.adapterEvent("mock.proto", detail);
+
+    const extensions = collector.events[0]?.extensions;
+    expect(Object.prototype.hasOwnProperty.call(extensions, "__proto__")).toBe(
+      true
+    );
+    expect(Object.getPrototypeOf(extensions)).toBe(Object.prototype);
+    expect(
+      Object.getOwnPropertyDescriptor(extensions, "__proto__")?.value
+    ).toBe(`token=${REDACTED_MARKER} done`);
+    expect(
+      JSON.stringify(collector.events).includes("sk-live-secret-value")
+    ).toBe(false);
+  });
+
+  it("passes a Date detail value through untouched", () => {
+    const collector = collectingSink();
+    const recorder = new SessionEventRecorder({
+      runId: "run_000001",
+      adapter: "mock-agent",
+      sink: collector.sink,
+      redact: createSecretRedactor(["sk-live-secret-value"]),
+      now: () => "2026-08-27T10:00:00.000Z"
+    });
+    recorder.adapterEvent("mock.clock", {
+      when: new Date("2026-08-27T10:00:00.000Z"),
+      nested: { when: new Date("2026-08-27T11:30:00.000Z") },
+      stamps: [new Date("2026-08-27T12:45:00.000Z")]
+    });
+
+    expect(JSON.stringify(collector.events[0]?.extensions)).toBe(
+      '{"when":"2026-08-27T10:00:00.000Z",' +
+        '"nested":{"when":"2026-08-27T11:30:00.000Z"},' +
+        '"stamps":["2026-08-27T12:45:00.000Z"]}'
+    );
+    expect(collector.events[0]?.payload).toMatchObject({
+      channel: "adapter",
+      redacted: false,
+      kind: "mock.clock"
+    });
+  });
+
+  it("redacts secrets nested in plain objects and arrays only", () => {
+    const collector = collectingSink();
+    const recorder = new SessionEventRecorder({
+      runId: "run_000001",
+      adapter: "mock-agent",
+      sink: collector.sink,
+      redact: createSecretRedactor(["sk-live-secret-value"]),
+      now: () => "2026-08-27T10:00:00.000Z"
+    });
+    const empty = Object.create(null) as Record<string, unknown>;
+    empty.token = "sk-live-secret-value";
+    recorder.adapterEvent("mock.nested", {
+      plain: { token: "sk-live-secret-value" },
+      list: [{ token: "sk-live-secret-value" }],
+      nullProto: empty
+    });
+
+    expect(collector.events[0]?.extensions).toEqual({
+      plain: { token: REDACTED_MARKER },
+      list: [{ token: REDACTED_MARKER }],
+      nullProto: { token: REDACTED_MARKER }
+    });
+    expect(collector.events[0]?.payload).toMatchObject({
+      channel: "adapter",
+      redacted: true
+    });
+  });
+
   it("rejects an unsafe run identifier and adapter identifier", () => {
     const collector = collectingSink();
     expect(

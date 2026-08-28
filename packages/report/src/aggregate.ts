@@ -1033,19 +1033,45 @@ function buildMetrics(
     label: "surface_agreement",
     numerator: validReports,
     denominator: turnCompleted.length,
-    availability: {
-      observed: turnCompleted.length,
-      unknown: 0,
-      not_applicable:
-        facts.filter((fact) => fact.row.launched).length - turnCompleted.length,
-      unavailable_due_to_evidence: facts.filter((fact) => !fact.row.launched)
-        .length
-    },
+    availability: reportValidityAvailability(facts),
     reasons: [],
     per_run: perRun
   });
 
   return metrics.sort((a, b) => (a.id < b.id ? -1 : 1));
+}
+
+/**
+ * Availability buckets for the section 27.3 report-validity metric.
+ * Every attempt lands in exactly one bucket: a never-launched trial is
+ * not applicable, a trial that completed its turn is observed, and a
+ * launched trial without a completed turn is unavailable when its
+ * evidence is not intact and unknown otherwise.
+ */
+function reportValidityAvailability(
+  facts: readonly TrialFacts[]
+): ReportMetric["availability"] {
+  let observed = 0;
+  let unknown = 0;
+  let notApplicable = 0;
+  let unavailable = 0;
+  for (const fact of facts) {
+    if (!fact.row.launched) {
+      notApplicable += 1;
+    } else if (fact.row.turn_completed) {
+      observed += 1;
+    } else if (fact.integrity !== "intact") {
+      unavailable += 1;
+    } else {
+      unknown += 1;
+    }
+  }
+  return {
+    observed,
+    unknown,
+    not_applicable: notApplicable,
+    unavailable_due_to_evidence: unavailable
+  };
 }
 
 function rollupCheck(
@@ -1637,8 +1663,12 @@ function buildSurfaces(
   redaction: SummaryRedactionContext | undefined
 ): Report["surfaces"] {
   const statuses = countBy(facts, (fact) => fact.participantReportStatus);
-  const turnCompleted = facts.filter((fact) => fact.row.turn_completed).length;
+  const turnCompletedFacts = facts.filter((fact) => fact.row.turn_completed);
+  const turnCompleted = turnCompletedFacts.length;
   const valid = statuses["valid"] ?? 0;
+  const validAmongTurnCompleted = turnCompletedFacts.filter(
+    (fact) => fact.participantReportStatus === "valid"
+  ).length;
   const finalStates = facts
     .flatMap((fact) => {
       const state = fact.input.final_state;
@@ -1664,7 +1694,12 @@ function buildSurfaces(
       schema_invalid: statuses["schema_invalid"] ?? 0,
       valid,
       // Section 27.3: agreement over trials reaching turn_completed.
-      agreement: turnCompleted === 0 ? null : valid / turnCompleted
+      // The numerator counts only valid reports inside that
+      // denominator, so a valid-status report from a trial that never
+      // completed its turn is listed but can never push the rate
+      // above 1.
+      agreement:
+        turnCompleted === 0 ? null : validAmongTurnCompleted / turnCompleted
     },
     final_states: finalStates
   };

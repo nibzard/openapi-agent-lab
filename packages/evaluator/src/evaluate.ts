@@ -562,7 +562,9 @@ function readsReport(expression: string, context: EvaluationContext): boolean {
 /**
  * Documentation and semantic checks either quantify over single
  * events, or run an ordered search over the events that pass the
- * where filter.
+ * where filter. The declared match mode governs both shapes:
+ * existential needs one complete match, universal walks the steps in
+ * stream order, and counted bounds the number of complete matches.
  */
 function orderedOrQuantifiedCheck(
   check:
@@ -578,6 +580,10 @@ function orderedOrQuantifiedCheck(
         event: candidate.event
       })
     );
+    const started: CheckResult = { ...base, expressionSource: check.where };
+    if (check.match === "counted") {
+      return countedSequence(check, filtered, context, started);
+    }
     return runSequence(
       {
         checkId: check.id,
@@ -585,13 +591,71 @@ function orderedOrQuantifiedCheck(
         postconditions: [],
         maxCandidates: undefined
       },
-      "any",
+      check.match === "universal" ? "all" : "any",
       filtered,
       context,
-      { ...base, expressionSource: check.where }
+      started
     );
   }
   return streamCheck(check, context, base, candidates);
+}
+
+/**
+ * A counted ordered check bounds the number of complete ordered
+ * matches. Matches are counted greedily and without overlap: every
+ * search resumes after the last event of the previous match and picks
+ * the lexicographically smallest complete match, so the count never
+ * depends on search order (sections 26.4 and 26.6).
+ */
+function countedSequence(
+  check:
+    | Extract<RubricCheck, { kind: "documentation_event" }>
+    | Extract<RubricCheck, { kind: "semantic_event" }>,
+  candidates: readonly StreamCandidate[],
+  context: EvaluationContext,
+  base: CheckResult
+): CheckResult {
+  const outcome = countMatches(check.steps ?? [], candidates, context);
+  if (outcome.kind === "candidate-limit" || outcome.kind === "capture-limit") {
+    return limitResult(base, check.id, outcome);
+  }
+  const status = quantifierStatus(
+    "counted",
+    check.min_count,
+    check.max_count,
+    outcome.count,
+    outcome.count
+  );
+  if (outcome.first === null) {
+    const failedStepId = status === "failed" ? outcome.failedStepId : null;
+    return {
+      ...base,
+      status,
+      steps: [
+        ...outcome.deepest.map((selection) => stepOutcome(selection)),
+        ...(failedStepId === null ? [] : [unmatchedStep(failedStepId)])
+      ],
+      eventIds: outcome.deepest.map((selection) => selection.eventId),
+      failedPointers: failedStepId === null ? [] : [`steps/${failedStepId}`],
+      message:
+        failedStepId === null
+          ? `${String(outcome.count)} ordered matches met the counted bounds.`
+          : `No ordered match; step ${JSON.stringify(
+              failedStepId
+            )} found no event.`
+    };
+  }
+  return {
+    ...base,
+    status,
+    steps: outcome.first.selections.map((selection) => stepOutcome(selection)),
+    eventIds: outcome.first.selections.map((selection) => selection.eventId),
+    captures: outcome.first.captures,
+    message:
+      status === "passed"
+        ? `${String(outcome.count)} ordered matches met the counted bounds.`
+        : `${String(outcome.count)} ordered matches broke the counted bounds.`
+  };
 }
 
 function streamCheck(
@@ -642,6 +706,45 @@ function quantifierStatus(
   return aboveMinimum && belowMaximum ? "passed" : "failed";
 }
 
+/** The two resource-limit outcomes of a sequence search. */
+type LimitOutcome = Extract<
+  SequenceOutcome,
+  { kind: "candidate-limit" | "capture-limit" }
+>;
+
+function limitResult(
+  base: CheckResult,
+  checkId: string,
+  outcome: LimitOutcome
+): CheckResult {
+  if (outcome.kind === "candidate-limit") {
+    return {
+      ...base,
+      status: "error",
+      message: `The search exceeded the candidate limit after ${outcome.attempted} attempts.`,
+      error: infrastructureError({
+        code: EvaluatorErrorCode.CheckCandidateLimit,
+        message: `Sequence search for ${JSON.stringify(
+          checkId
+        )} exceeded max_candidates.`,
+        checkId
+      })
+    };
+  }
+  return {
+    ...base,
+    status: "error",
+    message: `Captured ${JSON.stringify(outcome.name)} is larger than the capture limit.`,
+    error: infrastructureError({
+      code: EvaluatorErrorCode.CheckCaptureLimit,
+      message: `Capture ${JSON.stringify(outcome.name)} in ${JSON.stringify(
+        checkId
+      )} is ${String(outcome.bytes)} bytes.`,
+      checkId
+    })
+  };
+}
+
 function runSequence(
   query: SequenceQuery,
   match: "any" | "all",
@@ -653,33 +756,8 @@ function runSequence(
     match === "all"
       ? matchAllSteps(query.steps, candidates, context)
       : searchSequence(query.steps, candidates, context, query.maxCandidates);
-  if (outcome.kind === "candidate-limit") {
-    return {
-      ...base,
-      status: "error",
-      message: `The search exceeded the candidate limit after ${outcome.attempted} attempts.`,
-      error: infrastructureError({
-        code: EvaluatorErrorCode.CheckCandidateLimit,
-        message: `Sequence search for ${JSON.stringify(
-          query.checkId
-        )} exceeded max_candidates.`,
-        checkId: query.checkId
-      })
-    };
-  }
-  if (outcome.kind === "capture-limit") {
-    return {
-      ...base,
-      status: "error",
-      message: `Captured ${JSON.stringify(outcome.name)} is larger than the capture limit.`,
-      error: infrastructureError({
-        code: EvaluatorErrorCode.CheckCaptureLimit,
-        message: `Capture ${JSON.stringify(outcome.name)} in ${JSON.stringify(
-          query.checkId
-        )} is ${String(outcome.bytes)} bytes.`,
-        checkId: query.checkId
-      })
-    };
+  if (outcome.kind === "candidate-limit" || outcome.kind === "capture-limit") {
+    return limitResult(base, query.checkId, outcome);
   }
   if (outcome.kind === "unmatched") {
     const failedStepId = outcome.failedStepId;
@@ -788,6 +866,76 @@ function matchedSequence(
   };
 }
 
+/** Shared candidate budget across the searches of one check. */
+interface CandidateBudget {
+  /** Total candidate pairs the searches may try. */
+  ceiling: number;
+  /** Pairs tried so far, shared so counting stays bounded. */
+  attempted: number;
+}
+
+/** Result of counting the ordered matches of one stream. */
+interface CountedMatches {
+  kind: "counted";
+  count: number;
+  /** The lexicographically smallest match, reported as the evidence. */
+  first: { selections: StepSelection[]; captures: JsonObject } | null;
+  deepest: StepSelection[];
+  failedStepId: string | null;
+}
+
+/**
+ * Count complete ordered matches without overlap. Every round takes
+ * the lexicographically smallest complete match from where the
+ * previous one ended, and the rounds share one candidate budget, so
+ * the count is deterministic and bounded.
+ */
+function countMatches(
+  steps: readonly RubricStep[],
+  candidates: readonly StreamCandidate[],
+  context: EvaluationContext
+): CountedMatches | LimitOutcome {
+  const budget: CandidateBudget = {
+    ceiling: context.limits.maxCandidates,
+    attempted: 0
+  };
+  let start = 0;
+  let count = 0;
+  let first: { selections: StepSelection[]; captures: JsonObject } | null =
+    null;
+  let deepest: StepSelection[] = [];
+  let failedStepId: string | null = null;
+  for (;;) {
+    const outcome = searchSequence(
+      steps,
+      candidates,
+      context,
+      undefined,
+      start,
+      budget
+    );
+    if (outcome.kind === "matched") {
+      count += 1;
+      if (first === null) {
+        first = { selections: outcome.selections, captures: outcome.captures };
+      }
+      const last = outcome.selections[outcome.selections.length - 1];
+      const resume = (last?.eventIndex ?? -1) + 1;
+      if (resume >= candidates.length) {
+        return { kind: "counted", count, first, deepest, failedStepId };
+      }
+      start = resume;
+      continue;
+    }
+    if (outcome.kind === "unmatched") {
+      deepest = outcome.deepest;
+      failedStepId = outcome.failedStepId;
+      return { kind: "counted", count, first, deepest, failedStepId };
+    }
+    return outcome;
+  }
+}
+
 /**
  * Backtracking search for one complete ordered match. Candidates are
  * tried in stream order at every step, so the first complete match is
@@ -797,10 +945,14 @@ function searchSequence(
   steps: readonly RubricStep[],
   candidates: readonly StreamCandidate[],
   context: EvaluationContext,
-  maxCandidates: number | undefined
+  maxCandidates: number | undefined,
+  start = 0,
+  budget?: CandidateBudget
 ): SequenceOutcome {
-  const ceiling = maxCandidates ?? context.limits.maxCandidates;
-  let attempted = 0;
+  const counter: CandidateBudget = budget ?? {
+    ceiling: maxCandidates ?? context.limits.maxCandidates,
+    attempted: 0
+  };
   let deepest: StepSelection[] = [];
   const recurse = (
     stepIndex: number,
@@ -823,9 +975,9 @@ function searchSequence(
       if (candidate === undefined) {
         continue;
       }
-      attempted += 1;
-      if (attempted > ceiling) {
-        return { kind: "candidate-limit", attempted };
+      counter.attempted += 1;
+      if (counter.attempted > counter.ceiling) {
+        return { kind: "candidate-limit", attempted: counter.attempted };
       }
       const scope: JsonObject = {
         event: candidate.event,
@@ -858,7 +1010,7 @@ function searchSequence(
     }
     return null;
   };
-  const outcome = recurse(0, 0, {}, []);
+  const outcome = recurse(0, start, {}, []);
   if (outcome !== null) {
     return outcome;
   }

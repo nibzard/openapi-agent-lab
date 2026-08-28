@@ -21,6 +21,7 @@ import { join } from "node:path";
 import {
   assertAgentProbeUsable,
   buildSpawnEnvironment,
+  createSessionRedactor,
   DEFAULT_MAX_FINAL_OUTPUT_BYTES,
   LineAssembler,
   readBoundedFile,
@@ -219,7 +220,8 @@ export class CodexCliAdapter implements AgentAdapter {
     const recorder = new SessionEventRecorder({
       runId: context.runId,
       adapter: this.id,
-      sink
+      sink,
+      redact: createSessionRedactor(context)
     });
     const usage: Record<string, number> = {};
     const events = new LineAssembler();

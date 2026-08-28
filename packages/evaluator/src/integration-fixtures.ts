@@ -16,7 +16,14 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { isJsonObject, type Json, type JsonObject } from "@oal/core";
+import {
+  isJsonObject,
+  parseBlockYaml,
+  type BlockYamlDialect,
+  type BlockYamlFailure,
+  type Json,
+  type JsonObject
+} from "@oal/core";
 import type { TraceBody, TraceEvent } from "@oal/evidence";
 
 import { loadRubric, type Rubric, type RubricLoadResult } from "./rubric.ts";
@@ -122,7 +129,9 @@ export function steelRubric(evalId: SteelEvalId): Rubric {
  * block sequences with compact mapping items, comments, plain and quoted
  * scalars, literal `|` and folded `>` block scalars with chomping, and
  * duplicate-key rejection. Anchors, aliases, tags, and flow collections
- * are rejected, because no shipped rubric uses them.
+ * are rejected, because no shipped rubric uses them. The engine is the
+ * shared line-based engine of `@oal/core`; the dialect below reproduces
+ * the historical Steel behavior exactly.
  */
 
 /** Error thrown for any unsupported YAML construct. */
@@ -137,498 +146,55 @@ export class SteelYamlError extends Error {
   }
 }
 
-interface SourceLine {
-  readonly text: string;
-  readonly indent: number;
-  readonly number: number;
-  readonly blank: boolean;
-}
-
-const PLAIN_INTEGER = /^[+-]?[0-9]+$/;
-const PLAIN_NUMBER = /^[+-]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][+-]?[0-9]+)?$/;
-const BLOCK_HEADER = /^([|>])([+-]\d*|\d+[+-]?)?$/;
-
-function isSpace(ch: string): boolean {
-  return ch === " " || ch === "\t";
-}
-
-function toSourceLine(raw: string, number: number): SourceLine {
-  let indent = 0;
-  while (indent < raw.length && raw.charAt(indent) === " ") {
-    indent += 1;
-  }
-  if (raw.charAt(indent) === "\t") {
-    throw new SteelYamlError(
-      "Tab characters are not allowed in indentation.",
-      number
-    );
-  }
-  const text = raw.slice(indent);
-  return {
-    text,
-    indent,
-    number,
-    blank: text === "" || text.startsWith("#")
-  };
-}
-
-function isSequenceEntry(text: string): boolean {
-  return text === "-" || text.startsWith("- ");
-}
-
-interface QuotedScalar {
-  readonly value: string;
-  readonly next: number;
-}
-
-function readQuoted(text: string, start: number): QuotedScalar | null {
-  const quote = text.charAt(start);
-  let out = "";
-  let i = start + 1;
-  while (i < text.length) {
-    const ch = text.charAt(i);
-    if (ch === quote) {
-      if (quote === "'" && text.charAt(i + 1) === "'") {
-        out += "'";
-        i += 2;
-        continue;
-      }
-      return { value: out, next: i + 1 };
-    }
-    if (quote === '"' && ch === "\\") {
-      const escape = text.charAt(i + 1);
-      if (escape === "u") {
-        const hex = text.slice(i + 2, i + 6);
-        if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
-          return null;
-        }
-        out += String.fromCharCode(Number.parseInt(hex, 16));
-        i += 4;
-      } else {
-        const map: Readonly<Record<string, string>> = {
-          '"': '"',
-          "\\": "\\",
-          "/": "/",
-          n: "\n",
-          t: "\t",
-          r: "\r",
-          b: "\b",
-          f: "\f",
-          "0": "\0"
-        };
-        const mapped = map[escape];
-        if (mapped === undefined) {
-          return null;
-        }
-        out += mapped;
-      }
-      i += 2;
-      continue;
-    }
-    out += ch;
-    i += 1;
-  }
-  return null;
-}
-
-function resolvePlainScalar(input: string): Json {
-  const value = input.trim();
-  if (
-    value === "" ||
-    value === "null" ||
-    value === "Null" ||
-    value === "NULL" ||
-    value === "~"
-  ) {
-    return null;
-  }
-  if (value === "true" || value === "True" || value === "TRUE") {
-    return true;
-  }
-  if (value === "false" || value === "False" || value === "FALSE") {
-    return false;
-  }
-  if (PLAIN_INTEGER.test(value) || PLAIN_NUMBER.test(value)) {
-    const numeric = Number(value);
-    if (Number.isFinite(numeric)) {
-      return numeric;
-    }
-  }
-  return value;
-}
-
-function stripComment(text: string): string {
-  let quote: string | null = null;
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text.charAt(i);
-    if (quote !== null) {
-      if (ch === quote) {
-        quote = null;
-      }
-      continue;
-    }
-    if (ch === '"' || ch === "'") {
-      quote = ch;
-      continue;
-    }
-    if (ch === "#" && (i === 0 || isSpace(text.charAt(i - 1)))) {
-      return text.slice(0, i).trimEnd();
-    }
-  }
-  return text.trimEnd();
-}
-
-interface EntrySplit {
-  readonly key: string;
-  readonly rest: string;
-}
-
-function splitEntry(text: string): EntrySplit | null {
-  const first = text.charAt(0);
-  if (first === '"' || first === "'") {
-    const scalar = readQuoted(text, 0);
-    if (scalar === null) {
-      return null;
-    }
-    let i = scalar.next;
-    while (i < text.length && isSpace(text.charAt(i))) {
-      i += 1;
-    }
-    if (text.charAt(i) !== ":") {
-      return null;
-    }
-    return { key: scalar.value, rest: text.slice(i + 1) };
-  }
-  let depth = 0;
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text.charAt(i);
-    if (ch === "#" && i > 0 && isSpace(text.charAt(i - 1))) {
-      return null;
-    }
-    if (ch === "[" || ch === "{") {
-      depth += 1;
-      continue;
-    }
-    if (ch === "]" || ch === "}") {
-      depth -= 1;
-      continue;
-    }
-    if (depth !== 0) {
-      continue;
-    }
-    const after = text.charAt(i + 1);
-    if (ch === ":" && (after === "" || isSpace(after))) {
-      return { key: text.slice(0, i).trim(), rest: text.slice(i + 1) };
-    }
-  }
-  return null;
-}
-
-class SteelYamlParser {
-  private readonly lines: readonly SourceLine[];
-  private index = 0;
-
-  constructor(lines: readonly SourceLine[]) {
-    this.lines = lines;
-  }
-
-  parseDocument(): Json {
-    this.skipDocumentStart();
-    const first = this.peek();
-    if (first === null) {
-      return null;
-    }
-    const value = this.parseNode(0);
-    const trailing = this.peek();
-    if (trailing !== null) {
-      throw new SteelYamlError(
-        "Unexpected content after the document.",
-        trailing.number
-      );
-    }
-    return value;
-  }
-
-  private skipDocumentStart(): void {
-    for (;;) {
-      const line = this.peek();
-      if (line === null) {
-        return;
-      }
-      if (line.text.startsWith("%") || line.text === "---") {
-        this.index += 1;
-        continue;
-      }
-      return;
-    }
-  }
-
-  private peek(): SourceLine | null {
-    while (this.index < this.lines.length) {
-      const line = this.lines[this.index];
-      if (line === undefined || !line.blank) {
-        return line ?? null;
-      }
-      this.index += 1;
-    }
-    return null;
-  }
-
-  private parseNode(depth: number): Json {
-    const line = this.peek();
-    if (line === null) {
-      return null;
-    }
-    if (isSequenceEntry(line.text)) {
-      return this.parseSequence(line.indent, depth);
-    }
-    return this.parseMapping(line.indent, depth, null);
-  }
-
-  private parseSequence(indent: number, depth: number): Json[] {
-    const items: Json[] = [];
-    for (;;) {
-      const line = this.peek();
-      if (
-        line === null ||
-        line.indent < indent ||
-        !isSequenceEntry(line.text)
-      ) {
-        return items;
-      }
-      if (line.indent > indent) {
-        throw new SteelYamlError(
-          "Unexpected indentation in a block sequence.",
-          line.number
-        );
-      }
-      this.index += 1;
-      const rest = line.text === "-" ? "" : line.text.slice(2);
-      items.push(this.parseSequenceItem(rest, line, depth));
-    }
-  }
-
-  private parseSequenceItem(
-    rest: string,
-    dash: SourceLine,
-    depth: number
-  ): Json {
-    if (rest === "") {
-      const nested = this.peek();
-      if (nested !== null && nested.indent > dash.indent) {
-        return this.parseNode(depth + 1);
-      }
-      return null;
-    }
-    if (isSequenceEntry(rest)) {
-      throw new SteelYamlError(
-        "Compact nested sequences are not supported.",
-        dash.number
-      );
-    }
-    const content = stripComment(rest);
-    if (splitEntry(content) !== null) {
-      const offset = dash.text.length - rest.length;
-      return this.parseMapping(dash.indent + offset, depth, {
-        content,
-        line: dash.number
-      });
-    }
-    return this.parseScalar(rest, dash.number);
-  }
-
-  private parseMapping(
-    indent: number,
-    depth: number,
-    pending: { readonly content: string; readonly line: number } | null
-  ): JsonObject {
-    const result: JsonObject = {};
-    let first = pending;
-    for (;;) {
-      let content: string;
-      let lineNumber: number;
-      if (first !== null) {
-        content = first.content;
-        lineNumber = first.line;
-        first = null;
-      } else {
-        const line = this.peek();
-        if (line === null || line.indent < indent) {
-          return result;
-        }
-        if (line.indent > indent) {
-          throw new SteelYamlError(
-            "Unexpected indentation in a block mapping.",
-            line.number
-          );
-        }
-        if (isSequenceEntry(line.text)) {
-          return result;
-        }
-        this.index += 1;
-        content = line.text;
-        lineNumber = line.number;
-      }
-      const entry = splitEntry(content);
-      if (entry === null) {
-        throw new SteelYamlError(
-          "Expected a 'key: value' mapping entry.",
-          lineNumber
-        );
-      }
-      if (entry.key === "") {
-        throw new SteelYamlError("Mapping keys must not be empty.", lineNumber);
-      }
-      if (Object.hasOwn(result, entry.key)) {
-        throw new SteelYamlError(
-          `Duplicate mapping key: ${entry.key}`,
-          lineNumber
-        );
-      }
-      result[entry.key] = this.parseValue(
-        entry.rest,
-        indent,
-        lineNumber,
-        depth
-      );
-    }
-  }
-
-  private parseValue(
-    rest: string,
-    indent: number,
-    lineNumber: number,
-    depth: number
-  ): Json {
-    const header = stripComment(rest).trim();
-    if (header === "") {
-      const next = this.peek();
-      if (next === null) {
-        return null;
-      }
-      if (next.indent > indent) {
-        return this.parseNode(depth + 1);
-      }
-      if (next.indent === indent && isSequenceEntry(next.text)) {
-        return this.parseSequence(indent, depth + 1);
-      }
-      return null;
-    }
-    if (BLOCK_HEADER.test(header)) {
-      return this.parseBlockScalar(header, indent);
-    }
-    return this.parseScalar(rest, lineNumber);
-  }
-
-  private parseBlockScalar(header: string, indent: number): string {
-    const style = header.charAt(0);
-    const indicators = header.slice(1);
-    const chomp = indicators.includes("-")
-      ? "strip"
-      : indicators.includes("+")
-        ? "keep"
-        : "clip";
-    const explicit = /^[0-9]/.test(indicators)
-      ? indent + Number(indicators.replace(/[^0-9]/g, ""))
-      : null;
-
-    const collected: SourceLine[] = [];
-    while (this.index < this.lines.length) {
-      const line = this.lines[this.index];
-      if (line === undefined) {
-        break;
-      }
-      if (line.text === "") {
-        collected.push(line);
-        this.index += 1;
-        continue;
-      }
-      if (line.indent <= indent) {
-        break;
-      }
-      collected.push(line);
-      this.index += 1;
-    }
-    while (
-      collected.length > 0 &&
-      collected[collected.length - 1]?.text === ""
-    ) {
-      collected.pop();
-    }
-    const firstContent = collected.find((line) => line.text !== "");
-    const contentIndent =
-      explicit ?? (firstContent === undefined ? indent : firstContent.indent);
-
-    const rendered = collected.map((line) =>
-      line.text === ""
-        ? ""
-        : line.text.slice(Math.max(0, line.indent - contentIndent))
-    );
-    let text = "";
-    if (style === "|") {
-      text = rendered.length === 0 ? "" : `${rendered.join("\n")}\n`;
-    } else {
-      const folded: string[] = [];
-      let buffer = "";
-      for (const line of rendered) {
-        if (line === "") {
-          folded.push(buffer);
-          buffer = "";
-          continue;
-        }
-        buffer = buffer === "" ? line : `${buffer} ${line}`;
-      }
-      folded.push(buffer);
-      const body = folded.join("\n");
-      text = body === "" ? "" : `${body}\n`;
-    }
-    if (chomp === "strip") {
-      return text.replace(/\n+$/, "");
-    }
-    if (chomp === "keep") {
-      return text;
-    }
-    return text.replace(/\n+$/, "\n");
-  }
-
-  private parseScalar(text: string, lineNumber: number): Json {
-    const stripped = stripComment(text).trim();
-    if (stripped === "") {
-      return null;
-    }
-    const first = stripped.charAt(0);
-    if (first === "&" || first === "*" || first === "!") {
-      throw new SteelYamlError(
-        "Anchors, aliases, and tags are not supported.",
-        lineNumber
-      );
-    }
-    if (first === "[" || first === "{") {
-      throw new SteelYamlError(
-        "Flow collections are not supported.",
-        lineNumber
-      );
-    }
-    if (first === '"' || first === "'") {
-      const scalar = readQuoted(stripped, 0);
-      if (scalar === null || scalar.next !== stripped.length) {
-        throw new SteelYamlError(
-          "Unterminated or trailing quoted scalar.",
-          lineNumber
-        );
-      }
-      return scalar.value;
-    }
-    return resolvePlainScalar(stripped);
+function steelYamlMessage(failure: BlockYamlFailure): string {
+  switch (failure.situation) {
+    case "tab-indent":
+      return "Tab characters are not allowed in indentation.";
+    case "multiple-documents":
+    case "trailing-content":
+      return "Unexpected content after the document.";
+    case "sequence-indent":
+      return "Unexpected indentation in a block sequence.";
+    case "compact-sequence":
+      return "Compact nested sequences are not supported.";
+    case "mapping-indent":
+      return "Unexpected indentation in a block mapping.";
+    case "expected-entry":
+      return "Expected a 'key: value' mapping entry.";
+    case "empty-key":
+      return "Mapping keys must not be empty.";
+    case "duplicate-key":
+      return `Duplicate mapping key: ${failure.key}`;
+    case "anchors":
+      return "Anchors, aliases, and tags are not supported.";
+    case "flow-unsupported":
+      return "Flow collections are not supported.";
+    case "quoted-scalar":
+      return "Unterminated or trailing quoted scalar.";
+    default:
+      return "The rubric document is not valid YAML.";
   }
 }
+
+/** Dialect that reproduces the Steel rubric parser exactly. */
+const STEEL_YAML_DIALECT: BlockYamlDialect = {
+  fail(failure) {
+    throw new SteelYamlError(steelYamlMessage(failure), failure.line);
+  },
+  skipDirectives: true,
+  tabCheck: "split",
+  flow: false,
+  limits: null,
+  extendedEscapes: true,
+  blankIsContent: false,
+  chompFormulation: "text",
+  flowSkipsBreaks: true,
+  flowKeyBreaksOnBracket: true
+};
 
 /** Parse the YAML subset the Steel rubrics use. */
 export function parseSteelYaml(text: string): Json {
-  const lines = text
-    .split("\n")
-    .map((raw, position) => toSourceLine(raw.replace(/\r$/, ""), position + 1));
-  return new SteelYamlParser(lines).parseDocument();
+  return parseBlockYaml(text, STEEL_YAML_DIALECT);
 }
 
 /**

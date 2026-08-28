@@ -18,6 +18,8 @@ import {
   completedRunEvents,
   evaluation,
   checkRecord,
+  postControlFailureEvents,
+  preControlFailureEvents,
   scenarioReport,
   scenarioTrials,
   SHA_A,
@@ -432,6 +434,116 @@ describe("usage distribution rule", () => {
 
   it("returns null for an empty sample", () => {
     expect(usageDistribution([])).toBeNull();
+  });
+});
+
+describe("report agreement and availability (section 27.3)", () => {
+  /** Full lifecycle minus the turn_completed stage. */
+  const eventsWithoutTurnCompleted = (
+    runId: string
+  ): ReturnType<typeof completedRunEvents> =>
+    completedRunEvents(runId, true).filter(
+      (event) =>
+        !(
+          event.type === "lifecycle.stage" &&
+          event.payload.stage === "turn_completed"
+        )
+    );
+
+  it("keeps the agreement rate within [0, 1] for valid reports without a completed turn", () => {
+    const report = buildReport({
+      scope: { level: "batch", id: "batch-01" },
+      trials: [
+        {
+          run_id: "run-a",
+          evidence_uri: "evidence",
+          events: completedRunEvents("run-a", true),
+          trace: []
+        },
+        {
+          run_id: "run-b",
+          evidence_uri: "evidence",
+          events: eventsWithoutTurnCompleted("run-b"),
+          trace: []
+        },
+        {
+          run_id: "run-c",
+          evidence_uri: "evidence",
+          events: eventsWithoutTurnCompleted("run-c"),
+          trace: []
+        }
+      ]
+    });
+    // Three valid-status reports but only one trial reaching
+    // turn_completed: the rate is 1, never 3.
+    expect(report.surfaces.participant_reports.valid).toBe(3);
+    expect(report.surfaces.participant_reports.agreement).toBe(1);
+    const reportValid = report.metrics.find(
+      (metric) => metric.id === "report_valid"
+    );
+    expect(reportValid?.numerator).toBe(1);
+    expect(reportValid?.denominator).toBe(1);
+  });
+
+  it("returns a null agreement rate when no trial completed a turn", () => {
+    const report = buildReport({
+      scope: { level: "batch", id: "batch-01" },
+      trials: [
+        {
+          run_id: "run-b",
+          evidence_uri: "evidence",
+          events: eventsWithoutTurnCompleted("run-b"),
+          trace: []
+        }
+      ]
+    });
+    expect(report.surfaces.participant_reports.agreement).toBeNull();
+  });
+
+  it("places every attempt in the correct availability bucket", () => {
+    const report = buildReport({
+      scope: { level: "batch", id: "batch-01" },
+      trials: [
+        {
+          // Launched, turn completed: observed.
+          run_id: "run-a",
+          evidence_uri: "evidence",
+          events: completedRunEvents("run-a", true),
+          trace: []
+        },
+        {
+          // Launched, no completed turn, corrupt evidence:
+          // unavailable due to evidence.
+          run_id: "run-d",
+          evidence_uri: "evidence",
+          events: postControlFailureEvents("run-d"),
+          trace: []
+        },
+        {
+          // Launched, no completed turn, intact evidence: unknown.
+          run_id: "run-c",
+          evidence_uri: "evidence",
+          events: preControlFailureEvents("run-c"),
+          trace: []
+        },
+        {
+          // Never launched: not applicable.
+          run_id: "run-e",
+          evidence_uri: "evidence",
+          events: [],
+          trace: []
+        }
+      ]
+    });
+    const reportValid = report.metrics.find(
+      (metric) => metric.id === "report_valid"
+    );
+    expect(reportValid?.availability).toEqual({
+      observed: 1,
+      unknown: 1,
+      not_applicable: 1,
+      unavailable_due_to_evidence: 1
+    });
   });
 });
 

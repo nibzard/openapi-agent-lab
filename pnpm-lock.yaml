@@ -101,6 +101,9 @@ importers:
       '@oal/core':
         specifier: workspace:*
         version: link:../core
+      '@oal/evidence':
+        specifier: workspace:*
+        version: link:../evidence
 
   packages/agent-codex:
     dependencies:

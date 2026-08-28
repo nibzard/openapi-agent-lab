@@ -920,7 +920,8 @@ describe("documentation and semantic streams", () => {
   function documentation(
     eventId: string,
     sequence: number,
-    outcome: string
+    outcome: string,
+    path = "/openapi.json"
   ): DocumentationExchange {
     return {
       schema_version: 1,
@@ -932,7 +933,7 @@ describe("documentation and semantic streams", () => {
       batch_id: null,
       run_id: RUN_ID,
       actor: "participant",
-      request: { method: "GET", path: "/openapi.json" },
+      request: { method: "GET", path },
       candidate: { profile: "openapi-3-1", route_id: "docs" },
       authentication: { status: "not_required" },
       visibility: "public",
@@ -1038,6 +1039,177 @@ describe("documentation and semantic streams", () => {
     expect(docs.status).toBe("passed");
     expect(docs.eventIds).toEqual(["doc-1"]);
     expect(docs.steps[0]?.status).toBe("selected");
+  });
+
+  it("fails an ordered existential check when the steps run backwards", () => {
+    const document: Json = {
+      ...STEEL_RECOVERY,
+      checks: [
+        {
+          id: "docs_served",
+          kind: "documentation_event",
+          weight: 1,
+          required: true,
+          match: "existential",
+          where: 'event.outcome == "served"',
+          ordered: true,
+          steps: [
+            {
+              id: "well_known",
+              where: 'event.request.path == "/.well-known/ai-plugin.json"'
+            },
+            { id: "opened", where: 'event.request.path == "/openapi.json"' }
+          ]
+        }
+      ],
+      signals: []
+    };
+    const result = evaluate(loadFixture(document), {
+      documentationEvents: [
+        documentation("doc-1", 1, "served", "/openapi.json"),
+        documentation("doc-2", 2, "served", "/.well-known/ai-plugin.json")
+      ]
+    });
+    const docs = checkOf(result, "docs_served");
+    expect(docs.status).toBe("failed");
+    expect(docs.failedPointers).toEqual(["steps/opened"]);
+  });
+
+  it("counts ordered matches against the declared bounds", () => {
+    const counted = (bound: JsonObject): Json => ({
+      ...STEEL_RECOVERY,
+      checks: [
+        {
+          id: "discovery_pairs",
+          kind: "documentation_event",
+          weight: 1,
+          required: true,
+          match: "counted",
+          where: 'event.outcome == "served"',
+          ordered: true,
+          steps: [
+            { id: "openapi", where: 'event.request.path == "/openapi.json"' },
+            {
+              id: "well_known",
+              where: 'event.request.path == "/.well-known/ai-plugin.json"'
+            }
+          ],
+          ...bound
+        }
+      ],
+      signals: []
+    });
+    const onePair = [
+      documentation("doc-1", 1, "served", "/openapi.json"),
+      documentation("doc-2", 2, "served", "/.well-known/ai-plugin.json")
+    ];
+    const twoPairs = [
+      ...onePair,
+      documentation("doc-3", 3, "served", "/openapi.json"),
+      documentation("doc-4", 4, "served", "/.well-known/ai-plugin.json")
+    ];
+
+    const shortFall = evaluate(loadFixture(counted({ min_count: 2 })), {
+      documentationEvents: onePair
+    });
+    expect(checkOf(shortFall, "discovery_pairs").status).toBe("failed");
+
+    const enough = evaluate(loadFixture(counted({ min_count: 2 })), {
+      documentationEvents: twoPairs
+    });
+    const pairs = checkOf(enough, "discovery_pairs");
+    expect(pairs.status).toBe("passed");
+    expect(pairs.eventIds).toEqual(["doc-1", "doc-2"]);
+
+    const capped = evaluate(loadFixture(counted({ max_count: 1 })), {
+      documentationEvents: twoPairs
+    });
+    expect(checkOf(capped, "discovery_pairs").status).toBe("failed");
+
+    const within = evaluate(loadFixture(counted({ max_count: 1 })), {
+      documentationEvents: onePair
+    });
+    expect(checkOf(within, "discovery_pairs").status).toBe("passed");
+  });
+
+  it("counts ordered matches over semantic events", () => {
+    const document: Json = {
+      ...STEEL_RECOVERY,
+      checks: [
+        {
+          id: "checkpoint_then_pause",
+          kind: "semantic_event",
+          weight: 1,
+          required: true,
+          match: "counted",
+          min_count: 2,
+          where: "true",
+          ordered: true,
+          steps: [
+            { id: "created", where: 'event.name == "checkpoint.created"' },
+            { id: "paused", where: 'event.name == "computer.paused"' }
+          ]
+        }
+      ],
+      signals: []
+    };
+    const result = evaluate(loadFixture(document), {
+      semanticEvents: SEMANTIC
+    });
+    const ordered = checkOf(result, "checkpoint_then_pause");
+    expect(ordered.status).toBe("failed");
+    expect(ordered.eventIds).toEqual(["sem-1", "sem-2"]);
+    expect(ordered.message).toContain("1 ordered matches");
+  });
+
+  it("walks every step in stream order for a universal match", () => {
+    const document: Json = {
+      ...STEEL_RECOVERY,
+      checks: [
+        {
+          id: "docs_served",
+          kind: "documentation_event",
+          weight: 1,
+          required: true,
+          match: "universal",
+          where: 'event.outcome == "served"',
+          ordered: true,
+          steps: [
+            { id: "opened", where: 'event.request.path == "/openapi.json"' },
+            {
+              id: "well_known",
+              where: 'event.request.path == "/.well-known/ai-plugin.json"'
+            }
+          ]
+        }
+      ],
+      signals: []
+    };
+    const aligned = evaluate(loadFixture(document), {
+      documentationEvents: [
+        documentation("doc-1", 1, "served", "/openapi.json"),
+        documentation("doc-2", 2, "served", "/.well-known/ai-plugin.json"),
+        documentation("doc-3", 3, "served", "/openapi.json")
+      ]
+    });
+    expect(checkOf(aligned, "docs_served").status).toBe("passed");
+
+    const swapped = evaluate(loadFixture(document), {
+      documentationEvents: [
+        documentation("doc-1", 1, "served", "/.well-known/ai-plugin.json"),
+        documentation("doc-2", 2, "served", "/openapi.json")
+      ]
+    });
+    expect(checkOf(swapped, "docs_served").status).toBe("failed");
+
+    const delayed = evaluate(loadFixture(document), {
+      documentationEvents: [
+        documentation("doc-1", 1, "served", "/.well-known/ai-plugin.json"),
+        documentation("doc-2", 2, "served", "/openapi.json"),
+        documentation("doc-3", 3, "served", "/.well-known/ai-plugin.json")
+      ]
+    });
+    expect(checkOf(delayed, "docs_served").status).toBe("failed");
   });
 
   it("requires every event to satisfy a universal match", () => {

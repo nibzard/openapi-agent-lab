@@ -182,4 +182,93 @@ describe("paired binary comparison", () => {
       mcnemarExact({ both: 5, onlyFirst: 0, onlySecond: 0, neither: 5 })
     ).toBe(1);
   });
+
+  it("matches the exact binomial tail for small discordant counts", () => {
+    // Reference values from the exact two-sided binomial tail at
+    // p = 0.5: 2 * sum_{i=0..k} C(10,i) / 2^10 with k = min(b, c).
+    expect(
+      mcnemarExact({ both: 0, onlyFirst: 0, onlySecond: 10, neither: 0 })
+    ).toBeCloseTo(0.001953125, 12);
+    expect(
+      mcnemarExact({ both: 0, onlyFirst: 2, onlySecond: 8, neither: 0 })
+    ).toBeCloseTo(0.109375, 12);
+    expect(
+      mcnemarExact({ both: 0, onlyFirst: 3, onlySecond: 7, neither: 0 })
+    ).toBeCloseTo(0.34375, 12);
+    expect(
+      mcnemarExact({ both: 0, onlyFirst: 4, onlySecond: 6, neither: 0 })
+    ).toBeCloseTo(0.75390625, 12);
+    expect(
+      mcnemarExact({ both: 0, onlyFirst: 5, onlySecond: 5, neither: 0 })
+    ).toBe(1);
+  });
+
+  it("stays finite when the discordant count overflows 2^1024", () => {
+    // 512 + 512 = 1024 discordant pairs: the direct binomial
+    // coefficients overflow, the doubled tail reaches 1.
+    const balanced = mcnemarExact({
+      both: 0,
+      onlyFirst: 512,
+      onlySecond: 512,
+      neither: 0
+    });
+    expect(Number.isFinite(balanced)).toBe(true);
+    expect(balanced).toBe(1);
+    const large = mcnemarExact({
+      both: 0,
+      onlyFirst: 2000,
+      onlySecond: 2000,
+      neither: 0
+    });
+    expect(Number.isFinite(large)).toBe(true);
+    expect(large).toBe(1);
+  });
+
+  it("keeps a positive p-value at cohort sizes that used to yield 0", () => {
+    // 400 + 624 = 1024 discordant pairs: the exact two-sided tail is
+    // about 2.63e-12, which the overflowed sum used to truncate to a
+    // fabricated exact 0.
+    const pValue = mcnemarExact({
+      both: 0,
+      onlyFirst: 400,
+      onlySecond: 624,
+      neither: 0
+    });
+    expect(Number.isFinite(pValue)).toBe(true);
+    expect(pValue).toBeGreaterThan(2.5e-12);
+    expect(pValue).toBeLessThan(2.8e-12);
+    // Reference value 2.630042808782403e-12 computed exactly with
+    // integer binomial coefficients.
+    expect(pValue / 2.630042808782403e-12).toBeCloseTo(1, 10);
+    // A p below the double range stays positive instead of becoming 0.
+    const underflow = mcnemarExact({
+      both: 0,
+      onlyFirst: 2000,
+      onlySecond: 0,
+      neither: 0
+    });
+    expect(underflow).toBeGreaterThan(0);
+    expect(holmAdjust([underflow])).toEqual([underflow]);
+  });
+
+  it("survives the Holm adjustment with large paired counts", () => {
+    // A NaN p-value used to make holmAdjust throw before any verdict.
+    const pValues = [
+      mcnemarExact({ both: 0, onlyFirst: 512, onlySecond: 512, neither: 0 }),
+      mcnemarExact({ both: 0, onlyFirst: 400, onlySecond: 624, neither: 0 }),
+      mcnemarExact({ both: 0, onlyFirst: 600, onlySecond: 700, neither: 0 })
+    ];
+    expect(() => holmAdjust(pValues)).not.toThrow();
+    const adjusted = holmAdjust(pValues);
+    for (const value of adjusted) {
+      expect(Number.isFinite(value)).toBe(true);
+      expect(value).toBeGreaterThanOrEqual(0);
+      expect(value).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("is deterministic across repeated calls", () => {
+    const counts = { both: 0, onlyFirst: 400, onlySecond: 624, neither: 0 };
+    expect(mcnemarExact(counts)).toBe(mcnemarExact(counts));
+  });
 });

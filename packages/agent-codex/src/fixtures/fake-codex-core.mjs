@@ -67,6 +67,7 @@ function helpText(flags) {
 async function runExec(args, env) {
   const exitCode = Number.parseInt(env.FAKE_CODEX_EXIT_CODE ?? "0", 10);
   const stderrNote = env.FAKE_CODEX_STDERR ?? "";
+  const stdoutNote = env.FAKE_CODEX_STDOUT_NOTE ?? "";
   const hangMs = Number.parseInt(env.FAKE_CODEX_HANG_MS ?? "0", 10);
   let outputLastMessage = null;
   let readsStdin = false;
@@ -115,6 +116,15 @@ async function runExec(args, env) {
       item: {
         type: "agent_message",
         text: `env names: ${Object.keys(env).sort().join(",")}`
+      }
+    });
+  }
+  if (stdoutNote !== "") {
+    lines.splice(2, 0, {
+      type: "item.completed",
+      item: {
+        type: "agent_message",
+        text: stdoutNote
       }
     });
   }

@@ -40,6 +40,10 @@ const CAPABILITIES: AgentCapabilities = {
 
 const LAUNCHER_SECRET = "sk-launcher-topsecret-0001";
 const MOCK_KEY = "mock-key-canary-0002";
+/** Values shaped like the ones the runner mints into the tool environment. */
+const RUN_BEARER = "oal_5f3a91c07d2e4b68a1c9e0b2";
+const RUN_API_KEY = "oal_7b2d94f16e8a40c3b5d7f2a1";
+const RUN_BASIC_PASSWORD = "oal_9c4e27d80f1a5b6c3d4e5f60";
 const NO_SIGNAL = (): AbortSignal => new AbortController().signal;
 
 const BASE_CONFIG: GenericAgentConfig = {
@@ -478,6 +482,56 @@ describe("GenericCommandAdapter.run", () => {
       const preview = previews(collector.events, "stdout").join("\n");
       expect(preview).toContain(`secret seen: ${REDACTED_MARKER}`);
       expect(preview).not.toContain(LAUNCHER_SECRET);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("redacts credentials the child prints without a sink redactor", async () => {
+    const { adapter, context, root } = await harness(
+      {},
+      {
+        transcript: { kind: "text-tail", stream: "stdout" },
+        finalOutput: { source: "none" }
+      }
+    );
+    try {
+      const collector = collectingSink();
+      const prepared = await adapter.prepare(
+        withFixtureEnv(
+          {
+            ...context,
+            exposure: {
+              ...context.exposure,
+              credentialNames: [
+                "OAL_AUTH_BEARER",
+                "OAL_AUTH_X_API_KEY",
+                "OAL_AUTH_BASIC_PASSWORD"
+              ]
+            },
+            toolEnvironment: {
+              ...context.toolEnvironment,
+              OAL_AUTH_BEARER: RUN_BEARER,
+              OAL_AUTH_X_API_KEY: RUN_API_KEY,
+              OAL_AUTH_BASIC_PASSWORD: RUN_BASIC_PASSWORD
+            }
+          },
+          { FIXTURE_DUMP_ENV: "1" }
+        )
+      );
+      const result = await adapter.run(prepared, collector.sink, NO_SIGNAL());
+      expect(result.status).toBe("completed");
+      const seen = previews(collector.events, "stdout").join("\n");
+      expect(seen).toContain(`OAL_AUTH_BEARER=${REDACTED_MARKER}`);
+      expect(seen).toContain(`OAL_AUTH_X_API_KEY=${REDACTED_MARKER}`);
+      expect(seen).toContain(`OAL_AUTH_BASIC_PASSWORD=${REDACTED_MARKER}`);
+      expect(seen).toContain(`X_API_KEY=${REDACTED_MARKER}`);
+      expect(seen).toContain("HOME=");
+      const recorded = JSON.stringify(collector.events);
+      expect(recorded).not.toContain(RUN_BEARER);
+      expect(recorded).not.toContain(RUN_API_KEY);
+      expect(recorded).not.toContain(RUN_BASIC_PASSWORD);
+      expect(recorded).not.toContain(MOCK_KEY);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

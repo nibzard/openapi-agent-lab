@@ -7,21 +7,23 @@
  */
 
 import { createHmac } from "node:crypto";
-import { isJsonObject, type Json, type JsonObject } from "@oal/core";
+import {
+  CREDENTIAL_KEY_FRAGMENTS,
+  isCredentialKey,
+  isJsonObject,
+  normalizeCredentialKey,
+  type Json,
+  type JsonObject
+} from "@oal/core";
 
-/** Case-insensitive name fragments from section 30.3. */
-export const DEFAULT_KEY_PATTERNS: readonly string[] = [
-  "api key",
-  "apikey",
-  "token",
-  "secret",
-  "password",
-  "authorization",
-  "cookie",
-  "credential",
-  "private key",
-  "privatekey"
-];
+/**
+ * Default key patterns: the canonical credential-key fragments from
+ * `@oal/core`, shared with every other redaction sink. The fragments are
+ * stored normalized, and the default matcher also applies the canonical
+ * loose compound joins, so a supplied pattern list narrows recognition
+ * while the default never diverges from the canonical list.
+ */
+export const DEFAULT_KEY_PATTERNS: readonly string[] = CREDENTIAL_KEY_FRAGMENTS;
 
 export interface RedactionConfig {
   /** Exact header names, compared lowercase. */
@@ -56,11 +58,6 @@ export type RedactedValue = {
   kind: string;
   fingerprint: string;
 };
-
-/** Collapse separators so x-api-key, x_api_key, and x api key unify. */
-function normalizeKey(key: string): string {
-  return key.toLowerCase().replace(/[-_\s]+/g, "");
-}
 
 /** Kind labels for recognized credential shapes. */
 type ShapeKind =
@@ -111,7 +108,7 @@ function credentialShape(value: string): ShapeKind | null {
 export class Redactor {
   private readonly hmacKey: Uint8Array;
   private readonly secrets: readonly string[];
-  private readonly patterns: readonly string[];
+  private readonly patterns: readonly string[] | undefined;
   private readonly sensitiveNames: ReadonlySet<string>;
   readonly config: RedactionConfig;
 
@@ -119,10 +116,9 @@ export class Redactor {
     this.hmacKey = options.hmacKey;
     this.secrets = (options.secrets ?? []).filter((value) => value.length > 0);
     this.config = options.config ?? {};
-    this.patterns =
-      options.config?.keyPatterns === undefined
-        ? DEFAULT_KEY_PATTERNS
-        : options.config.keyPatterns;
+    // Undefined patterns mean the canonical credential-key list from
+    // `@oal/core`; a supplied list replaces it, pattern by pattern.
+    this.patterns = options.config?.keyPatterns;
     const names = new Set<string>();
     for (const name of options.config?.sensitiveHeaderNames ?? []) {
       names.add(name.toLowerCase());
@@ -165,13 +161,13 @@ export class Redactor {
     if (this.isSensitiveName(key)) {
       return true;
     }
-    const normalized = normalizeKey(key);
-    for (const pattern of this.patterns) {
-      if (normalized.includes(normalizeKey(pattern))) {
-        return true;
-      }
+    if (this.patterns === undefined) {
+      return isCredentialKey(key);
     }
-    return false;
+    const normalized = normalizeCredentialKey(key);
+    return this.patterns.some((pattern) =>
+      normalized.includes(normalizeCredentialKey(pattern))
+    );
   }
 
   /** Whether a value is an exact registered secret or contains one. */

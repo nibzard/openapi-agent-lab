@@ -276,6 +276,114 @@ describe("EventStream", () => {
       .split("\n");
     expect(lines).toHaveLength(3);
   });
+
+  it("commits concurrent completions in submission order", async () => {
+    const sink = await JsonlSink.open(join(dir, "trace.jsonl"));
+    const stream = EventStream.open(sink, "evt");
+    const reserved = Array.from({ length: 24 }, () => stream.reserve());
+    await Promise.all(
+      reserved.map((slot) => stream.complete({ sequence: slot.sequence }))
+    );
+    const lines = (await readFile(join(dir, "trace.jsonl"), "utf8"))
+      .trim()
+      .split("\n");
+    expect(lines).toHaveLength(24);
+    expect(
+      lines.map((line) => (JSON.parse(line) as { sequence: number }).sequence)
+    ).toEqual(reserved.map((slot) => slot.sequence));
+  });
+
+  it("keeps a slow earlier write ahead of a faster later one", async () => {
+    // Every append resolves on fewer timer ticks than the one before,
+    // so an unserialized stream would commit the records backwards.
+    const written: Json[] = [];
+    let call = 0;
+    const scheduled = {
+      async appendJson(value: Json): Promise<void> {
+        call += 1;
+        const ticks = 4 - call;
+        for (let index = 0; index < ticks; index += 1) {
+          await new Promise<void>((done) => setTimeout(done, 0));
+        }
+        written.push(value);
+      }
+    };
+    const stream = EventStream.open(scheduled as unknown as JsonlSink, "evt");
+    const first = stream.reserve();
+    const second = stream.reserve();
+    const third = stream.reserve();
+    await Promise.all([
+      stream.complete({ sequence: first.sequence }),
+      stream.complete({ sequence: second.sequence }),
+      stream.complete({ sequence: third.sequence })
+    ]);
+    expect(
+      written.map((value) => (value as { sequence: number }).sequence)
+    ).toEqual([first.sequence, second.sequence, third.sequence]);
+  });
+
+  it("retries a buffered record dropped by a failed shared drain", async () => {
+    // Sequence 3 completes early and resolves while buffered. A later
+    // drain for sequence 1 flushes 1 and 2, then the append for 3
+    // fails once. Record 3 must stay buffered until some later
+    // completion retries it, and every record must land exactly once.
+    const written: Json[] = [];
+    let failingSequence: number | null = 3;
+    const flaky = {
+      appendJson(value: Json): Promise<void> {
+        const sequence = (value as { sequence: number }).sequence;
+        if (sequence === failingSequence) {
+          failingSequence = null;
+          return Promise.reject(new Error("transient write failure"));
+        }
+        written.push(value);
+        return Promise.resolve();
+      }
+    };
+    const stream = EventStream.open(flaky as unknown as JsonlSink, "evt");
+    const first = stream.reserve();
+    const second = stream.reserve();
+    const third = stream.reserve();
+    const fourth = stream.reserve();
+    await stream.complete({ sequence: second.sequence });
+    await stream.complete({ sequence: third.sequence });
+    expect(stream.buffered).toBe(2);
+    await expect(stream.complete({ sequence: first.sequence })).rejects.toThrow(
+      "transient write failure"
+    );
+    expect(stream.buffered).toBe(1);
+    await stream.complete({ sequence: fourth.sequence });
+    expect(stream.buffered).toBe(0);
+    expect(
+      written.map((value) => (value as { sequence: number }).sequence)
+    ).toEqual([
+      first.sequence,
+      second.sequence,
+      third.sequence,
+      fourth.sequence
+    ]);
+  });
+
+  it("keeps later completions usable after a failed write", async () => {
+    const failing = {
+      appendJson(): Promise<void> {
+        return Promise.reject(new Error("disk full"));
+      }
+    };
+    const stream = EventStream.open(failing as unknown as JsonlSink, "evt");
+    const broken = stream.reserve();
+    await expect(
+      stream.complete({ sequence: broken.sequence })
+    ).rejects.toThrow("disk full");
+    const sink = await JsonlSink.open(join(dir, "trace.jsonl"));
+    const healing = EventStream.open(sink, "evt");
+    const reserved = healing.reserve();
+    await healing.complete({ sequence: reserved.sequence, index: 1 });
+    const lines = (await readFile(join(dir, "trace.jsonl"), "utf8"))
+      .trim()
+      .split("\n");
+    expect(lines).toHaveLength(1);
+  });
 });
 
 describe("trace-event schema conformance", () => {

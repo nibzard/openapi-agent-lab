@@ -57,6 +57,11 @@ for (let index = 0; index < textLines; index += 1) {
 if (env.FIXTURE_SECRET !== undefined) {
   lines.push(`secret seen: ${env.FIXTURE_SECRET}`);
 }
+if (env.FIXTURE_DUMP_ENV === "1") {
+  for (const [name, value] of Object.entries(env).sort()) {
+    lines.push(`${name}=${value}`);
+  }
+}
 if (env.FIXTURE_STDIN === "1") {
   let received = "";
   process.stdin.setEncoding("utf8");

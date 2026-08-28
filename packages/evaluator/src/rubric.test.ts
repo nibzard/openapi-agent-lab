@@ -334,6 +334,182 @@ describe("loadRubric", () => {
     expect(result.rubric).toBeNull();
   });
 
+  it("rejects a counted ordered check without a count bound", async () => {
+    const result = await load({
+      ...SAMPLE_RUBRIC,
+      checks: [
+        {
+          id: "docs",
+          kind: "documentation_event",
+          weight: 1,
+          required: true,
+          match: "counted",
+          where: 'event.outcome == "served"',
+          ordered: true,
+          steps: [{ id: "one", where: "true" }]
+        }
+      ]
+    });
+    expect(result.rubric).toBeNull();
+    expect(
+      result.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.severity === "error" &&
+          diagnostic.message === "A counted match needs min_count or max_count."
+      )
+    ).toBe(true);
+  });
+
+  it("accepts a counted ordered check with a count bound", async () => {
+    const result = await load({
+      ...SAMPLE_RUBRIC,
+      checks: [
+        {
+          id: "docs",
+          kind: "documentation_event",
+          weight: 1,
+          required: true,
+          match: "counted",
+          min_count: 2,
+          where: 'event.outcome == "served"',
+          ordered: true,
+          steps: [{ id: "one", where: "true" }]
+        }
+      ]
+    });
+    expect(result.rubric).not.toBeNull();
+    expect(errorsOf(result.diagnostics)).toEqual([]);
+  });
+
+  it("rejects a count bound on an existential check", async () => {
+    const result = await load({
+      ...SAMPLE_RUBRIC,
+      checks: [
+        {
+          id: "exists",
+          kind: "event",
+          weight: 1,
+          required: true,
+          match: "existential",
+          where: "true",
+          min_count: 1
+        }
+      ]
+    });
+    expect(result.rubric).toBeNull();
+    expect(
+      result.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.severity === "error" &&
+          diagnostic.message ===
+            "Only a counted match declares min_count or max_count." &&
+          diagnostic.json_pointer === "#/checks/0/min_count"
+      )
+    ).toBe(true);
+  });
+
+  it("rejects a count bound on a universal check", async () => {
+    const result = await load({
+      ...SAMPLE_RUBRIC,
+      checks: [
+        {
+          id: "always",
+          kind: "event",
+          weight: 1,
+          required: true,
+          match: "universal",
+          where: "true",
+          max_count: 2
+        }
+      ]
+    });
+    expect(result.rubric).toBeNull();
+    expect(
+      result.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.severity === "error" &&
+          diagnostic.message ===
+            "Only a counted match declares min_count or max_count." &&
+          diagnostic.json_pointer === "#/checks/0/max_count"
+      )
+    ).toBe(true);
+  });
+
+  it("rejects a count bound on an ordered check with steps", async () => {
+    const result = await load({
+      ...SAMPLE_RUBRIC,
+      checks: [
+        {
+          id: "docs",
+          kind: "semantic_event",
+          weight: 1,
+          required: true,
+          match: "universal",
+          where: "true",
+          max_count: 3,
+          ordered: true,
+          steps: [{ id: "one", where: "true" }]
+        }
+      ]
+    });
+    expect(result.rubric).toBeNull();
+    expect(
+      result.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.severity === "error" &&
+          diagnostic.message ===
+            "Only a counted match declares min_count or max_count."
+      )
+    ).toBe(true);
+  });
+
+  it("accepts a counted check with both bounds and no steps", async () => {
+    const result = await load({
+      ...SAMPLE_RUBRIC,
+      checks: [
+        {
+          id: "counted",
+          kind: "event",
+          weight: 1,
+          required: true,
+          match: "counted",
+          where: "true",
+          min_count: 1,
+          max_count: 4
+        }
+      ]
+    });
+    expect(result.rubric).not.toBeNull();
+    expect(errorsOf(result.diagnostics)).toEqual([]);
+  });
+
+  it("rejects steps on an event check", async () => {
+    const result = await load({
+      ...SAMPLE_RUBRIC,
+      checks: [
+        {
+          id: "api_flow",
+          kind: "event",
+          weight: 1,
+          required: true,
+          match: "existential",
+          where: "true",
+          ordered: true,
+          steps: [{ id: "one", where: "true" }]
+        }
+      ]
+    });
+    expect(result.rubric).toBeNull();
+    expect(
+      result.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.severity === "error" &&
+          diagnostic.message ===
+            "Only documentation_event and semantic_event checks declare steps."
+      )
+    ).toBe(true);
+  });
+
   it("rejects a json_schema reference that traverses outside the pack", async () => {
     const result = await load({
       ...SAMPLE_RUBRIC,

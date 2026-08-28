@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import {
   argvTokenSourceFromContext,
   buildSpawnEnvironment,
+  createSessionRedactor,
   DEFAULT_MAX_FINAL_OUTPUT_BYTES,
   expandArgv,
   LineAssembler,
@@ -200,7 +201,8 @@ export class GenericCommandAdapter implements AgentAdapter {
     const recorder = new SessionEventRecorder({
       runId: context.runId,
       adapter: this.id,
-      sink
+      sink,
+      redact: createSessionRedactor(context)
     });
     const parser = createTranscriptParser(config.transcript);
     const usage: Record<string, number> = {};

@@ -64,6 +64,82 @@ export function createSecretRedactor(secrets: readonly string[]): TextRedactor {
 /** Redactor that changes nothing. Used when no secrets are known. */
 export const identityRedactor: TextRedactor = (text: string): string => text;
 
+/** One adapter detail value after redaction, plus whether it changed. */
+interface ScrubbedDetail {
+  readonly value: unknown;
+  readonly redacted: boolean;
+}
+
+/** A detail record after per-value redaction, plus whether any value changed. */
+interface ScrubbedDetailRecord {
+  readonly value: Record<string, unknown>;
+  readonly redacted: boolean;
+}
+
+/**
+ * Check whether a value is a plain object record. Class instances such as
+ * Date or Map are not plain records: the serializer emits them through their
+ * own shape, so the redactor must pass them through untouched.
+ */
+function isPlainObjectRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const prototype: unknown = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+/**
+ * Redact every string inside an adapter detail record. Numbers, booleans,
+ * and null pass through untouched, so machine-readable facts stay exact.
+ */
+function redactDetailValues(
+  detail: Readonly<Record<string, unknown>>,
+  redact: TextRedactor
+): ScrubbedDetailRecord {
+  let redacted = false;
+  const value: Record<string, unknown> = {};
+  for (const [key, inner] of Object.entries(detail)) {
+    const scrubbed = redactDetailValue(inner, redact);
+    redacted = redacted || scrubbed.redacted;
+    // Define every key so a legal detail key such as __proto__ stays an own
+    // data property. Plain assignment would drop it or write to the
+    // prototype of this accumulator instead.
+    Object.defineProperty(value, key, {
+      value: scrubbed.value,
+      enumerable: true,
+      writable: true,
+      configurable: true
+    });
+  }
+  return { value, redacted };
+}
+
+/** Redact one adapter detail value, including strings nested in containers. */
+function redactDetailValue(
+  input: unknown,
+  redact: TextRedactor
+): ScrubbedDetail {
+  if (typeof input === "string") {
+    const clean = redact(input);
+    return { value: clean, redacted: clean !== input };
+  }
+  if (Array.isArray(input)) {
+    let redacted = false;
+    const items: unknown[] = [];
+    for (const item of input) {
+      const scrubbed = redactDetailValue(item, redact);
+      redacted = redacted || scrubbed.redacted;
+      items.push(scrubbed.value);
+    }
+    return { value: items, redacted };
+  }
+  if (isPlainObjectRecord(input)) {
+    return redactDetailValues(input, redact);
+  }
+  return { value: input, redacted: false };
+}
+
 export interface SessionEventRecorderOptions {
   runId: string;
   adapter: string;
@@ -155,16 +231,19 @@ export class SessionEventRecorder {
   }
 
   /**
-   * Emit an adapter-declared machine-readable fact. `detail` carries only
-   * secret-free structured fields and lands in the event extensions.
+   * Emit an adapter-declared machine-readable fact. The recorder redacts
+   * every string value of `detail` before it lands in the event extensions,
+   * and the payload flag reports whether that pass changed any value, so
+   * `redacted === false` still means the recorded text was clean.
    */
   adapterEvent(kind: string, detail?: Readonly<Record<string, unknown>>): void {
+    const scrubbed = redactDetailValues(detail ?? {}, this.redact);
     const payload: AgentStreamPayload = {
       channel: "adapter",
-      redacted: false,
+      redacted: scrubbed.redacted,
       kind
     };
-    this.emit("agent.session_event", payload, detail ?? {});
+    this.emit("agent.session_event", payload, scrubbed.value);
   }
 
   /** Emit the `agent.exited` record. */

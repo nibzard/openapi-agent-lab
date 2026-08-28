@@ -204,12 +204,16 @@ export class JsonlSink {
 /**
  * Allocates event ids and sequences at ingress and flushes completed
  * records in strict sequence order. Out-of-order completions buffer
- * until every prior record has been appended.
+ * until every prior record has been appended, and completions serialize
+ * on one promise chain so concurrent writers commit in submission
+ * order. A record leaves the buffer only after its append succeeds,
+ * so a failed drain leaves it for the next completion to retry.
  */
 export class EventStream {
   private nextSequence = 1;
   private readonly pending = new Map<number, Json>();
   private writeUpTo = 1;
+  private tail: Promise<void> = Promise.resolve();
 
   private constructor(
     private readonly sink: JsonlSink,
@@ -227,16 +231,38 @@ export class EventStream {
     return { sequence, event_id: sequenceId(this.idPrefix, sequence) };
   }
 
-  /** Complete a reserved record; flushes everything now in order. */
+  /**
+   * Complete a reserved record; flushes everything now in order. Each
+   * call waits for the previous one, so records reach the file in the
+   * order completions were submitted, whatever the scheduling of the
+   * underlying writes.
+   */
   async complete(event: Json & { sequence: number }): Promise<void> {
+    const run = this.tail.then(() => this.flushContiguous(event));
+    // A failed write must not poison later completions; the caller
+    // still observes the error from its own promise.
+    this.tail = run.then(
+      () => undefined,
+      () => undefined
+    );
+    await run;
+  }
+
+  private async flushContiguous(
+    event: Json & { sequence: number }
+  ): Promise<void> {
     this.pending.set(event.sequence, event);
     while (this.pending.has(this.writeUpTo)) {
       const ready = this.pending.get(this.writeUpTo);
+      if (ready === undefined) {
+        break;
+      }
+      // Append before dropping: a failed append leaves the record
+      // buffered at writeUpTo, so the next completion retries it and
+      // a record whose own complete() already resolved is never lost.
+      await this.sink.appendJson(ready);
       this.pending.delete(this.writeUpTo);
       this.writeUpTo += 1;
-      if (ready !== undefined) {
-        await this.sink.appendJson(ready);
-      }
     }
   }
 

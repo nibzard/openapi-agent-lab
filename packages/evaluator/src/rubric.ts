@@ -507,6 +507,13 @@ class RubricLoader {
     }
     const steps = this.readSteps(fieldOf(value, "steps"), pointer, STEP_ROOTS);
     const usesSteps = steps !== null && steps.length > 0;
+    if (kind === "event" && steps !== null) {
+      this.error(
+        DiagnosticCode.RubricInvalid,
+        "Only documentation_event and semantic_event checks declare steps.",
+        `${pointer}/steps`
+      );
+    }
     if (usesSteps && ordered !== true) {
       this.error(
         DiagnosticCode.RubricInvalid,
@@ -514,24 +521,32 @@ class RubricLoader {
         `${pointer}/ordered`
       );
     }
-    if (usesSteps && where === null) {
+    if (where === null) {
       return null;
     }
-    if (!usesSteps) {
-      if (where === null) {
-        return null;
-      }
-      if (
-        match === "counted" &&
-        minCount === undefined &&
-        maxCount === undefined
-      ) {
-        this.error(
-          DiagnosticCode.RubricInvalid,
-          "A counted match needs min_count or max_count.",
-          `${pointer}/match`
-        );
-      }
+    if (
+      match === "counted" &&
+      minCount === undefined &&
+      maxCount === undefined
+    ) {
+      this.error(
+        DiagnosticCode.RubricInvalid,
+        "A counted match needs min_count or max_count.",
+        `${pointer}/match`
+      );
+    }
+    // Bounds only carry meaning in counted mode; an existential or
+    // universal check would silently ignore them at evaluation.
+    if (
+      match !== null &&
+      match !== "counted" &&
+      (minCount !== undefined || maxCount !== undefined)
+    ) {
+      this.error(
+        DiagnosticCode.RubricInvalid,
+        "Only a counted match declares min_count or max_count.",
+        minCount !== undefined ? `${pointer}/min_count` : `${pointer}/max_count`
+      );
     }
     if (
       minCount !== undefined &&
@@ -551,7 +566,7 @@ class RubricLoader {
       ...common,
       kind,
       match,
-      where: where === null ? "" : where.source,
+      where: where.source,
       ...(minCount === undefined ? {} : { min_count: minCount }),
       ...(maxCount === undefined ? {} : { max_count: maxCount }),
       ...(usesSteps ? { ordered: true, steps } : {})

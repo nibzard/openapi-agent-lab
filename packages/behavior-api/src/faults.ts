@@ -81,8 +81,73 @@ export class FaultCounters {
   }
 }
 
+/**
+ * Structural equality over JSON values. Object key order never
+ * matters, because object fields compare by name lookup; a plain
+ * JSON.stringify comparison would depend on the key order the
+ * participant happened to send. An absent value never equals a
+ * declared one.
+ *
+ * Matching must always decide, never throw. Lenient decoders can
+ * deliver non-finite numbers (JSON 1e999, YAML .inf and .nan), which
+ * canonical JSON refuses. The total rule: a non-finite number never
+ * equals a finite one, and two non-finite numbers equal only when
+ * they are the same kind, one of positive infinity, negative
+ * infinity, or NaN.
+ */
 function jsonEquals(left: Json | undefined, right: Json): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  if (left === undefined) {
+    return false;
+  }
+  return deepEquals(left, right);
+}
+
+/** The non-finite kind of a number, or null when it is finite. */
+function nonFiniteKind(value: Json): "infinity" | "-infinity" | "nan" | null {
+  if (typeof value !== "number" || Number.isFinite(value)) {
+    return null;
+  }
+  if (Number.isNaN(value)) {
+    return "nan";
+  }
+  return value > 0 ? "infinity" : "-infinity";
+}
+
+function deepEquals(left: Json, right: Json): boolean {
+  const leftKind = nonFiniteKind(left);
+  const rightKind = nonFiniteKind(right);
+  if (leftKind !== null || rightKind !== null) {
+    return leftKind !== null && leftKind === rightKind;
+  }
+  if (
+    typeof left !== "object" ||
+    typeof right !== "object" ||
+    left === null ||
+    right === null
+  ) {
+    return left === right;
+  }
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right)) {
+      return false;
+    }
+    return (
+      left.length === right.length &&
+      left.every((item, index) => deepEquals(item, right[index] as Json))
+    );
+  }
+  const leftKeys = Object.keys(left).filter((key) => left[key] !== undefined);
+  const rightKeys = Object.keys(right).filter(
+    (key) => right[key] !== undefined
+  );
+  if (leftKeys.length !== rightKeys.length) {
+    return false;
+  }
+  return leftKeys.every(
+    (key) =>
+      Object.prototype.hasOwnProperty.call(right, key) &&
+      deepEquals(left[key] as Json, right[key] as Json)
+  );
 }
 
 function matchesPredicate(
