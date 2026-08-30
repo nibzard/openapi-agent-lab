@@ -910,6 +910,7 @@ openapi-agent-lab/
     evaluation.v1.schema.json
     cohort-evaluation.v1.schema.json
     report.v1.schema.json
+    friction.v1.schema.json
     resource-usage.v1.schema.json
     artifact-manifest.v1.schema.json
 

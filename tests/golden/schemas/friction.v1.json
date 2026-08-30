@@ -1,0 +1,246 @@
+{
+  "schema_version": 1,
+  "kind": "FrictionReport",
+  "scope": {
+    "level": "batch",
+    "id": "webclip-before"
+  },
+  "generated_at": "2026-08-30T12:00:00.000Z",
+  "counts": {
+    "trials": 2,
+    "exchanges": 14,
+    "operations": 3,
+    "incidents": 3,
+    "incidents_by_class": {
+      "spec_friction": 1,
+      "mock_fidelity": 1,
+      "harness": 1,
+      "unknown": 0
+    },
+    "incidents_by_kind": {
+      "request_schema_rejected": 1,
+      "escalation": 1,
+      "quota_exceeded": 1
+    },
+    "worklist_items": 2
+  },
+  "trials": [
+    {
+      "trial_id": "run-01",
+      "exchanges": 7,
+      "failed_exchanges": 2,
+      "incident_count": 2
+    },
+    {
+      "trial_id": "run-02",
+      "exchanges": 7,
+      "failed_exchanges": 1,
+      "incident_count": 1
+    }
+  ],
+  "operations": [
+    {
+      "operation": "path:POST /v1/clips",
+      "operation_id": "create_clip",
+      "attempts": 4,
+      "status_counts": {
+        "422": 2,
+        "201": 2
+      },
+      "first_success_attempt": 2,
+      "attempts_to_first_2xx": 2,
+      "distinct_request_shapes": 1,
+      "shape_descriptors": ["{\"keys\":[\"format\",\"url\"]}"],
+      "escalated": true,
+      "abandoned": false,
+      "identical_retries": 0,
+      "framework_codes": [
+        {
+          "code": "request_schema_invalid",
+          "status": 422,
+          "count": 2
+        }
+      ],
+      "provenance_mix": {
+        "fixture": 0,
+        "example": 0,
+        "generated": 2
+      },
+      "approximations": [],
+      "duration": {
+        "n": 4,
+        "median": 12,
+        "p25": 9,
+        "p75": 15,
+        "p95": null,
+        "min": 6,
+        "max": 18
+      }
+    },
+    {
+      "operation": "path:GET /v1/clips",
+      "operation_id": "list_clips",
+      "attempts": 2,
+      "status_counts": {
+        "200": 2
+      },
+      "first_success_attempt": 1,
+      "attempts_to_first_2xx": 1,
+      "distinct_request_shapes": 1,
+      "shape_descriptors": ["none"],
+      "escalated": false,
+      "abandoned": false,
+      "identical_retries": 0,
+      "framework_codes": [],
+      "provenance_mix": {
+        "fixture": 0,
+        "example": 0,
+        "generated": 2
+      },
+      "approximations": [],
+      "duration": {
+        "n": 2,
+        "median": 5,
+        "p25": 4,
+        "p75": 6,
+        "p95": null,
+        "min": 4,
+        "max": 6
+      }
+    },
+    {
+      "operation": "unmatched:GET /v1/clips/",
+      "operation_id": null,
+      "attempts": 1,
+      "status_counts": {
+        "unmatched": 1
+      },
+      "first_success_attempt": null,
+      "attempts_to_first_2xx": null,
+      "distinct_request_shapes": 1,
+      "shape_descriptors": ["none"],
+      "escalated": false,
+      "abandoned": false,
+      "identical_retries": 0,
+      "framework_codes": [
+        {
+          "code": "route_not_found",
+          "status": 404,
+          "count": 1
+        }
+      ],
+      "provenance_mix": {
+        "fixture": 0,
+        "example": 0,
+        "generated": 0
+      },
+      "approximations": [],
+      "duration": {
+        "n": 1,
+        "median": 2,
+        "p25": 2,
+        "p75": 2,
+        "p95": null,
+        "min": 2,
+        "max": 2
+      }
+    }
+  ],
+  "incidents": [
+    {
+      "id": "inc_request_schema_rejected_post_v1_clips",
+      "kind": "request_schema_rejected",
+      "class": "spec_friction",
+      "origin": "api",
+      "operation": "path:POST /v1/clips",
+      "near_miss_of": null,
+      "trials": ["run-01", "run-02"],
+      "occurrences": 2,
+      "evidence": [
+        {
+          "trial_id": "run-01",
+          "sequence": 3,
+          "status": 422,
+          "code": "request_schema_invalid",
+          "request_shape": "/format: value must be one of the declared enum",
+          "provenance": null
+        },
+        {
+          "trial_id": "run-02",
+          "sequence": 2,
+          "status": 422,
+          "code": "request_schema_invalid",
+          "request_shape": "/format: value must be one of the declared enum",
+          "provenance": null
+        }
+      ],
+      "detail": "The format value was rejected by the declared enum before it reached the mock."
+    },
+    {
+      "id": "inc_escalation_post_v1_clips",
+      "kind": "escalation",
+      "class": "mock_fidelity",
+      "origin": "api",
+      "operation": "path:POST /v1/clips",
+      "near_miss_of": null,
+      "trials": ["run-01"],
+      "occurrences": 1,
+      "evidence": [
+        {
+          "trial_id": "run-01",
+          "sequence": 4,
+          "status": 201,
+          "code": null,
+          "request_shape": "{\"keys\":[\"format\",\"url\"]}",
+          "provenance": "generated"
+        }
+      ],
+      "detail": "The participant retried with different values after a rejection; the satisfying response was generated, not authored."
+    },
+    {
+      "id": "inc_quota_exceeded_run_02",
+      "kind": "quota_exceeded",
+      "class": "harness",
+      "origin": "harness",
+      "operation": null,
+      "near_miss_of": null,
+      "trials": ["run-02"],
+      "occurrences": 1,
+      "evidence": [
+        {
+          "trial_id": "run-02",
+          "sequence": 6,
+          "status": 429,
+          "code": "request_quota_exceeded",
+          "request_shape": null,
+          "provenance": null
+        }
+      ],
+      "detail": "The exposure refused the request under its own burst quota; the mock never saw it."
+    }
+  ],
+  "worklist": [
+    {
+      "id": "wl_post_v1_clips_enum",
+      "incident_ids": ["inc_request_schema_rejected_post_v1_clips"],
+      "operation": "path:POST /v1/clips",
+      "action": "add_enum_values",
+      "summary": "Widen the declared format enum or describe the accepted values where the participant looks for them.",
+      "requires_behavior_backend": false
+    },
+    {
+      "id": "wl_post_v1_clips_fixture",
+      "incident_ids": ["inc_escalation_post_v1_clips"],
+      "operation": "path:POST /v1/clips",
+      "action": "author_fixture",
+      "summary": "Author a realistic 201 clip body so a generated handle never stands in for a resource.",
+      "fixture": {
+        "status": 201,
+        "media_type": "application/json",
+        "body_kind": "json_file"
+      },
+      "requires_behavior_backend": false
+    }
+  ],
+  "extensions": {}
+}
