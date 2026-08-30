@@ -17,6 +17,7 @@
  * no installed packages.
  */
 import { readFile, writeFile } from "node:fs/promises";
+import { performance } from "node:perf_hooks";
 
 const contractPath = process.argv[2] ?? "./openapi.json";
 const baseUrl = (process.env.OAL_BASE_URL ?? "").replace(/\/$/, "");

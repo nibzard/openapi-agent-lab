@@ -18215,7 +18215,7 @@
                       "access_token": "xoxb-placeholder",
                       "app_id": "A0KRD7HC3",
                       "authed_user": {
-                        "access_token": "xoxp-1234",
+                        "access_token": "xoxp-placeholder",
                         "id": "U1234",
                         "scope": "chat:write",
                         "token_type": "user"

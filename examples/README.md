@@ -45,5 +45,6 @@ An unlicensed contract can still be useful as a local test input. The rule is: f
 - **`quickstart.json`** was written for this repository. It is licensed under the [Apache License 2.0](../LICENSE), the same as the rest of this repository.
 - **`steel-v1.json`** is the published contract of the Steel Browser API (`https://api.steel.dev`), retrieved on 2026-08-27. Copyright Steel. Included with permission. Steel is open source: https://github.com/steel-dev/steel-browser
 - **`e2b.yaml`** is the published contract of the E2B API, retrieved on 2026-08-27 from https://github.com/e2b-dev/E2B/blob/main/spec/openapi.yml. That repository is licensed under the Apache License 2.0: https://github.com/e2b-dev/E2B/blob/main/LICENSE
+- **`packs/slack/contract/openapi.json`** is the apis.guru snapshot of the Slack Web API, version 1.7.0, retrieved on 2026-08-30. It derives from Slack's published specs, maintained at https://github.com/slackapi/slack-api-specs under the MIT license. Every `xox*`-shaped example token was replaced by a short placeholder before the copy was committed.
 
 Vendor contracts are kept in the format published by the vendor. They are snapshots, not mirrors. Fetch a fresh copy from the source when you need the current contract. Common linters report defects in them, such as dangling security requirements in `e2b.yaml`.

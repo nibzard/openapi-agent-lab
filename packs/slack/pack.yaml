@@ -17,7 +17,313 @@ requires:
 
 contract:
   entrypoint: contract/openapi.json
-  response_fixtures: []
+  response_fixtures:
+    - id: admin-conversations-get-teams
+      operation: "path:GET /admin.conversations.getTeams"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/admin-conversations-get-teams.json
+    - id: admin-conversations-search
+      operation: "path:GET /admin.conversations.search"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/admin-conversations-search.json
+    - id: chat-scheduled-messages-list
+      operation: "path:GET /chat.scheduledMessages.list"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/chat-scheduled-messages-list.json
+    - id: conversations-history
+      operation: "path:GET /conversations.history"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/conversations-history.json
+    - id: conversations-replies
+      operation: "path:GET /conversations.replies"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/conversations-replies.json
+    - id: dnd-info
+      operation: "path:GET /dnd.info"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/dnd-info.json
+    - id: files-info
+      operation: "path:GET /files.info"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/files-info.json
+    - id: files-list
+      operation: "path:GET /files.list"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/files-list.json
+    - id: oauth-access
+      operation: "path:GET /oauth.access"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/oauth-access.json
+    - id: reminders-info
+      operation: "path:GET /reminders.info"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/reminders-info.json
+    - id: reminders-list
+      operation: "path:GET /reminders.list"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/reminders-list.json
+    - id: stars-list
+      operation: "path:GET /stars.list"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/stars-list.json
+    - id: team-info
+      operation: "path:GET /team.info"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/team-info.json
+    - id: team-integration-logs
+      operation: "path:GET /team.integrationLogs"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/team-integration-logs.json
+    - id: team-profile-get
+      operation: "path:GET /team.profile.get"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/team-profile-get.json
+    - id: usergroups-list
+      operation: "path:GET /usergroups.list"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/usergroups-list.json
+    - id: users-profile-get
+      operation: "path:GET /users.profile.get"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/users-profile-get.json
+    - id: chat-post-message
+      operation: "path:POST /chat.postMessage"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/chat-post-message.json
+    - id: chat-schedule-message
+      operation: "path:POST /chat.scheduleMessage"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/chat-schedule-message.json
+    - id: conversations-set-purpose
+      operation: "path:POST /conversations.setPurpose"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/conversations-set-purpose.json
+    - id: conversations-set-topic
+      operation: "path:POST /conversations.setTopic"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/conversations-set-topic.json
+    - id: dnd-end-snooze
+      operation: "path:POST /dnd.endSnooze"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/dnd-end-snooze.json
+    - id: dnd-set-snooze
+      operation: "path:POST /dnd.setSnooze"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/dnd-set-snooze.json
+    - id: files-revoke-public-url
+      operation: "path:POST /files.revokePublicURL"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/files-revoke-public-url.json
+    - id: files-shared-public-url
+      operation: "path:POST /files.sharedPublicURL"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/files-shared-public-url.json
+    - id: files-upload
+      operation: "path:POST /files.upload"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/files-upload.json
+    - id: reminders-add
+      operation: "path:POST /reminders.add"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/reminders-add.json
+    - id: usergroups-create
+      operation: "path:POST /usergroups.create"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/usergroups-create.json
+    - id: usergroups-disable
+      operation: "path:POST /usergroups.disable"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/usergroups-disable.json
+    - id: usergroups-enable
+      operation: "path:POST /usergroups.enable"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/usergroups-enable.json
+    - id: usergroups-update
+      operation: "path:POST /usergroups.update"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/usergroups-update.json
+    - id: usergroups-users-update
+      operation: "path:POST /usergroups.users.update"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/usergroups-users-update.json
+    - id: users-profile-set
+      operation: "path:POST /users.profile.set"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/users-profile-set.json
+    - id: users-set-photo
+      operation: "path:POST /users.setPhoto"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/users-set-photo.json
 
 server:
   host: 127.0.0.1
@@ -106,3 +412,5 @@ extensions:
       placeholder, so the repository secret scanner stays clean. The
       substitution touches example values only; schemas, patterns, and
       routes are byte-identical to the snapshot.
+
+
