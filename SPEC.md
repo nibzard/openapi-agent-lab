@@ -2480,6 +2480,14 @@ becomes 500 **mock_response_invalid**. Under a future warning mode, the response
 may be sent but the approximation is explicit. Evaluation packs MUST use error
 mode.
 
+String patterns are satisfied by bounded synthesis (section 15.6) or by a fixed
+literal shortcut. The synthesizer supports anchors, disjunctions, groups,
+character classes with ranges and negation, counted quantifiers, and identity
+escapes; it refuses lookarounds, backreferences, named groups, inline flags,
+unicode property escapes, word boundaries outside classes, and any expression
+beyond its size caps. A pattern the synthesizer refuses stays 501
+**mock_behavior_unavailable**; it never degrades to 500.
+
 ### 15.5 Contract response selection
 
 The contract backend chooses a response deterministically.
@@ -2512,6 +2520,16 @@ Response-value precedence:
 7. Schema default.
 8. First enum value in ascending canonical-JSON byte order.
 9. Deterministic schema generation.
+
+An example candidate whose value fails the section 15.4 body check against the
+declared response schema is skipped in favor of the next candidate. The served
+value records its provenance, and skipped candidates are recorded as an
+approximation. When every candidate is skipped, deterministic schema
+generation (rule 9) produces the value. Only when no generation path exists —
+the content entry declares no schema — is the highest-precedence candidate
+served, and section 15.4 then applies to it unchanged. Contract response
+fixtures (section 15.5.1) are exempt: a fixture is pack-authored data and
+fails closed under 15.4.
 
 The trace records selected status, media type, value provenance, and any
 approximation.

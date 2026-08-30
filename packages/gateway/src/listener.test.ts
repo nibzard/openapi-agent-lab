@@ -15,7 +15,6 @@ import { LIMIT_DEFAULTS, type LimitTable } from "@oal/config";
 import { sha256HexBytes, type Json } from "@oal/core";
 import type {
   ContractIR,
-  MediaExampleIR,
   OperationIR,
   ParameterIR,
   ResponseIR,
@@ -140,30 +139,15 @@ function contract(init: {
   };
 }
 
-/** A contract whose singular example violates the declared schema. */
-function invalidExampleContract(): ContractIR {
-  const examples: MediaExampleIR[] = [
-    { name: null, value: { wrong: true }, summary: null }
-  ];
-  return contract({
-    operations: [
-      operation({
-        responses: [
-          response({
-            content: [
-              {
-                media_type: "application/json",
-                schema_ref: "sch_thing",
-                examples,
-                support: "supported",
-                support_reason_codes: []
-              }
-            ]
-          })
-        ]
-      })
-    ]
-  });
+/** A fixture whose body violates the declared schema. */
+function invalidFixture(): ContractFixture {
+  return {
+    id: "fx_invalid",
+    operation: "path:GET /things",
+    status: 200,
+    media_type: "application/json",
+    body: { kind: "json_inline", value: { wrong: true } }
+  };
 }
 
 interface ListenerInit {
@@ -720,7 +704,7 @@ describe("state on the serving path", () => {
   it("leaves state unchanged when the produced response is invalid", async () => {
     const state = createGatewayState();
     await withListener(
-      { contract: invalidExampleContract(), state },
+      { state, fixtures: [invalidFixture()] },
       async (listener) => {
         const served = await exchange(listener.port, "GET", "/things");
         expect(served.status).toBe(500);

@@ -203,15 +203,15 @@ let params: Gateway;
 let methods: Gateway;
 let secure: Gateway;
 let store: Gateway;
-let bomb: Gateway;
+let unsupported: Gateway;
 
 beforeAll(async () => {
-  [params, methods, secure, store, bomb] = await Promise.all([
+  [params, methods, secure, store, unsupported] = await Promise.all([
     Gateway.start("openapi/parameters-matrix.json"),
     Gateway.start("openapi/methods-eight.json"),
     Gateway.start("openapi/security-alternatives.json"),
     Gateway.start("openapi/petstore-expanded.yaml"),
-    Gateway.start("adversarial/regex-bomb.json")
+    Gateway.start("openapi/pattern-unsupported.json")
   ]);
 });
 
@@ -221,7 +221,7 @@ afterAll(async () => {
     methods.close(),
     secure.close(),
     store.close(),
-    bomb.close()
+    unsupported.close()
   ]);
 });
 
@@ -736,7 +736,7 @@ describe("determinism and mock bounds", () => {
 
   it("answers 501 quickly when generation is unsupported", async () => {
     const began = Date.now();
-    const exchange = await bomb.exchange(
+    const exchange = await unsupported.exchange(
       "POST",
       "/slugs",
       { "content-type": "application/json" },

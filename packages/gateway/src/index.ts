@@ -41,7 +41,17 @@ export {
   type SelectedResponse
 } from "./select.ts";
 
-export { generateValue, type GenerationOptions } from "./generate.ts";
+export {
+  generateValue,
+  GenerationUnsupportedError,
+  type GenerationOptions
+} from "./generate.ts";
+
+export {
+  patternAccepts,
+  synthesizePattern,
+  type PatternBounds
+} from "./pattern.ts";
 
 export {
   validateResponse,

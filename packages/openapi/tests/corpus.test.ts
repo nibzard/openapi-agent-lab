@@ -49,6 +49,7 @@ describe("conformance corpus", () => {
       "openapi/nullable-3.0.yaml",
       "openapi/nullable-3.1.json",
       "openapi/parameters-matrix.json",
+      "openapi/pattern-unsupported.json",
       "openapi/petstore-expanded.yaml",
       "openapi/refs/entry.yaml",
       "openapi/refs/shared.yaml",

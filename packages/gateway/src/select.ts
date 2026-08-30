@@ -12,6 +12,7 @@ import {
   type GenerationOptions
 } from "./generate.ts";
 import { negotiateResponseMedia, preferredMediaType } from "./negotiate.ts";
+import { responseBodyViolations } from "./response-body.ts";
 
 export interface ContractFixture {
   id: string;
@@ -158,22 +159,52 @@ function synthesizeResponse(
     const content = response.content.find(
       (entry) => entry.media_type === mediaType
     );
-    // Examples outrank schema generation in the value precedence table.
-    const fromExamples =
-      content === undefined ? null : selectExampleValue(content.examples);
-    if (fromExamples !== null) {
-      body = fromExamples.value;
-      provenance = fromExamples.provenance;
-    } else if (content !== undefined && content.schema_ref !== null) {
-      try {
-        body = generateValue({ $ref: content.schema_ref }, generationOptions);
-        provenance = "schema_generation";
-      } catch (error) {
-        if (error instanceof GenerationUnsupportedError) {
-          approximation = "generation_unsupported";
-          return null;
+    if (content !== undefined) {
+      // Examples outrank schema generation in the value precedence
+      // table, but an example whose value violates the declared schema
+      // is skipped for the next candidate (section 15.5). Without a
+      // resolvable schema there is no generation path and no body
+      // check, so the highest-precedence candidate is served as-is.
+      const lookup = generationOptions.lookup;
+      if (lookup === undefined || content.schema_ref === null) {
+        const highest = orderedExampleValues(content.examples)[0];
+        if (highest !== undefined) {
+          body = highest.value;
+          provenance = highest.provenance;
         }
-        throw error;
+      } else {
+        let skipped = 0;
+        for (const candidate of orderedExampleValues(content.examples)) {
+          const violations = responseBodyViolations(
+            content,
+            candidate.value,
+            lookup
+          );
+          if (violations.length === 0) {
+            body = candidate.value;
+            provenance = candidate.provenance;
+            break;
+          }
+          skipped += 1;
+        }
+        if (body === undefined) {
+          try {
+            body = generateValue(
+              { $ref: content.schema_ref },
+              generationOptions
+            );
+            provenance = "schema_generation";
+          } catch (error) {
+            if (error instanceof GenerationUnsupportedError) {
+              approximation = "generation_unsupported";
+              return null;
+            }
+            throw error;
+          }
+        }
+        if (skipped > 0) {
+          approximation = `example_invalid_skipped:${skipped}`;
+        }
       }
     }
   }
@@ -191,6 +222,34 @@ function synthesizeResponse(
 }
 
 /**
+ * Response-example candidates in value-precedence order: the singular
+ * example first, then named examples in ascending name order.
+ */
+function orderedExampleValues(
+  examples: readonly {
+    name: string | null;
+    value: Json;
+    summary?: string | null;
+  }[]
+): { value: Json; provenance: string }[] {
+  const named = examples
+    .filter((example) => example.name !== null)
+    .sort((a, b) => (a.name as string).localeCompare(b.name as string));
+  const singular = examples.find((example) => example.name === null);
+  const ordered: { value: Json; provenance: string }[] = [];
+  if (singular !== undefined) {
+    ordered.push({ value: singular.value, provenance: "example:singular" });
+  }
+  for (const example of named) {
+    ordered.push({
+      value: example.value,
+      provenance: `example:${example.name as string}`
+    });
+  }
+  return ordered;
+}
+
+/**
  * Response-value precedence among examples: singular example, then
  * lexicographically first named example.
  */
@@ -201,18 +260,7 @@ export function selectExampleValue(
     summary?: string | null;
   }[]
 ): { value: Json; provenance: string } | null {
-  const named = examples
-    .filter((example) => example.name !== null)
-    .sort((a, b) => (a.name as string).localeCompare(b.name as string));
-  const singular = examples.find((example) => example.name === null);
-  if (singular !== undefined) {
-    return { value: singular.value, provenance: "example:singular" };
-  }
-  const first = named[0];
-  if (first !== undefined) {
-    return { value: first.value, provenance: `example:${first.name}` };
-  }
-  return null;
+  return orderedExampleValues(examples)[0] ?? null;
 }
 
 /**

@@ -11,6 +11,7 @@ import {
   isJsonObject,
   type Json
 } from "@oal/core";
+import { patternAccepts, synthesizePattern } from "./pattern.ts";
 import { stripProperties } from "./validate.ts";
 
 export interface GenerationOptions {
@@ -169,7 +170,12 @@ function pickVariant(
     }
     const discriminated = discriminatorPick(schema, branches);
     if (discriminated !== null) {
-      return generateNode(discriminated, options, path, depth + 1);
+      return generateNode(
+        mergeSiblingKeywords(schema, discriminated),
+        options,
+        path,
+        depth + 1
+      );
     }
     // Choose among otherwise valid branches by ascending canonical
     // schema digest, never by parser or source iteration order.
@@ -180,9 +186,60 @@ function pickVariant(
     if (winner === undefined) {
       return null;
     }
-    return generateNode(winner, options, path, depth + 1);
+    return generateNode(
+      mergeSiblingKeywords(schema, winner),
+      options,
+      path,
+      depth + 1
+    );
   }
   return null;
+}
+
+/**
+ * Combine a variant branch with the sibling keywords of the schema
+ * that declared the variant. The validator applies both, so the
+ * generator must too: for example `items` beside `oneOf` constrains
+ * every element even when the winning branch is the array variant.
+ * Object keywords combine recursively; when both sides declare a
+ * scalar keyword, the outer sibling wins as the stricter constraint.
+ */
+function mergeSiblingKeywords(
+  parent: Record<string, Json>,
+  branch: Json
+): Record<string, Json> {
+  if (!isJsonObject(branch)) {
+    const outer: Record<string, Json> = {};
+    for (const [key, value] of Object.entries(parent)) {
+      if (key !== "oneOf" && key !== "anyOf" && key !== "discriminator") {
+        outer[key] = value;
+      }
+    }
+    return outer;
+  }
+  const merged: Record<string, Json> = { ...branch };
+  for (const [key, value] of Object.entries(parent)) {
+    if (key === "oneOf" || key === "anyOf" || key === "discriminator") {
+      continue;
+    }
+    const present = merged[key];
+    merged[key] =
+      present === undefined ? value : mergeKeywordValues(value, present);
+  }
+  return merged;
+}
+
+function mergeKeywordValues(outer: Json, inner: Json): Json {
+  if (isJsonObject(outer) && isJsonObject(inner)) {
+    const combined: Record<string, Json> = { ...inner };
+    for (const [key, value] of Object.entries(outer)) {
+      const present = combined[key];
+      combined[key] =
+        present === undefined ? value : mergeKeywordValues(value, present);
+    }
+    return combined;
+  }
+  return outer;
 }
 
 function discriminatorPick(
@@ -457,18 +514,13 @@ function generateString(
       }
       return candidate;
     }
-    const produced = producePattern(pattern);
+    const produced = producePattern(pattern, {
+      minLength: declaredMin,
+      maxLength: declaredMax
+    });
     if (produced === null) {
       throw new GenerationUnsupportedError(
         `pattern ${pattern} is not safely producible`
-      );
-    }
-    if (declaredMin !== null && produced.length < declaredMin) {
-      return produced.padEnd(declaredMin, produced.slice(-1));
-    }
-    if (declaredMax !== null && produced.length > declaredMax) {
-      throw new GenerationUnsupportedError(
-        `maxLength ${declaredMax} conflicts with pattern ${pattern}`
       );
     }
     return produced;
@@ -550,41 +602,41 @@ function formatValue(
 }
 
 /**
- * Test one candidate against a vendor pattern. The schema validator
- * compiles the same expression against the same schema, so this adds
- * no new trust boundary; an untestable pattern accepts nothing.
+ * Produce a string for a bounded set of safely supported patterns.
+ * The literal shortcuts come first and stay unchanged: they feed
+ * frozen golden traces. A shortcut whose output violates the declared
+ * bounds, or which the raw pattern refuses, falls through to the
+ * synthesizer instead of padding the literal into an invalid value.
  */
-function patternAccepts(pattern: string, candidate: string): boolean {
-  try {
-    return new RegExp(pattern).test(candidate);
-  } catch {
-    return false;
-  }
-}
-
-/** Produce a string for a bounded set of safely supported patterns. */
-function producePattern(pattern: string): string | null {
+function producePattern(
+  pattern: string,
+  bounds: { minLength: number | null; maxLength: number | null }
+): string | null {
   const anchored = pattern.startsWith("^") ? pattern : `^${pattern}`;
   const closed = anchored.endsWith("$") ? anchored : `${anchored}$`;
-  if (closed === "^[A-Za-z0-9_-]+$") {
-    return "generated_value";
+  const literal =
+    closed === "^[A-Za-z0-9_-]+$"
+      ? "generated_value"
+      : closed === "^[a-z]+$"
+        ? "generated"
+        : closed === "^[A-Za-z]+$"
+          ? "generated"
+          : closed === "^[0-9]+$"
+            ? "2000"
+            : closed === "^[A-Z]{2}-[0-9]{3}$"
+              ? "XX-000"
+              : closed === "^[a-z][a-z0-9-]*$"
+                ? "generated"
+                : null;
+  if (
+    literal !== null &&
+    (bounds.minLength === null || literal.length >= bounds.minLength) &&
+    (bounds.maxLength === null || literal.length <= bounds.maxLength) &&
+    patternAccepts(pattern, literal)
+  ) {
+    return literal;
   }
-  if (closed === "^[a-z]+$") {
-    return "generated";
-  }
-  if (closed === "^[A-Za-z]+$") {
-    return "generated";
-  }
-  if (closed === "^[0-9]+$") {
-    return "2000";
-  }
-  if (closed === "^[A-Z]{2}-[0-9]{3}$") {
-    return "XX-000";
-  }
-  if (closed === "^[a-z][a-z0-9-]*$") {
-    return "generated";
-  }
-  return null;
+  return synthesizePattern(pattern, bounds);
 }
 
 function generateNumber(schema: Json): Json {

@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import type { Json } from "@oal/core";
 import type {
   MediaContentIR,
   MediaExampleIR,
@@ -116,6 +117,93 @@ describe("selectResponse with a fixture", () => {
     expect(selected?.provenance).toBe("fixture:fx_json");
     expect(selected?.mediaType).toBe("application/json");
     expect(selected?.body).toEqual({ id: "thing_fixture" });
+  });
+});
+
+describe("selectResponse skips invalid examples (section 15.5)", () => {
+  const schemas: Record<string, Json> = {
+    sch_team: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string", pattern: "^[TE][A-Z0-9]{8,}$" }
+      }
+    }
+  };
+  const lookup = (ref: string): Json | undefined => schemas[ref];
+
+  it("skips an invalid singular example for a valid named example", () => {
+    const selected = selectResponse(
+      "path:GET /things",
+      [
+        response({
+          content: [
+            {
+              media_type: "application/json",
+              schema_ref: "sch_team",
+              examples: [
+                { name: null, value: { id: "T12345" }, summary: null },
+                { name: "alpha", value: { id: "TAAAAAAAA" }, summary: null },
+                { name: "beta", value: { id: "TBBBBBBBB" }, summary: null }
+              ],
+              support: "supported",
+              support_reason_codes: []
+            }
+          ]
+        })
+      ],
+      [],
+      { seed: "select_seed_1", lookup }
+    );
+    expect(selected?.provenance).toBe("example:alpha");
+    expect(selected?.body).toEqual({ id: "TAAAAAAAA" });
+    expect(selected?.approximation).toBe("example_invalid_skipped:1");
+  });
+
+  it("demotes an invalid example to schema generation", () => {
+    const selected = selectResponse(
+      "path:GET /things",
+      [
+        response({
+          content: [
+            {
+              media_type: "application/json",
+              schema_ref: "sch_team",
+              examples: [
+                { name: null, value: { id: "T12345" }, summary: null }
+              ],
+              support: "supported",
+              support_reason_codes: []
+            }
+          ]
+        })
+      ],
+      [],
+      { seed: "select_seed_1", lookup }
+    );
+    expect(selected?.provenance).toBe("schema_generation");
+    expect((selected?.body as { id?: string }).id).toBe("TAAAAAAAA");
+    expect(selected?.approximation).toBe("example_invalid_skipped:1");
+  });
+
+  it("serves the highest-precedence example without a schema", () => {
+    const selected = selectResponse(
+      "path:GET /things",
+      [
+        response({
+          content: [
+            contentEntry("application/json", [
+              { name: null, value: { id: "T12345" }, summary: null }
+            ])
+          ]
+        })
+      ],
+      [],
+      { seed: "select_seed_1", lookup }
+    );
+    expect(selected?.provenance).toBe("example:singular");
+    expect(selected?.body).toEqual({ id: "T12345" });
+    expect(selected?.approximation).toBeNull();
   });
 });
 

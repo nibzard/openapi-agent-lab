@@ -979,18 +979,21 @@ describe("URL-encoded form request bodies (V2A)", () => {
 describe("response validation before commit", () => {
   it("rejects a produced body that violates the declared schema", () => {
     const op = operation({
-      responses: [
-        response({
-          content: [
-            jsonContent("sch_thing", [
-              { name: null, value: { wrong: true }, summary: null }
-            ])
-          ]
-        })
-      ]
+      responses: [response({ content: [jsonContent("sch_thing")] })]
     });
     const result = handleGatewayRequest(
-      options({ contract: contract({ operations: [op] }) }),
+      options({
+        contract: contract({ operations: [op] }),
+        fixtures: [
+          {
+            id: "fx_invalid",
+            operation: "path:GET /things",
+            status: 200,
+            media_type: "application/json",
+            body: { kind: "json_inline", value: { wrong: true } }
+          }
+        ]
+      }),
       12,
       request({})
     );
@@ -1003,6 +1006,76 @@ describe("response validation before commit", () => {
     };
     expect(document.code).toBe("mock_response_invalid");
     expect(document.request_id).toBe("req_00000012");
+  });
+
+  it("demotes an invalid example to schema generation", () => {
+    const op = operation({
+      responses: [
+        response({
+          content: [
+            jsonContent("sch_thing", [
+              { name: null, value: { wrong: true }, summary: null }
+            ])
+          ]
+        })
+      ]
+    });
+    const result = handleGatewayRequest(
+      options({ contract: contract({ operations: [op] }) }),
+      31,
+      request({})
+    );
+    expect(result.status).toBe(200);
+    expect(result.provenance).toBe("schema_generation");
+    const body = JSON.parse(result.body ?? "{}") as { id?: string };
+    expect(typeof body.id).toBe("string");
+  });
+
+  it("serves a slack-shaped team.info example through generation", () => {
+    // The vendor example carries team.id "T12345" against the vendor
+    // pattern ^[TE][A-Z0-9]{8,}$: the example is skipped and the
+    // pattern synthesizer produces a conforming id.
+    const op = operation({
+      key: "path:GET /team.info",
+      path_template: "/team.info",
+      route_segments: [{ kind: "literal", value: "team.info" }],
+      responses: [
+        response({
+          content: [
+            jsonContent("sch_team_info", [
+              { name: null, value: { team: { id: "T12345" } }, summary: null }
+            ])
+          ]
+        })
+      ]
+    });
+    const result = handleGatewayRequest(
+      options({
+        contract: contract({
+          operations: [op],
+          schemas: {
+            sch_team_info: schema("sch_team_info", {
+              type: "object",
+              required: ["team"],
+              properties: { team: { $ref: "sch_team" } }
+            }),
+            sch_team: schema("sch_team", {
+              type: "object",
+              required: ["id"],
+              properties: {
+                id: { type: "string", pattern: "^[TE][A-Z0-9]{8,}$" }
+              }
+            })
+          }
+        })
+      }),
+      32,
+      request({ target: "/team.info" })
+    );
+    expect(result.status).toBe(200);
+    expect(result.provenance).toBe("schema_generation");
+    const body = JSON.parse(result.body ?? "{}") as { team?: { id?: string } };
+    expect(body.team?.id).toBe("TAAAAAAAA");
   });
 
   it("rejects a fixture status that matches no declared response", () => {
@@ -1249,25 +1322,19 @@ describe("response validation before commit", () => {
 });
 
 describe("state transactions", () => {
-  const invalidExample = (): OperationIR => {
-    return operation({
-      responses: [
-        response({
-          content: [
-            jsonContent("sch_thing", [
-              { name: null, value: { wrong: true }, summary: null }
-            ])
-          ]
-        })
-      ]
-    });
-  };
-
   it("rolls back the pending mutation when validation fails", () => {
     const state = createGatewayState();
     const result = handleGatewayRequest(
       options({
-        contract: contract({ operations: [invalidExample()] }),
+        fixtures: [
+          {
+            id: "fx_invalid",
+            operation: "path:GET /things",
+            status: 200,
+            media_type: "application/json",
+            body: { kind: "json_inline", value: { wrong: true } }
+          }
+        ],
         state
       }),
       16,

@@ -9,10 +9,10 @@
  * mock_response_invalid.
  */
 
-import { SchemaValidator, type Json } from "@oal/core";
+import type { Json } from "@oal/core";
 import type { ResponseIR } from "@oal/contract-ir";
+import { responseBodyViolations } from "./response-body.ts";
 import { findResponseForStatus, type SelectedResponse } from "./select.ts";
-import { strippingSchemaLookup, stripProperties } from "./validate.ts";
 
 export interface ResponseViolation {
   location: "status" | "header" | "media_type" | "body";
@@ -106,27 +106,24 @@ export function validateResponse(
     const content = declared.content.find(
       (entry) => entry.media_type.toLowerCase() === media.toLowerCase()
     );
-    if (content !== undefined && content.schema_ref !== null) {
-      const schema = schemaLookup(content.schema_ref);
-      if (schema !== undefined) {
-        const fixtureId = selected.provenance.startsWith("fixture:")
-          ? selected.provenance.slice("fixture:".length)
-          : null;
-        const validator = new SchemaValidator(
-          stripProperties(schema, "writeOnly"),
-          { resolveRef: strippingSchemaLookup(schemaLookup, "writeOnly") }
-        );
-        for (const violation of validator.errors(selected.body)) {
-          violations.push({
-            location: "body",
-            pointer: violation.pointer,
-            code: violation.code,
-            message:
-              fixtureId === null
-                ? violation.message
-                : `Fixture ${fixtureId} body: ${violation.message}`
-          });
-        }
+    if (content !== undefined) {
+      const fixtureId = selected.provenance.startsWith("fixture:")
+        ? selected.provenance.slice("fixture:".length)
+        : null;
+      for (const violation of responseBodyViolations(
+        content,
+        selected.body,
+        schemaLookup
+      )) {
+        violations.push({
+          location: "body",
+          pointer: violation.pointer,
+          code: violation.code,
+          message:
+            fixtureId === null
+              ? violation.message
+              : `Fixture ${fixtureId} body: ${violation.message}`
+        });
       }
     }
   }

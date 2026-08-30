@@ -391,12 +391,41 @@ describe("deterministic generation", () => {
   });
 
   it("rejects a format value the pattern refuses", () => {
+    // The lookahead keeps the pattern outside the synthesizer's
+    // supported set, so the refused format value fails closed.
     expect(() =>
       generateValue(
-        { type: "string", format: "uuid", pattern: "^[A-Z]+$" },
+        { type: "string", format: "uuid", pattern: "^(?=A)[A-Z]+$" },
         options
       )
     ).toThrow(GenerationUnsupportedError);
+  });
+
+  it("synthesizes a pattern string when the format value is refused", () => {
+    const value = generateValue(
+      { type: "string", format: "uuid", pattern: "^[A-Z]+$" },
+      options
+    );
+    expect(value).toBe("A");
+    expect(
+      new SchemaValidator({ type: "string", pattern: "^[A-Z]+$" }).errors(value)
+    ).toHaveLength(0);
+  });
+
+  it("applies sibling keywords beside oneOf to the chosen branch", () => {
+    // Shape of slack's profile.fields: `items` sits beside `oneOf`, so
+    // the array variant still generates object elements.
+    const schema = {
+      items: { type: "object" },
+      nullable: true,
+      oneOf: [{ type: "object" }, { items: {}, type: "array" }]
+    };
+    const value = generateValue(schema, options) as Json[];
+    expect(Array.isArray(value)).toBe(true);
+    for (const element of value) {
+      expect(typeof element).toBe("object");
+    }
+    expect(new SchemaValidator(schema).errors(value)).toHaveLength(0);
   });
 
   it("namespaces seeds so unrelated paths differ", () => {
