@@ -90,6 +90,19 @@ function fixtureBodyOf(
       value: reference?.document ?? null
     };
   }
+  if (kind === "text_file") {
+    const source = declared["source"];
+    const pointer = `${RESPONSE_FIXTURES_POINTER}/${index}/body`;
+    const reference = pack.references.find(
+      (candidate) =>
+        candidate.role === "fixture_body" && candidate.pointer === pointer
+    );
+    return {
+      kind: "text_file",
+      ...(typeof source === "string" ? { source } : {}),
+      value: reference?.text ?? null
+    };
+  }
   return { kind: typeof kind === "string" ? kind : "none" };
 }
 

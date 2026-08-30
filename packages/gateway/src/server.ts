@@ -49,6 +49,8 @@ export interface GatewayResponse {
   requestId: string;
   /** Response-value provenance, for example fixture: or example:. */
   provenance: string | null;
+  /** Approximation marker, for example example_invalid_skipped:1. */
+  approximation: string | null;
   /** Framework error code when a framework error was served. */
   frameworkCode: string | null;
 }
@@ -270,6 +272,7 @@ export function handleGatewayRequest(
       body: JSON.stringify(document),
       requestId,
       provenance: null,
+      approximation: null,
       frameworkCode: FRAMEWORK_ERRORS.requestSchemaInvalid.code
     };
   }
@@ -356,6 +359,7 @@ export function handleGatewayRequest(
     body: method === "HEAD" || noBodyStatus ? undefined : representation,
     requestId,
     provenance: selected.provenance,
+    approximation: selected.approximation,
     frameworkCode: null
   };
 }
@@ -402,6 +406,7 @@ function framework(
     body: JSON.stringify(problemDocument(error, requestId)),
     requestId,
     provenance: null,
+    approximation: null,
     frameworkCode: error.code
   };
 }

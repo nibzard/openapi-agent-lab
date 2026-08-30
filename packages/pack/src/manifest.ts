@@ -386,7 +386,11 @@ export function collectDeclaredReferences(
         "fixture_body",
         `${atIndex(at("/contract", "response_fixtures"), i)}/body`,
         body["source"],
-        kind === "json_file" ? "document" : "none"
+        kind === "json_file"
+          ? "document"
+          : kind === "text_file"
+            ? "text"
+            : "none"
       );
     }
   }

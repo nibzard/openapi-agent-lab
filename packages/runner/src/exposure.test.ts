@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { LIMIT_DEFAULTS, type LimitTable } from "@oal/config";
-import { sha256Hex } from "@oal/core";
+import { isJsonObject, sha256Hex, type Json, type JsonObject } from "@oal/core";
 import type {
   ContractIR,
   OperationIR,
@@ -503,6 +503,13 @@ function provenanceOf(event: Record<string, unknown>): unknown {
   return (event["backend"] as Record<string, unknown> | null)?.[
     "response_provenance"
   ];
+}
+
+/** The open observations object of one trace event's backend block. */
+function observationsOf(event: Record<string, unknown>): JsonObject {
+  const backend = event["backend"] as Record<string, unknown> | null;
+  const observations = backend?.["observations"] as Json | undefined;
+  return isJsonObject(observations) ? observations : {};
 }
 
 /** The connect target of one socket connect call, whatever its shape. */
@@ -1823,6 +1830,119 @@ describe("response fixtures", () => {
         totalCount: 0
       });
       expect(provenanceOf(firstApiEvent(server.trace))).toBe("fixture");
+    } finally {
+      await server.handle.close();
+    }
+  });
+});
+
+describe("response provenance recording", () => {
+  it("records the example class for an example-served response", async () => {
+    const server = await startServer({
+      contract: contract({
+        operations: [
+          operation({
+            responses: [
+              response({
+                content: [
+                  {
+                    media_type: "application/json",
+                    schema_ref: "sch_thing",
+                    examples: [
+                      {
+                        name: null,
+                        value: { id: "from-example" },
+                        summary: null
+                      }
+                    ],
+                    support: "supported",
+                    support_reason_codes: []
+                  }
+                ]
+              })
+            ]
+          })
+        ]
+      })
+    });
+    try {
+      const response = await exchange(server.handle, "GET", "/things");
+      expect(response.status).toBe(200);
+      expect(JSON.parse(response.body)).toEqual({ id: "from-example" });
+      const event = firstApiEvent(server.trace);
+      expect(provenanceOf(event)).toBe("example");
+      expect(observationsOf(event)["approximation"]).toBeNull();
+      expect(observationsOf(event)["provenance_detail"]).toBe(
+        "example:singular"
+      );
+    } finally {
+      await server.handle.close();
+    }
+  });
+
+  it("records the skip marker when an invalid example falls through", async () => {
+    const server = await startServer({
+      contract: contract({
+        operations: [
+          operation({
+            responses: [
+              response({
+                content: [
+                  {
+                    media_type: "application/json",
+                    schema_ref: "sch_thing",
+                    examples: [
+                      { name: null, value: { id: 123 }, summary: null }
+                    ],
+                    support: "supported",
+                    support_reason_codes: []
+                  }
+                ]
+              })
+            ]
+          })
+        ]
+      })
+    });
+    try {
+      const response = await exchange(server.handle, "GET", "/things");
+      expect(response.status).toBe(200);
+      expect(typeof (JSON.parse(response.body) as JsonObject)["id"]).toBe(
+        "string"
+      );
+      const event = firstApiEvent(server.trace);
+      expect(provenanceOf(event)).toBe("generated");
+      expect(observationsOf(event)["approximation"]).toBe(
+        "example_invalid_skipped:1"
+      );
+      expect(observationsOf(event)["provenance_detail"]).toBe(
+        "schema_generation"
+      );
+    } finally {
+      await server.handle.close();
+    }
+  });
+
+  it("records the raw none provenance when no content entry matches", async () => {
+    const server = await startServer({
+      contract: contract({
+        operations: [
+          operation({
+            responses: [
+              response({
+                content: []
+              })
+            ]
+          })
+        ]
+      })
+    });
+    try {
+      const response = await exchange(server.handle, "GET", "/things");
+      expect(response.status).toBe(200);
+      const event = firstApiEvent(server.trace);
+      expect(provenanceOf(event)).toBe("generated");
+      expect(observationsOf(event)["provenance_detail"]).toBe("none");
     } finally {
       await server.handle.close();
     }

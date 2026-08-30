@@ -400,6 +400,27 @@ function pathOf(target: string): string {
   return marker === -1 ? target : target.slice(0, marker);
 }
 
+/**
+ * Collapse a gateway provenance string into the trace enum. The raw
+ * string survives in backend.observations.provenance_detail, so the
+ * class never destroys information: fixture:<id> and example:<name>
+ * keep their identity one level down.
+ */
+function provenanceClassOf(
+  provenance: string | null | undefined
+): "fixture" | "example" | "generated" {
+  if (provenance === null || provenance === undefined) {
+    return "generated";
+  }
+  if (provenance.startsWith("fixture:")) {
+    return "fixture";
+  }
+  if (provenance.startsWith("example:")) {
+    return "example";
+  }
+  return "generated";
+}
+
 function bodyOf(
   bytes: Uint8Array,
   redactor: Redactor,
@@ -456,6 +477,7 @@ function frameworkResponse(
     body: JSON.stringify(problemDocument(error, requestId)),
     requestId,
     provenance: null,
+    approximation: null,
     frameworkCode: error.code
   };
 }
@@ -1175,12 +1197,12 @@ async function completeApiExchange(
       name: null,
       outcome: response.frameworkCode === null ? "handled" : "skipped",
       duration_ms: Math.max(0, request.now() - input.startedAt),
-      response_provenance:
-        response.provenance?.startsWith("fixture:") === true
-          ? "fixture"
-          : "generated",
+      response_provenance: provenanceClassOf(response.provenance),
       effects: [],
-      observations: {}
+      observations: {
+        approximation: response.approximation,
+        provenance_detail: response.provenance
+      }
     },
     response: {
       completed_at: formatRfc3339(request.now()),

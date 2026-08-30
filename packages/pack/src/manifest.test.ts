@@ -216,6 +216,31 @@ describe("referenced assets", () => {
     const fixture = loaded.references.find((r) => r.role === "fixture_body");
     expect(fixture?.document).toEqual({ total: 0 });
   });
+
+  it("loads a text_file response fixture body as text", async () => {
+    const manifest = baseManifest();
+    const contract = manifest["contract"] as {
+      response_fixtures: unknown[];
+    };
+    contract["response_fixtures"] = [
+      {
+        id: "widgets-svg",
+        operation: "path:GET /widgets",
+        status: 200,
+        media_type: "image/svg+xml",
+        headers: {},
+        body: { kind: "text_file", source: "fixtures/widgets.svg" }
+      }
+    ];
+    const files = baseFiles(manifest);
+    files["fixtures/widgets.svg"] = "<svg>widgets</svg>\n";
+    const root = await writePack(files);
+    const loaded = await loadPack(root);
+    expect(codesOf(loaded.diagnostics)).toEqual([]);
+    const fixture = loaded.references.find((r) => r.role === "fixture_body");
+    expect(fixture?.document).toBeNull();
+    expect(fixture?.text).toBe("<svg>widgets</svg>\n");
+  });
 });
 
 const EVENT_SCHEMA = `${JSON.stringify({ type: "object" })}\n`;

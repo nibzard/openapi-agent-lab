@@ -1274,6 +1274,40 @@ describe("response validation before commit", () => {
     expect(JSON.parse(result.body ?? "{}")).toEqual([{ id: "thing_1" }]);
   });
 
+  it("serves a text_file fixture body verbatim under its media type", () => {
+    // A non-JSON media type with no declared schema carries the file
+    // bytes unchanged; canonical JSON never touches a text asset.
+    const op = operation({
+      responses: [
+        response({
+          content: [contentEntry("image/svg+xml", null)]
+        })
+      ]
+    });
+    const svg = '<svg xmlns="urn:x"></svg>';
+    const result = handleGatewayRequest(
+      options({
+        contract: contract({ operations: [op] }),
+        fixtures: [
+          {
+            id: "fx_svg",
+            operation: "path:GET /things",
+            status: 200,
+            media_type: "image/svg+xml",
+            body: { kind: "text_file", value: svg }
+          }
+        ]
+      }),
+      19,
+      request({})
+    );
+    expect(result.status).toBe(200);
+    expect(result.frameworkCode).toBeNull();
+    expect(result.provenance).toBe("fixture:fx_svg");
+    expect(result.headers["content-type"]).toBe("image/svg+xml");
+    expect(result.body).toBe(svg);
+  });
+
   it("never serves a fixture body that violates the declared schema", () => {
     const op = operation({
       responses: [

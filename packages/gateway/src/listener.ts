@@ -262,6 +262,7 @@ export async function startGatewayListener(
           body: JSON.stringify(problemDocument(error, requestId)),
           requestId,
           provenance: null,
+          approximation: null,
           frameworkCode: error.code
         };
         diagnostics.push(
@@ -324,6 +325,7 @@ export async function startGatewayListener(
           body: JSON.stringify(problemDocument(error, requestId)),
           requestId,
           provenance: null,
+          approximation: null,
           frameworkCode: error.code
         };
       }
