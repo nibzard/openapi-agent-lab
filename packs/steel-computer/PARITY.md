@@ -114,15 +114,18 @@ The scripted set sends one request per operation with the minted credential
 and fixed path values, through `handleGatewayRequest` with the pack fixtures.
 The frozen outcome per operation:
 
-- 27 operations serve a declared success response: 23 answer 200, one answers
-  201 (`POST /v1/extensions`), three answer 204 (the file deletions).
-- 14 operations answer 501 with the neutral `mock_behavior_unavailable`
-  problem document. Thirteen success schemas carry an ISO-8601 date-time
-  pattern on `createdAt` or `updatedAt` that deterministic generation refuses,
-  and the events route declares no usable type. Contract mode has no response
-  value for them (drift items 17 and 18).
-- Three operations answer from the declared fixtures: the session list, the
-  JWKS document, and the captcha status. The fixture bodies reach the
+- 41 operations serve a declared success response: 32 answer 200, six answer
+  201 (the creates), three answer 204 (the file deletions).
+- Deterministic generation satisfies the ISO-8601 date-time and UUID patterns
+  on `createdAt`, `updatedAt`, and `id` through the declared formats, and the
+  events route generates from its unconstrained item schema. No operation
+  answers the neutral `mock_behavior_unavailable` problem document.
+- Five operations answer from the declared fixtures: the session list, the
+  JWKS document, the captcha status, and the two release routes. The
+  release fixtures answer `success: true` because deterministic
+  generation would deny every release while no backend keeps state, and
+  a participant that cleaned up correctly would read the denial and
+  escalate to the destroy-everything route. The fixture bodies reach the
   participant byte for byte.
 
 Every non-framework status is a declared response status of that operation,

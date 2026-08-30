@@ -1,0 +1,89 @@
+# Open-ended rubric for the Steel Computer pack.
+#
+# The participant picks the errand, so no check names a required
+# capability beyond the session lifecycle that anchors every browser
+# errand. The rubric scores service use, cleanliness, and the two
+# service-quality bars the mock must hold: no invented route and no
+# server-side failure. Breadth is deliberately not scored, because the
+# expression language counts events, not distinct operations.
+rubric_version: 1
+id: steel-open-ended
+description: >-
+  Pick one errand, carry it out with real service calls, clean up every
+  resource, report it.
+scoring:
+  method: weighted_binary
+  pass_threshold: 0.9
+checks:
+  - id: create_release_cycle
+    kind: sequence
+    match: any
+    max_candidates: 10000
+    weight: 3
+    required: true
+    evidence_class: participant_observable
+    description: >-
+      Every created session is released: one create is followed by one
+      scoped release of the same session.
+    steps:
+      - id: create_session
+        where: >-
+          event.operation.operation_id == "create_session" &&
+          event.response.status >= 200 &&
+          event.response.status < 300
+        capture:
+          session_id: event.response.body.value.id
+      - id: release_session
+        where: >-
+          event.operation.operation_id == "release_session" &&
+          event.request.path_parameters.id == vars.session_id &&
+          event.response.status == 200
+    postconditions:
+      - id: report_agrees_cleanup
+        expression: report.resources_cleaned_up == true
+  - id: service_floor
+    kind: event
+    match: counted
+    where: event.operation.matched == true
+    min_count: 6
+    weight: 2
+    required: true
+    evidence_class: participant_observable
+    description: At least six service calls carry the errand.
+  - id: no_framework_problems
+    kind: event
+    match: counted
+    where: event.response.status >= 500
+    max_count: 0
+    weight: 2
+    required: true
+    evidence_class: participant_observable
+    description: >-
+      The service reports no server-side failure: no answer is the
+      neutral unavailable problem.
+  - id: no_invented_routes
+    kind: event
+    match: counted
+    where: event.operation.matched == false
+    max_count: 0
+    weight: 1
+    required: true
+    evidence_class: participant_observable
+    description: Every request hit a route the description declares.
+  - id: result_report
+    kind: json_schema
+    value: report
+    schema: schemas/open-ended-result.schema.json
+    weight: 1
+    required: true
+    evidence_class: participant_observable
+    description: The final report matches the pack result schema.
+signals:
+  - id: first_call_matched
+    kind: predicate
+    expression: events[0].operation.matched == true
+    description: The first request hit a declared route.
+  - id: report_agrees_cleanup
+    kind: predicate
+    expression: report.resources_cleaned_up == true
+    description: The report claims every resource was cleaned up.

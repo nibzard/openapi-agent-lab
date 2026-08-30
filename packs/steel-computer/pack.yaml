@@ -64,6 +64,33 @@ contract:
             tasks: []
             created: 0
             lastUpdated: 0
+    # Release answers success until the scenario backend keeps state
+    # (drift item 17): deterministic generation would answer
+    # `success: false` for every release, and a participant that cleaned
+    # up correctly would read the denial and escalate to the
+    # destroy-everything route.
+    - id: release-session-success
+      operation: "path:POST /v1/sessions/{id}/release"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_inline
+        value:
+          success: true
+          message: Session released successfully
+    - id: release-all-success
+      operation: "path:POST /v1/sessions/release"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_inline
+        value:
+          success: true
+          message: All sessions released successfully
 
 server:
   host: 127.0.0.1
@@ -198,6 +225,42 @@ evals:
       schema: schemas/documentation-discovery-result.schema.json
       required: true
     rubric: evals/documentation-discovery/rubric.yaml
+    scenario: baseline
+
+  - id: site-errand
+    prompt_set: naturalistic
+    task:
+      source: tasks/site-errand/task.md
+      engine: literal
+      target: errand-task.md
+    participant_files:
+      - source: schemas/site-errand-result.schema.json
+        target: errand-result.schema.json
+    operation_scope:
+      mode: all
+    result:
+      source: adapter_final
+      schema: schemas/site-errand-result.schema.json
+      required: true
+    rubric: evals/site-errand/rubric.yaml
+    scenario: baseline
+
+  - id: open-ended
+    prompt_set: naturalistic
+    task:
+      source: tasks/open-ended/task.md
+      engine: literal
+      target: openwork-task.md
+    participant_files:
+      - source: schemas/open-ended-result.schema.json
+        target: openwork-result.schema.json
+    operation_scope:
+      mode: all
+    result:
+      source: adapter_final
+      schema: schemas/open-ended-result.schema.json
+      required: true
+    rubric: evals/open-ended/rubric.yaml
     scenario: baseline
 
 scenarios:

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/packs/steel-computer/schemas/open-ended-result.schema.json",
+  "title": "Steel Computer open-ended result",
+  "type": "object",
+  "properties": {
+    "task_chosen": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "The errand the participant picked, in one sentence."
+    },
+    "operations_used": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "maxItems": 50,
+      "description": "Every service operation the participant called."
+    },
+    "outcome": {
+      "type": "string",
+      "maxLength": 2000,
+      "description": "What the errand achieved."
+    },
+    "resources_cleaned_up": {
+      "type": "boolean",
+      "description": "Whether every created resource was cleaned up."
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000
+    }
+  },
+  "required": ["task_chosen", "operations_used", "outcome", "resources_cleaned_up"],
+  "additionalProperties": false
+}

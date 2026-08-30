@@ -5,12 +5,12 @@
  * The scripted request set replays every one of the 41 operations
  * through the pure gateway pipeline with the pack response fixtures.
  * The frozen status table is the golden trace of pack version 0.1.0:
- * every status is an exact expected value. Twenty-seven operations
- * serve a declared success response and fourteen serve the neutral
- * `mock_behavior_unavailable` framework problem, because their success
- * schemas carry a date-time pattern that deterministic generation
- * refuses. See packs/steel-computer/PARITY.md and migration notes
- * drift items 17 and 18.
+ * every status is an exact expected value. Every operation serves a
+ * declared success response: deterministic generation satisfies the
+ * vendor uuid and date-time patterns through the declared formats, and
+ * annotation-only schemas generate as unconstrained values. See
+ * packs/steel-computer/PARITY.md and migration notes drift items 17
+ * and 18.
  */
 
 import { readFile } from "node:fs/promises";
@@ -56,51 +56,53 @@ const GOLDEN_STATUSES: Readonly<Record<string, number>> = {
   "path:DELETE /v1/sessions/{sessionId}/files": 204,
   "path:DELETE /v1/sessions/{sessionId}/files/{path}": 204,
   "path:GET /.well-known/jwks.json": 200,
-  "path:GET /v1/credentials": 501,
+  "path:GET /v1/credentials": 200,
   "path:GET /v1/extensions": 200,
   "path:GET /v1/extensions/{extensionId}": 200,
-  "path:GET /v1/files": 501,
+  "path:GET /v1/files": 200,
   "path:GET /v1/files/{path}": 200,
-  "path:GET /v1/profiles": 501,
-  "path:GET /v1/profiles/{id}": 501,
+  "path:GET /v1/profiles": 200,
+  "path:GET /v1/profiles/{id}": 200,
   "path:GET /v1/sessions": 200,
-  "path:GET /v1/sessions/{id}": 501,
+  "path:GET /v1/sessions/{id}": 200,
   "path:GET /v1/sessions/{id}/context": 200,
-  "path:GET /v1/sessions/{id}/events": 501,
+  "path:GET /v1/sessions/{id}/events": 200,
   "path:GET /v1/sessions/{id}/hls": 200,
   "path:GET /v1/sessions/{id}/live-details": 200,
   "path:GET /v1/sessions/{sessionId}/captchas/status": 200,
-  "path:GET /v1/sessions/{sessionId}/files": 501,
+  "path:GET /v1/sessions/{sessionId}/files": 200,
   "path:GET /v1/sessions/{sessionId}/files.zip": 200,
   "path:GET /v1/sessions/{sessionId}/files/{path}": 200,
-  "path:PATCH /v1/profiles/{id}": 501,
-  "path:POST /v1/credentials": 501,
+  "path:PATCH /v1/profiles/{id}": 200,
+  "path:POST /v1/credentials": 201,
   "path:POST /v1/extensions": 201,
-  "path:POST /v1/files": 501,
+  "path:POST /v1/files": 201,
   "path:POST /v1/pdf": 200,
-  "path:POST /v1/profiles": 501,
+  "path:POST /v1/profiles": 201,
   "path:POST /v1/scrape": 200,
   "path:POST /v1/screenshot": 200,
-  "path:POST /v1/sessions": 501,
+  "path:POST /v1/sessions": 201,
   "path:POST /v1/sessions/release": 200,
   "path:POST /v1/sessions/{id}/release": 200,
   "path:POST /v1/sessions/{sessionId}/captchas/solve": 200,
   "path:POST /v1/sessions/{sessionId}/captchas/solve-image": 200,
   "path:POST /v1/sessions/{sessionId}/computer": 200,
-  "path:POST /v1/sessions/{sessionId}/files": 501,
-  "path:PUT /v1/credentials": 501,
+  "path:POST /v1/sessions/{sessionId}/files": 201,
+  "path:PUT /v1/credentials": 200,
   "path:PUT /v1/extensions/{extensionId}": 200
 };
 
 /** Operations whose success schema blocks deterministic generation. */
-const GOLDEN_FRAMEWORK_OUTCOMES = 14;
+const GOLDEN_FRAMEWORK_OUTCOMES = 0;
 
 /** The fixture-backed operations and their provenance of record. */
 const GOLDEN_FIXTURES: Readonly<Record<string, string>> = {
   "path:GET /.well-known/jwks.json": "fixture:jwks-empty",
   "path:GET /v1/sessions": "fixture:sessions-list-empty",
   "path:GET /v1/sessions/{sessionId}/captchas/status":
-    "fixture:captcha-status-idle"
+    "fixture:captcha-status-idle",
+  "path:POST /v1/sessions/{id}/release": "fixture:release-session-success",
+  "path:POST /v1/sessions/release": "fixture:release-all-success"
 };
 
 let pack: PackForTest;
@@ -169,7 +171,7 @@ describe("the frozen Steel golden trace", () => {
     expect(new Set(responses.map(gatewayRecord)).size).toBe(41);
   });
 
-  it("answers the three fixture-backed operations from the fixtures", () => {
+  it("answers the five fixture-backed operations from the fixtures", () => {
     for (const [key, provenance] of Object.entries(GOLDEN_FIXTURES)) {
       const index = requests.findIndex((entry) => entry.operation.key === key);
       const response = responses[index];

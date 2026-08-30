@@ -61,7 +61,7 @@ describe("the Steel Computer pack", () => {
     expect(pack.validation.packIr).not.toBeNull();
     const behavior = pack.loaded.manifest.behavior as JsonObject;
     expect(behavior.mode).toBe("contract");
-    expect(pack.loaded.manifest.evals).toHaveLength(3);
+    expect(pack.loaded.manifest.evals).toHaveLength(5);
     expect(pack.loaded.manifest.scenarios).toHaveLength(1);
   });
 
@@ -84,7 +84,9 @@ describe("the Steel Computer pack", () => {
     expect(rubricPaths).toEqual([
       "evals/checkpoint-recovery/rubric.yaml",
       "evals/basic-lifecycle/rubric.yaml",
-      "evals/documentation-discovery/rubric.yaml"
+      "evals/documentation-discovery/rubric.yaml",
+      "evals/site-errand/rubric.yaml",
+      "evals/open-ended/rubric.yaml"
     ]);
     const ids = rubricPaths.map((rubricPath) => {
       const result = loadPackRubric(pack.loaded, rubricPath);
@@ -94,7 +96,9 @@ describe("the Steel Computer pack", () => {
     expect(ids).toEqual([
       "steel-checkpoint-recovery",
       "steel-basic-lifecycle",
-      "steel-documentation-discovery"
+      "steel-documentation-discovery",
+      "steel-site-errand",
+      "steel-open-ended"
     ]);
   });
 

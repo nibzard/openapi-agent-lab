@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/packs/steel-computer/schemas/site-errand-result.schema.json",
+  "title": "Steel Computer site-errand result",
+  "type": "object",
+  "properties": {
+    "session_created": {
+      "type": "boolean",
+      "description": "Whether one session was started."
+    },
+    "page_visited": {
+      "type": "boolean",
+      "description": "Whether the session reached the site."
+    },
+    "evidence_captured": {
+      "type": "boolean",
+      "description": "Whether the screenshot or page content was captured."
+    },
+    "evidence_kind": {
+      "type": "string",
+      "enum": ["screenshot", "scrape"],
+      "description": "The capture kind the service returned."
+    },
+    "session_released": {
+      "type": "boolean",
+      "description": "Whether the session was shut down."
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000
+    }
+  },
+  "required": [
+    "session_created",
+    "page_visited",
+    "evidence_captured",
+    "evidence_kind",
+    "session_released"
+  ],
+  "additionalProperties": false
+}

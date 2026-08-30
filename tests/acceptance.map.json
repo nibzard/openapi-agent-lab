@@ -1188,7 +1188,7 @@
       "packages/pack/src/invariants.test.ts > accepts a fixture status matched by a range or default response",
       "packages/gateway/src/generate.test.ts > lets fixtures win with recorded provenance",
       "packages/testkit/src/steel-parity-golden.test.ts > serves the pack fixture bytes exactly as the file holds them",
-      "packages/testkit/src/steel-parity-golden.test.ts > answers the three fixture-backed operations from the fixtures"
+      "packages/testkit/src/steel-parity-golden.test.ts > answers the five fixture-backed operations from the fixtures"
     ]
   },
   {

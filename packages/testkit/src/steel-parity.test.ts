@@ -52,7 +52,7 @@ import {
 const DIGEST_PATTERN = /^[0-9a-f]{64}$/u;
 
 /** Digest pairs the PackIR records: contract, prompts, evals, files. */
-const DIGEST_PAIR_COUNT = 23;
+const DIGEST_PAIR_COUNT = 33;
 
 /**
  * Path segments that name a platform endpoint, never a product route.
@@ -185,7 +185,9 @@ describe("Steel parity: operation coverage", () => {
     expect(scopeIds).toEqual([
       "basic-lifecycle",
       "checkpoint-recovery",
-      "documentation-discovery"
+      "documentation-discovery",
+      "open-ended",
+      "site-errand"
     ]);
     for (const keys of pack.validation.coverage.scope.values()) {
       expect(keys).toHaveLength(41);
@@ -699,7 +701,7 @@ describe("Steel parity: redaction", () => {
     const tasks = pack.loaded.references.filter(
       (entry) => entry.role === "task"
     );
-    expect(tasks).toHaveLength(3);
+    expect(tasks).toHaveLength(5);
     for (const reference of tasks) {
       for (const name of templateVariables(reference.text ?? "")) {
         expect(
