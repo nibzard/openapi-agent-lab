@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/packs/webclip/schemas/site-errand-result.schema.json",
+  "title": "webclip site-errand result",
+  "type": "object",
+  "properties": {
+    "clips_created": {
+      "type": "boolean",
+      "description": "Whether two clips were created."
+    },
+    "markdown_clipped": {
+      "type": "boolean",
+      "description": "Whether the essay clip exists in markdown form."
+    },
+    "image_clipped": {
+      "type": "boolean",
+      "description": "Whether the dashboard clip exists in image form."
+    },
+    "both_rendered": {
+      "type": "boolean",
+      "description": "Whether both clips were rendered."
+    },
+    "markdown_content_fetched": {
+      "type": "boolean",
+      "description": "Whether the markdown content was fetched."
+    },
+    "image_content_fetched": {
+      "type": "boolean",
+      "description": "Whether the image content was fetched."
+    },
+    "text_extracted": {
+      "type": "boolean",
+      "description": "Whether the markdown clip's text was extracted."
+    },
+    "clip_deleted": {
+      "type": "boolean",
+      "description": "Whether the markdown clip was deleted."
+    },
+    "quota_checked": {
+      "type": "boolean",
+      "description": "Whether the account quota was read."
+    },
+    "api_model": {
+      "type": "string",
+      "minLength": 120,
+      "maxLength": 2000,
+      "description": "What the API does and how its resources relate, in your own words"
+    },
+    "authentication_model": {
+      "type": "string",
+      "minLength": 60,
+      "maxLength": 1000,
+      "description": "How a client proves its identity to the service, in your own words"
+    },
+    "uncertainties": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10,
+      "items": {
+        "type": "string",
+        "minLength": 8,
+        "maxLength": 300
+      },
+      "description": "What stayed unclear while working."
+    }
+  },
+  "required": [
+    "clips_created",
+    "markdown_clipped",
+    "image_clipped",
+    "both_rendered",
+    "markdown_content_fetched",
+    "image_content_fetched",
+    "text_extracted",
+    "clip_deleted",
+    "quota_checked",
+    "api_model",
+    "authentication_model",
+    "uncertainties"
+  ],
+  "additionalProperties": false
+}

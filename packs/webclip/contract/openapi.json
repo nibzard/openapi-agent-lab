@@ -1,0 +1,700 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "webclip",
+    "version": "1.0.0",
+    "description": "webclip captures a live web page as a clip, renders it, extracts its text, and exports the capture. A new clip starts in the pending status. Rendering moves it to rendered or failed. Extraction works only on a rendered clip and moves it to extracted. The content endpoint serves the captured representation, guided by the clip's format and the Accept header. Every request needs a bearer token.",
+    "license": {
+      "name": "Apache-2.0",
+      "identifier": "Apache-2.0"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.webclip.example.com",
+      "description": "Public endpoint. The lab serves a local mock instead."
+    }
+  ],
+  "security": [{ "bearerAuth": [] }],
+  "tags": [
+    {
+      "name": "clips",
+      "description": "Create, list, read, render, extract, export, and delete clips."
+    },
+    {
+      "name": "account",
+      "description": "Read the quota state of the calling account."
+    }
+  ],
+  "paths": {
+    "/v1/clips": {
+      "post": {
+        "operationId": "create_clip",
+        "summary": "Create a clip",
+        "description": "Creates one clip of a single web page and returns it in the pending status. The format field fixes the captured representation for the clip's lifetime: markdown serves extracted text, html serves the cleaned page, image serves a rendered picture. Rendering and extraction are separate steps; creation only records the request.",
+        "tags": ["clips"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ClipRequest" },
+              "examples": {
+                "markdown-clip": {
+                  "summary": "A markdown clip with a note",
+                  "value": {
+                    "url": "https://example.com/essay",
+                    "format": "markdown",
+                    "notes": "Source for the weekly digest"
+                  }
+                },
+                "image-clip": {
+                  "summary": "An image clip without notes",
+                  "value": {
+                    "url": "https://example.com/dashboard",
+                    "format": "image"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The clip was created. It starts in the pending status.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Clip" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "422": { "$ref": "#/components/responses/Unprocessable" }
+        }
+      },
+      "get": {
+        "operationId": "list_clips",
+        "summary": "List clips",
+        "description": "Returns one page of clips, newest first. Pass the nextCursor value from one response as the cursor of the next request. An empty nextCursor means the last page.",
+        "tags": ["clips"],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Clips per page. The maximum is 100.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "example": 20
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque page cursor returned by a previous list response. Send it back unchanged.",
+            "schema": { "type": "string", "minLength": 1 },
+            "example": "cur_9x2m1b4q"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of clips.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ClipList" },
+                "examples": {
+                  "one-page": {
+                    "summary": "One clip and the cursor of the next page",
+                    "value": {
+                      "items": [
+                        {
+                          "id": "clip_01h8x9k4m2",
+                          "url": "https://example.com/essay",
+                          "format": "markdown",
+                          "status": "pending",
+                          "created_at": "2026-08-29T09:14:00Z"
+                        }
+                      ],
+                      "nextCursor": "cur_9x2m1b4q"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/v1/clips/{clipId}": {
+      "parameters": [
+        {
+          "name": "clipId",
+          "in": "path",
+          "required": true,
+          "description": "Identifier of the clip.",
+          "schema": { "$ref": "#/components/schemas/ClipId" }
+        }
+      ],
+      "get": {
+        "operationId": "get_clip",
+        "summary": "Read one clip",
+        "description": "Returns the clip with the given identifier, including its current status.",
+        "tags": ["clips"],
+        "responses": {
+          "200": {
+            "description": "The clip.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Clip" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "operationId": "delete_clip",
+        "summary": "Delete one clip",
+        "description": "Deletes the clip with the given identifier. The response has no body. A deleted clip returns 404 on every later read.",
+        "tags": ["clips"],
+        "responses": {
+          "204": {
+            "description": "The clip was deleted. The response has no body."
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/v1/clips/{clipId}/render": {
+      "post": {
+        "operationId": "render_clip",
+        "summary": "Render one clip",
+        "description": "Loads the clipped page in a headless browser and stores the rendered artifact. The request body is optional; without it the service renders with its default viewport and waits for the load event. A clip must exist before it can render.",
+        "tags": ["clips"],
+        "parameters": [
+          {
+            "name": "clipId",
+            "in": "path",
+            "required": true,
+            "description": "Identifier of the clip to render.",
+            "schema": { "$ref": "#/components/schemas/ClipId" }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RenderRequest" },
+              "examples": {
+                "desktop-viewport": {
+                  "summary": "A desktop viewport that waits for network idle",
+                  "value": {
+                    "viewport": { "width": 1440, "height": 900 },
+                    "wait_for": "networkidle"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The render finished. Read status to learn whether it succeeded.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RenderResult" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "422": { "$ref": "#/components/responses/Unprocessable" }
+        }
+      }
+    },
+    "/v1/clips/{clipId}/content": {
+      "get": {
+        "operationId": "get_clip_content",
+        "summary": "Fetch the captured representation",
+        "description": "Serves the captured representation of one clip. The served representation depends on the clip's format and the Accept header. A markdown or html clip serves text/markdown. An image clip serves image/svg+xml. Send the Accept header that names the representation you want. When the Accept header names no representation the clip can serve, the service answers 406.",
+        "tags": ["clips"],
+        "parameters": [
+          {
+            "name": "clipId",
+            "in": "path",
+            "required": true,
+            "description": "Identifier of the clip to export.",
+            "schema": { "$ref": "#/components/schemas/ClipId" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The captured representation. The served media type follows the clip's format and the Accept header: image clips serve image/svg+xml, markdown and html clips serve text/markdown. Ask with Accept, because the two representations carry different schemas.",
+            "content": {
+              "image/svg+xml": {
+                "description": "The rendered picture of the page.",
+                "example": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1440\" height=\"900\"><rect width=\"1440\" height=\"900\" fill=\"#f5f2ea\"/><text x=\"72\" y=\"96\" font-family=\"Georgia\" font-size=\"36\">Example Dashboard</text></svg>"
+              },
+              "text/markdown": {
+                "description": "The extracted text of the page.",
+                "schema": {
+                  "type": "string",
+                  "description": "Markdown text of the captured page.",
+                  "example": "# Example Essay\n\nThe page opens with a thesis statement.\n\n## Section\n\nThe argument follows in three steps.\n"
+                }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "406": { "$ref": "#/components/responses/NotAcceptable" }
+        }
+      }
+    },
+    "/v1/clips/{clipId}/extract": {
+      "post": {
+        "operationId": "extract_text",
+        "summary": "Extract the text of one clip",
+        "description": "Extracts the visible text of the stored render and counts its words. The clip must be rendered before extraction; a pending or failed clip answers 409. The request body is optional; without it the service keeps hyperlink text and drops the link targets.",
+        "tags": ["clips"],
+        "parameters": [
+          {
+            "name": "clipId",
+            "in": "path",
+            "required": true,
+            "description": "Identifier of the clip to extract.",
+            "schema": { "$ref": "#/components/schemas/ClipId" }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ExtractRequest" },
+              "examples": {
+                "keep-links": {
+                  "summary": "Keep hyperlink targets in the text",
+                  "value": { "include_links": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The extraction finished and returned the text.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ExtractResult" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" }
+        }
+      }
+    },
+    "/v1/account": {
+      "get": {
+        "operationId": "get_account",
+        "summary": "Read the account quota",
+        "description": "Returns the calling account, its plan, and how many clips of the plan limit it used. Every created clip counts against the limit; a deleted clip frees its slot on the next read.",
+        "tags": ["account"],
+        "responses": {
+          "200": {
+            "description": "The account and its quota state.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Account" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Use the bearer token issued with the account. Send it as the Authorization: Bearer header."
+      }
+    },
+    "schemas": {
+      "ClipId": {
+        "type": "string",
+        "description": "Clip identifier. It starts with clip_ followed by lower case letters and digits.",
+        "pattern": "^clip_[0-9a-z]+$",
+        "examples": ["clip_01h8x9k4m2"]
+      },
+      "ClipFormat": {
+        "type": "string",
+        "description": "Captured representation of the clip. The value is fixed at creation.",
+        "enum": ["markdown", "html", "image"],
+        "examples": ["markdown"]
+      },
+      "ClipStatus": {
+        "type": "string",
+        "description": "Lifecycle status of the clip.",
+        "enum": ["pending", "rendered", "extracted", "failed"],
+        "examples": ["pending"]
+      },
+      "Timestamp": {
+        "type": "string",
+        "format": "date-time",
+        "description": "RFC 3339 date and time in UTC.",
+        "examples": ["2026-08-29T09:14:00Z"]
+      },
+      "Clip": {
+        "type": "object",
+        "description": "One stored clip.",
+        "required": ["id", "url", "format", "status", "created_at"],
+        "properties": {
+          "id": { "$ref": "#/components/schemas/ClipId" },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "The clipped page.",
+            "examples": ["https://example.com/essay"]
+          },
+          "format": { "$ref": "#/components/schemas/ClipFormat" },
+          "status": { "$ref": "#/components/schemas/ClipStatus" },
+          "created_at": { "$ref": "#/components/schemas/Timestamp" }
+        },
+        "example": {
+          "id": "clip_01h8x9k4m2",
+          "url": "https://example.com/essay",
+          "format": "markdown",
+          "status": "pending",
+          "created_at": "2026-08-29T09:14:00Z"
+        }
+      },
+      "ClipRequest": {
+        "type": "object",
+        "description": "Data for a new clip.",
+        "required": ["url", "format"],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "The page to clip. It must be an absolute http or https URL.",
+            "minLength": 8,
+            "maxLength": 2048,
+            "examples": ["https://example.com/essay"]
+          },
+          "format": {
+            "$ref": "#/components/schemas/ClipFormat"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Free-form note stored with the clip. The service never parses it.",
+            "maxLength": 500,
+            "examples": ["Source for the weekly digest"]
+          }
+        },
+        "additionalProperties": false
+      },
+      "Viewport": {
+        "type": "object",
+        "description": "Browser viewport for one render.",
+        "required": ["width", "height"],
+        "properties": {
+          "width": {
+            "type": "integer",
+            "minimum": 320,
+            "maximum": 3840,
+            "description": "Viewport width in pixels.",
+            "examples": [1440]
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 240,
+            "maximum": 2160,
+            "description": "Viewport height in pixels.",
+            "examples": [900]
+          }
+        },
+        "additionalProperties": false,
+        "example": { "width": 1440, "height": 900 }
+      },
+      "RenderRequest": {
+        "type": "object",
+        "description": "Optional render options. Omitted fields take the service defaults.",
+        "properties": {
+          "viewport": { "$ref": "#/components/schemas/Viewport" },
+          "wait_for": {
+            "type": "string",
+            "enum": ["load", "domcontentloaded", "networkidle"],
+            "description": "Browser event the render waits for before it captures the page.",
+            "examples": ["networkidle"]
+          }
+        },
+        "additionalProperties": false,
+        "example": {
+          "viewport": { "width": 1440, "height": 900 },
+          "wait_for": "networkidle"
+        }
+      },
+      "RenderResult": {
+        "type": "object",
+        "description": "Outcome of one render.",
+        "required": ["clipId", "status", "duration_ms"],
+        "properties": {
+          "clipId": { "$ref": "#/components/schemas/ClipId" },
+          "status": {
+            "type": "string",
+            "enum": ["rendered", "failed"],
+            "description": "Whether the render stored an artifact.",
+            "examples": ["rendered"]
+          },
+          "duration_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Wall-clock time the render took, in milliseconds.",
+            "examples": [812]
+          }
+        },
+        "additionalProperties": false,
+        "example": {
+          "clipId": "clip_01h8x9k4m2",
+          "status": "rendered",
+          "duration_ms": 812
+        }
+      },
+      "ExtractRequest": {
+        "type": "object",
+        "description": "Optional extraction options.",
+        "properties": {
+          "include_links": {
+            "type": "boolean",
+            "description": "Keep hyperlink targets in the extracted text. The default is false.",
+            "default": false,
+            "examples": [true]
+          }
+        },
+        "additionalProperties": false,
+        "example": { "include_links": true }
+      },
+      "ExtractResult": {
+        "type": "object",
+        "description": "Text extracted from one render.",
+        "required": ["clipId", "text", "word_count"],
+        "properties": {
+          "clipId": { "$ref": "#/components/schemas/ClipId" },
+          "text": {
+            "type": "string",
+            "description": "Visible text of the rendered page.",
+            "examples": [
+              "Example Essay\n\nThe page opens with a thesis statement."
+            ]
+          },
+          "word_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of words in the extracted text.",
+            "examples": [42]
+          }
+        },
+        "additionalProperties": false,
+        "example": {
+          "clipId": "clip_01h8x9k4m2",
+          "text": "Example Essay\n\nThe page opens with a thesis statement.",
+          "word_count": 42
+        }
+      },
+      "ClipList": {
+        "type": "object",
+        "description": "One page of clips.",
+        "required": ["items", "nextCursor"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "description": "Clips on this page, newest first.",
+            "items": { "$ref": "#/components/schemas/Clip" }
+          },
+          "nextCursor": {
+            "type": "string",
+            "description": "Opaque cursor of the next page. It is empty on the last page.",
+            "examples": ["cur_9x2m1b4q"]
+          }
+        }
+      },
+      "Plan": {
+        "type": "string",
+        "description": "Account plan.",
+        "enum": ["free", "pro"],
+        "examples": ["free"]
+      },
+      "Account": {
+        "type": "object",
+        "description": "The calling account and its quota state.",
+        "required": ["account_id", "plan", "clips_used", "clips_limit"],
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "description": "Stable identifier of the account.",
+            "pattern": "^acct_[0-9a-z]+$",
+            "examples": ["acct_7d2m01"]
+          },
+          "plan": { "$ref": "#/components/schemas/Plan" },
+          "clips_used": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Clips counted against the plan limit right now.",
+            "examples": [3]
+          },
+          "clips_limit": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Clips the plan allows in total.",
+            "examples": [100]
+          }
+        },
+        "additionalProperties": false,
+        "example": {
+          "account_id": "acct_7d2m01",
+          "plan": "free",
+          "clips_used": 3,
+          "clips_limit": 100
+        }
+      },
+      "ErrorDetail": {
+        "type": "object",
+        "description": "One invalid field of a request.",
+        "required": ["field", "issue"],
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "JSON Pointer of the field the issue is about.",
+            "examples": ["/format"]
+          },
+          "issue": {
+            "type": "string",
+            "description": "What is wrong with the field.",
+            "examples": ["must be one of markdown, html, image"]
+          }
+        },
+        "additionalProperties": false,
+        "example": {
+          "field": "/format",
+          "issue": "must be one of markdown, html, image"
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "Error response body.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable machine-readable error code, in snake case.",
+            "examples": ["not_found"]
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable explanation of the failure.",
+            "examples": ["No clip has this identifier."]
+          },
+          "details": {
+            "type": "array",
+            "description": "One entry per field the failure names. Absent when the failure names no field.",
+            "items": { "$ref": "#/components/schemas/ErrorDetail" }
+          }
+        },
+        "additionalProperties": false,
+        "example": {
+          "code": "not_found",
+          "message": "No clip has this identifier."
+        }
+      },
+      "ValidationErrorResponse": {
+        "type": "object",
+        "description": "The ErrorResponse the API returns for 422. The details array is always present and never empty.",
+        "required": ["code", "message", "details"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable machine-readable error code, in snake case.",
+            "examples": ["validation_failed"]
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable explanation of the failure.",
+            "examples": ["The request body failed validation."]
+          },
+          "details": {
+            "type": "array",
+            "description": "One entry per invalid field.",
+            "minItems": 1,
+            "items": { "$ref": "#/components/schemas/ErrorDetail" }
+          }
+        },
+        "additionalProperties": false,
+        "example": {
+          "code": "validation_failed",
+          "message": "The request body failed validation.",
+          "details": [
+            {
+              "field": "/format",
+              "issue": "must be one of markdown, html, image"
+            }
+          ]
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "The request body is not valid JSON or cannot be parsed.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "The bearer token is missing or not valid.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "No clip has this identifier.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      },
+      "Unprocessable": {
+        "description": "The request body parsed but failed validation. Read details for the invalid fields.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ValidationErrorResponse"
+            }
+          }
+        }
+      },
+      "NotAcceptable": {
+        "description": "The Accept header names no representation this clip can serve.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "The clip is not rendered yet. Render the clip first, then extract its text.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      }
+    }
+  }
+}

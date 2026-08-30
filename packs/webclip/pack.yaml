@@ -1,0 +1,107 @@
+apiVersion: agentlab.dev/v1
+kind: Pack
+
+metadata:
+  id: webclip
+  name: webclip
+  version: 0.1.0
+  description: >-
+    A greenfield pack that demonstrates the friction-measurement loop
+    on a new API.
+
+requires:
+  agentlab: ">=0.1.0 <0.2.0"
+  backend_api: 1
+  rubric_api: 1
+
+contract:
+  entrypoint: contract/openapi.json
+  # Empty on purpose. The bare contract is the "before" state of the
+  # friction measurement: the mock answers every operation from declared
+  # examples and schema generation alone, with no authored fixtures.
+  response_fixtures: []
+
+server:
+  host: 127.0.0.1
+  port: 0
+  request_body_limit_bytes: 5242880
+  request_timeout_ms: 30000
+  response_validation: error
+  request_validation: error
+  concurrency: serial
+
+behavior:
+  mode: contract
+  completeness: exact
+  fallback: none
+
+# The request pipeline verifies a declared security alternative on
+# every request (SPEC section 31, step 6), so the pack admits the
+# synthetic bearer the runner mints for the http bearer scheme. The
+# probe sends it as the Authorization header.
+security:
+  enforce: false
+  credentials: []
+  base_url_environment: OAL_BASE_URL
+
+redaction:
+  header_names:
+    - authorization
+  key_patterns:
+    - "(?i)api.?key"
+    - "(?i)token"
+    - "(?i)secret"
+  capture_binary_blobs: false
+  max_text_capture_bytes: 65536
+
+participant:
+  environment:
+    inherit: none
+    allow:
+      - PATH
+      - HOME
+      - TMPDIR
+      - OAL_BASE_URL
+      - OAL_AUTH_BEARER
+
+prompt_sets:
+  - id: naturalistic
+    purpose_disclosure: naturalistic
+    instructions:
+      source: prompts/naturalistic/instructions.md
+      engine: mustache-strict
+      delivery: file
+      target: AGENTS.md
+    launch:
+      source: prompts/naturalistic/launch.txt
+      engine: literal
+
+evals:
+  - id: site-errand
+    prompt_set: naturalistic
+    task:
+      source: tasks/site-errand/task.md
+      engine: literal
+      target: TASK.md
+    # The probe schema must ride along as a participant file: the pack
+    # loader resolves rubric schema references only through declared
+    # manifest fields, and participant_files is the one for schemas.
+    # The participant can read it; the probe is a floor, not a judge.
+    participant_files:
+      - source: schemas/site-errand-result.schema.json
+        target: result.schema.json
+      - source: schemas/comprehension-probe.schema.json
+        target: comprehension-probe.schema.json
+    operation_scope:
+      mode: all
+    result:
+      source: adapter_final
+      schema: schemas/site-errand-result.schema.json
+      required: true
+    rubric: evals/site-errand/rubric.yaml
+    scenario: baseline
+
+scenarios:
+  - id: baseline
+
+extensions: {}

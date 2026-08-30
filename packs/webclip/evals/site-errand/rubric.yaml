@@ -1,0 +1,116 @@
+# Site-errand rubric for the webclip pack.
+#
+# The naturalistic prompt set gives no API hints, so this rubric scores
+# what a participant can observe: two clips created, one ordered
+# lifecycle through the markdown clip, and a quota read at the end.
+# Contract mode keeps no clip state, so no check inspects what the
+# render or the extraction returned, only that the calls succeeded.
+# The comprehension probe is optional: it reads the free-text api_model
+# answer and asks whether the participant named the clip resource.
+rubric_version: 1
+id: webclip-site-errand
+description: >-
+  Create two clips, render both, fetch both representations, extract
+  the markdown text, delete the markdown clip, read the quota.
+scoring:
+  method: weighted_binary
+  pass_threshold: 0.9
+checks:
+  - id: errand_flow
+    kind: sequence
+    match: any
+    max_candidates: 10000
+    weight: 1
+    required: true
+    evidence_class: participant_observable
+    description: One ordered create, render, content, extract, delete flow.
+    steps:
+      - id: create_clip
+        where: >-
+          event.operation.operation_id == "create_clip" &&
+          event.response.status >= 200 &&
+          event.response.status < 300
+        capture:
+          clip_id: event.response.body.value.id
+      - id: render_clip
+        where: >-
+          event.operation.operation_id == "render_clip" &&
+          event.request.path_parameters.clipId == vars.clip_id &&
+          event.response.status >= 200 &&
+          event.response.status < 300
+      - id: fetch_content
+        where: >-
+          event.operation.operation_id == "get_clip_content" &&
+          event.request.path_parameters.clipId == vars.clip_id &&
+          event.response.status >= 200 &&
+          event.response.status < 300
+      - id: extract_text
+        where: >-
+          event.operation.operation_id == "extract_text" &&
+          event.request.path_parameters.clipId == vars.clip_id &&
+          event.response.status >= 200 &&
+          event.response.status < 300
+      - id: delete_clip
+        where: >-
+          event.operation.operation_id == "delete_clip" &&
+          event.request.path_parameters.clipId == vars.clip_id &&
+          event.response.status >= 200 &&
+          event.response.status < 300
+    postconditions:
+      - id: report_agrees_deleted
+        expression: report.clip_deleted == true
+      - id: report_agrees_extracted
+        expression: report.text_extracted == true
+  - id: result_report
+    kind: json_schema
+    value: report
+    schema: schemas/site-errand-result.schema.json
+    weight: 1
+    required: true
+    evidence_class: participant_observable
+    description: The final report matches the pack result schema.
+  - id: two_clips_created
+    kind: event
+    match: counted
+    where: >-
+      event.operation.operation_id == "create_clip" &&
+      event.response.status >= 200 &&
+      event.response.status < 300
+    min_count: 2
+    max_count: 2
+    weight: 1
+    required: true
+    evidence_class: participant_observable
+    description: Exactly two clips are created.
+  - id: no_unmatched_delete
+    kind: event
+    match: counted
+    where: >-
+      event.request.method == "DELETE" &&
+      event.operation.matched == false
+    max_count: 0
+    weight: 1
+    required: true
+    evidence_class: participant_observable
+    description: >-
+      Deletes stay on the declared clip route; blind DELETE requests
+      that hit no declared path stay untouched.
+  - id: comprehension_probe
+    kind: json_schema
+    value: report
+    schema: schemas/comprehension-probe.schema.json
+    weight: 1
+    required: false
+    evidence_class: participant_observable
+    description: >-
+      The participant describes the API in its own words and names the
+      clip resource.
+signals:
+  - id: first_call_is_create
+    kind: predicate
+    expression: events[0].operation.operation_id == "create_clip"
+    description: The participant opened with clip creation.
+  - id: first_call_matched
+    kind: predicate
+    expression: events[0].operation.matched == true
+    description: The first request hit a declared route.

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/packs/webclip/schemas/comprehension-probe.schema.json",
+  "title": "webclip comprehension probe",
+  "description": "Partial schema used by one optional rubric check. It constrains only the api_model answer, so the probe can see whether the participant described the API in its own clip vocabulary. It validates the whole report, so it leaves every other field open. The pack ships this file into the workspace, because the manifest can declare a rubric schema only as a participant file.",
+  "type": "object",
+  "properties": {
+    "api_model": {
+      "type": "string",
+      "pattern": "clip",
+      "description": "The free-text API description, which should name the clip resource."
+    }
+  }
+}
