@@ -517,7 +517,11 @@ class YamlParser {
     }
     if (line.indent >= blockMin) {
       this.ci = 0;
-      return this.parseNode(line.indent, line.indent + 1, true);
+      // Keep the parent block's minimum: a plain scalar continued on
+      // the following lines may sit at the same indent as its first
+      // line, so deriving the minimum from that line would reject a
+      // legal fold (the inline-value branch keeps it already).
+      return this.parseNode(line.indent, blockMin, true);
     }
     if (
       allowSameIndentSequence &&
@@ -1878,7 +1882,10 @@ class BlockYamlParser {
     const rendered = collected.map((line) =>
       line.text === ""
         ? ""
-        : line.text.slice(Math.max(0, line.indent - contentIndent))
+        : // A more-indented line keeps its extra indent as content, the
+          // same rule the document engine applies; slicing here would
+          // silently eat the line's first characters.
+          `${" ".repeat(Math.max(0, line.indent - contentIndent))}${line.text}`
     );
     if (this.dialect.chompFormulation === "text") {
       let text: string;

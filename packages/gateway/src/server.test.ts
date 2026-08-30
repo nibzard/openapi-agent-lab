@@ -816,6 +816,110 @@ describe("array and scalar request bodies", () => {
   });
 });
 
+describe("multipart form request bodies", () => {
+  const postUpload = (): OperationIR => {
+    return operation({
+      method: "POST",
+      key: "path:POST /uploads",
+      // The default response references sch_thing, which this contract
+      // does not define, so declare a content-free success response.
+      responses: [response({})],
+      request_body: {
+        required: true,
+        description: null,
+        content: [contentEntry("multipart/form-data", "sch_upload")],
+        source_pointer: ""
+      }
+    });
+  };
+
+  const uploadContract = (): ContractIR =>
+    contract({
+      operations: [postUpload()],
+      schemas: {
+        sch_upload: schema("sch_upload", {
+          type: "object",
+          properties: {
+            file: { type: "string" },
+            path: { type: "string" }
+          },
+          required: ["file"],
+          additionalProperties: false
+        })
+      }
+    });
+
+  /** A curl-shaped multipart body: one file field, one text field. */
+  function uploadBody(boundary: string): Uint8Array {
+    return new TextEncoder().encode(
+      [
+        `--${boundary}`,
+        'Content-Disposition: form-data; name="file"; filename="notes.txt"',
+        "Content-Type: text/plain",
+        "",
+        "file bytes",
+        `--${boundary}`,
+        'Content-Disposition: form-data; name="path"',
+        "",
+        "dir/notes.txt",
+        `--${boundary}--`,
+        ""
+      ].join("\r\n")
+    );
+  }
+
+  it("validates the parts as an object keyed by field name", () => {
+    const result = handleGatewayRequest(
+      options({ contract: uploadContract() }),
+      31,
+      request({
+        method: "POST",
+        headers: {
+          "content-type": "multipart/form-data; boundary=oal_upload"
+        },
+        body: uploadBody("oal_upload")
+      })
+    );
+    expect(result.status).toBe(200);
+    expect(result.frameworkCode).toBeNull();
+  });
+
+  it("rejects a multipart body that misses a required field", () => {
+    const body = new TextEncoder().encode(
+      [
+        "--oal_upload",
+        'Content-Disposition: form-data; name="path"',
+        "",
+        "dir/notes.txt",
+        "--oal_upload--",
+        ""
+      ].join("\r\n")
+    );
+    const result = handleGatewayRequest(
+      options({ contract: uploadContract() }),
+      32,
+      request({
+        method: "POST",
+        headers: {
+          "content-type": "multipart/form-data; boundary=oal_upload"
+        },
+        body
+      })
+    );
+    expect(result.status).toBe(422);
+    expect(result.frameworkCode).toBe("request_schema_invalid");
+    const document = JSON.parse(result.body ?? "{}") as {
+      violations?: Array<{ location: string; pointer: string; code: string }>;
+    };
+    expect(document.violations).toContainEqual({
+      location: "body",
+      pointer: "",
+      code: "required",
+      message: 'Required property "file" is missing.'
+    });
+  });
+});
+
 describe("URL-encoded form request bodies (V2A)", () => {
   const postForm = (): OperationIR => {
     return operation({

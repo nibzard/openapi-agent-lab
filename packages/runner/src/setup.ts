@@ -50,6 +50,7 @@ import {
 import {
   contractSettings,
   declaredBaseUrlEnvironment,
+  declaredCredentialEnvironments,
   declaredEnvironmentNames,
   type ContractSettings,
   type FrozenPlan
@@ -162,6 +163,11 @@ export interface ExposureRequest {
   readonly sensitiveHeaderNames: readonly string[];
   /** Key pattern strings whose matching names the trace must redact. */
   readonly sensitiveKeyPatterns: readonly string[];
+  /**
+   * Participant environment name of each credential, keyed by scheme
+   * alias. Names only: values never appear here.
+   */
+  readonly credentialEnvironments?: ReadonlyMap<string, string>;
 }
 
 /** Builds one exposure treatment per trial. Injected; never a socket. */
@@ -581,6 +587,7 @@ function buildToolEnvironment(input: {
   baseUrl: string;
   baseUrlEnvironment: string | null;
   declaredNames: readonly string[];
+  credentialEnvironments: ReadonlyMap<string, string>;
 }): Record<string, string> {
   const environment: Record<string, string> = {};
   for (const alias of credentialAliases(input.contract)) {
@@ -590,13 +597,27 @@ function buildToolEnvironment(input: {
     if (scheme === undefined) {
       continue;
     }
+    // The pack may declare one participant-facing name per credential.
+    // The value is then set under both names; the allow list keeps
+    // whichever the pack admits.
+    const exposed = input.credentialEnvironments.get(alias);
     if (scheme.type === "apiKey") {
       environment[name] = input.credentials.apiKeys[alias] ?? "";
+      if (exposed !== undefined) {
+        environment[exposed] = environment[name];
+      }
     } else if (scheme.type === "http") {
       environment[`${name}_USERNAME`] = input.credentials.basic.username;
       environment[`${name}_PASSWORD`] = input.credentials.basic.password;
+      if (exposed !== undefined) {
+        environment[`${exposed}_USERNAME`] = input.credentials.basic.username;
+        environment[`${exposed}_PASSWORD`] = input.credentials.basic.password;
+      }
     } else {
       environment[name] = input.credentials.bearer;
+      if (exposed !== undefined) {
+        environment[exposed] = environment[name];
+      }
     }
   }
   environment.OAL_AUTH_BEARER = input.credentials.bearer;
@@ -746,6 +767,7 @@ export async function setupTrial(
       now,
       trace,
       documentationTrace,
+      credentialEnvironments: declaredCredentialEnvironments(pack),
       secrets: [
         ...Object.values(credentials.apiKeys),
         credentials.basic.username,
@@ -918,7 +940,8 @@ export async function setupTrial(
       credentials,
       baseUrl: liveExposure.baseUrl,
       baseUrlEnvironment: declaredBaseUrlEnvironment(pack),
-      declaredNames: declaredEnvironmentNames(pack)
+      declaredNames: declaredEnvironmentNames(pack),
+      credentialEnvironments: declaredCredentialEnvironments(pack)
     });
     const launcherEnvironment: Record<string, string> = {
       OAL_RUN_ID: runId,

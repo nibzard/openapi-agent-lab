@@ -126,6 +126,17 @@ describe("query parameter deserialization", () => {
     expect(parseOk(parameter({ location: "query" }), "hello")).toBe("hello");
   });
 
+  it("parses a one-element non-exploded form array", () => {
+    // RFC 6570 serializes ["abc"] with no delimiter; only the schema
+    // type hint separates it from a primitive.
+    expect(
+      parseOk(parameter({ location: "query", explode: false }), "abc", "array")
+    ).toEqual(["abc"]);
+    expect(
+      parseOk(parameter({ location: "cookie", explode: false }), "abc", "array")
+    ).toEqual(["abc"]);
+  });
+
   it("parses delimited and deep-object styles", () => {
     expect(
       parseOk(parameter({ location: "query", style: "spaceDelimited" }), [

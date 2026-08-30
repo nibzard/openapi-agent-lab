@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   parseBlockYaml,
+  parseSafeYaml,
   type BlockYamlDialect,
   type BlockYamlFailure,
   type BlockYamlSituation
@@ -135,6 +136,77 @@ describe("flow-collection separators in the pack dialect", () => {
     expect(parseWith(PACK_LIKE_DIALECT, "a: [1, 2] # c")).toEqual({
       a: [1, 2]
     });
+  });
+});
+
+describe("folded block scalars in the line-based engine", () => {
+  it("keeps the characters of a more-indented continuation line", () => {
+    // A continuation indented past the first content line keeps its
+    // extra indent as content; nothing is sliced away.
+    const text = [
+      "postconditions:",
+      "  - id: check",
+      "    expression: >-",
+      "      report.evidence_captured == true &&",
+      '      (report.evidence_kind == "screenshot" ||',
+      '       report.evidence_kind == "scrape")'
+    ].join("\n");
+    const value = parseWith(PACK_LIKE_DIALECT, text) as {
+      postconditions: Array<{ expression: string }>;
+    };
+    expect(value.postconditions[0]?.expression).toBe(
+      "report.evidence_captured == true && " +
+        '(report.evidence_kind == "screenshot" ||  ' +
+        'report.evidence_kind == "scrape")'
+    );
+  });
+});
+
+describe("multi-line plain scalars in the document engine", () => {
+  it("folds a value that starts on the line after its key", () => {
+    // Shape of examples/e2b.yaml: the key sits at one indent and every
+    // continuation line of the plain scalar sits at the next indent.
+    const text = [
+      "properties:",
+      "  snapshotID:",
+      "    type: string",
+      "    description:",
+      "      Identifier of the snapshot template including the tag. Uses",
+      "      namespace/alias when a name was provided, otherwise falls",
+      "      back to the raw template ID."
+    ].join("\n");
+    expect(parseSafeYaml(text)).toEqual({
+      properties: {
+        snapshotID: {
+          type: "string",
+          description:
+            "Identifier of the snapshot template including the tag. Uses " +
+            "namespace/alias when a name was provided, otherwise falls " +
+            "back to the raw template ID."
+        }
+      }
+    });
+  });
+
+  it("stops the fold at a line indented like an outer key", () => {
+    const text = [
+      "schema:",
+      "  description:",
+      "    first continued",
+      "    second continued",
+      "  type: string"
+    ].join("\n");
+    expect(parseSafeYaml(text)).toEqual({
+      schema: {
+        description: "first continued second continued",
+        type: "string"
+      }
+    });
+  });
+
+  it("keeps a deeper-indented continuation inside the scalar", () => {
+    const text = ["a:", "  one two", "    three four"].join("\n");
+    expect(parseSafeYaml(text)).toEqual({ a: "one two three four" });
   });
 });
 

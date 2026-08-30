@@ -319,6 +319,22 @@ function generateObject(
       }
     }
   }
+  if (
+    Object.keys(properties).length === 0 &&
+    isJsonObject(schema.additionalProperties) &&
+    Object.keys(result).length === 0
+  ) {
+    // A schema of only additionalProperties is a map. One synthetic
+    // entry exercises the value schema; an empty object would also
+    // validate but shows the participant nothing.
+    const key = seededToken(options.seed, path, "map-key", 0);
+    result[key] = generateNode(
+      schema.additionalProperties,
+      options,
+      `${path}/${key}`,
+      depth + 1
+    );
+  }
   if (schema.propertyNames !== undefined && Object.keys(result).length > 0) {
     // propertyNames constrains keys; generation already uses safe names.
     return result;
@@ -423,6 +439,24 @@ function generateString(
   const declaredMax =
     typeof schema.maxLength === "number" ? schema.maxLength : null;
   if (pattern !== null) {
+    // A declared format is tried first: its fixed synthetic shape is
+    // the realistic value, and the pattern only narrows it. The
+    // candidate is accepted when it satisfies the pattern, using the
+    // same compilation the validator performs on the same schema.
+    const candidate = formatValue(format, options.seed, path);
+    if (candidate !== null && patternAccepts(pattern, candidate)) {
+      if (declaredMin !== null && candidate.length < declaredMin) {
+        throw new GenerationUnsupportedError(
+          `minLength ${declaredMin} conflicts with pattern ${pattern}`
+        );
+      }
+      if (declaredMax !== null && candidate.length > declaredMax) {
+        throw new GenerationUnsupportedError(
+          `maxLength ${declaredMax} conflicts with pattern ${pattern}`
+        );
+      }
+      return candidate;
+    }
     const produced = producePattern(pattern);
     if (produced === null) {
       throw new GenerationUnsupportedError(
@@ -512,6 +546,19 @@ function formatValue(
     default:
       // Unknown formats are annotations; fall back to a plain token.
       return token;
+  }
+}
+
+/**
+ * Test one candidate against a vendor pattern. The schema validator
+ * compiles the same expression against the same schema, so this adds
+ * no new trust boundary; an untestable pattern accepts nothing.
+ */
+function patternAccepts(pattern: string, candidate: string): boolean {
+  try {
+    return new RegExp(pattern).test(candidate);
+  } catch {
+    return false;
   }
 }
 
@@ -610,6 +657,34 @@ function generateNumber(schema: Json): Json {
   return value;
 }
 
+/**
+ * Keywords that carry no constraint the generator must satisfy. A
+ * schema made only of these admits any value, exactly like `true`;
+ * string-affine keywords (format, pattern, length bounds) are admitted
+ * because a string is always a valid instance for them.
+ */
+const ANNOTATION_ONLY_KEYS: ReadonlySet<string> = new Set([
+  "$anchor",
+  "$comment",
+  "$defs",
+  "$id",
+  "$schema",
+  "definitions",
+  "deprecated",
+  "description",
+  "discriminator",
+  "externalDocs",
+  "format",
+  "maxLength",
+  "minLength",
+  "nullable",
+  "pattern",
+  "readOnly",
+  "title",
+  "writeOnly",
+  "xml"
+]);
+
 function effectiveType(schema: Record<string, Json>): string | null {
   const type = schema.type;
   if (typeof type === "string") {
@@ -635,7 +710,11 @@ function effectiveType(schema: Record<string, Json>): string | null {
     }
   }
   const hasProperties =
-    isJsonObject(schema.properties) || Array.isArray(schema.required);
+    isJsonObject(schema.properties) ||
+    Array.isArray(schema.required) ||
+    // A declared additionalProperties makes the schema a map, which is
+    // an object even without a type word.
+    schema.additionalProperties !== undefined;
   const hasItems =
     schema.items !== undefined || schema.prefixItems !== undefined;
   if (hasProperties) {
@@ -643,6 +722,9 @@ function effectiveType(schema: Record<string, Json>): string | null {
   }
   if (hasItems) {
     return "array";
+  }
+  if (Object.keys(schema).every((key) => ANNOTATION_ONLY_KEYS.has(key))) {
+    return "string";
   }
   return null;
 }

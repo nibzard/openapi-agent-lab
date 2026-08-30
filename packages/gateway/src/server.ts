@@ -360,15 +360,31 @@ export function handleGatewayRequest(
   };
 }
 
-/** Bounded JSON view of parsed multipart parts for request validation. */
+/**
+ * Bounded JSON view of parsed multipart parts for request validation.
+ * A multipart body validates against the declared schema as an object
+ * keyed by field name, the same form semantics the urlencoded branch
+ * keeps: each part decodes to its text, and a repeated name collects
+ * its values into an array.
+ */
 function multipartJsonValue(parts: readonly MultipartPart[]): Json {
   const decoder = new TextDecoder();
-  return parts.map((part) => ({
-    name: part.name,
-    filename: part.filename,
-    headers: part.headers,
-    body: decoder.decode(part.body)
-  }));
+  const object: Record<string, Json> = {};
+  for (const part of parts) {
+    if (part.name === null) {
+      continue;
+    }
+    const value = decoder.decode(part.body);
+    const existing = object[part.name];
+    if (existing === undefined) {
+      object[part.name] = value;
+    } else if (Array.isArray(existing)) {
+      existing.push(value);
+    } else {
+      object[part.name] = [existing, value];
+    }
+  }
+  return object;
 }
 
 function isJsonType(media: string): boolean {

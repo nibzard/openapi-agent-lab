@@ -148,6 +148,32 @@ describe("setupTrial", () => {
     }
   });
 
+  it("exposes the credential under the pack-declared environment name", async () => {
+    const { plan, pack, store, clean } = await fixture("oal-setup-env-");
+    const exposure = new FakeExposure();
+    try {
+      const setup = await setupTrial({
+        store,
+        plan,
+        pack: pack.loaded,
+        index: 0,
+        exposure: exposure.factory,
+        now: CLOCK
+      });
+      // The pack declares STEEL_API_KEY in security.credentials.expose
+      // and admits it through the participant allow list, so the value
+      // must cross under that name, not only as OAL_AUTH_APIKEY.
+      expect(setup.toolEnvironment.STEEL_API_KEY).toBeTruthy();
+      expect(setup.toolEnvironment.STEEL_BASE_URL).toBe(exposure.baseUrl);
+      expect(setup.toolEnvironment.OAL_AUTH_APIKEY).toBeUndefined();
+      expect(exposure.requests[0]?.credentialEnvironments?.get("apiKey")).toBe(
+        "STEEL_API_KEY"
+      );
+    } finally {
+      await clean();
+    }
+  });
+
   it("derives byte-identical start records for identical inputs", async () => {
     const { plan, pack, store, clean } = await fixture("oal-setup-2-");
     try {

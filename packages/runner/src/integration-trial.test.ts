@@ -188,10 +188,11 @@ describe("runner integration: fake-agent trials through the loopback exposure", 
         // The scripted participant made four real HTTP calls.
         expect(outcome.apiRequests).toBe(4);
 
-        // Golden evaluation. The gateway cannot generate the Steel
-        // session documents (packs/steel-computer/PARITY.md), so the
-        // flow checks fail. The report schema reference resolves, and
-        // the scripted report matches it.
+        // Golden evaluation. The gateway generates every Steel session
+        // document, so the create step matches; the confirm steps still
+        // fail because contract mode keeps no backend state (see
+        // packs/steel-computer/PARITY.md and drift item 17). The report
+        // schema reference resolves, and the scripted report matches it.
         const evaluation = await readJsonObject(
           harness.store,
           `${trialRootOf(harness.plan.batchId, outcome.runId)}/evaluation.json`
@@ -201,15 +202,15 @@ describe("runner integration: fake-agent trials through the loopback exposure", 
           "993896d94572a1860738f155774bf6fb8e9b7c0e6cf690068a2d88ec36906e74"
         );
         expect(evaluation["status"]).toBe("failed");
-        expect(evaluation["passed_weight"]).toBe(2);
+        expect(evaluation["passed_weight"]).toBe(3);
         expect(evaluation["total_weight"]).toBe(9);
-        expect(evaluation["score"]).toBe(2 / 9);
+        expect(evaluation["score"]).toBe(3 / 9);
         expect(evaluation["run_id"]).toBe(outcome.runId);
         expect(evaluation["evaluated_at"]).toBe("2023-11-14T22:13:20.000Z");
         expect(outcome.evaluation).toEqual({
           status: "failed",
-          score: 2 / 9,
-          passedWeight: 2,
+          score: 3 / 9,
+          passedWeight: 3,
           totalWeight: 9,
           valid: true
         });
@@ -264,9 +265,9 @@ describe("runner integration: fake-agent trials through the loopback exposure", 
           "00b9237d010083bb5f25efb496b4dd36099c7414475944311f55fafecdc9e28f"
         );
         expect(evaluation["status"]).toBe("failed");
-        expect(evaluation["passed_weight"]).toBe(3);
+        expect(evaluation["passed_weight"]).toBe(4);
         expect(evaluation["total_weight"]).toBe(12);
-        expect(evaluation["score"]).toBe(3 / 12);
+        expect(evaluation["score"]).toBe(4 / 12);
         const signals = evaluation["signals"];
         expect(signals).toEqual({
           first_call_is_create: true,

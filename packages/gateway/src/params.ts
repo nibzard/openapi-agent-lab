@@ -284,7 +284,12 @@ function parseQuery(
         }
         return okValue(items.map(parseScalar));
       }
-      if (typeHint !== "array" && only.includes("=") && !only.startsWith("=")) {
+      if (typeHint === "array") {
+        // A one-element non-exploded array carries no delimiter, so only
+        // the schema type hint separates it from a primitive.
+        return okValue([parseScalar(only)]);
+      }
+      if (only.includes("=") && !only.startsWith("=")) {
         return okValue(objectFromPairs([splitFirst(only, "=")]));
       }
       return okValue(parseScalar(only));
@@ -362,7 +367,12 @@ function parseFormCookie(
     }
     return okValue(items.map(parseScalar));
   }
-  if (typeHint !== "array" && value.includes("=") && !value.startsWith("=")) {
+  if (typeHint === "array") {
+    // A one-element non-exploded array carries no delimiter, so only
+    // the schema type hint separates it from a primitive.
+    return okValue([parseScalar(value)]);
+  }
+  if (value.includes("=") && !value.startsWith("=")) {
     return okValue(objectFromPairs([splitFirst(value, "=")]));
   }
   return okValue(parseScalar(value));

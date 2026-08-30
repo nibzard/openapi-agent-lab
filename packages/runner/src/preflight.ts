@@ -394,6 +394,32 @@ export function declaredEnvironmentNames(pack: LoadedPack): readonly string[] {
   return allow.filter((name): name is string => typeof name === "string");
 }
 
+/**
+ * Participant environment name of each credential the pack declares,
+ * keyed by security scheme alias. The participant environment allow
+ * list still gates delivery of the value.
+ */
+export function declaredCredentialEnvironments(
+  pack: LoadedPack
+): ReadonlyMap<string, string> {
+  const credentials = manifestSection(pack, "security")?.["credentials"];
+  const names = new Map<string, string>();
+  if (!Array.isArray(credentials)) {
+    return names;
+  }
+  for (const credential of credentials) {
+    const expose = isJsonObject(credential) ? credential["expose"] : null;
+    const alias = isJsonObject(credential) ? str(credential["scheme"]) : null;
+    const environment = isJsonObject(expose)
+      ? str(expose["environment"])
+      : null;
+    if (alias !== null && environment !== null && environment !== "") {
+      names.set(alias, environment);
+    }
+  }
+  return names;
+}
+
 /** Base URL environment name the pack declares, when it declares one. */
 export function declaredBaseUrlEnvironment(pack: LoadedPack): string | null {
   return str(manifestSection(pack, "security")?.["base_url_environment"]);

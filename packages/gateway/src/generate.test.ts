@@ -167,6 +167,40 @@ describe("deterministic generation", () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
 
+  it("generates a schema of only additionalProperties as a map", () => {
+    // Shape of the e2b metrics response: no type word, no properties,
+    // one value schema under additionalProperties.
+    const template = {
+      type: "object",
+      required: ["cpuUsedPct"],
+      properties: { cpuUsedPct: { type: "number" } }
+    };
+    const value = generateValue(
+      {
+        required: ["sandboxes"],
+        properties: {
+          sandboxes: { additionalProperties: template }
+        }
+      },
+      options
+    ) as { sandboxes: Record<string, { cpuUsedPct: number }> };
+    const entries = Object.entries(value.sandboxes);
+    expect(entries).toHaveLength(1);
+    const [key, metric] = entries[0] as [string, { cpuUsedPct: number }];
+    expect(key).toMatch(/^gen_/);
+    expect(typeof metric.cpuUsedPct).toBe("number");
+    expect(
+      new SchemaValidator({ additionalProperties: template }).errors(
+        value.sandboxes
+      )
+    ).toEqual([]);
+  });
+
+  it("keeps a boolean additionalProperties a free-form object", () => {
+    expect(generateValue({ additionalProperties: true }, options)).toEqual({});
+    expect(generateValue({ additionalProperties: false }, options)).toEqual({});
+  });
+
   it("generates a tuple that fits the count bound from prefixItems", () => {
     const schema = {
       type: "array",
@@ -332,6 +366,37 @@ describe("deterministic generation", () => {
     expect(() => generateValue(false, options)).toThrow(
       GenerationUnsupportedError
     );
+  });
+
+  it("accepts a format value that satisfies a strict vendor pattern", () => {
+    // The Steel v1 contract narrows uuid and date-time with full regexes
+    // that no bounded pattern producer covers; the format shape must be
+    // accepted when it satisfies the pattern.
+    const uuidPattern =
+      "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$";
+    const dateTimePattern =
+      "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$";
+    expect(
+      generateValue(
+        { type: "string", format: "uuid", pattern: uuidPattern },
+        options
+      )
+    ).toBe("00000000-0000-4000-8000-000000000001");
+    expect(
+      generateValue(
+        { type: "string", format: "date-time", pattern: dateTimePattern },
+        options
+      )
+    ).toBe("2000-01-01T00:00:00.000Z");
+  });
+
+  it("rejects a format value the pattern refuses", () => {
+    expect(() =>
+      generateValue(
+        { type: "string", format: "uuid", pattern: "^[A-Z]+$" },
+        options
+      )
+    ).toThrow(GenerationUnsupportedError);
   });
 
   it("namespaces seeds so unrelated paths differ", () => {

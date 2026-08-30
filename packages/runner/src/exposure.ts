@@ -196,14 +196,17 @@ export interface RawHttpExposureOptions {
 /**
  * Render the declared synthetic authentication instructions for one
  * contract. Instructions name schemes, wire names, and environment
- * names only; credential values never appear.
+ * names only; credential values never appear. A pack-declared
+ * participant name, when one exists, replaces the generated name.
  */
 export function syntheticCredentialInstructions(
-  contract: ContractIR
+  contract: ContractIR,
+  credentialEnvironments?: ReadonlyMap<string, string>
 ): readonly string[] {
   const instructions: string[] = [];
   for (const { alias, scheme } of declaredSchemes(contract)) {
-    const name = credentialEnvironmentName(alias);
+    const name =
+      credentialEnvironments?.get(alias) ?? credentialEnvironmentName(alias);
     const wireName = scheme.wire_name ?? alias;
     if (scheme.type === "http" && scheme.scheme === "basic") {
       instructions.push(
@@ -966,8 +969,15 @@ async function startRawHttpExposure(
           });
   }
 
-  const names = credentialEnvironmentNames(request.contract);
-  const instructions = syntheticCredentialInstructions(request.contract);
+  const credentialEnvironments = request.credentialEnvironments;
+  const names = [
+    ...credentialEnvironmentNames(request.contract),
+    ...(credentialEnvironments?.values() ?? [])
+  ].filter((name, index, all) => all.indexOf(name) === index);
+  const instructions = syntheticCredentialInstructions(
+    request.contract,
+    credentialEnvironments
+  );
   const indexEnabled = candidates.some(
     (candidate) => candidate.enabled && candidate.role === "index"
   );
