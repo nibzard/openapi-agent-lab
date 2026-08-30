@@ -214,6 +214,30 @@ operation usage, and Wilson intervals for binary rates. It does not pool
 incompatible batches, claim significance, or select a winner. Registered
 inferential comparisons require [a study](research-methods.md).
 
+## Friction analysis
+
+`oal friction` analyzes one run or batch for the friction the participant
+experienced. It runs deterministic detectors over the recorded trace: route
+mismatches, request schema rejections with their per-field pointers, media
+type rejections, mock framework errors, escalation, identical retries,
+abandonment, quota refusals, and reuse of mock-generated handles:
+
+```sh
+oal friction .oal/runs/<batch-id>
+oal friction .oal/runs/<batch-id> --format json --out friction.json
+```
+
+Every incident names its class (`spec_friction`, `mock_fidelity`, `harness`,
+`unknown`), its origin, and the evidence rows that prove it. The worklist
+names the sidecar action that removes each incident: author a fixture, widen
+an enum, declare a media type, normalize a route, or add a behavior backend.
+Quota refusals are harness-origin and never reach the worklist.
+
+The analysis is a measurement, not a verdict: the command exits `0`
+whatever it finds. Only `--format html` and `--format markdown` are
+unsupported projections. Run it again after editing the sidecar to prove
+the repair: the same trials minus the repaired friction.
+
 ## Adapters
 
 An adapter translates one normalized run context into one agent process. The

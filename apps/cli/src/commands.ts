@@ -9,6 +9,7 @@ import {
   evalValidateCommand
 } from "./handlers/eval.ts";
 import { doctorCommand } from "./handlers/doctor.ts";
+import { frictionCommand } from "./handlers/friction.ts";
 import { evaluateCommand } from "./handlers/evaluate.ts";
 import { inspectCommand } from "./handlers/inspect.ts";
 import { helpCommand, versionCommand } from "./handlers/misc.ts";
@@ -259,6 +260,15 @@ export const COMMANDS: readonly CommandSpec[] = [
     ],
     options: [],
     handler: compareCommand
+  },
+  {
+    name: "friction",
+    summary: "Analyze recorded trials for deterministic API friction.",
+    arguments: [
+      { name: "run-or-batch", description: "Run or batch directory." }
+    ],
+    options: [],
+    handler: frictionCommand
   },
   {
     name: "replay",

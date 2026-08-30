@@ -599,7 +599,7 @@ function collectEventIncident(
       summary: clamp(
         first === null
           ? `Widen the request schema for ${attempt.key} or document the accepted values where the participant looks for them.`
-          : `Widen the schema at ${first}, or document the accepted values where the participant looks for them.`
+          : `Widen the request schema for ${attempt.key} (first violation: ${first}), or document the accepted values where the participant looks for them.`
       ),
       hint: null
     });
