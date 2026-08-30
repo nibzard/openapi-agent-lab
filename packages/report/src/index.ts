@@ -139,6 +139,32 @@ export {
   type RegradeStore
 } from "./regrade.ts";
 export {
+  FRICTION_MAX_APPROXIMATIONS,
+  FRICTION_MAX_EVIDENCE_ROWS,
+  FRICTION_MAX_FRAMEWORK_CODES,
+  FRICTION_MAX_SHAPE_DESCRIPTORS,
+  FRICTION_REPORT_KIND,
+  FRICTION_SCHEMA_VERSION,
+  buildFrictionReport,
+  type FrictionBuildInput,
+  type FrictionClass,
+  type FrictionCounts,
+  type FrictionEvidenceRow,
+  type FrictionFixtureHint,
+  type FrictionFrameworkCodeRow,
+  type FrictionIncident,
+  type FrictionIncidentKind,
+  type FrictionOperationRow,
+  type FrictionOrigin,
+  type FrictionReport,
+  type FrictionScope,
+  type FrictionScopeLevel,
+  type FrictionTrialInput,
+  type FrictionTrialRow,
+  type FrictionWorklistAction,
+  type FrictionWorklistItem
+} from "./friction.ts";
+export {
   DOCTOR_CAPABILITIES,
   DOCTOR_PROBE_LIMITS,
   DOCTOR_REPORT_KIND,

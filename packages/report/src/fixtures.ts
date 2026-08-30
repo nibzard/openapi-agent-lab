@@ -160,6 +160,8 @@ export interface TraceOverrides {
   authenticationStatus?: TraceEvent["authentication"]["status"];
   body?: TraceBody | undefined;
   support?: TraceOperation["support"];
+  backend?: TraceEvent["backend"];
+  durationMs?: number;
 }
 
 const JSON_BODY: TraceBody = {
@@ -222,7 +224,7 @@ export function traceEvent(overrides: TraceOverrides = {}): TraceEvent {
       request: { status: "valid", violations: [] },
       response: { status: "valid", violations: [] }
     },
-    backend: null,
+    backend: overrides.backend ?? null,
     response:
       overrides.status === null || overrides.status === undefined
         ? null
@@ -237,7 +239,7 @@ export function traceEvent(overrides: TraceOverrides = {}): TraceEvent {
     idempotency: { status: "not_requested", record_ref: null },
     replay: { classification: "full", reason_code: null },
     error: overrides.error ?? null,
-    duration_ms: 12,
+    duration_ms: overrides.durationMs ?? 12,
     resource_usage: null,
     extensions: {}
   };
