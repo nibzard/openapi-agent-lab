@@ -1,0 +1,24 @@
+# Fix-mock rubric for the Slack pack.
+#
+# The smallest legal rubric: the diagnostic task is scored only on the
+# structured report. Whether the authored fixtures actually repair the
+# mock is checked operator-side by re-running the probe against a
+# server with those fixtures wired in, not by this rubric.
+rubric_version: 1
+id: slack-fix-mock
+description: >-
+  The participant probed the mock and reported the response-side
+  failures in the structured shape.
+scoring:
+  method: weighted_binary
+  pass_threshold: 1
+checks:
+  - id: structured-report
+    kind: json_schema
+    value: report
+    schema: schemas/report.schema.json
+    weight: 1
+    required: true
+    evidence_class: participant_observable
+    description: The final report matches the pack result schema.
+signals: []

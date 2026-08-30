@@ -1,0 +1,108 @@
+apiVersion: agentlab.dev/v1
+kind: Pack
+
+metadata:
+  id: slack
+  name: slack
+  version: 0.1.0
+  description: >-
+    Contract-mode pack built from the Slack Web API snapshot. Ships one
+    diagnostic eval in which an operator agent probes every operation
+    and authors response fixtures for the failures it finds.
+
+requires:
+  agentlab: ">=0.1.0 <0.2.0"
+  backend_api: 1
+  rubric_api: 1
+
+contract:
+  entrypoint: contract/openapi.json
+  response_fixtures: []
+
+server:
+  host: 127.0.0.1
+  port: 0
+  request_body_limit_bytes: 5242880
+  request_timeout_ms: 30000
+  response_validation: error
+  request_validation: error
+  concurrency: serial
+
+behavior:
+  mode: contract
+  completeness: exact
+  fallback: none
+
+# The request pipeline verifies a declared security alternative on
+# every request (SPEC section 31, step 6), so the pack admits the
+# synthetic bearer the runner mints for the oauth2 scheme. The probe
+# sends it as the Authorization header.
+security:
+  enforce: false
+  credentials: []
+  base_url_environment: OAL_BASE_URL
+
+redaction:
+  header_names:
+    - authorization
+  key_patterns:
+    - "(?i)api.?key"
+    - "(?i)token"
+    - "(?i)secret"
+  capture_binary_blobs: false
+  max_text_capture_bytes: 65536
+
+participant:
+  environment:
+    inherit: none
+    allow:
+      - PATH
+      - HOME
+      - TMPDIR
+      - OAL_BASE_URL
+      - OAL_AUTH_BEARER
+
+prompt_sets:
+  - id: diagnostic
+    purpose_disclosure: diagnostic
+    instructions:
+      source: prompts/diagnostic/instructions.md
+      engine: mustache-strict
+      delivery: file
+      target: AGENTS.md
+    launch:
+      source: prompts/diagnostic/launch.txt
+      engine: mustache-strict
+
+evals:
+  - id: fix-mock
+    prompt_set: diagnostic
+    task:
+      source: tasks/fix-mock/task.md
+      engine: literal
+      target: TASK.md
+    participant_files:
+      - source: participants/probe.mjs
+        target: probe.mjs
+      - source: schemas/report.schema.json
+        target: report.schema.json
+    operation_scope:
+      mode: all
+    result:
+      source: adapter_final
+      schema: schemas/report.schema.json
+      required: true
+    rubric: evals/fix-mock/rubric.yaml
+    scenario: baseline
+
+scenarios:
+  - id: baseline
+
+extensions:
+  drift:
+    note: >-
+      contract/openapi.json is the apis.guru slack.com 1.7.0 snapshot
+      with every xox*-shaped example token replaced by a short
+      placeholder, so the repository secret scanner stays clean. The
+      substitution touches example values only; schemas, patterns, and
+      routes are byte-identical to the snapshot.

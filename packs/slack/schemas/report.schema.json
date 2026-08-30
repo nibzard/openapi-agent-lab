@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/packs/slack/schemas/report.schema.json",
+  "title": "Slack fix-mock report",
+  "description": "Structured answer for the fix-mock diagnostic task.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "probe_runs",
+    "failures_found",
+    "fixtures_authored",
+    "files_written"
+  ],
+  "properties": {
+    "probe_runs": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "How many times the participant ran probe.mjs."
+    },
+    "failures_found": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["operation"],
+        "properties": {
+          "operation": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Operation key, for example path:GET /team.info."
+          },
+          "status": {
+            "type": "integer",
+            "description": "Status the probe recorded for the operation."
+          },
+          "detail": {
+            "type": "string",
+            "description": "What the failure was, in the participant's words."
+          }
+        }
+      }
+    },
+    "fixtures_authored": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "How many fixture bodies the participant authored."
+    },
+    "files_written": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Every file the participant created under authored/."
+    }
+  }
+}
