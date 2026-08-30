@@ -43,3 +43,6 @@ results/
 
 # Local agent session state
 .claude/
+
+# Local run evidence and control files
+.oal/

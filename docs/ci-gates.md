@@ -130,12 +130,13 @@ Reference numbers from one local run on Node 24:
 | `examples/steel-v1.json` | 41 | 269750 | 14.6 ms | 515 ms |
 | `examples/e2b.yaml` | Skipped | 127133 | Not compiled | Not compiled |
 
-`examples/e2b.yaml` does not compile today. The bounded YAML subset
-rejects a multi-line plain scalar with `OAL-YAML-INVALID` at line 323.
-The probe reports the document as skipped, because a parse diagnostic is
-not a performance regression. Fixing the parser is tracked with
-`@oal/openapi`; until then the probe carries one large document instead
-of two.
+`examples/e2b.yaml` does not compile today. The parser folds its
+multi-line plain scalars, and the compiler then rejects the document
+with `OAL-OAS-ROUTE-AMBIGUOUS`: `/templates/aliases/{alias}` and
+`/templates/{templateID}/tags` can match the same request path. The
+probe reports the document as skipped, because a compile diagnostic is
+not a performance regression. The vendor snapshot keeps the defect, so
+the probe carries one large document instead of two.
 
 The remaining budgets, request latency, server readiness, and limit
 termination, have no probe yet. Pending, owner: `@oal/gateway`.

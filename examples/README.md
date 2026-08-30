@@ -1,6 +1,6 @@
 # Example OpenAPI documents
 
-Example contracts for a quick start with the lab. Point `oal serve` at any file in this directory:
+Example contracts for a quick start with the lab. Point `oal serve` at the two documents that compile, `quickstart.json` and `steel-v1.json`:
 
 ```sh
 oal inspect examples/quickstart.json
@@ -19,7 +19,7 @@ Each file was picked for a reason. Together the set covers format, size, OpenAPI
 
 - **`quickstart.json`** is written for this repository. It is small and clean. A user can start the lab with it before writing any contract. It is also the easy-to-read input for compiler tests.
 - **`steel-v1.json`** is a production contract of moderate size. It supplies real operation names, real error shapes, and the OpenAPI 3.0.x format in JSON.
-- **`e2b.yaml`** is a second production contract, in YAML. It supplies API-key and bearer schemes, more operations, and known defects.
+- **`e2b.yaml`** is a second production contract, in YAML. It supplies API-key and bearer schemes, more operations, and known defects. Two of its templated routes can match the same request path, so it does not compile: `oal inspect` reports `OAL-OAS-ROUTE-AMBIGUOUS` and serving is unavailable.
 
 Selection rules for any file added to this directory:
 
