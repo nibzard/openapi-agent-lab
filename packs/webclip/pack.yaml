@@ -16,10 +16,70 @@ requires:
 
 contract:
   entrypoint: contract/openapi.json
-  # Empty on purpose. The bare contract is the "before" state of the
-  # friction measurement: the mock answers every operation from declared
-  # examples and schema generation alone, with no authored fixtures.
-  response_fixtures: []
+  # Authored after the webclip-before batch (2026-08-30): the stateless
+  # mock answered every create with the same generated markdown clip and
+  # the list never showed the second clip, so two of three participants
+  # re-created the image clip and failed the exactly-two-clips check.
+  # These fixtures make the served answers consistent with the errand.
+  # Static bodies still cannot echo the request; that repair needs the
+  # behavior backend. The content endpoint keeps no fixture: a fixture
+  # overrides Accept negotiation in the gateway, so wiring image/svg+xml
+  # would serve the picture to a text/markdown request.
+  response_fixtures:
+    - id: clip-created
+      operation: "path:POST /v1/clips"
+      status: 201
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/clip-created.json
+    - id: clips-page
+      operation: "path:GET /v1/clips"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/clips-page.json
+    - id: clip-read
+      operation: "path:GET /v1/clips/{clipId}"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/clip-read.json
+    - id: render-result
+      operation: "path:POST /v1/clips/{clipId}/render"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/render-result.json
+    - id: extract-result
+      operation: "path:POST /v1/clips/{clipId}/extract"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/extract-result.json
+    - id: account-read
+      operation: "path:GET /v1/account"
+      status: 200
+      media_type: application/json
+      headers: {}
+      default: true
+      body:
+        kind: json_file
+        source: fixtures/account.json
 
 server:
   host: 127.0.0.1

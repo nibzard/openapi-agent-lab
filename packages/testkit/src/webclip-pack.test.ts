@@ -49,9 +49,24 @@ describe("the webclip pack", () => {
     expect(behavior.mode).toBe("contract");
     expect(pack.loaded.manifest.evals).toHaveLength(1);
     expect(pack.loaded.manifest.scenarios).toHaveLength(1);
-    // The before state: no fixtures, so every response is generated.
+    // The after state: six authored fixtures cover every operation the
+    // errand touches except the content endpoint, which keeps Accept
+    // negotiation, and the bodyless delete.
     const contract = pack.loaded.manifest.contract as JsonObject;
-    expect(contract.response_fixtures).toEqual([]);
+    const fixtures = contract.response_fixtures as Json[];
+    expect(fixtures).toHaveLength(6);
+    expect(
+      pack.loaded.references
+        .filter((reference) => reference.role === "fixture_body")
+        .map((reference) => reference.path)
+    ).toEqual([
+      "fixtures/clip-created.json",
+      "fixtures/clips-page.json",
+      "fixtures/clip-read.json",
+      "fixtures/render-result.json",
+      "fixtures/extract-result.json",
+      "fixtures/account.json"
+    ]);
   });
 
   it("compiles the eight greenfield operations with none unsupported", async () => {
