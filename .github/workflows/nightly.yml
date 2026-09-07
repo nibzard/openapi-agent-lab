@@ -22,11 +22,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Enable corepack before setup-node: the `cache: pnpm` input needs
+      # the pnpm binary on PATH when setup-node runs.
+      - run: corepack enable
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
-      - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec vitest run
 
@@ -36,11 +38,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Enable corepack before setup-node: the `cache: pnpm` input needs
+      # the pnpm binary on PATH when setup-node runs.
+      - run: corepack enable
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
-      - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - run: node scripts/schedule-balance.mjs
 
@@ -50,10 +54,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Enable corepack before setup-node: the `cache: pnpm` input needs
+      # the pnpm binary on PATH when setup-node runs.
+      - run: corepack enable
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
-      - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - run: node scripts/perf-probe.mjs
