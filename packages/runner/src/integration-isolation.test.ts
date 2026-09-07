@@ -348,6 +348,15 @@ describe("runner integration: isolation of parallel trials", () => {
       // refused, because nothing listens there.
       const closedPort = await reserveClosedPort();
 
+      // Host baseline for the metadata address. Cloud runners have a
+      // live metadata service there; local machines do not. Advisory
+      // isolation adds no capability, so the participant may observe
+      // only what the host already observes.
+      const hostMetadataReachable = await probeTcpConnected(
+        "169.254.169.254",
+        80
+      );
+
       // A host sentinel outside every trial tree. The probe walks up from
       // its working directory to find it, so the path never travels
       // through the participant environment.
@@ -403,8 +412,13 @@ describe("runner integration: isolation of parallel trials", () => {
 
           // The unrelated loopback port refused the connection.
           expect(attempts["loopback"]?.startsWith("refused:")).toBe(true);
-          // The metadata address failed or timed out; it never connected.
-          expect(attempts["metadata"]?.startsWith("connected:")).toBe(false);
+          // The metadata address never connects on a host that cannot
+          // reach it. On a host with a live metadata service the result
+          // carries no signal: advisory isolation grants no network
+          // capability beyond the host baseline.
+          if (!hostMetadataReachable) {
+            expect(attempts["metadata"]?.startsWith("connected:")).toBe(false);
+          }
 
           // The spawn environment carries no host path: no sentinel, no
           // sibling evidence tree, no metadata address.
@@ -489,6 +503,34 @@ async function reserveClosedPort(): Promise<number> {
     });
   });
   return address.port;
+}
+
+/**
+ * Dial `host:port` once with a bounded timeout. Report only whether the
+ * socket connected; refusal and timeout both count as unreachable.
+ */
+async function probeTcpConnected(host: string, port: number): Promise<boolean> {
+  return await new Promise((resolve) => {
+    const socket = net.connect({ host, port });
+    let settled = false;
+    const finish = (connected: boolean) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      socket.destroy();
+      resolve(connected);
+    };
+    socket.setTimeout(1200, () => {
+      finish(false);
+    });
+    socket.on("connect", () => {
+      finish(true);
+    });
+    socket.on("error", () => {
+      finish(false);
+    });
+  });
 }
 
 /**

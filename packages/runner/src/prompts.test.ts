@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -327,8 +327,11 @@ suite("materializePrompts", () => {
     const schema = materialized.files[2];
     expect(schema?.text).toBeNull();
     expect(schema?.engine).toBeNull();
+    // The pack loader canonicalizes asset paths through realpath, so the
+    // expected value must resolve the macOS temp symlink (/var ->
+    // /private/var) the same way.
     expect(schema?.sourcePath).toBe(
-      path.join(pack.root, "schemas/result.schema.json")
+      await realpath(path.join(pack.root, "schemas/result.schema.json"))
     );
     expect(schema?.bytes).toBe(
       new TextEncoder().encode(
