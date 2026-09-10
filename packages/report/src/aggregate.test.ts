@@ -11,6 +11,8 @@ import {
   resolveSlots,
   taskOutcomeFor,
   usageDistribution,
+  worstCaseSlotTally,
+  type SlotResolution,
   type TrialInput
 } from "./aggregate.ts";
 import {
@@ -82,6 +84,101 @@ describe("report stages", () => {
       "evaluated",
       "finalized"
     ]);
+  });
+});
+
+describe("worst-case slot tally (section 27.2)", () => {
+  const slot = (
+    overrides: Partial<SlotResolution> & { readonly slot_id: string }
+  ): SlotResolution => ({
+    attempt_run_ids: [overrides.slot_id],
+    resolved: true,
+    source: "primary",
+    supplying_run_id: overrides.slot_id,
+    task_outcome: "passed",
+    worst_case_failure: false,
+    ...overrides
+  });
+  const passedOf = (input: SlotResolution): boolean =>
+    input.task_outcome === "passed";
+
+  it("gives a post-control censored slot exactly one failure", () => {
+    // asg-1 passes cleanly; asg-2 resolves through a passing
+    // replacement over a post-control censored original.
+    const tally = worstCaseSlotTally(
+      [
+        slot({ slot_id: "asg-1" }),
+        slot({
+          slot_id: "asg-2",
+          source: "replacement",
+          worst_case_failure: true
+        })
+      ],
+      passedOf
+    );
+    expect(tally).toEqual({
+      successes: 1,
+      failures: 1,
+      censored_failures: 1,
+      unresolved: 0,
+      worst_case_rate: 1 / 2
+    });
+  });
+
+  it("invents no failure for a pre-control-only chain", () => {
+    const tally = worstCaseSlotTally(
+      [
+        slot({ slot_id: "asg-1" }),
+        slot({
+          slot_id: "asg-2",
+          resolved: false,
+          source: null,
+          supplying_run_id: null,
+          task_outcome: null
+        })
+      ],
+      passedOf
+    );
+    expect(tally).toEqual({
+      successes: 1,
+      failures: 0,
+      censored_failures: 0,
+      unresolved: 1,
+      worst_case_rate: 1
+    });
+  });
+
+  it("censors a failing slot once, not twice", () => {
+    const tally = worstCaseSlotTally(
+      [
+        slot({
+          slot_id: "asg-1",
+          task_outcome: "failed",
+          worst_case_failure: true
+        })
+      ],
+      passedOf
+    );
+    expect(tally.failures).toBe(1);
+    expect(tally.censored_failures).toBe(1);
+    expect(tally.worst_case_rate).toBe(0);
+  });
+
+  it("returns a null rate when no slot resolves", () => {
+    const tally = worstCaseSlotTally(
+      [
+        slot({
+          slot_id: "asg-1",
+          resolved: false,
+          source: null,
+          supplying_run_id: null,
+          task_outcome: null
+        })
+      ],
+      passedOf
+    );
+    expect(tally.worst_case_rate).toBeNull();
+    expect(tally.unresolved).toBe(1);
   });
 });
 
@@ -213,17 +310,26 @@ describe("aggregation on a hand-built evidence stream", () => {
     expect(report.surfaces.participant_reports.valid).toBe(2);
   });
 
-  it("computes the worst-case sensitivity from censor bounds", () => {
+  it("computes the worst-case sensitivity from the slot tally", () => {
     expect(report.estimates).toHaveLength(1);
     const estimate = report.estimates[0];
     expect(estimate?.contrast_id).toBe("task_pass");
     // Two resolved slots, both passed, so the main rate is 1.
     expect(estimate?.estimate).toBe(1);
-    // Worst case: the censored original counts as one failure, so
-    // 2 / (2 + 0 + 1) = 2/3.
+    // Hand-derived slot table for the worst case (section 27.2):
+    //   asg_...1 run-1   resolved, passed, no censor     -> 1 success
+    //   asg_...2 run-2b  resolved, passed, but the chain
+    //                    holds the post-control censor of run-2
+    //                                                    -> 1 failure
+    //   asg_...3 run-3   unresolved, pre-control only    -> tracked,
+    //                                                      no entry
+    // One outcome per slot: 1 / (1 + 1) = 1/2. The old bound
+    // 2 / (2 + 0 + 1) = 2/3 counted the passing replacement as a
+    // success and the same slot's censor as an extra denominator
+    // entry, which double-counted one slot.
     const sensitivity = estimate?.sensitivity[0];
     expect(sensitivity?.kind).toBe("worst_case_sensitivity");
-    expect(sensitivity?.estimate).toBeCloseTo(2 / 3, 12);
+    expect(sensitivity?.estimate).toBeCloseTo(1 / 2, 12);
   });
 
   it("aggregates API behavior without pooling smoke traffic", () => {

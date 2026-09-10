@@ -63,6 +63,7 @@ export {
   resolveSlots,
   taskOutcomeFor,
   usageDistribution,
+  worstCaseSlotTally,
   type AssignmentTotals,
   type Denominators,
   type ProvenanceInput,
@@ -72,7 +73,8 @@ export {
   type TrialFinalStateInput,
   type TrialInput,
   type TrialRow,
-  type TrialUsageInput
+  type TrialUsageInput,
+  type WorstCaseSlotTally
 } from "./aggregate.ts";
 export {
   CHAIN_OF_THOUGHT_KEY_FRAGMENTS,

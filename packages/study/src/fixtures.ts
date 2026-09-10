@@ -373,6 +373,9 @@ export function twoCellPhasePlanDoc(options?: {
   readonly activation_timing?:
     | "immediate_after_terminal"
     | "after_primary_schedule";
+  /** Adds a corrupt-evidence activation rule to the frozen policy. */
+  readonly activateOnCorruptEvidence?: boolean;
+  readonly direction?: "first_minus_second" | "second_minus_first";
 }): JsonObject {
   return {
     apiVersion: "agentlab.dev/v1",
@@ -392,7 +395,9 @@ export function twoCellPhasePlanDoc(options?: {
       slots_per_cell: 1,
       activation_timing:
         options?.activation_timing ?? "immediate_after_terminal",
-      activate_on: [{ disposition: "infrastructure_failed_pre_control" }],
+      activate_on: options?.activateOnCorruptEvidence
+        ? [{ evidence_integrity: ["corrupt"] }]
+        : [{ disposition: "infrastructure_failed_pre_control" }],
       maximum_activated_per_cell: 1
     },
     runtime_lock: { required_fields: ["agent.adapter", "agent.model"] },
@@ -417,7 +422,7 @@ export function twoCellPhasePlanDoc(options?: {
           metric: "clean_completion",
           factor: "api_shape",
           levels: ["shape_a", "shape_b"],
-          direction: "first_minus_second"
+          direction: options?.direction ?? "first_minus_second"
         }
       ],
       primary_estimand: {
@@ -467,6 +472,8 @@ export function twoCellStudy(options?: {
   readonly activation_timing?:
     | "immediate_after_terminal"
     | "after_primary_schedule";
+  readonly activateOnCorruptEvidence?: boolean;
+  readonly direction?: "first_minus_second" | "second_minus_first";
 }): TwoCellStudy {
   const protocolResult = loadProtocol(twoCellProtocolDoc(), {
     schema: loadSchema("study-protocol.v1.schema.json")

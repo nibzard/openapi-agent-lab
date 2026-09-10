@@ -38,9 +38,11 @@ import {
 import {
   buildTrialFacts,
   resolveSlots,
+  worstCaseSlotTally,
   type SlotResolution,
   type TrialFacts,
-  type TrialInput
+  type TrialInput,
+  type WorstCaseSlotTally
 } from "@oal/report";
 import {
   blockCompletion,
@@ -59,11 +61,7 @@ import {
 import type { ProtocolMetric, PhaseContrast, PhasePlan } from "@oal/study-ir";
 
 import { poolCompatibleCells } from "./compatibility.ts";
-import {
-  checkAnalysisSupport,
-  SupportCode,
-  SUPPORTED_POPULATION
-} from "./support.ts";
+import { checkAnalysisSupport, SUPPORTED_POPULATION } from "./support.ts";
 
 /** Schema version of the emitted analysis document. */
 export const ANALYSIS_SCHEMA_VERSION = 1;
@@ -87,7 +85,8 @@ export const AnalysisCode = {
     "OAL-STUDY-ANALYSIS-CONTRAST-METRIC-NOT-ESTIMABLE",
   ContrastDenominatorEmpty: "OAL-STUDY-ANALYSIS-CONTRAST-DENOMINATOR-EMPTY",
   PopulationMissing: "OAL-STUDY-ANALYSIS-POPULATION-MISSING",
-  MethodUnsupported: "OAL-STUDY-ANALYSIS-METHOD-UNSUPPORTED"
+  MethodUnsupported: "OAL-STUDY-ANALYSIS-METHOD-UNSUPPORTED",
+  SensitivityWithheld: "OAL-STUDY-ANALYSIS-SENSITIVITY-WITHHELD"
 } as const;
 
 /** Frozen evidence of one collected cell. */
@@ -219,7 +218,8 @@ interface CellCounts {
   readonly numerator: number;
   readonly denominator: number;
   readonly unresolved: number;
-  readonly censored: number;
+  /** Shared one-outcome-per-slot worst-case tally of this metric. */
+  readonly worst_case: WorstCaseSlotTally;
 }
 
 function report(
@@ -314,7 +314,6 @@ function cellSlots(
     let numerator = 0;
     let denominator = 0;
     let unresolved = 0;
-    let censored = 0;
     for (const outcome of outcomes) {
       if (!outcome.resolved) {
         unresolved += 1;
@@ -324,19 +323,41 @@ function cellSlots(
       if (outcome.metric_values[metric.id] === true) {
         numerator += 1;
       }
-      if (outcome.worst_case_failure) {
-        censored += 1;
-      }
     }
+    // The worst-case tally comes from the same resolved slot table, so
+    // the report rule and the study rule cannot drift apart: one
+    // failure per post-control censored slot, whatever its eligible
+    // outcome says.
+    const worstCase = worstCaseSlotTally(resolutions, (slot) =>
+      slot.resolved
+        ? metricValueOf(metric, byRun.get(slot.supplying_run_id ?? ""))
+        : false
+    );
     byMetric.set(metric.id, {
       cell_id: cell.cell_id,
       numerator,
       denominator,
       unresolved,
-      censored
+      worst_case: worstCase
     });
   }
   return { outcomes, byMetric };
+}
+
+/** True when the collected cell sits on one contrast side. */
+function cellMatchesSide(
+  factorLevels: ReadonlyMap<string, Readonly<Record<string, string>>>,
+  contrast: PhaseContrast,
+  cellId: string,
+  levelId: string
+): boolean {
+  const levels = factorLevels.get(cellId);
+  if (levels === undefined || levels[contrast.factor] !== levelId) {
+    return false;
+  }
+  return Object.entries(contrast.within ?? {}).every(
+    ([factor, level]) => levels[factor] === level
+  );
 }
 
 /** Blocks one cell's primaries live in. */
@@ -567,6 +588,27 @@ export function analyzeStudyRun(
     input.phasePlan.analysis.comparison_families.find((family) =>
       family.contrasts.includes(contrastId)
     ) ?? null;
+  /**
+   * Both sides of one contrast over the pooled cells. A side resolves
+   * only when exactly one collected cell matches it; the support check
+   * above already rejected the several-cells case, so a null side can
+   * only mean the level cell is missing from the pooled inventory.
+   */
+  const sideCountsOf = (
+    contrast: PhaseContrast,
+    metricId: string
+  ): readonly [CellCounts | null, CellCounts | null] => {
+    const ofSide = (levelId: string): CellCounts | null => {
+      const matching = collectedCells
+        .map((cell) => cell.cell_id)
+        .filter((id) => cellMatchesSide(factorLevels, contrast, id, levelId));
+      if (matching.length !== 1) {
+        return null;
+      }
+      return countsByCell.get(matching[0] ?? "")?.get(metricId) ?? null;
+    };
+    return [ofSide(contrast.levels[0]), ofSide(contrast.levels[1])];
+  };
   // Registered population of one contrast: its own declaration, the
   // primary estimand's declaration for the referenced contrast, or the
   // analysis population the counts always compose. After the support
@@ -608,41 +650,11 @@ export function analyzeStudyRun(
       continue;
     }
 
-    const matchesSide = (
-      cellId: string,
-      levelId: string,
-      within: Readonly<Record<string, string>>
-    ): boolean => {
-      const levels = factorLevels.get(cellId);
-      if (levels === undefined || levels[contrast.factor] !== levelId) {
-        return false;
-      }
-      return Object.entries(within).every(
-        ([factor, level]) => levels[factor] === level
-      );
-    };
-    // A side resolves only when exactly one collected cell matches it.
-    // The first matching cell is never chosen silently; the support
-    // check above already rejects ambiguous sides, so a second match
-    // here can only mean the pooled inventory drifted.
-    const sides = [contrast.levels[0], contrast.levels[1]].map((levelId) => {
-      const matching = collectedCells
-        .map((cell) => cell.cell_id)
-        .filter((id) => matchesSide(id, levelId, contrast.within ?? {}));
-      if (matching.length > 1) {
-        report(
-          diagnostics,
-          SupportCode.ContrastAmbiguous,
-          `Contrast ${JSON.stringify(contrast.id)} side ${JSON.stringify(levelId)} matches ${matching.length} pooled cells; no marginal analysis exists to pool them.`
-        );
-        return null;
-      }
-      return matching.length === 0
-        ? null
-        : (countsByCell.get(matching[0] ?? "")?.get(metric.id) ?? null);
-    });
-    const first = sides[0] ?? null;
-    const second = sides[1] ?? null;
+    const matchesSide = (cellId: string, levelId: string): boolean =>
+      cellMatchesSide(factorLevels, contrast, cellId, levelId);
+    const sides = sideCountsOf(contrast, metric.id);
+    const first = sides[0];
+    const second = sides[1];
     if (first === null || second === null) {
       warnings.push(
         `${AnalysisCode.ContrastCellsMissing}: contrast ${contrast.id} lacks one level cell of factor ${contrast.factor}.`
@@ -654,8 +666,8 @@ export function analyzeStudyRun(
       .map((cell) => cell.cell_id)
       .filter(
         (id) =>
-          matchesSide(id, contrast.levels[0], contrast.within ?? {}) ||
-          matchesSide(id, contrast.levels[1], contrast.within ?? {})
+          matchesSide(id, contrast.levels[0]) ||
+          matchesSide(id, contrast.levels[1])
       );
     const drawnBlocks = new Set<number>();
     for (const cellId of contrastCells) {
@@ -834,35 +846,62 @@ export function analyzeStudyRun(
       };
     });
 
+  // Worst-case sensitivity from slot counts, never from the main-estimate
+  // drafts: a refused main estimate (incomplete block, missing level cell,
+  // empty denominator) cannot erase an estimable sensitivity result. Each
+  // side uses the shared one-outcome-per-slot tally, so a post-control
+  // censored slot contributes exactly one failure even when its
+  // replacement passed, and unresolved slots join no denominator.
   const sensitivity: {
     id: string;
     estimates: { contrast_id: string; estimate: number }[];
   }[] = [];
   if (
     input.phasePlan.analysis.sensitivity
-      .participant_control_started_censors_as_failure &&
-    drafts.length > 0
+      .participant_control_started_censors_as_failure
   ) {
-    sensitivity.push({
-      id: "worst_case_censor_failure",
-      estimates: drafts.map((draft) => {
-        const firstTotal = draft.first.denominator + draft.first.censored;
-        const secondTotal = draft.second.denominator + draft.second.censored;
-        const firstWorst =
-          (draft.first.numerator + draft.first.censored) /
-          Math.max(firstTotal, 1);
-        const secondWorst =
-          (draft.second.numerator + draft.second.censored) /
-          Math.max(secondTotal, 1);
-        return {
-          contrast_id: draft.contrast.id,
-          estimate:
-            draft.contrast.direction === "first_minus_second"
-              ? firstWorst - secondWorst
-              : secondWorst - firstWorst
-        };
-      })
-    });
+    const worstEstimates: { contrast_id: string; estimate: number }[] = [];
+    for (const contrast of input.phasePlan.analysis.contrasts) {
+      const metric = input.metrics.find(
+        (entry) => entry.id === contrast.metric
+      );
+      if (metric === undefined || slotBinaryMetric(metric) === null) {
+        warnings.push(
+          `${AnalysisCode.SensitivityWithheld}: contrast ${contrast.id} names no binary slot metric, so no worst-case difference exists.`
+        );
+        continue;
+      }
+      const sides = sideCountsOf(contrast, metric.id);
+      const first = sides[0];
+      const second = sides[1];
+      if (first === null || second === null) {
+        warnings.push(
+          `${AnalysisCode.SensitivityWithheld}: contrast ${contrast.id} lacks one pooled level cell of factor ${contrast.factor}, so no worst-case difference exists.`
+        );
+        continue;
+      }
+      const firstWorst = first.worst_case.worst_case_rate;
+      const secondWorst = second.worst_case.worst_case_rate;
+      if (firstWorst === null || secondWorst === null) {
+        warnings.push(
+          `${AnalysisCode.SensitivityWithheld}: contrast ${contrast.id} has no resolved slot on one side, so no worst-case difference exists.`
+        );
+        continue;
+      }
+      worstEstimates.push({
+        contrast_id: contrast.id,
+        estimate:
+          contrast.direction === "first_minus_second"
+            ? firstWorst - secondWorst
+            : secondWorst - firstWorst
+      });
+    }
+    if (worstEstimates.length > 0) {
+      sensitivity.push({
+        id: "worst_case_censor_failure",
+        estimates: worstEstimates
+      });
+    }
   }
 
   if (input.phasePlan.analysis.small_sample_label === "directional") {

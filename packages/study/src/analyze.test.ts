@@ -89,27 +89,38 @@ interface ExecutedStudy {
   readonly launches: readonly TrialLaunch[];
   /** Assignments whose trials failed before participant control. */
   readonly failedAssignments: ReadonlySet<string>;
+  /** Assignments whose trials were censored after participant control. */
+  readonly censoredAssignments: ReadonlySet<string>;
 }
 
 /**
  * Drive the two-cell study through the injected executor. The failure
  * selector names the assignments whose trials fail before participant
  * control with an infrastructural disposition the frozen policy replaces.
+ * The post-control selector names the assignments whose trials fail
+ * after participant control with corrupt evidence.
  */
 async function executedStudy(
   options: {
     readonly activation_timing?:
       | "immediate_after_terminal"
       | "after_primary_schedule";
+    readonly activateOnCorruptEvidence?: boolean;
+    readonly direction?: "first_minus_second" | "second_minus_first";
     readonly fail?: (launch: TrialLaunch) => boolean;
+    readonly postControlCensor?: (launch: TrialLaunch) => boolean;
     readonly cleanCompletion?: (launch: TrialLaunch) => boolean;
   } = {}
 ): Promise<ExecutedStudy> {
-  const study = twoCellStudy(
-    options.activation_timing === undefined
-      ? undefined
-      : { activation_timing: options.activation_timing }
-  );
+  const study = twoCellStudy({
+    ...(options.activation_timing === undefined
+      ? {}
+      : { activation_timing: options.activation_timing }),
+    ...(options.activateOnCorruptEvidence === undefined
+      ? {}
+      : { activateOnCorruptEvidence: options.activateOnCorruptEvidence }),
+    ...(options.direction === undefined ? {} : { direction: options.direction })
+  });
   const planned = planStudyRun({
     study_run_id: TWO_CELL_RUN_ID,
     created_at: TWO_CELL_CREATED_AT,
@@ -141,6 +152,7 @@ async function executedStudy(
     throw new Error("Fixture plan must assemble.");
   }
   const failedAssignments = new Set<string>();
+  const censoredAssignments = new Set<string>();
   const execution = await executeStudyRun(
     plan,
     (launch: TrialLaunch): Promise<TrialOutcome> => {
@@ -150,6 +162,14 @@ async function executedStudy(
           disposition: "infrastructure_failed_pre_control",
           evidence_integrity: "intact",
           censor_class: "pre_control_nonparticipant"
+        });
+      }
+      if (options.postControlCensor?.(launch) === true) {
+        censoredAssignments.add(launch.assignment_id);
+        return outcomeOf({
+          disposition: "infrastructure_failed_post_control",
+          evidence_integrity: "corrupt",
+          censor_class: "instrumentation_censor"
         });
       }
       return outcomeOf({
@@ -164,7 +184,8 @@ async function executedStudy(
     plan,
     ledger: execution.ledger,
     launches: execution.launches,
-    failedAssignments
+    failedAssignments,
+    censoredAssignments
   };
 }
 
@@ -174,6 +195,11 @@ function cellEvidenceOf(
   options: {
     readonly cleanCompletion?: (launch: TrialLaunch) => boolean;
     readonly driftCellKeyOf?: (cellId: string) => string | undefined;
+    /**
+     * Marks extra trials whose evidence the runner lost after
+     * participant control, beyond what the launcher recorded.
+     */
+    readonly postControlCensorOf?: (launch: TrialLaunch) => boolean;
   } = {}
 ): CellEvidence[] {
   return TWO_CELL_CELLS.map((cellId) => ({
@@ -186,6 +212,9 @@ function cellEvidenceOf(
       .filter((launch) => launch.cell_id === cellId)
       .map((launch) => {
         const failed = executed.failedAssignments.has(launch.assignment_id);
+        const censored =
+          executed.censoredAssignments.has(launch.assignment_id) ||
+          options.postControlCensorOf?.(launch) === true;
         return studyTrial({
           runId: launch.run_id,
           assignmentId: launch.assignment_id,
@@ -195,7 +224,10 @@ function cellEvidenceOf(
           controlStarted: !failed,
           disposition: failed
             ? "infrastructure_failed_pre_control"
-            : "completed"
+            : censored
+              ? "infrastructure_failed_post_control"
+              : "completed",
+          ...(censored ? { integrity: "corrupt" as const } : {})
         });
       })
   }));
@@ -344,6 +376,12 @@ describe("study analysis", () => {
         unresolved_slots: 1
       }
     ]);
+    // The refused main estimate does not erase the estimable sensitivity:
+    // shape_a = 1/1 and shape_b = 2/2 from the resolved slots alone.
+    expect(analysis.sensitivity).toHaveLength(1);
+    expect(analysis.sensitivity[0]?.estimates).toEqual([
+      { contrast_id: "shape_a_minus_shape_b", estimate: 0 }
+    ]);
   });
 
   it("excludes a drifted cell from pooling with a diagnostic", async () => {
@@ -365,6 +403,14 @@ describe("study analysis", () => {
     expect(
       analysis.warnings.some((warning) =>
         warning.startsWith(AnalysisCode.ContrastCellsMissing)
+      )
+    ).toBe(true);
+    // The excluded level cell withholds the worst-case difference too,
+    // with the reason recorded in the warnings.
+    expect(analysis.sensitivity).toEqual([]);
+    expect(
+      analysis.warnings.some((warning) =>
+        warning.startsWith(AnalysisCode.SensitivityWithheld)
       )
     ).toBe(true);
     // The excluded cell keeps no denominator entry.
@@ -470,6 +516,177 @@ describe("study analysis", () => {
     expect(analysis.sensitivity[0]?.estimates[0]?.estimate).toBe(0);
     expect(
       analysis.warnings.some((warning) => warning.includes("directional"))
+    ).toBe(true);
+  });
+});
+
+describe("worst-case sensitivity (one outcome per slot)", () => {
+  /** The -0.5 fixture: one censored original, one passing replacement. */
+  async function censoredOriginalStudy(
+    direction?: "first_minus_second" | "second_minus_first"
+  ) {
+    const executed = await executedStudy({
+      activateOnCorruptEvidence: true,
+      ...(direction === undefined ? {} : { direction }),
+      postControlCensor: (launch) =>
+        launch.kind === "primary" &&
+        launch.cell_id === "shape_a" &&
+        launch.repetition_index === 0
+    });
+    // The frozen policy activated one held slot for the corrupt
+    // original, so five trials launched: four primaries plus one
+    // replacement.
+    expect(executed.launches).toHaveLength(5);
+    const replacement = executed.launches.find(
+      (launch) => launch.kind === "held_replacement"
+    );
+    expect(replacement?.replacement_target).not.toBeNull();
+    const result = analyzeStudyRun(
+      analysisInputOf(executed, cellEvidenceOf(executed))
+    );
+    const analysis = result.analysis;
+    if (analysis === null) {
+      throw new Error(
+        `Fixture analysis must build: ${JSON.stringify(result.diagnostics)}`
+      );
+    }
+    return { executed, result, analysis };
+  }
+
+  it("scores a censored original with a passing replacement as -0.5", async () => {
+    const { executed, result, analysis } = await censoredOriginalStudy();
+
+    // Hand-derived slot table. The schedule holds six assignments
+    // (four primaries plus one held reserve per cell); the unused
+    // reserve of shape_b never ran, so it contributes no slot.
+    expect(executed.study.schedule.assignments).toHaveLength(6);
+    expect(result.slots).toHaveLength(4);
+    //   shape_a rep0: original censored post control, replacement
+    //                passed -> resolved, one worst-case failure
+    //   shape_a rep1: resolved, passed, clean chain -> one success
+    //   shape_b rep0: resolved, passed -> one success
+    //   shape_b rep1: resolved, passed -> one success
+    const shapeA = result.slots.filter((slot) => slot.cell_id === "shape_a");
+    expect(shapeA).toHaveLength(2);
+    expect(shapeA.filter((slot) => slot.worst_case_failure)).toHaveLength(1);
+    expect(shapeA.filter((slot) => slot.resolved)).toHaveLength(2);
+    expect(new Set(result.slots.map((slot) => slot.slot_id)).size).toBe(4);
+
+    // Main estimates use the eligible outcome of each resolved slot:
+    // shape_a 2/2, shape_b 2/2, difference 0.
+    expect(analysis.populations).toEqual([
+      { id: "clean_completion", numerator: 4, denominator: 4 }
+    ]);
+    expect(analysis.estimates[0]?.estimate).toBe(0);
+
+    // Worst case, per the shared slot tally:
+    //   shape_a = 1 success / (1 success + 1 forced failure) = 1/2
+    //   shape_b = 2 successes / 2 = 1
+    //   direction first_minus_second: 1/2 - 1 = -0.5.
+    expect(analysis.sensitivity).toHaveLength(1);
+    const entry = analysis.sensitivity[0];
+    expect(entry?.id).toBe("worst_case_censor_failure");
+    expect(entry?.estimates).toEqual([
+      { contrast_id: "shape_a_minus_shape_b", estimate: -0.5 }
+    ]);
+  });
+
+  it("flips the worst-case sign with the contrast direction", async () => {
+    const { analysis } = await censoredOriginalStudy("second_minus_first");
+    expect(analysis.sensitivity[0]?.estimates).toEqual([
+      { contrast_id: "shape_a_minus_shape_b", estimate: 0.5 }
+    ]);
+  });
+
+  it("keeps a censored replacement unresolved without inventing a failure", async () => {
+    const executed = await executedStudy();
+    // shape_a rep0 holds only a post-control censored trial: no
+    // replacement ran, so the slot never resolves.
+    const cells = cellEvidenceOf(executed, {
+      postControlCensorOf: (launch) =>
+        launch.kind === "primary" &&
+        launch.cell_id === "shape_a" &&
+        launch.repetition_index === 0
+    });
+    const result = analyzeStudyRun(analysisInputOf(executed, cells));
+    const analysis = result.analysis;
+    if (analysis === null) {
+      throw new Error("Fixture analysis must build.");
+    }
+    const censored = result.slots.find((slot) => slot.worst_case_failure);
+    expect(censored?.resolved).toBe(false);
+    // The unresolved censored slot joins no worst-case denominator:
+    // shape_a = 1/1, shape_b = 2/2, difference 0. Counting the
+    // unresolved censor as a failure would give 1/2 - 1 = -0.5.
+    expect(analysis.populations).toEqual([
+      {
+        id: "clean_completion",
+        numerator: 3,
+        denominator: 3,
+        unresolved_slots: 1
+      }
+    ]);
+    expect(analysis.sensitivity[0]?.estimates).toEqual([
+      { contrast_id: "shape_a_minus_shape_b", estimate: 0 }
+    ]);
+  });
+
+  it("invents no failure for a chain of pre-control failures only", async () => {
+    const executed = await executedStudy({
+      fail: (launch) =>
+        launch.kind === "primary" &&
+        launch.cell_id === "shape_a" &&
+        launch.repetition_index === 0
+    });
+    // The replacement never reported evidence, so the slot holds only
+    // its pre-control failed original.
+    const cells = cellEvidenceOf(executed).map((cell) => ({
+      ...cell,
+      trials: cell.trials.filter((trial) => trial.replacement_of === null)
+    }));
+    const result = analyzeStudyRun(analysisInputOf(executed, cells));
+    const analysis = result.analysis;
+    if (analysis === null) {
+      throw new Error("Fixture analysis must build.");
+    }
+    const unresolved = result.slots.find((slot) => !slot.resolved);
+    expect(unresolved?.worst_case_failure).toBe(false);
+    expect(analysis.populations).toEqual([
+      {
+        id: "clean_completion",
+        numerator: 3,
+        denominator: 3,
+        unresolved_slots: 1
+      }
+    ]);
+    expect(analysis.sensitivity[0]?.estimates).toEqual([
+      { contrast_id: "shape_a_minus_shape_b", estimate: 0 }
+    ]);
+  });
+
+  it("withholds sensitivity with a reason when a side resolves no slot", async () => {
+    const executed = await executedStudy();
+    const cells = cellEvidenceOf(executed).map((cell) =>
+      cell.cell_id === "shape_b" ? { ...cell, trials: [] } : cell
+    );
+    const result = analyzeStudyRun(analysisInputOf(executed, cells));
+    const analysis = result.analysis;
+    if (analysis === null) {
+      throw new Error("Fixture analysis must build.");
+    }
+    expect(analysis.sensitivity).toEqual([]);
+    expect(
+      analysis.warnings.some((warning) =>
+        warning.startsWith(AnalysisCode.SensitivityWithheld)
+      )
+    ).toBe(true);
+    expect(analysis.estimates).toEqual([]);
+    // The empty side also refuses the main estimate: its promised
+    // primaries never resolved, so the block stays incomplete.
+    expect(
+      analysis.warnings.some((warning) =>
+        warning.startsWith(AnalysisCode.BlockIncomplete)
+      )
     ).toBe(true);
   });
 });

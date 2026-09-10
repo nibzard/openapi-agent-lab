@@ -39,8 +39,7 @@ import {
   quantile,
   summarize,
   weightedMean,
-  wilsonInterval,
-  worstCaseBounds
+  wilsonInterval
 } from "@oal/statistics";
 import {
   DISPOSITIONS,
@@ -648,6 +647,69 @@ function slotKeyOf(fact: TrialFacts): string {
   return fact.row.assignment_id ?? `run:${fact.row.run_id}`;
 }
 
+/** Per-slot worst-case tally shared by report and study sensitivity. */
+export interface WorstCaseSlotTally {
+  /** Resolved slots whose eligible outcome passes. */
+  readonly successes: number;
+  /** Resolved slots whose eligible outcome fails. */
+  readonly failures: number;
+  /**
+   * Resolved slots forced to one failure by a post-control censor in
+   * their chain, whatever their eligible outcome says.
+   */
+  readonly censored_failures: number;
+  /** Unresolved slots: no denominator entry, tracked separately. */
+  readonly unresolved: number;
+  /** Worst-case rate successes / (successes + failures), or null. */
+  readonly worst_case_rate: number | null;
+}
+
+/**
+ * Apply the one-outcome-per-slot worst-case rule of section 27.2 to a
+ * resolved slot table. A slot whose chain holds a post-control censor
+ * contributes exactly one failure, even when a later replacement
+ * passed. Every other resolved slot contributes its eligible outcome.
+ * A chain with only pre-control failures stays unresolved and invents
+ * no task failure. Each slot enters the tally at most once.
+ *
+ * The success predicate adapts the shared rule to the caller's
+ * outcome: the report passes `task_outcome === "passed"` and the study
+ * passes its metric outcome.
+ */
+export function worstCaseSlotTally(
+  slots: readonly SlotResolution[],
+  isSuccess: (slot: SlotResolution) => boolean
+): WorstCaseSlotTally {
+  let successes = 0;
+  let failures = 0;
+  let censoredFailures = 0;
+  let unresolved = 0;
+  for (const slot of slots) {
+    if (!slot.resolved) {
+      unresolved += 1;
+      continue;
+    }
+    if (slot.worst_case_failure) {
+      censoredFailures += 1;
+      failures += 1;
+      continue;
+    }
+    if (isSuccess(slot)) {
+      successes += 1;
+    } else {
+      failures += 1;
+    }
+  }
+  const total = successes + failures;
+  return {
+    successes,
+    failures,
+    censored_failures: censoredFailures,
+    unresolved,
+    worst_case_rate: total === 0 ? null : successes / total
+  };
+}
+
 /** Original attempts sort before their replacements. */
 function compareAttempts(a: TrialFacts, b: TrialFacts): number {
   const aOriginal = a.row.replacement_of === null ? 0 : 1;
@@ -1192,28 +1254,31 @@ function rollupSignal(
 function buildEstimates(slots: readonly SlotResolution[]): Report["estimates"] {
   const resolved = slots.filter((slot) => slot.resolved);
   const passed = resolved.filter((slot) => slot.task_outcome === "passed");
-  const failed = resolved.length - passed.length;
   const estimate =
     resolved.length === 0 ? null : passed.length / resolved.length;
   const interval = wilsonInterval(passed.length, resolved.length);
   const sensitivity: SensitivityEstimate[] = [];
-  const censored = slots.filter((slot) => slot.worst_case_failure).length;
-  if (censored > 0) {
-    // Section 27.2 worst-case sensitivity: every post-control censored
-    // slot contributes exactly one failure to the slot-preserving bound.
-    const bounds = worstCaseBounds(passed.length, failed, censored);
-    if (bounds !== null) {
-      const worstCaseInterval = wilsonInterval(passed.length, bounds.total);
-      sensitivity.push({
-        id: "worst_case",
-        kind: "worst_case_sensitivity",
-        estimate: bounds.lower,
-        interval:
-          worstCaseInterval === null
-            ? null
-            : ([worstCaseInterval.lower, worstCaseInterval.upper] as const)
-      });
-    }
+  // Section 27.2 worst-case sensitivity through the shared slot tally:
+  // a post-control censor gives its slot exactly one failure, even when
+  // a later replacement passed; unresolved slots join no denominator.
+  const tally = worstCaseSlotTally(
+    slots,
+    (slot) => slot.task_outcome === "passed"
+  );
+  if (tally.censored_failures > 0 && tally.worst_case_rate !== null) {
+    const worstCaseInterval = wilsonInterval(
+      tally.successes,
+      tally.successes + tally.failures
+    );
+    sensitivity.push({
+      id: "worst_case",
+      kind: "worst_case_sensitivity",
+      estimate: tally.worst_case_rate,
+      interval:
+        worstCaseInterval === null
+          ? null
+          : ([worstCaseInterval.lower, worstCaseInterval.upper] as const)
+    });
   }
   return [
     {
