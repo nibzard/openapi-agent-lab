@@ -4,7 +4,12 @@ kind: Pack
 metadata:
   id: webclip
   name: webclip
-  version: 0.1.0
+  # 0.2.0 ships the corrected site-errand rubric: two verified clip
+  # chains, distinct identifiers, header-based representation checks,
+  # full report cross-checks, and a non-scoring comprehension probe.
+  # Evidence and scores recorded under 0.1.0 stay under 0.1.0; any
+  # regrading of them is labeled derived.
+  version: 0.2.0
   description: >-
     A greenfield pack that demonstrates the friction-measurement loop
     on a new API.

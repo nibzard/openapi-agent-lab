@@ -106,6 +106,50 @@ One more limit is on purpose: the seeded error friction (enum guesses,
 route misses) never fired, because the participants read the
 specification before their first call.
 
+## The corrected rubric (pack 0.2.0)
+
+The rubric now grades the errand the task states. Two sequence
+checks, one per clip, verify each lifecycle: create with the
+requested URL and format, render, content fetch through the
+requested `Accept` header and the served `Content-Type` header,
+extraction and deletion scoped to the markdown clip, and the quota
+read after the deletion. The two chains may interleave. Header
+checks read the normalized header view of the evaluator by name
+(`event.request.header_values`), never a header array position.
+Three further required checks keep the evidence honest: the two
+create responses name two different identifiers, at least two
+creates succeed, and at most one deletion succeeds. The report
+schema check stays, and all nine claim fields must agree with the
+evidence through postconditions.
+
+Seven required checks carry weight 1 each. A run fails when any
+required check fails; one miss already drops the score to 6 of 7,
+below the 0.9 threshold. Two recorded observations carry weight 0
+and never fail the run: the comprehension probe (whether the
+`api_model` answer names the clip resource) and the extra-create
+count. The task states no exactly-two-creates constraint, so a third
+create call is a diagnostic, not a failure. The result schema also
+accepts an empty `uncertainties` list, so nobody must invent one.
+
+## Standing limitation until the behavior backend
+
+The corrected rubric cannot be satisfied end to end through the
+served pack, because the contract fixtures are static:
+
+- Every create returns the same markdown clip body, so the two
+  identifiers never differ and no create echoes its request.
+- The account read hard-codes `clips_used: 1`, whatever was deleted.
+- Render and extract never change state and never return 409.
+- The content endpoint cannot carry a fixture, because a fixture
+  overrides `Accept` negotiation in the gateway.
+
+The recorded 3 of 3 pass rate of the webclip-after batch belongs to
+pack 0.1.0 and its rubric. Old evidence and scores stay under their
+original version; any re-scoring under the corrected rubric runs
+through `oal report --regrade` and is labeled derived. The rubric is
+not relaxed to keep the old pass rate. Work item F5 lands the
+stateful backend that closes the gap.
+
 ## Layout
 
 | Directory   | Purpose                                     |

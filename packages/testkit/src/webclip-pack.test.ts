@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { isJsonObject, type Json, type JsonObject } from "@oal/core";
 import { evaluateRubric } from "@oal/evaluator";
-import type { TraceBody, TraceEvent } from "@oal/evidence";
+import type { TraceEvent } from "@oal/evidence";
 
 import {
   compilePackContract,
@@ -11,6 +11,7 @@ import {
   readPackJson,
   rubricOf,
   traceExchange,
+  traceHeader,
   traceJsonBody,
   type PackForTest
 } from "./index.ts";
@@ -40,6 +41,17 @@ function evaluate(
   });
 }
 
+function checkStatus(
+  result: ReturnType<typeof evaluateRubric>,
+  id: string
+): string {
+  const check = result.checks.find((candidate) => candidate.id === id);
+  if (check === undefined) {
+    throw new Error(`Check ${id} is missing from the result.`);
+  }
+  return check.status;
+}
+
 describe("the webclip pack", () => {
   it("validates with zero errors and zero warnings", () => {
     expect(pack.validation.errors).toEqual([]);
@@ -49,6 +61,8 @@ describe("the webclip pack", () => {
     expect(behavior.mode).toBe("contract");
     expect(pack.loaded.manifest.evals).toHaveLength(1);
     expect(pack.loaded.manifest.scenarios).toHaveLength(1);
+    const metadata = pack.loaded.manifest.metadata as JsonObject;
+    expect(metadata.version).toBe("0.2.0");
     // The after state: six authored fixtures cover every operation the
     // errand touches except the content endpoint, which keeps Accept
     // negotiation, and the bodyless delete.
@@ -101,90 +115,211 @@ describe("the webclip pack", () => {
   });
 });
 
-describe("the webclip site-errand rubric against a passing trace", () => {
-  it("scores the two-clip errand as passed", () => {
-    const markdown = "clip_01h8x9k4m2";
-    const image = "clip_01h8x9k4n7";
-    const createClip = (id: string, format: string, sequence: number) =>
-      traceExchange({
-        event_id: `evt-${sequence}`,
-        sequence,
+/** One step of the errand, named for the negative controls. */
+type ErrandPartId =
+  | "create_markdown"
+  | "create_image"
+  | "render_markdown"
+  | "render_image"
+  | "fetch_markdown"
+  | "fetch_image"
+  | "extract_markdown"
+  | "delete_markdown"
+  | "read_quota";
+
+const CANONICAL_ORDER: readonly ErrandPartId[] = [
+  "create_markdown",
+  "create_image",
+  "render_markdown",
+  "render_image",
+  "fetch_markdown",
+  "fetch_image",
+  "extract_markdown",
+  "delete_markdown",
+  "read_quota"
+];
+
+const MARKDOWN_ID = "clip_01h8x9k4m2";
+const IMAGE_ID = "clip_01h8x9k4n7";
+const EXTRA_ID = "clip_01h8x9k4p9";
+const ESSAY_URL = "https://example.com/essay";
+const DASHBOARD_URL = "https://example.com/dashboard";
+
+interface ErrandOptions {
+  /** Drops one errand step from the trace. */
+  readonly omit?: ErrandPartId;
+  /** Identifier returned by the markdown create. */
+  readonly markdownId?: string;
+  /** Identifier returned by the image create. */
+  readonly imageId?: string;
+  /** Request body of the markdown create. */
+  readonly markdownCreate?: {
+    readonly url: string;
+    readonly format: string;
+  };
+  /** Request body of the image create. */
+  readonly imageCreate?: {
+    readonly url: string;
+    readonly format: string;
+  };
+  /** Which clip the deletion targets. */
+  readonly deletedClip?: "markdown" | "image";
+  /** Representation of the markdown content fetch. */
+  readonly markdownFetch?: {
+    readonly accept?: string;
+    readonly contentType?: string;
+  };
+  /** Representation of the image content fetch. */
+  readonly imageFetch?: {
+    readonly accept?: string;
+    readonly contentType?: string;
+  };
+  /** Appends one extra successful create call. */
+  readonly extraCreate?: boolean;
+}
+
+type PartInit = Omit<
+  Parameters<typeof traceExchange>[0],
+  "event_id" | "sequence"
+>;
+
+function errandPart(id: ErrandPartId, options: ErrandOptions): PartInit {
+  const markdownId = options.markdownId ?? MARKDOWN_ID;
+  const imageId = options.imageId ?? IMAGE_ID;
+  const markdownCreate = options.markdownCreate ?? {
+    url: ESSAY_URL,
+    format: "markdown"
+  };
+  const imageCreate = options.imageCreate ?? {
+    url: DASHBOARD_URL,
+    format: "image"
+  };
+  const markdownFetch = {
+    accept: options.markdownFetch?.accept ?? "text/markdown",
+    contentType: options.markdownFetch?.contentType ?? "text/markdown"
+  };
+  const imageFetch = {
+    accept: options.imageFetch?.accept ?? "image/svg+xml",
+    contentType: options.imageFetch?.contentType ?? "image/svg+xml"
+  };
+  const clipStep = (
+    operationId: string,
+    method: string,
+    suffix: string,
+    clipId: string,
+    status: number,
+    responseBody: Parameters<typeof traceJsonBody>[0]
+  ): PartInit => ({
+    operation_id: operationId,
+    method,
+    path_template: `/v1/clips/{clipId}${suffix}`,
+    status,
+    path_parameters: { clipId },
+    response_body: traceJsonBody(responseBody)
+  });
+  switch (id) {
+    case "create_markdown":
+      return {
         operation_id: "create_clip",
         method: "POST",
         path_template: "/v1/clips",
         status: 201,
-        request_body: traceJsonBody({
-          url: "https://example.com/page",
-          format
-        }),
+        request_body: traceJsonBody(markdownCreate),
         response_body: traceJsonBody({
-          id,
-          url: "https://example.com/page",
-          format,
+          id: markdownId,
+          url: markdownCreate.url,
+          format: markdownCreate.format,
           status: "pending",
           created_at: "2026-08-29T09:14:00Z"
         })
+      };
+    case "create_image":
+      return {
+        operation_id: "create_clip",
+        method: "POST",
+        path_template: "/v1/clips",
+        status: 201,
+        request_body: traceJsonBody(imageCreate),
+        response_body: traceJsonBody({
+          id: imageId,
+          url: imageCreate.url,
+          format: imageCreate.format,
+          status: "pending",
+          created_at: "2026-08-29T09:14:04Z"
+        })
+      };
+    case "render_markdown":
+      return clipStep("render_clip", "POST", "/render", markdownId, 200, {
+        clipId: markdownId,
+        status: "rendered",
+        duration_ms: 812
       });
-    const step = (
-      operationId: string,
-      method: string,
-      suffix: string,
-      id: string,
-      sequence: number,
-      status: number,
-      body: TraceBody
-    ) =>
-      traceExchange({
-        event_id: `evt-${sequence}`,
-        sequence,
-        operation_id: operationId,
-        method,
-        path_template: `/v1/clips/{clipId}${suffix}`,
-        status,
-        path_parameters: { clipId: id },
-        response_body: body
+    case "render_image":
+      return clipStep("render_clip", "POST", "/render", imageId, 200, {
+        clipId: imageId,
+        status: "rendered",
+        duration_ms: 903
       });
-    const events = [
-      createClip(markdown, "markdown", 1),
-      createClip(image, "image", 2),
-      step("render_clip", "POST", "/render", markdown, 3, 200, {
-        kind: "json",
-        size_bytes: 48,
-        value: { clipId: markdown, status: "rendered", duration_ms: 812 },
-        truncated: false
-      }),
-      step("render_clip", "POST", "/render", image, 4, 200, {
-        kind: "json",
-        size_bytes: 47,
-        value: { clipId: image, status: "rendered", duration_ms: 903 },
-        truncated: false
-      }),
-      step("get_clip_content", "GET", "/content", markdown, 5, 200, {
-        kind: "text",
-        size_bytes: 18,
-        sha256: null,
-        text: "# Essay\n\nThesis.",
-        truncated: false
-      }),
-      step("get_clip_content", "GET", "/content", image, 6, 200, {
-        kind: "text",
-        size_bytes: 67,
-        sha256: null,
-        text: '<svg xmlns="http://www.w3.org/2000/svg"/>',
-        truncated: false
-      }),
-      step("extract_text", "POST", "/extract", markdown, 7, 200, {
-        kind: "json",
-        size_bytes: 44,
-        value: { clipId: markdown, text: "Essay Thesis.", word_count: 2 },
-        truncated: false
-      }),
-      step("delete_clip", "DELETE", "", markdown, 8, 204, {
-        kind: "none"
-      }),
-      traceExchange({
-        event_id: "evt-9",
-        sequence: 9,
+    case "fetch_markdown":
+      return {
+        operation_id: "get_clip_content",
+        method: "GET",
+        path_template: "/v1/clips/{clipId}/content",
+        status: 200,
+        path_parameters: { clipId: markdownId },
+        request_headers: [traceHeader("accept", [markdownFetch.accept])],
+        response_headers: [
+          traceHeader("content-type", [markdownFetch.contentType])
+        ],
+        response_content_type: markdownFetch.contentType,
+        response_body: {
+          kind: "text",
+          size_bytes: 18,
+          sha256: null,
+          text: "# Essay\n\nThesis.",
+          truncated: false
+        }
+      };
+    case "fetch_image":
+      return {
+        operation_id: "get_clip_content",
+        method: "GET",
+        path_template: "/v1/clips/{clipId}/content",
+        status: 200,
+        path_parameters: { clipId: imageId },
+        request_headers: [traceHeader("accept", [imageFetch.accept])],
+        response_headers: [
+          traceHeader("content-type", [imageFetch.contentType])
+        ],
+        response_content_type: imageFetch.contentType,
+        response_body: {
+          kind: "text",
+          size_bytes: 67,
+          sha256: null,
+          text: '<svg xmlns="http://www.w3.org/2000/svg"/>',
+          truncated: false
+        }
+      };
+    case "extract_markdown":
+      return clipStep("extract_text", "POST", "/extract", markdownId, 200, {
+        clipId: markdownId,
+        text: "Essay Thesis.",
+        word_count: 2
+      });
+    case "delete_markdown": {
+      const deleted = options.deletedClip ?? "markdown";
+      const clipId = deleted === "image" ? imageId : markdownId;
+      return {
+        operation_id: "delete_clip",
+        method: "DELETE",
+        path_template: "/v1/clips/{clipId}",
+        status: 204,
+        path_parameters: { clipId },
+        response_body: { kind: "none" }
+      };
+    }
+    case "read_quota":
+      return {
         operation_id: "get_account",
         method: "GET",
         path_template: "/v1/account",
@@ -192,42 +327,106 @@ describe("the webclip site-errand rubric against a passing trace", () => {
         response_body: traceJsonBody({
           account_id: "acct_7d2m01",
           plan: "free",
-          clips_used: 2,
+          clips_used: 1,
           clips_limit: 100
         })
+      };
+  }
+}
+
+/** Build the errand trace in the given step order, minus any omit. */
+function errandEvents(
+  order: readonly ErrandPartId[] = CANONICAL_ORDER,
+  options: ErrandOptions = {}
+): TraceEvent[] {
+  const events: TraceEvent[] = [];
+  const push = (init: PartInit): void => {
+    events.push(
+      traceExchange({
+        ...init,
+        event_id: `evt-${events.length + 1}`,
+        sequence: events.length + 1
       })
-    ];
-    const report = {
-      clips_created: true,
-      markdown_clipped: true,
-      image_clipped: true,
-      both_rendered: true,
-      markdown_content_fetched: true,
-      image_content_fetched: true,
-      text_extracted: true,
-      clip_deleted: true,
-      quota_checked: true,
-      api_model:
-        "webclip stores clips of web pages. A clip is created with a URL " +
-        "and a fixed format, then rendered, and its content is fetched as " +
-        "markdown or as a picture. Extracted text and deletion close the " +
-        "clip lifecycle, and the account endpoint reports the quota.",
-      authentication_model:
-        "Every request carries an Authorization header with a Bearer token " +
-        "taken from the OAL_AUTH_BEARER environment variable.",
-      uncertainties: [
-        "Whether the quota counts deleted clips.",
-        "Which Accept value names the picture form."
-      ]
-    };
-    const result = evaluate(events, report);
+    );
+  };
+  for (const id of order) {
+    if (id === options.omit) {
+      continue;
+    }
+    push(errandPart(id, options));
+  }
+  if (options.extraCreate === true) {
+    push(errandPart("create_image", { imageId: EXTRA_ID }));
+  }
+  return events;
+}
+
+/** The agreeing report, with optional claim overrides. */
+function errandReport(
+  claims: Partial<Record<string, boolean>> = {}
+): JsonObject {
+  return {
+    clips_created: true,
+    markdown_clipped: true,
+    image_clipped: true,
+    both_rendered: true,
+    markdown_content_fetched: true,
+    image_content_fetched: true,
+    text_extracted: true,
+    clip_deleted: true,
+    quota_checked: true,
+    api_model:
+      "webclip stores clips of web pages. A clip is created with a URL " +
+      "and a fixed format, then rendered, and its content is fetched as " +
+      "markdown or as a picture. Extracted text and deletion close the " +
+      "clip lifecycle, and the account endpoint reports the quota.",
+    authentication_model:
+      "Every request carries an Authorization header with a Bearer token " +
+      "taken from the OAL_AUTH_BEARER environment variable.",
+    uncertainties: [],
+    ...claims
+  };
+}
+
+describe("the corrected webclip site-errand rubric", () => {
+  it("passes a complete trace with all required checks", () => {
+    const result = evaluate(errandEvents(), errandReport());
     expect(result.status).toBe("passed");
+    expect(result.score).toBe(1);
+    expect(result.passedWeight).toBe(7);
+    expect(result.totalWeight).toBe(7);
     expect(result.checks.map((check) => [check.id, check.status])).toEqual([
-      ["errand_flow", "passed"],
-      ["result_report", "passed"],
+      ["markdown_clip_chain", "passed"],
+      ["image_clip_chain", "passed"],
+      ["clip_ids_distinct", "passed"],
       ["two_clips_created", "passed"],
+      ["single_clip_deletion", "passed"],
+      ["result_report", "passed"],
       ["no_unmatched_delete", "passed"],
-      ["comprehension_probe", "passed"]
+      ["comprehension_probe", "passed"],
+      ["extra_create_calls", "passed"]
     ]);
+    expect(result.signals).toEqual({
+      first_call_is_create: true,
+      first_call_matched: true
+    });
+  });
+
+  it("passes when the two clip lifecycles interleave", () => {
+    const events = errandEvents([
+      "create_markdown",
+      "render_markdown",
+      "create_image",
+      "fetch_markdown",
+      "render_image",
+      "extract_markdown",
+      "fetch_image",
+      "delete_markdown",
+      "read_quota"
+    ]);
+    const result = evaluate(events, errandReport());
+    expect(result.status).toBe("passed");
+    expect(checkStatus(result, "markdown_clip_chain")).toBe("passed");
+    expect(checkStatus(result, "image_clip_chain")).toBe("passed");
   });
 });

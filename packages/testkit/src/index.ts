@@ -18,7 +18,7 @@ import {
   isWithin,
   type Json
 } from "@oal/core";
-import type { TraceBody, TraceEvent } from "@oal/evidence";
+import type { TraceBody, TraceEvent, TraceHeader } from "@oal/evidence";
 import { loadRubric, type Rubric, type RubricLoadResult } from "@oal/evaluator";
 import { compileOpenApi, type CompileResult } from "@oal/openapi";
 import {
@@ -206,10 +206,20 @@ export interface TraceExchangeInit {
   readonly status: number;
   readonly request_path?: string;
   readonly path_parameters?: Record<string, string>;
+  readonly request_headers?: readonly TraceHeader[];
+  readonly response_headers?: readonly TraceHeader[];
   readonly request_content_type?: string;
   readonly response_content_type?: string;
   readonly request_body?: TraceBody;
   readonly response_body?: TraceBody;
+}
+
+/** One trace header record with an unredacted single value. */
+export function traceHeader(
+  name: string,
+  values: readonly string[]
+): TraceHeader {
+  return { name, values: [...values], redacted: false };
 }
 
 export function traceExchange(init: TraceExchangeInit): TraceEvent {
@@ -243,7 +253,12 @@ export function traceExchange(init: TraceExchangeInit): TraceEvent {
       query_string: "",
       query: [],
       path_parameters: init.path_parameters ?? {},
-      headers: [],
+      headers:
+        init.request_headers?.map((header) => ({
+          name: header.name,
+          values: [...header.values],
+          redacted: header.redacted
+        })) ?? [],
       credential_present: true,
       content_type: init.request_content_type ?? "application/json",
       body: init.request_body ?? { kind: "none" }
@@ -262,7 +277,12 @@ export function traceExchange(init: TraceExchangeInit): TraceEvent {
     response: {
       completed_at: "2026-01-01T00:00:00.000Z",
       status: init.status,
-      headers: [],
+      headers:
+        init.response_headers?.map((header) => ({
+          name: header.name,
+          values: [...header.values],
+          redacted: header.redacted
+        })) ?? [],
       content_type: init.response_content_type ?? "application/json",
       body: init.response_body ?? { kind: "none" }
     },
