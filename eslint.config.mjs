@@ -8,7 +8,8 @@ export default tseslint.config(
       "node_modules/**",
       "coverage/**",
       "*.tsbuildinfo",
-      ".oal/**"
+      ".oal/**",
+      ".claude/**"
     ]
   },
   js.configs.recommended,
