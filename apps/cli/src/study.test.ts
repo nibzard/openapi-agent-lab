@@ -1,8 +1,22 @@
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  writeFile
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { EXIT_INVALID, EXIT_OK, EXIT_UNSUPPORTED, sha256Hex } from "@oal/core";
+import {
+  EXIT_INFRASTRUCTURE,
+  EXIT_INVALID,
+  EXIT_OK,
+  EXIT_UNSUPPORTED,
+  sha256Hex
+} from "@oal/core";
 import {
   appendAssignmentEvent,
   buildStudyRunHeader,
@@ -936,6 +950,139 @@ describe("oal study analyze", () => {
     expect(code).toBe(EXIT_UNSUPPORTED);
     expect(io.stderrText()).toContain(AnalyzeCode.AnalysisPlanUnsupported);
     // No analysis document was written for a refused request.
+    expect(
+      await readFile(path.join(runRoot, "study-analysis.json"), "utf8").catch(
+        () => "missing"
+      )
+    ).toBe("missing");
+  });
+
+  it("refuses to overwrite the recorded analysis document", async () => {
+    const steel = await loadSteelPack();
+    const cwd = await newWorkspace();
+    const { root } = await scaffoldedStudy(cwd, steel.root);
+    await writeLock(cwd, root, steel.root);
+    const { runRoot } = await assembleStudyRun(cwd, root, steel.root);
+    const first = new MemoryIo();
+    expect(await main(["study", "analyze", runRoot], first, { cwd })).toBe(
+      EXIT_OK
+    );
+    const original = await readFile(
+      path.join(runRoot, "study-analysis.json"),
+      "utf8"
+    );
+
+    const second = new MemoryIo();
+    const code = await main(["study", "analyze", runRoot], second, { cwd });
+    expect(code).toBe(EXIT_INVALID);
+    expect(second.stderrText()).toContain(AnalyzeCode.ArtifactExists);
+    // The recorded result keeps its bytes: nothing overwrote it.
+    expect(
+      await readFile(path.join(runRoot, "study-analysis.json"), "utf8")
+    ).toBe(original);
+  });
+
+  it("writes a derived correction beside the untouched original", async () => {
+    const steel = await loadSteelPack();
+    const cwd = await newWorkspace();
+    const { root } = await scaffoldedStudy(cwd, steel.root);
+    await writeLock(cwd, root, steel.root);
+    const { runRoot } = await assembleStudyRun(cwd, root, steel.root);
+    const first = new MemoryIo();
+    expect(await main(["study", "analyze", runRoot], first, { cwd })).toBe(
+      EXIT_OK
+    );
+    const original = await readFile(
+      path.join(runRoot, "study-analysis.json"),
+      "utf8"
+    );
+
+    const io = new MemoryIo();
+    const code = await main(
+      [
+        "study",
+        "analyze",
+        runRoot,
+        "--derived-from",
+        path.join(runRoot, "study-analysis.json")
+      ],
+      io,
+      { cwd }
+    );
+    expect(code).toBe(EXIT_OK);
+    expect(
+      await readFile(path.join(runRoot, "study-analysis.json"), "utf8")
+    ).toBe(original);
+    const derivedDir = path.join(runRoot, "derived");
+    const names = await readdir(derivedDir);
+    expect(names).toHaveLength(1);
+    expect(names[0]).toMatch(/^study-analysis-[0-9a-f]{12}\.json$/);
+    const derived = JSON.parse(
+      await readFile(path.join(derivedDir, names[0] ?? ""), "utf8")
+    ) as {
+      analysis_id: string;
+      lineage: {
+        kind: string;
+        parent_analysis_id: string;
+        reason: string;
+      };
+    };
+    expect(derived.analysis_id).toBe("sr-1-analysis-derived");
+    expect(derived.lineage).toEqual({
+      kind: "derived",
+      parent_analysis_id: "sr-1-analysis",
+      reason: "corrected built-in analysis"
+    });
+
+    // A byte-identical derived request never duplicates itself.
+    const repeat = new MemoryIo();
+    const repeatCode = await main(
+      [
+        "study",
+        "analyze",
+        runRoot,
+        "--derived-from",
+        path.join(runRoot, "study-analysis.json")
+      ],
+      repeat,
+      { cwd }
+    );
+    expect(repeatCode).toBe(EXIT_INVALID);
+    expect(repeat.stderrText()).toContain(AnalyzeCode.ArtifactExists);
+    expect(await readdir(derivedDir)).toEqual(names);
+  });
+
+  it("refuses drifted child-batch evidence before any estimate", async () => {
+    const steel = await loadSteelPack();
+    const cwd = await newWorkspace();
+    const { root } = await scaffoldedStudy(cwd, steel.root);
+    await writeLock(cwd, root, steel.root);
+    const { runRoot, schedule } = await assembleStudyRun(cwd, root, steel.root);
+    // Tamper one manifest-listed file inside a child batch after freezing.
+    const batchDir = path.join(
+      runRoot,
+      "batches",
+      schedule.assignments[0]?.child_batch_id ?? ""
+    );
+    const manifest = JSON.parse(
+      await readFile(path.join(batchDir, "artifact-manifest.json"), "utf8")
+    ) as { entries: { path: string; entry_type?: string }[] };
+    const entry = manifest.entries.find(
+      (candidate) => candidate.entry_type === "file"
+    );
+    if (entry === undefined) {
+      throw new Error("Fixture batch manifest holds no file entry.");
+    }
+    const evidencePath = path.join(batchDir, entry.path);
+    await writeFile(
+      evidencePath,
+      `${await readFile(evidencePath, "utf8")}tampered\n`
+    );
+
+    const io = new MemoryIo();
+    const code = await main(["study", "analyze", runRoot], io, { cwd });
+    expect(code).toBe(EXIT_INFRASTRUCTURE);
+    expect(io.stderrText()).toContain(AnalyzeCode.EvidenceDrift);
     expect(
       await readFile(path.join(runRoot, "study-analysis.json"), "utf8").catch(
         () => "missing"

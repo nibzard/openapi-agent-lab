@@ -310,7 +310,7 @@ describe("aggregation on a hand-built evidence stream", () => {
     expect(report.surfaces.participant_reports.valid).toBe(2);
   });
 
-  it("computes the worst-case sensitivity from the slot tally", () => {
+  it("computes the worst-case sensitivity from censor bounds", () => {
     expect(report.estimates).toHaveLength(1);
     const estimate = report.estimates[0];
     expect(estimate?.contrast_id).toBe("task_pass");

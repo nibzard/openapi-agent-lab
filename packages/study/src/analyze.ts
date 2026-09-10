@@ -72,6 +72,13 @@ export const ANALYSIS_KIND = "StudyAnalysis";
 /** Default two-sided level when a family declares no usable alpha. */
 export const DEFAULT_CONFIDENCE_LEVEL = 0.95;
 
+/**
+ * Identity of the executing analyzer, parallel to the report builder
+ * identity. The digest of this string is recorded in every analysis
+ * document, so a reader can tell which analyzer produced it.
+ */
+export const STUDY_ANALYZER_IDENTITY = "@oal/study@0.0.0";
+
 /** Stable diagnostic codes of the study analyzer. */
 export const AnalysisCode = {
   HashVerificationFailed: "OAL-STUDY-ANALYSIS-HASH-VERIFICATION-FAILED",
@@ -169,6 +176,8 @@ export interface StudyAnalysis {
     readonly implementation_sha256: string;
     readonly evidence_requirements_sha256: string;
     readonly analysis_plan_sha256: string;
+    /** Digest of the executing analyzer identity. */
+    readonly analyzer_sha256: string;
   };
   readonly populations: readonly {
     readonly id: string;
@@ -958,7 +967,8 @@ export function analyzeStudyRun(
       compatibility_sha256: header.study_compatibility_sha256,
       implementation_sha256: header.implementation_sha256,
       evidence_requirements_sha256: input.evidence_requirements_sha256,
-      analysis_plan_sha256: header.analysis_plan_sha256
+      analysis_plan_sha256: header.analysis_plan_sha256,
+      analyzer_sha256: sha256Hex(STUDY_ANALYZER_IDENTITY)
     },
     populations,
     estimates,

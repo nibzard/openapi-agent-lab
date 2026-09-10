@@ -78,6 +78,7 @@ export {
   analyzeStudyRun,
   DEFAULT_CONFIDENCE_LEVEL,
   serializeStudyAnalysis,
+  STUDY_ANALYZER_IDENTITY,
   studyAnalysisContentSha256,
   studyAnalysisJson,
   studyAnalysisSha256

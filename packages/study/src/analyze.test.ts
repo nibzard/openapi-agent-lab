@@ -7,6 +7,7 @@ import {
   AnalysisCode,
   analyzeStudyRun,
   serializeStudyAnalysis,
+  STUDY_ANALYZER_IDENTITY,
   studyAnalysisJson,
   studyAnalysisSha256,
   type CellEvidence,
@@ -278,6 +279,10 @@ describe("study analysis", () => {
     }
     expect(analysisSchema.errors(studyAnalysisJson(analysis))).toEqual([]);
     expect(analysis.study_run_id).toBe(TWO_CELL_RUN_ID);
+    // The document names its executing analyzer by digest.
+    expect(analysis.inputs.analyzer_sha256).toBe(
+      sha256Hex(STUDY_ANALYZER_IDENTITY)
+    );
     expect(analysis.populations).toEqual([
       { id: "clean_completion", numerator: 4, denominator: 4 }
     ]);

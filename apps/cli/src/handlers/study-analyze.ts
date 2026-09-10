@@ -11,11 +11,13 @@
  * cross-key pooling is forbidden anyway.
  */
 
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  DiagnosticCode,
   diagnostic,
+  EXIT_INFRASTRUCTURE,
   EXIT_INVALID,
   EXIT_OK,
   EXIT_UNSUPPORTED,
@@ -36,6 +38,7 @@ import {
 import {
   analyzeStudyRun,
   studyAnalysisJson,
+  studyAnalysisSha256,
   type AnalysisLineage,
   type CellEvidence,
   type VerificationEntry
@@ -56,7 +59,12 @@ import type { TrialInput } from "@oal/report";
 import type { CommandHandler } from "../commands.ts";
 import { emitDiagnostics } from "../diagnostics.ts";
 import { tooManyArguments } from "../usage.ts";
-import { loadRunOrBatch, trialsOf } from "./run-tree.ts";
+import {
+  loadRunOrBatch,
+  trialsOf,
+  verifyArtifactsOf,
+  type ArtifactDrift
+} from "./run-tree.ts";
 import { assignmentsOf, trialInputOf } from "./report.ts";
 import { readSchema, StudyCliCode } from "./study-tree.ts";
 
@@ -66,8 +74,55 @@ export const AnalyzeCode = {
   InputMissing: "OAL-STUDY-ANALYZE-INPUT-MISSING",
   HashMismatch: "OAL-STUDY-ANALYZE-HASH-MISMATCH",
   AggregationUnsupported: "OAL-STUDY-ANALYZE-AGGREGATION-UNSUPPORTED",
-  AnalysisPlanUnsupported: "OAL-STUDY-ANALYZE-ANALYSIS-PLAN-UNSUPPORTED"
+  AnalysisPlanUnsupported: "OAL-STUDY-ANALYZE-ANALYSIS-PLAN-UNSUPPORTED",
+  EvidenceDrift: "OAL-STUDY-ANALYZE-EVIDENCE-DRIFT",
+  ParentInvalid: "OAL-STUDY-ANALYZE-PARENT-INVALID",
+  ArtifactExists: DiagnosticCode.ArtifactExists
 } as const;
+
+/** Directory of derived analysis documents inside a StudyRun root. */
+const DERIVED_ANALYSIS_DIR = "derived";
+
+/** Digest-prefix length of derived analysis file names. */
+const DERIVED_ANALYSIS_PREFIX_LENGTH = 12;
+
+/** Lineage reason of every derived study analysis this build writes. */
+const DERIVED_REASON = "corrected built-in analysis";
+
+/**
+ * Path of one derived analysis document. The name carries a digest prefix
+ * of the derived bytes, so a corrected analysis never collides with an
+ * earlier one and byte-identical re-runs refuse to duplicate themselves.
+ */
+function derivedAnalysisPath(root: string, sha256: string): string {
+  return path.join(
+    root,
+    DERIVED_ANALYSIS_DIR,
+    `study-analysis-${sha256.slice(0, DERIVED_ANALYSIS_PREFIX_LENGTH)}.json`
+  );
+}
+
+/**
+ * Write one analysis document exclusively. Returns false when the target
+ * already exists: analysis artifacts are write-once, so an existing file
+ * is never overwritten.
+ */
+async function writeAnalysisOnce(
+  target: string,
+  text: string
+): Promise<boolean> {
+  await mkdir(path.dirname(target), { recursive: true });
+  const handle = await open(target, "wx").catch(() => null);
+  if (handle === null) {
+    return false;
+  }
+  try {
+    await handle.writeFile(text, "utf8");
+  } finally {
+    await handle.close();
+  }
+  return true;
+}
 
 /** File names of the frozen StudyRun inputs (specification 23.19). */
 const RUN_INPUTS = {
@@ -413,10 +468,19 @@ export async function loadStudyRun(root: string): Promise<{
 async function cellEvidenceOf(
   root: string,
   header: StudyRunHeader
-): Promise<readonly CellEvidence[]> {
+): Promise<{
+  readonly cells: readonly CellEvidence[];
+  readonly drift: readonly ArtifactDrift[];
+}> {
   const cells: CellEvidence[] = [];
+  const drift: ArtifactDrift[] = [];
   for (const batch of header.child_batches) {
     const batchDir = path.resolve(root, batch.relative_path);
+    // Verify the child-batch artifact manifest before any evidence is
+    // read: every recorded file below the batch must hash to its
+    // recorded digest. The paths are manifest-relative, so a relocated
+    // batch tree still verifies.
+    drift.push(...(await verifyArtifactsOf(batchDir)));
     const loaded = await loadRunOrBatch(batchDir).catch(() => null);
     if (loaded === null) {
       continue;
@@ -437,7 +501,63 @@ async function cellEvidenceOf(
       trials: inputs
     });
   }
-  return cells;
+  return { cells, drift };
+}
+
+/** The identifying fields of one parent analysis document. */
+interface ParentAnalysis {
+  readonly analysis_id: string;
+  readonly study_run_id: string;
+}
+
+/** Load and schema-check one parent analysis document. */
+async function loadParentAnalysis(target: string): Promise<{
+  readonly parent: ParentAnalysis | null;
+  readonly diagnostics: readonly Diagnostic[];
+}> {
+  const diagnostics: Diagnostic[] = [];
+  const refuse = (message: string): void => {
+    diagnostics.push(
+      diagnostic({
+        severity: "error",
+        phase: "evaluate",
+        code: AnalyzeCode.ParentInvalid,
+        message
+      })
+    );
+  };
+  const text = await readFile(target, "utf8").catch(() => null);
+  if (text === null) {
+    refuse(`Parent analysis document is unreadable: ${target}`);
+    return { parent: null, diagnostics };
+  }
+  let parsed: Json;
+  try {
+    parsed = JSON.parse(text) as Json;
+  } catch (cause: unknown) {
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    refuse(`Parent analysis document is not valid JSON: ${reason}`);
+    return { parent: null, diagnostics };
+  }
+  for (const violation of await schemaErrors(
+    "study-analysis.v1.schema.json",
+    parsed
+  )) {
+    refuse(`Parent analysis document fails study-analysis.v1: ${violation}`);
+  }
+  const analysisId = (parsed as { analysis_id?: unknown }).analysis_id;
+  const studyRunId = (parsed as { study_run_id?: unknown }).study_run_id;
+  if (
+    diagnostics.length === 0 &&
+    typeof analysisId === "string" &&
+    typeof studyRunId === "string"
+  ) {
+    return {
+      parent: { analysis_id: analysisId, study_run_id: studyRunId },
+      diagnostics
+    };
+  }
+  return { parent: null, diagnostics };
 }
 
 /** `oal study analyze <study-run-dir> [options]`. */
@@ -499,7 +619,7 @@ export const studyAnalyzeCommand: CommandHandler = async (args, io) => {
   }
 
   const planFlag = args.flags.string("analysis-plan");
-  const lineage: AnalysisLineage = { kind: "preregistered" };
+  const derivedFrom = args.flags.string("derived-from");
   if (planFlag !== undefined) {
     // The flag never executed the file it reads: the frozen phase plan
     // is what runs. Reject it instead of recording a derived lineage
@@ -519,6 +639,38 @@ export const studyAnalyzeCommand: CommandHandler = async (args, io) => {
       })
     ]);
     return EXIT_UNSUPPORTED;
+  }
+
+  let lineage: AnalysisLineage = { kind: "preregistered" };
+  let parentAnalysisId: string | null = null;
+  if (derivedFrom !== undefined) {
+    const parentPath = path.resolve(args.context.cwd, derivedFrom);
+    const parentLoad = await loadParentAnalysis(parentPath);
+    diagnostics.push(...parentLoad.diagnostics);
+    const parent = parentLoad.parent;
+    if (parent !== null && parent.study_run_id !== header.study_run_id) {
+      diagnostics.push(
+        diagnostic({
+          severity: "error",
+          phase: "evaluate",
+          code: AnalyzeCode.ParentInvalid,
+          message:
+            `Parent analysis ${JSON.stringify(parent.analysis_id)} belongs ` +
+            `to StudyRun ${JSON.stringify(parent.study_run_id)}, not to ` +
+            `${JSON.stringify(header.study_run_id)}.`
+        })
+      );
+    }
+    if (parent === null || parent.study_run_id !== header.study_run_id) {
+      emitDiagnostics(io, args.context, diagnostics);
+      return EXIT_INVALID;
+    }
+    parentAnalysisId = parent.analysis_id;
+    lineage = {
+      kind: "derived",
+      parent_analysis_id: parent.analysis_id,
+      reason: DERIVED_REASON
+    };
   }
 
   if (loaded.compatibility !== null) {
@@ -574,10 +726,34 @@ export const studyAnalyzeCommand: CommandHandler = async (args, io) => {
     }
   }
 
-  const cells = await cellEvidenceOf(root, header);
-  const analysisId = isSafeId(`${header.study_run_id}-analysis`)
+  const evidence = await cellEvidenceOf(root, header);
+  if (evidence.drift.length > 0) {
+    // Evidence drift is an infrastructure failure, not a study finding:
+    // refuse the whole command before any estimate is computed.
+    emitDiagnostics(io, args.context, [
+      ...diagnostics,
+      ...evidence.drift.map((finding) =>
+        diagnostic({
+          severity: "error",
+          phase: "evaluate",
+          code: AnalyzeCode.EvidenceDrift,
+          message: `Artifact verification failed for ${finding.path}: ${finding.detail}`,
+          details: { path: finding.path }
+        })
+      )
+    ]);
+    return EXIT_INFRASTRUCTURE;
+  }
+  const baseAnalysisId = isSafeId(`${header.study_run_id}-analysis`)
     ? `${header.study_run_id}-analysis`
     : "study-analysis";
+  const derivedBase = `${parentAnalysisId ?? baseAnalysisId}-derived`;
+  const analysisId =
+    parentAnalysisId === null
+      ? baseAnalysisId
+      : isSafeId(derivedBase)
+        ? derivedBase
+        : "study-analysis-derived";
   const result = analyzeStudyRun({
     analysis_id: analysisId,
     lineage,
@@ -586,7 +762,7 @@ export const studyAnalyzeCommand: CommandHandler = async (args, io) => {
     metrics,
     schedule: loaded.schedule,
     ledger: loaded.ledger,
-    cells,
+    cells: evidence.cells,
     verification: loaded.verification,
     evidence_requirements_sha256: loaded.evidenceRequirementsSha256
   });
@@ -606,15 +782,40 @@ export const studyAnalyzeCommand: CommandHandler = async (args, io) => {
   }
 
   const errors = diagnostics.filter((entry) => entry.severity === "error");
-  emitDiagnostics(io, args.context, diagnostics);
   const analysis = result.analysis;
   if (errors.length > 0 || analysis === null) {
+    emitDiagnostics(io, args.context, diagnostics);
     return EXIT_INVALID;
   }
 
   const analysisJson = studyAnalysisJson(analysis);
-  const analysisPath = path.join(root, "study-analysis.json");
-  await writeFile(analysisPath, `${stableJsonStringify(analysisJson)}\n`);
+  // The preregistered result lands once at the StudyRun root; a derived
+  // correction lands under derived/ beside it, named by a digest prefix.
+  const analysisPath =
+    parentAnalysisId === null
+      ? path.join(root, "study-analysis.json")
+      : derivedAnalysisPath(root, studyAnalysisSha256(analysis));
+  const written = await writeAnalysisOnce(
+    analysisPath,
+    `${stableJsonStringify(analysisJson)}\n`
+  );
+  if (!written) {
+    emitDiagnostics(io, args.context, [
+      ...diagnostics,
+      diagnostic({
+        severity: "error",
+        phase: "evaluate",
+        code: AnalyzeCode.ArtifactExists,
+        message:
+          `Analysis artifact already exists: ${analysisPath}. Analysis ` +
+          "documents are write-once, so a recorded result never " +
+          "changes. Record a corrected built-in analysis as a new " +
+          "derived document with --derived-from."
+      })
+    ]);
+    return EXIT_INVALID;
+  }
+  emitDiagnostics(io, args.context, diagnostics);
 
   if (args.context.format === "json") {
     io.stdout(stableJsonStringify(analysisJson));
