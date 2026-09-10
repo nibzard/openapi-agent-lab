@@ -961,7 +961,7 @@
       "id": "T057",
       "title": "Make webclip grading match its task",
       "priority": 1,
-      "status": "doing",
+      "status": "done",
       "details": "Map each task requirement to a required rubric check: two clip identifiers, URLs and formats, both renders, both content reads, markdown extraction, scoped deletion, quota read, and report agreement; add a bounded normalized header view; remove word-matching from the completion score; allow empty uncertainty; treat create-call count as request evidence; version the corrected pack and rubric.",
       "steps": [
         "Rewrite the webclip task and rubric to the corrected requirements.",
@@ -972,7 +972,7 @@
       ],
       "tags": ["webclip", "evaluator"],
       "files": ["docs/review-fix-plan.md"],
-      "updated_at": "2026-09-10T16:33:34.514Z"
+      "updated_at": "2026-09-10T17:45:06.404Z"
     },
     {
       "id": "T058",
