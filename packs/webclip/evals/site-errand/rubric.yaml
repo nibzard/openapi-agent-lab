@@ -7,9 +7,11 @@
 # Content-Type header, extraction and deletion scoped to the markdown
 # clip, and the quota read after the deletion. Within one chain the
 # steps follow the numbered order of the task; between the chains no
-# order is imposed beyond the create order the task numbers state.
+# order at all is imposed, so either clip may be created first.
 # Header checks read the normalized header view by name, never a
-# header array position.
+# header array position. A render counts only when the response body
+# reports status rendered; a 200 that carries a failed render fails
+# the chain.
 #
 # The report is cross-checked, not just schema-checked: each of the
 # nine claim fields must agree with the evidence the chains found.
@@ -51,7 +53,9 @@ checks:
           event.operation.operation_id == "render_clip" &&
           event.request.path_parameters.clipId == vars.markdown_clip_id &&
           event.response.status >= 200 &&
-          event.response.status < 300
+          event.response.status < 300 &&
+          event.response.body.kind == "json" &&
+          event.response.body.value.status == "rendered"
       - id: fetch_markdown_content
         where: >-
           event.operation.operation_id == "get_clip_content" &&
@@ -119,7 +123,9 @@ checks:
           event.operation.operation_id == "render_clip" &&
           event.request.path_parameters.clipId == vars.image_clip_id &&
           event.response.status >= 200 &&
-          event.response.status < 300
+          event.response.status < 300 &&
+          event.response.body.kind == "json" &&
+          event.response.body.value.status == "rendered"
       - id: fetch_image_content
         where: >-
           event.operation.operation_id == "get_clip_content" &&
@@ -145,33 +151,36 @@ checks:
     required: true
     evidence_class: participant_observable
     description: >-
-      The two create responses name two different clips. The steps
-      follow the create order the task numbers state: the essay clip
-      first, the dashboard clip second.
+      Two create calls succeed and name two different clips. Each step
+      accepts a create of either clip, so the check holds no matter
+      which clip the participant creates first.
     steps:
-      - id: first_create_markdown
+      - id: first_create
         where: >-
           event.operation.operation_id == "create_clip" &&
           event.response.status >= 200 &&
           event.response.status < 300 &&
           event.request.body.kind == "json" &&
-          event.request.body.value.url == "https://example.com/essay" &&
-          event.request.body.value.format == "markdown"
+          (event.request.body.value.url == "https://example.com/essay" ||
+          event.request.body.value.url == "https://example.com/dashboard")
         capture:
-          markdown_clip_id: event.response.body.value.id
-      - id: second_create_image
+          a_id: event.response.body.value.id
+          a_url: event.request.body.value.url
+      - id: second_create
         where: >-
           event.operation.operation_id == "create_clip" &&
           event.response.status >= 200 &&
           event.response.status < 300 &&
           event.request.body.kind == "json" &&
-          event.request.body.value.url == "https://example.com/dashboard" &&
-          event.request.body.value.format == "image"
+          (event.request.body.value.url == "https://example.com/essay" ||
+          event.request.body.value.url == "https://example.com/dashboard")
         capture:
-          image_clip_id: event.response.body.value.id
+          b_id: event.response.body.value.id
+          b_url: event.request.body.value.url
     postconditions:
       - id: identifiers_differ
-        expression: vars.markdown_clip_id != vars.image_clip_id
+        expression: >-
+          vars.a_url != vars.b_url && vars.a_id != vars.b_id
   - id: two_clips_created
     kind: event
     match: counted

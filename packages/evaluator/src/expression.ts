@@ -407,6 +407,7 @@ class Parser {
   private readonly source: string;
   private readonly limits: ExpressionLimits;
   private readonly roots: string[] = [];
+  private readonly members: string[] = [];
   private position = 0;
   private depth = 0;
 
@@ -436,6 +437,15 @@ class Parser {
   /** Root identifiers in source order, deduplicated and sorted. */
   rootIdentifiers(): readonly string[] {
     return [...new Set(this.roots)].sort();
+  }
+
+  /**
+   * Property names the expression reads through `.name` or
+   * `["name"]` access, deduplicated and sorted. Rubric loading uses
+   * the list to keep scope-only fields out of persisted captures.
+   */
+  memberProperties(): readonly string[] {
+    return [...new Set(this.members)].sort();
   }
 
   private parseOr(): ExpressionNode {
@@ -571,6 +581,7 @@ class Parser {
         this.advance();
         const property = this.expectIdentifier('a property name after "."');
         target = { node: "member", target, property };
+        this.members.push(property);
         continue;
       }
       if (this.atOperator("[")) {
@@ -578,6 +589,13 @@ class Parser {
         const index = this.parseOr();
         this.expectOperator("]");
         target = { node: "index", target, index };
+        if (
+          index.node === "literal" &&
+          typeof index.value === "string" &&
+          index.value.length > 0
+        ) {
+          this.members.push(index.value);
+        }
         continue;
       }
       return target;
@@ -981,6 +999,8 @@ function compareStrings(
 export interface CompiledExpression {
   readonly source: string;
   readonly rootIdentifiers: readonly string[];
+  /** Property names read through member or string-index access. */
+  readonly memberProperties: readonly string[];
   evaluate(scope: JsonObject): Json;
   evaluatePredicate(scope: JsonObject): boolean;
 }
@@ -989,11 +1009,13 @@ function makeCompiled(
   source: string,
   ast: ExpressionNode,
   roots: readonly string[],
+  members: readonly string[],
   limits: ExpressionLimits
 ): CompiledExpression {
   return {
     source,
     rootIdentifiers: roots,
+    memberProperties: members,
     evaluate(scope: JsonObject): Json {
       return evaluateNode(ast, scope, { remaining: limits.maxSteps }, source);
     },
@@ -1047,7 +1069,13 @@ export function compileExpression(
     );
   }
   const parser = new Parser(source, limits);
-  return makeCompiled(source, parser.parse(), parser.rootIdentifiers(), limits);
+  return makeCompiled(
+    source,
+    parser.parse(),
+    parser.rootIdentifiers(),
+    parser.memberProperties(),
+    limits
+  );
 }
 
 /** Parse and evaluate one expression in a single step. */

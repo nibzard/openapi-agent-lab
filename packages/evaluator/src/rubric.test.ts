@@ -653,6 +653,85 @@ describe("rubric expression compilation", () => {
     expect(result.rubric).toBeNull();
   });
 
+  it("rejects a capture that reads header_values", async () => {
+    const result = await load({
+      ...SAMPLE_RUBRIC,
+      checks: [
+        {
+          id: "flow",
+          kind: "sequence",
+          weight: 1,
+          required: true,
+          match: "any",
+          steps: [
+            {
+              id: "one",
+              where: "true",
+              capture: { view: "event.request.header_values" }
+            }
+          ]
+        }
+      ]
+    });
+    expect(result.rubric).toBeNull();
+    expect(errorsOf(result.diagnostics)).toEqual(["OAL-RUBRIC-INVALID"]);
+    expect(
+      result.diagnostics.some(
+        (entry) =>
+          entry.severity === "error" && entry.message.includes("header_values")
+      )
+    ).toBe(true);
+  });
+
+  it("rejects a capture that reads header_values by index", async () => {
+    const result = await load({
+      ...SAMPLE_RUBRIC,
+      checks: [
+        {
+          id: "flow",
+          kind: "sequence",
+          weight: 1,
+          required: true,
+          match: "any",
+          steps: [
+            {
+              id: "one",
+              where: "true",
+              capture: { view: 'event.request["header_values"]' }
+            }
+          ]
+        }
+      ]
+    });
+    expect(result.rubric).toBeNull();
+    expect(errorsOf(result.diagnostics)).toEqual(["OAL-RUBRIC-INVALID"]);
+  });
+
+  it("accepts a where expression that reads header_values", async () => {
+    const result = await load({
+      ...SAMPLE_RUBRIC,
+      checks: [
+        {
+          id: "flow",
+          kind: "sequence",
+          weight: 1,
+          required: true,
+          match: "any",
+          steps: [
+            {
+              id: "one",
+              where:
+                "event.request.header_values.accept != null && " +
+                '"text/markdown" in event.request.header_values.accept'
+            }
+          ]
+        }
+      ]
+    });
+    expect(result.rubric).not.toBeNull();
+    expect(errorsOf(result.diagnostics)).toEqual([]);
+  });
+
   it("applies the expression limits it is given", async () => {
     const long = `state.counter + ${"1 + ".repeat(40)}1`;
     const result = await load(

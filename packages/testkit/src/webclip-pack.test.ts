@@ -164,6 +164,8 @@ interface ErrandOptions {
   };
   /** Which clip the deletion targets. */
   readonly deletedClip?: "markdown" | "image";
+  /** Status the markdown render response body reports. */
+  readonly markdownRenderStatus?: string;
   /** Representation of the markdown content fetch. */
   readonly markdownFetch?: {
     readonly accept?: string;
@@ -176,6 +178,8 @@ interface ErrandOptions {
   };
   /** Appends one extra successful create call. */
   readonly extraCreate?: boolean;
+  /** Appends one successful deletion of the image clip. */
+  readonly alsoDeleteImage?: boolean;
 }
 
 type PartInit = Omit<
@@ -251,7 +255,7 @@ function errandPart(id: ErrandPartId, options: ErrandOptions): PartInit {
     case "render_markdown":
       return clipStep("render_clip", "POST", "/render", markdownId, 200, {
         clipId: markdownId,
-        status: "rendered",
+        status: options.markdownRenderStatus ?? "rendered",
         duration_ms: 812
       });
     case "render_image":
@@ -358,6 +362,9 @@ function errandEvents(
   if (options.extraCreate === true) {
     push(errandPart("create_image", { imageId: EXTRA_ID }));
   }
+  if (options.alsoDeleteImage === true) {
+    push(errandPart("delete_markdown", { deletedClip: "image" }));
+  }
   return events;
 }
 
@@ -428,6 +435,58 @@ describe("the corrected webclip site-errand rubric", () => {
     expect(result.status).toBe("passed");
     expect(checkStatus(result, "markdown_clip_chain")).toBe("passed");
     expect(checkStatus(result, "image_clip_chain")).toBe("passed");
+  });
+
+  it("passes when the image clip is created first", () => {
+    const events = errandEvents([
+      "create_image",
+      "create_markdown",
+      "render_image",
+      "render_markdown",
+      "fetch_image",
+      "fetch_markdown",
+      "extract_markdown",
+      "delete_markdown",
+      "read_quota"
+    ]);
+    const result = evaluate(events, errandReport());
+    expect(result.status).toBe("passed");
+    expect(checkStatus(result, "markdown_clip_chain")).toBe("passed");
+    expect(checkStatus(result, "image_clip_chain")).toBe("passed");
+    expect(checkStatus(result, "clip_ids_distinct")).toBe("passed");
+  });
+
+  it("passes when the accept header joins media types with commas", () => {
+    const result = evaluate(
+      errandEvents(CANONICAL_ORDER, {
+        markdownFetch: { accept: "text/markdown, text/html" }
+      }),
+      errandReport()
+    );
+    expect(result.status).toBe("passed");
+    expect(checkStatus(result, "markdown_clip_chain")).toBe("passed");
+  });
+
+  it("passes when the accept element carries a quality parameter", () => {
+    const result = evaluate(
+      errandEvents(CANONICAL_ORDER, {
+        markdownFetch: { accept: "text/markdown;q=0.9" }
+      }),
+      errandReport()
+    );
+    expect(result.status).toBe("passed");
+    expect(checkStatus(result, "markdown_clip_chain")).toBe("passed");
+  });
+
+  it("passes when the served content-type carries a charset parameter", () => {
+    const result = evaluate(
+      errandEvents(CANONICAL_ORDER, {
+        markdownFetch: { contentType: "text/markdown; charset=utf-8" }
+      }),
+      errandReport()
+    );
+    expect(result.status).toBe("passed");
+    expect(checkStatus(result, "markdown_clip_chain")).toBe("passed");
   });
 
   it("accepts a report with an empty uncertainties list", () => {
@@ -530,6 +589,30 @@ describe("the corrected webclip site-errand rubric against failing traces", () =
     expect(result.status).toBe("failed");
     expect(checkStatus(result, "markdown_clip_chain")).toBe("failed");
     expect(checkStatus(result, "single_clip_deletion")).toBe("passed");
+  });
+
+  it("fails the task when both clips are deleted", () => {
+    const result = evaluate(
+      errandEvents(CANONICAL_ORDER, { alsoDeleteImage: true }),
+      errandReport()
+    );
+    expect(result.status).toBe("failed");
+    expect(checkStatus(result, "single_clip_deletion")).toBe("failed");
+    expect(checkStatus(result, "markdown_clip_chain")).toBe("passed");
+  });
+
+  it("fails the task when the markdown render reports status failed", () => {
+    const result = evaluate(
+      errandEvents(CANONICAL_ORDER, { markdownRenderStatus: "failed" }),
+      errandReport()
+    );
+    expect(result.status).toBe("failed");
+    const chain = result.checks.find(
+      (candidate) => candidate.id === "markdown_clip_chain"
+    );
+    expect(chain?.status).toBe("failed");
+    expect(chain?.failedPointers).toEqual(["steps/render_markdown_clip"]);
+    expect(checkStatus(result, "image_clip_chain")).toBe("passed");
   });
 
   it("fails the task when the markdown fetch asks for the picture", () => {

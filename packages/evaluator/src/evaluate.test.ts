@@ -1411,7 +1411,86 @@ describe("the normalized header view", () => {
     expect(result.signals.header_signal).toBe(true);
   });
 
-  it("bounds the values kept per header name", () => {
+  it("splits a comma-joined accept value into elements", () => {
+    const event = headerEvent({
+      requestHeaders: [
+        {
+          name: "accept",
+          values: ["text/markdown, text/html"],
+          redacted: false
+        }
+      ]
+    });
+    const result = evaluate(
+      headerRubric({
+        where:
+          '"text/markdown" in event.request.header_values.accept && ' +
+          'event.request.header_values.accept == ["text/markdown", "text/html"]'
+      }),
+      { events: [event] }
+    );
+    expect(checkOf(result, "header_probe").status).toBe("passed");
+  });
+
+  it("strips quality parameters from accept elements", () => {
+    const event = headerEvent({
+      requestHeaders: [
+        { name: "accept", values: ["text/markdown;q=0.9"], redacted: false }
+      ]
+    });
+    const result = evaluate(
+      headerRubric({
+        where:
+          '"text/markdown" in event.request.header_values.accept && ' +
+          'event.request.header_values.accept == ["text/markdown"]'
+      }),
+      { events: [event] }
+    );
+    expect(checkOf(result, "header_probe").status).toBe("passed");
+  });
+
+  it("strips the charset parameter from content-type without splitting", () => {
+    const event = headerEvent({
+      responseHeaders: [
+        {
+          name: "content-type",
+          values: ["text/markdown; charset=utf-8"],
+          redacted: false
+        }
+      ]
+    });
+    const result = evaluate(
+      headerRubric({
+        where:
+          'event.response.header_values["content-type"] == ' +
+          '["text/markdown"]'
+      }),
+      { events: [event] }
+    );
+    expect(checkOf(result, "header_probe").status).toBe("passed");
+  });
+
+  it("does not match a media type the accept header omits", () => {
+    const event = headerEvent({
+      requestHeaders: [
+        {
+          name: "accept",
+          values: ["image/png, image/jpeg;q=0.8"],
+          redacted: false
+        }
+      ]
+    });
+    const result = evaluate(
+      headerRubric({
+        where: '"text/markdown" in event.request.header_values.accept'
+      }),
+      { events: [event] }
+    );
+    expect(checkOf(result, "header_probe").status).toBe("failed");
+    expect(result.infrastructureErrors).toEqual([]);
+  });
+
+  it("turns a values-bound hit into an infrastructure error", () => {
     const event = headerEvent({
       requestHeaders: [
         {
@@ -1427,7 +1506,28 @@ describe("the normalized header view", () => {
       }),
       { events: [event], limits: { maxHeaderValues: 1 } }
     );
-    expect(checkOf(result, "header_probe").status).toBe("failed");
+    expect(checkOf(result, "header_probe").status).toBe("error");
+    expect(result.status).toBe("error");
+    expect(result.infrastructureErrors).toHaveLength(1);
+    expect(result.infrastructureErrors[0]?.code).toBe(
+      "OAL-CHECK-HEADER-VIEW-LIMIT"
+    );
+  });
+
+  it("turns a names-bound hit into an infrastructure error", () => {
+    const event = headerEvent({
+      requestHeaders: [
+        { name: "accept", values: ["text/markdown"], redacted: false }
+      ]
+    });
+    const result = evaluate(
+      headerRubric({
+        where: "event.request.header_values.accept != null"
+      }),
+      { events: [event], limits: { maxHeaderNames: 0 } }
+    );
+    expect(checkOf(result, "header_probe").status).toBe("error");
+    expect(result.infrastructureErrors).toHaveLength(1);
   });
 });
 

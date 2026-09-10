@@ -110,17 +110,18 @@ specification before their first call.
 
 The rubric now grades the errand the task states. Two sequence
 checks, one per clip, verify each lifecycle: create with the
-requested URL and format, render, content fetch through the
-requested `Accept` header and the served `Content-Type` header,
-extraction and deletion scoped to the markdown clip, and the quota
-read after the deletion. The two chains may interleave. Header
-checks read the normalized header view of the evaluator by name
+requested URL and format, a render that reports `status: rendered`
+in its body, content fetch through the requested `Accept` header
+and the served `Content-Type` header, extraction and deletion
+scoped to the markdown clip, and the quota read after the deletion.
+The two chains may interleave. Header checks read the normalized
+header view of the evaluator by name
 (`event.request.header_values`), never a header array position.
 Three further required checks keep the evidence honest: the two
-create responses name two different identifiers, at least two
-creates succeed, and at most one deletion succeeds. The report
-schema check stays, and all nine claim fields must agree with the
-evidence through postconditions.
+create responses name two different identifiers, whichever clip is
+created first; at least two creates succeed; and at most one
+deletion succeeds. The report schema check stays, and all nine
+claim fields must agree with the evidence through postconditions.
 
 Seven required checks carry weight 1 each. A run fails when any
 required check fails; one miss already drops the score to 6 of 7,

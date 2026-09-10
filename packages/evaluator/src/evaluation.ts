@@ -38,6 +38,7 @@ export const EvaluatorErrorCode = {
   CheckMissingValue: "OAL-CHECK-MISSING-VALUE",
   CheckCandidateLimit: "OAL-CHECK-CANDIDATE-LIMIT",
   CheckCaptureLimit: "OAL-CHECK-CAPTURE-LIMIT",
+  CheckHeaderViewLimit: "OAL-CHECK-HEADER-VIEW-LIMIT",
   RubricSchemaUnresolved: "OAL-RUBRIC-SCHEMA-UNRESOLVED",
   RubricInvalid: DiagnosticCode.RubricInvalid,
   EvaluatorCrashed: DiagnosticCode.EvaluatorCrashed

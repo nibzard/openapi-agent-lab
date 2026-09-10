@@ -845,6 +845,16 @@ class RubricLoader {
       if (compiled === null) {
         continue;
       }
+      if (compiled.memberProperties.includes("header_values")) {
+        this.error(
+          DiagnosticCode.RubricInvalid,
+          `Capture ${JSON.stringify(name)} may not read header_values. ` +
+            "The header view exists only inside expression scopes and is " +
+            "never persisted as evidence.",
+          `${stepPointer}/capture/${name}`
+        );
+        continue;
+      }
       capture[name] = source;
     }
     return capture;

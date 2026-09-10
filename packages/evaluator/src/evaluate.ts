@@ -166,6 +166,8 @@ interface EvaluationContext {
   events: readonly TraceEvent[];
   /** Scope views of the api events, in the same order as events. */
   eventViews: readonly Json[];
+  /** True when any header view hit a size bound. */
+  headerViewTruncated: boolean;
   documentationEvents: readonly DocumentationExchange[];
   semanticEvents: readonly SemanticEvent[];
   state: Json;
@@ -210,25 +212,32 @@ function toJsonValue(value: unknown): Json {
 
 /**
  * Normalized header view for expression scopes. The view maps each
- * lowercase header name to the values of every record that carries
+ * lowercase header name to the elements of every record that carries
  * that name, in record order, so a rubric asks for a header by name
- * instead of by array position. Names keep their hyphens, so a name
- * such as content-type is read with bracket indexing. The view stays
- * bounded at maxHeaderNames names and maxHeaderValues values per
- * name, so a pathological trace cannot grow the scope without bound.
- * The view exists only inside expression scopes; it is never
- * persisted as evidence.
+ * instead of by array position. The view is a semantic normalization
+ * for list fields, not a verbatim copy: accept and accept-... names
+ * are comma lists whose elements keep their bare media ranges, and
+ * content-type keeps its bare media type. Every other name keeps the
+ * verbatim value. Names keep their hyphens, so a name such as
+ * content-type is read with bracket indexing. The view stays bounded
+ * at maxHeaderNames names and maxHeaderValues elements per name; a
+ * bound hit is reported so the caller turns the outcome into an
+ * evaluator error, never a silent participant failure. The view
+ * exists only inside expression scopes; it is never persisted as
+ * evidence.
  */
 function headerValuesView(
   headers: readonly TraceHeader[],
   limits: EvaluatorLimits
-): JsonObject {
+): { view: JsonObject; truncated: boolean } {
   const collected = new Map<string, string[]>();
+  let truncated = false;
   for (const header of headers) {
     const name = header.name.toLowerCase();
     let values = collected.get(name);
     if (values === undefined) {
       if (collected.size >= limits.maxHeaderNames) {
+        truncated = true;
         continue;
       }
       values = [];
@@ -236,16 +245,50 @@ function headerValuesView(
     }
     for (const value of header.values) {
       if (values.length >= limits.maxHeaderValues) {
+        truncated = true;
         break;
       }
-      values.push(value);
+      const elements = normalizedElements(name, value);
+      for (const element of elements) {
+        if (values.length >= limits.maxHeaderValues) {
+          truncated = true;
+          break;
+        }
+        values.push(element);
+      }
     }
   }
   const view: JsonObject = {};
   for (const [name, values] of collected) {
     view[name] = values;
   }
-  return view;
+  return { view, truncated };
+}
+
+/**
+ * Elements one recorded value contributes to the view. Accept and
+ * accept-... names carry comma-separated media ranges with optional
+ * parameters, so the view splits and strips each element.
+ * Content-type carries one media type with optional parameters, so
+ * the view strips the suffix without splitting. Every other name
+ * keeps the verbatim value.
+ */
+function normalizedElements(name: string, value: string): string[] {
+  if (name === "content-type") {
+    return [stripParameters(value)];
+  }
+  if (name === "accept" || name.startsWith("accept-")) {
+    return value
+      .split(",")
+      .map((element) => stripParameters(element))
+      .filter((element) => element.length > 0);
+  }
+  return [value];
+}
+
+/** The token before its first semicolon, trimmed. */
+function stripParameters(value: string): string {
+  return (value.split(";")[0] ?? "").trim();
 }
 
 /**
@@ -253,24 +296,29 @@ function headerValuesView(
  * plus the header view on the request and the response sides. The
  * recorded fields stay untouched; only the scope gains the view.
  */
-function apiEventView(event: TraceEvent, limits: EvaluatorLimits): Json {
-  return toJsonValue({
-    ...event,
-    request:
-      event.request === null
-        ? null
-        : {
-            ...event.request,
-            header_values: headerValuesView(event.request.headers, limits)
-          },
-    response:
-      event.response === null
-        ? null
-        : {
-            ...event.response,
-            header_values: headerValuesView(event.response.headers, limits)
-          }
-  });
+function apiEventView(
+  event: TraceEvent,
+  limits: EvaluatorLimits
+): { value: Json; truncated: boolean } {
+  let truncated = false;
+  const sideView = (
+    side: TraceEvent["request"] | TraceEvent["response"]
+  ): Json => {
+    if (side === null) {
+      return null;
+    }
+    const view = headerValuesView(side.headers, limits);
+    truncated = truncated || view.truncated;
+    return toJsonValue({ ...side, header_values: view.view });
+  };
+  return {
+    value: toJsonValue({
+      ...event,
+      request: sideView(event.request),
+      response: sideView(event.response)
+    }),
+    truncated
+  };
 }
 
 function apiCandidates(context: EvaluationContext): StreamCandidate[] {
@@ -349,10 +397,16 @@ export function evaluateRubric(options: EvaluateOptions): EvaluationResult {
     ...(options.limits ?? {})
   };
   const cache = new Map<string, CompiledExpression>();
-  const eventViews = options.events.map((event) => apiEventView(event, limits));
+  let headerViewTruncated = false;
+  const eventViews = options.events.map((event) => {
+    const view = apiEventView(event, limits);
+    headerViewTruncated = headerViewTruncated || view.truncated;
+    return view.value;
+  });
   const context: EvaluationContext = {
     events: options.events,
     eventViews,
+    headerViewTruncated,
     documentationEvents: options.documentationEvents ?? [],
     semanticEvents: options.semanticEvents ?? [],
     state: options.state,
@@ -458,6 +512,9 @@ function evaluateCheck(
       case "predicate":
         return predicateCheck(check, context, base);
       case "event":
+        if (context.headerViewTruncated) {
+          return headerViewError(base, check.id);
+        }
         return streamCheck(check, context, base, apiCandidates(context));
       case "documentation_event":
         return orderedOrQuantifiedCheck(
@@ -474,6 +531,9 @@ function evaluateCheck(
           semanticCandidates(context.semanticEvents)
         );
       case "sequence":
+        if (context.headerViewTruncated) {
+          return headerViewError(base, check.id);
+        }
         return runSequence(
           {
             checkId: check.id,
@@ -518,6 +578,28 @@ function crashed(
 
 function onMissingPolicy(onMissing: OnMissing | undefined): OnMissing {
   return onMissing ?? "fail";
+}
+
+/**
+ * A truncated header view is an evaluator limit, never evidence about
+ * the participant. The check turns into an error with a stable code,
+ * so the run reports an infrastructure outcome instead of a task
+ * failure and the cause stays visible.
+ */
+function headerViewError(base: CheckResult, checkId: string): CheckResult {
+  return {
+    ...base,
+    status: "error",
+    message:
+      "A header view hit its size bound, so this check cannot read the api events.",
+    error: infrastructureError({
+      code: EvaluatorErrorCode.CheckHeaderViewLimit,
+      message:
+        `The header view of the api events of ${JSON.stringify(checkId)} ` +
+        "exceeded maxHeaderNames or maxHeaderValues.",
+      checkId
+    })
+  };
 }
 
 /** Apply the on_missing policy of one check to a missing input. */
@@ -585,6 +667,12 @@ function predicateCheck(
   if (referencesReport(check.expression, context)) {
     return missingResult(started, check.on_missing, "The report is");
   }
+  if (
+    context.headerViewTruncated &&
+    context.compiled(check.expression).rootIdentifiers.includes("events")
+  ) {
+    return headerViewError(started, check.id);
+  }
   const matched = context
     .compiled(check.expression)
     .evaluatePredicate(predicateScope(context));
@@ -611,6 +699,21 @@ function signalOutcome(
       };
     }
     return { value: false, error: null };
+  }
+  if (
+    context.headerViewTruncated &&
+    context.compiled(signal.expression).rootIdentifiers.includes("events")
+  ) {
+    return {
+      value: false,
+      error: infrastructureError({
+        code: EvaluatorErrorCode.CheckHeaderViewLimit,
+        message:
+          `The header view of the api events of ${JSON.stringify(signal.id)} ` +
+          "exceeded maxHeaderNames or maxHeaderValues.",
+        checkId: signal.id
+      })
+    };
   }
   try {
     return {
