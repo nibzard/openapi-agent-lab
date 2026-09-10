@@ -371,7 +371,14 @@ export const COMMANDS: readonly CommandSpec[] = [
     summary: "Analyze a finished study run.",
     arguments: [{ name: "study-run-dir", description: "StudyRun directory." }],
     options: [
-      value("analysis-plan", "Frozen derived analysis plan."),
+      value(
+        "analysis-plan",
+        "Refused: this build reads no analysis-plan file."
+      ),
+      value(
+        "derived-from",
+        "Parent analysis document; writes a derived corrected result."
+      ),
       value("include-study-run", "Additional compatible StudyRun directory.")
     ],
     handler: studyAnalyzeCommand

@@ -45,6 +45,8 @@ import type {
 } from "@oal/scheduler";
 import type { CensorClass, Disposition, PhasePlan } from "@oal/study-ir";
 
+import { checkAnalysisSupport } from "./support.ts";
+
 /** Stable diagnostic codes of the StudyRun orchestration. */
 export const RunCode = {
   PreflightFailed: "OAL-STUDY-RUN-PREFLIGHT-FAILED",
@@ -192,8 +194,9 @@ function isMillisecondRfc3339(value: string): boolean {
 
 /**
  * Plan one StudyRun. The header is assembled only when the caller's
- * no-paid preflight succeeded; a failed preflight returns no plan at all,
- * so no permanent artifact can precede a failed check.
+ * no-paid preflight succeeded and the frozen analysis plan stays inside
+ * the implemented calculation set; a failed check returns no plan at
+ * all, so no permanent artifact can precede a failed check.
  */
 export function planStudyRun(input: StudyRunPlanInput): StudyRunPlanResult {
   const diagnostics: Diagnostic[] = [];
@@ -208,6 +211,15 @@ export function planStudyRun(input: StudyRunPlanInput): StudyRunPlanResult {
     if (entry.severity === "error") {
       diagnostics.push(entry);
     }
+  }
+  for (const finding of checkAnalysisSupport({
+    phasePlan: input.phasePlan,
+    cells: input.cells.map((cell) => ({
+      cell_id: cell.cell_id,
+      factor_levels: cell.factor_levels
+    }))
+  })) {
+    error(diagnostics, finding.code, finding.message);
   }
   if (diagnostics.length > 0) {
     return { plan: null, diagnostics };

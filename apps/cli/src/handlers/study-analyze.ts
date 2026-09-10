@@ -1,11 +1,14 @@
 /**
  * `oal study analyze` (specification section 23.17). The command loads a
  * StudyRun directory, verifies the recorded digests of the protocol
- * lock, the phase plan, and the assignment schedule, then executes
- * exactly the frozen plan through the registered analyzer. A derived
- * analysis plan creates a derived lineage. Aggregating a second
- * StudyRun is refused: no engine in this build accepts more than one
- * StudyRun header, and cross-key pooling is forbidden anyway.
+ * lock, the phase plan, and the assignment schedule, verifies the
+ * child-batch artifact manifests, then executes exactly the frozen
+ * plan through the registered analyzer. `--analysis-plan` is refused:
+ * this build reads no analysis-plan file. A corrected built-in
+ * analysis runs through the derived-result path and never overwrites
+ * the original result. Aggregating a second StudyRun is refused: no
+ * engine in this build accepts more than one StudyRun header, and
+ * cross-key pooling is forbidden anyway.
  */
 
 import { readFile, writeFile } from "node:fs/promises";
@@ -62,7 +65,8 @@ export const AnalyzeCode = {
   NotStudyRun: "OAL-STUDY-ANALYZE-NOT-A-STUDY-RUN",
   InputMissing: "OAL-STUDY-ANALYZE-INPUT-MISSING",
   HashMismatch: "OAL-STUDY-ANALYZE-HASH-MISMATCH",
-  AggregationUnsupported: "OAL-STUDY-ANALYZE-AGGREGATION-UNSUPPORTED"
+  AggregationUnsupported: "OAL-STUDY-ANALYZE-AGGREGATION-UNSUPPORTED",
+  AnalysisPlanUnsupported: "OAL-STUDY-ANALYZE-ANALYSIS-PLAN-UNSUPPORTED"
 } as const;
 
 /** File names of the frozen StudyRun inputs (specification 23.19). */
@@ -495,25 +499,26 @@ export const studyAnalyzeCommand: CommandHandler = async (args, io) => {
   }
 
   const planFlag = args.flags.string("analysis-plan");
-  let lineage: AnalysisLineage = { kind: "preregistered" };
+  const lineage: AnalysisLineage = { kind: "preregistered" };
   if (planFlag !== undefined) {
-    const planPath = path.resolve(args.context.cwd, planFlag);
-    const text = await readFile(planPath, "utf8").catch(() => null);
-    if (text === null) {
-      diagnostics.push(
-        diagnostic({
-          severity: "error",
-          phase: "evaluate",
-          code: AnalyzeCode.InputMissing,
-          message: `Derived analysis plan not found: ${planPath}.`
-        })
-      );
-    } else {
-      lineage = {
-        kind: "derived",
-        reason: `analysis plan ${path.basename(planPath)}`
-      };
-    }
+    // The flag never executed the file it reads: the frozen phase plan
+    // is what runs. Reject it instead of recording a derived lineage
+    // no calculation backs. Corrected built-in analysis uses the
+    // explicit derived-result path.
+    emitDiagnostics(io, args.context, [
+      diagnostic({
+        severity: "error",
+        phase: "evaluate",
+        code: AnalyzeCode.AnalysisPlanUnsupported,
+        message:
+          "--analysis-plan is refused: this build reads no analysis-plan " +
+          "file, so the flag cannot change the executed calculation. The " +
+          "frozen phase plan runs. Use --derived-from for a corrected " +
+          "built-in analysis, which records a derived lineage without " +
+          "overwriting the original result."
+      })
+    ]);
+    return EXIT_UNSUPPORTED;
   }
 
   if (loaded.compatibility !== null) {

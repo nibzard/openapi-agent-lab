@@ -59,6 +59,11 @@ import {
 import type { ProtocolMetric, PhaseContrast, PhasePlan } from "@oal/study-ir";
 
 import { poolCompatibleCells } from "./compatibility.ts";
+import {
+  checkAnalysisSupport,
+  SupportCode,
+  SUPPORTED_POPULATION
+} from "./support.ts";
 
 /** Schema version of the emitted analysis document. */
 export const ANALYSIS_SCHEMA_VERSION = 1;
@@ -401,6 +406,19 @@ export function analyzeStudyRun(
     );
   }
 
+  // Permission to execute is separate from parsing: an archived plan
+  // with unsupported options still parses, but no estimate is computed
+  // from it and nothing substitutes for the requested calculation.
+  for (const finding of checkAnalysisSupport({
+    phasePlan: input.phasePlan,
+    cells: header.child_batches.map((batch) => ({
+      cell_id: batch.cell_id,
+      factor_levels: batch.factor_levels
+    }))
+  })) {
+    report(diagnostics, finding.code, finding.message);
+  }
+
   const verified = input.verification.map((entry) => ({
     artifact: entry.artifact,
     sha256: entry.observed_sha256,
@@ -549,6 +567,16 @@ export function analyzeStudyRun(
     input.phasePlan.analysis.comparison_families.find((family) =>
       family.contrasts.includes(contrastId)
     ) ?? null;
+  // Registered population of one contrast: its own declaration, the
+  // primary estimand's declaration for the referenced contrast, or the
+  // analysis population the counts always compose. After the support
+  // check all three carry the same implemented value.
+  const estimand = input.phasePlan.analysis.primary_estimand;
+  const registeredPopulationOf = (contrast: PhaseContrast): string =>
+    contrast.population ??
+    (contrast.id === estimand.contrast
+      ? estimand.population
+      : SUPPORTED_POPULATION);
 
   interface EstimateDraft {
     readonly contrast: PhaseContrast;
@@ -593,13 +621,25 @@ export function analyzeStudyRun(
         ([factor, level]) => levels[factor] === level
       );
     };
+    // A side resolves only when exactly one collected cell matches it.
+    // The first matching cell is never chosen silently; the support
+    // check above already rejects ambiguous sides, so a second match
+    // here can only mean the pooled inventory drifted.
     const sides = [contrast.levels[0], contrast.levels[1]].map((levelId) => {
-      const cellId = collectedCells
+      const matching = collectedCells
         .map((cell) => cell.cell_id)
-        .find((id) => matchesSide(id, levelId, contrast.within ?? {}));
-      return cellId === undefined
+        .filter((id) => matchesSide(id, levelId, contrast.within ?? {}));
+      if (matching.length > 1) {
+        report(
+          diagnostics,
+          SupportCode.ContrastAmbiguous,
+          `Contrast ${JSON.stringify(contrast.id)} side ${JSON.stringify(levelId)} matches ${matching.length} pooled cells; no marginal analysis exists to pool them.`
+        );
+        return null;
+      }
+      return matching.length === 0
         ? null
-        : (countsByCell.get(cellId)?.get(metric.id) ?? null);
+        : (countsByCell.get(matching[0] ?? "")?.get(metric.id) ?? null);
     });
     const first = sides[0] ?? null;
     const second = sides[1] ?? null;
@@ -656,19 +696,6 @@ export function analyzeStudyRun(
       pValue: rawP > 0 && rawP <= 1 ? rawP : null
     });
   }
-
-  const methodWarnings: string[] = [];
-  if (input.phasePlan.analysis.methods.binary_interval === "wald") {
-    methodWarnings.push(
-      `${AnalysisCode.MethodUnsupported}: binary_interval wald is not implemented; Wilson intervals are reported.`
-    );
-  }
-  if (input.phasePlan.analysis.methods.risk_difference_interval === "wald") {
-    methodWarnings.push(
-      `${AnalysisCode.MethodUnsupported}: risk_difference_interval wald is not implemented; Newcombe intervals are reported.`
-    );
-  }
-  warnings.push(...methodWarnings);
 
   const adjustedByContrast = new Map<string, number>();
   for (const family of input.phasePlan.analysis.comparison_families) {
@@ -758,7 +785,7 @@ export function analyzeStudyRun(
     return {
       contrast_id: draft.contrast.id,
       metric: draft.contrast.metric,
-      population: draft.contrast.metric,
+      population: registeredPopulationOf(draft.contrast),
       cells,
       estimate,
       ...(difference === null

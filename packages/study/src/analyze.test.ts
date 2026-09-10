@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { SchemaValidator, sha256Hex } from "@oal/core";
+import { SchemaValidator, sha256Hex, type JsonObject } from "@oal/core";
 import type { AssignmentLedger } from "@oal/scheduler";
+import { loadPhasePlan } from "@oal/study-ir";
 
 import {
   AnalysisCode,
@@ -11,6 +12,7 @@ import {
   type CellEvidence,
   type StudyAnalysisInput
 } from "./analyze.ts";
+import { SupportCode } from "./support.ts";
 import {
   executeStudyRun,
   planStudyRun,
@@ -32,6 +34,7 @@ import {
   TWO_CELL_STUDY_COMPATIBILITY,
   loadSchema,
   studyTrial,
+  twoCellPhasePlanDoc,
   twoCellStudy,
   type TwoCellStudy
 } from "./fixtures.ts";
@@ -419,6 +422,39 @@ describe("study analysis", () => {
     expect(result.diagnostics.map((entry) => entry.code)).toContain(
       AnalysisCode.StudyRunMismatch
     );
+  });
+
+  it("refuses a risk ratio plan and never substitutes a difference", async () => {
+    const executed = await executedStudy();
+    const cells = cellEvidenceOf(executed);
+    const document = twoCellPhasePlanDoc();
+    const estimand = (document["analysis"] as JsonObject)[
+      "primary_estimand"
+    ] as JsonObject;
+    estimand["measure"] = "risk_ratio";
+    const loaded = loadPhasePlan(document, {
+      schema: loadSchema("phase-plan.v1.schema.json"),
+      protocol: executed.study.protocol,
+      cellCount: TWO_CELL_CELLS.length
+    }).phasePlan;
+    if (loaded === null) {
+      throw new Error("Risk ratio fixture plan must load.");
+    }
+    const result = analyzeStudyRun({
+      ...analysisInputOf(executed, cells),
+      phasePlan: loaded
+    });
+    // No analysis document exists at all, so no difference estimate can
+    // appear under a plan that requested a risk ratio.
+    expect(result.analysis).toBeNull();
+    expect(result.diagnostics.map((entry) => entry.code)).toContain(
+      SupportCode.MeasureUnsupported
+    );
+    expect(
+      result.diagnostics.find(
+        (entry) => entry.code === SupportCode.MeasureUnsupported
+      )?.message
+    ).toContain("risk_ratio");
   });
 
   it("keeps sensitivity bounded and directional in the warnings", async () => {

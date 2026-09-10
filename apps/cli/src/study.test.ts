@@ -919,4 +919,27 @@ describe("oal study analyze", () => {
     expect(code).toBe(EXIT_INVALID);
     expect(io.stderrText()).toContain(AnalyzeCode.HashMismatch);
   });
+
+  it("refuses --analysis-plan without reading any file", async () => {
+    const steel = await loadSteelPack();
+    const cwd = await newWorkspace();
+    const { root } = await scaffoldedStudy(cwd, steel.root);
+    await writeLock(cwd, root, steel.root);
+    const { runRoot } = await assembleStudyRun(cwd, root, steel.root);
+
+    const io = new MemoryIo();
+    const code = await main(
+      ["study", "analyze", runRoot, "--analysis-plan", "plan.json"],
+      io,
+      { cwd }
+    );
+    expect(code).toBe(EXIT_UNSUPPORTED);
+    expect(io.stderrText()).toContain(AnalyzeCode.AnalysisPlanUnsupported);
+    // No analysis document was written for a refused request.
+    expect(
+      await readFile(path.join(runRoot, "study-analysis.json"), "utf8").catch(
+        () => "missing"
+      )
+    ).toBe("missing");
+  });
 });

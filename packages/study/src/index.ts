@@ -14,6 +14,14 @@ export type {
 } from "./validate.ts";
 
 export {
+  checkAnalysisSupport,
+  protocolCellViews,
+  SUPPORTED_POPULATION,
+  SupportCode
+} from "./support.ts";
+export type { AnalysisCellView, AnalysisSupportInput } from "./support.ts";
+
+export {
   COMPATIBILITY_ALGORITHM,
   COMPATIBILITY_SCHEMA_VERSION,
   CompatibilityCode,

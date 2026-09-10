@@ -21,6 +21,8 @@ import {
   type StudyProtocol
 } from "@oal/study-ir";
 
+import { checkAnalysisSupport, protocolCellViews } from "./support.ts";
+
 /** Review-specific codes the loaders cannot emit. */
 export const ReviewCode = {
   FactorNonvarying: "OAL-STUDY-FACTOR-NONVARYING",
@@ -76,7 +78,9 @@ export function resolvedCellCount(input: StudyReviewInput): number {
 
 /**
  * Review one study design. Every returned error blocks validation; a
- * warning is advisory only.
+ * warning is advisory only. Parsed phase plans also pass the analysis
+ * support check: a plan the analyzer cannot execute fails validation
+ * even when its archived fields still parse.
  */
 export function reviewStudyDesign(input: StudyReviewInput): StudyFinding[] {
   const findings: StudyFinding[] = [];
@@ -87,19 +91,42 @@ export function reviewStudyDesign(input: StudyReviewInput): StudyFinding[] {
   checkFactorBalance(input, cellCount, findings);
   checkCounterfactualArms(input, findings);
   checkBlindingRules(input, findings);
+  checkAnalysisPlans(input, findings);
 
   return findings;
 }
 
+/** Support-check every parsed phase plan against its cell inventory. */
+function checkAnalysisPlans(
+  input: StudyReviewInput,
+  findings: StudyFinding[]
+): void {
+  if (input.phases === undefined) {
+    return;
+  }
+  const cells = protocolCellViews(input.protocol);
+  for (const plan of input.phases.values()) {
+    findings.push(...checkAnalysisSupport({ phasePlan: plan, cells }));
+  }
+}
+
 /**
  * Decide whether an analytical run may start. A phase marked analytical
- * requires a protocol lock that verifies without drift.
+ * requires a protocol lock that verifies without drift, and every
+ * analysis plan must stay inside the implemented calculation set.
  */
 export function preflightAnalyticalRun(
   input: AnalyticalRunInput
 ): AnalyticalRunDecision {
   const findings: StudyFinding[] = [];
   const lock = input.lock;
+
+  findings.push(
+    ...checkAnalysisSupport({
+      phasePlan: input.phasePlan,
+      cells: protocolCellViews(input.protocol)
+    })
+  );
 
   if (lock === undefined) {
     if (input.phasePlan.analytical) {
@@ -116,7 +143,8 @@ export function preflightAnalyticalRun(
       message:
         "The phase runs without a protocol lock, so its evidence stays operational."
     });
-    return { allowed: true, findings };
+    const errors = findings.some((finding) => finding.severity === "error");
+    return { allowed: !errors, findings };
   }
 
   if (

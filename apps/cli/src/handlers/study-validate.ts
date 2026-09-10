@@ -264,12 +264,6 @@ export const studyValidateCommand: CommandHandler = async (args, io) => {
     });
     ir = compiled.ir;
     diagnostics.push(...compiled.diagnostics);
-    for (const finding of reviewStudyDesign({
-      protocol: study.protocol,
-      ...(ir === null ? {} : { ir })
-    })) {
-      diagnostics.push(findingToDiagnostic(finding));
-    }
     cellCount = resolvedCellCount({
       protocol: study.protocol,
       ...(ir === null ? {} : { ir })
@@ -283,9 +277,13 @@ export const studyValidateCommand: CommandHandler = async (args, io) => {
       : [phaseFlag]
     : [];
   const phases: PhaseReport[] = [];
+  const phasePlans = new Map<string, PhasePlan>();
   for (const phaseId of phaseIds) {
     const loaded = await loadPhaseSafe(study, phaseId, cellCount);
     diagnostics.push(...loaded.diagnostics);
+    if (loaded.plan !== null) {
+      phasePlans.set(phaseId, loaded.plan);
+    }
     phases.push({
       phase: phaseId,
       member: study.protocol.phases[phaseId] ?? null,
@@ -294,6 +292,15 @@ export const studyValidateCommand: CommandHandler = async (args, io) => {
       purpose: loaded.plan?.purpose ?? null,
       primaryAssignments: loaded.plan?.design.primary_assignments ?? null
     });
+  }
+  if (protocolLoaded) {
+    for (const finding of reviewStudyDesign({
+      protocol: study.protocol,
+      ...(ir === null ? {} : { ir }),
+      phases: phasePlans
+    })) {
+      diagnostics.push(findingToDiagnostic(finding));
+    }
   }
 
   const lockState = await readLock(study.root);
