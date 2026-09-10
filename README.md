@@ -14,20 +14,40 @@ This repository holds the local implementation and the normative
 specification. See [SPEC.md](SPEC.md) for the full specification (version
 0.2). The hosted service that the specification describes is not built.
 
+The execution surface splits into three states:
+
+- **Working end to end.** Raw HTTP execution: `oal inspect`, `oal serve` in
+  contract mode, `oal run --exposure raw-http` with the mock, generic, or
+  Codex adapter, plus `oal evaluate`, `oal report`, `oal compare`,
+  `oal replay`, `oal friction`, and `oal doctor`. Study authoring works
+  through `oal study init`, `validate`, and `schedule`, and `oal study
+  analyze` runs the frozen analysis on an assembled study-run directory.
+- **Implemented components, not connected.** The behavior runtime, the state
+  store, the direct-tool and catalog-tool surfaces, and the study scheduler
+  exist as tested packages. The run commands do not drive them yet.
+- **Refused by the command-line interface.** `oal serve --mode scenario`,
+  `oal run --exposure direct-tools|catalog-tools`, and participant launch in
+  `oal study run` exit with code `4` and a diagnostic. The
+  [review fix plan](docs/review-fix-plan.md) tracks the work that connects
+  them.
+
 ## What the lab does
 
 - **Contract fidelity.** The lab compiles an OpenAPI document into routes,
   authentication rules, validators, examples, and response generators. This
   gives you a mock server with no handwritten handlers.
-- **Scenario fidelity.** An optional versioned pack adds fixtures, state
-  transitions, faults, tasks, and deterministic rubrics. This makes interactions
-  reproducible and gradeable.
-- **Exposure treatments.** The same engine serves raw HTTP, one tool per
-  operation, or three catalog tools (search, describe, invoke) for large
-  contracts.
-- **Run engine.** Run one trial, a cohort, or a preregistered multi-cell study.
-  Every run freezes its inputs, isolates the participant workspace, captures
-  every request, and grades the trace and the final state.
+- **Scenario fidelity.** An optional versioned pack adds response fixtures,
+  tasks, result schemas, and deterministic rubrics. This makes interactions
+  reproducible and gradeable. Stateful scenario execution is not connected
+  yet: contract mode serves deterministic but stateless responses.
+- **Exposure treatments.** Raw HTTP is the one exposure the run engine
+  serves today. Direct-tool and catalog-tool components exist in
+  `@oal/tools`; the runner refuses runs that request them until the bridge
+  lands.
+- **Run engine.** Run one trial or a cohort. Every run freezes its inputs,
+  isolates the participant workspace, captures every request, and grades the
+  trace and the participant report. Study runs stop at validation and
+  scheduling; no command launches study participants yet.
 
 ## Install
 
@@ -73,9 +93,9 @@ task on purpose. The guide explains the exit codes.
 
 - [Quickstart](docs/quickstart.md) — run the local product end to end.
 - [Usage](docs/usage.md) — a reference walkthrough of the local product.
-- [Authoring packs](docs/authoring-packs.md) — add behavior, prompts, and
-  rubrics to a pack.
-- [Authoring studies](docs/authoring-studies.md) — write a study protocol.
+- [Authoring packs](docs/authoring-packs.md) — placeholder; not written yet.
+- [Authoring studies](docs/authoring-studies.md) — placeholder; not written
+  yet.
 - [Research methods](docs/research-methods.md) — run a preregistered study.
 - [Security](docs/security.md) — isolation, credentials, and redaction.
 - [Adapter API](docs/adapter-api.md) — implement an agent adapter.

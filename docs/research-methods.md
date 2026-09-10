@@ -103,7 +103,14 @@ the maximum paid launches.
 
 ### 4. Run the phase
 
-Execute the schedule:
+This build stops before participant launch. `oal study run` validates the
+candidate schedule against the locked protocol, expands the cells, derives
+the run bindings, prints the exact paid-call maximum, and probes the
+adapter. It then refuses to launch with exit code `4`: the batch runner
+allocates trial run IDs and cohort seeds itself and writes its own
+assignment ledger, so scheduler bindings cannot be imposed from the CLI
+yet. Connecting the two is work package F7 of the
+[review fix plan](review-fix-plan.md).
 
 ```sh
 oal study run ./studies/my-study-v1 \
@@ -113,24 +120,22 @@ oal study run ./studies/my-study-v1 \
   --study-run my-study-pilot-01 \
   --model MODEL_ID \
   --effort high \
-  --yes
+  --dry-run
 ```
 
 The command refuses CLI values that disagree with the PhasePlan or the
-candidate schedule. It probes the adapter, builds the phase lock, prints the
-exact paid-call maximum, then asks for confirmation. Omit `--yes` in an
-interactive terminal to confirm by prompt.
+candidate schedule. Use `--dry-run` to complete every check, print the
+launch plan, and persist nothing. `--yes` and the interactive confirmation
+apply to the launch path that F7 connects.
 
-Use `--dry-run` to complete the same validation in a temporary root. It
-starts no agent, persists no StudyRun, and makes no provider call.
-
-Evidence lands under `.oal/studies/<study-run-id>/`. Each cell writes an
-ordinary child batch under `batches/`. An analytical phase refuses dirty
-provenance and an existing study-run ID. There is no force flag.
+When the connection lands, evidence will land under
+`.oal/studies/<study-run-id>/`, one ordinary child batch per cell under
+`batches/`. An analytical phase refuses dirty provenance and an existing
+study-run ID. There is no force flag.
 
 ### 5. Analyze the study run
 
-Run the frozen analysis:
+Run the frozen analysis on an assembled study-run directory:
 
 ```sh
 oal study analyze .oal/studies/my-study-pilot-01
@@ -140,6 +145,13 @@ Analysis verifies the protocol, phase, schedule, compatibility, and evidence
 hashes first. It then executes exactly the frozen plan. A changed plan, a
 changed rubric, or a different weighting creates a derived analysis with a
 new lineage. It never overwrites the preregistered result.
+
+Because no command launches a study yet, the study-run directory must be
+assembled from engine outputs: the frozen inputs, the locks, the schedule,
+the assignment ledger, and the cell batches that the scheduler and runner
+produce. The command-line test suite assembles one this way. A study
+launched end to end through the public commands is the F7 acceptance
+control.
 
 To aggregate compatible runs, name each input explicitly:
 
@@ -183,9 +195,19 @@ exists. Built-in deterministic methods include:
 Small pilots are labeled directional. Unplanned contrasts stay descriptive.
 The analyzer refuses pooled estimates across different compatibility keys.
 
+The methods above are the implemented ones. Requesting an unimplemented
+option, such as a Wald interval, currently records a warning and reports the
+implemented method instead. Rejecting unsupported options before analytical
+execution is work package F3 of the
+[review fix plan](review-fix-plan.md).
+
 ## Study artifacts
 
-Each StudyRun directory follows this shape:
+No command produces a complete StudyRun in this build; the layout below is
+the target shape that the scheduler and analysis engines already write
+piecewise. Sections marked with F7 in the [review fix plan](review-fix-plan.md)
+land with durable trial execution. Each StudyRun directory follows this
+shape:
 
 ```text
 .oal/studies/<study-run-id>/

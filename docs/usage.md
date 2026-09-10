@@ -9,12 +9,17 @@ The local product covers the initial release scope:
 - OpenAPI 3.0 and 3.1 ingestion, in JavaScript Object Notation (JSON) or
   YAML.
 - A compiled contract and a capability report.
-- A deterministic contract mock with optional scenario packs.
+- A deterministic contract mock with pack-supplied response fixtures.
 - Prompts, tasks, instructions, and result schemas.
 - Deterministic rubrics, evaluations, and reports.
 - Adapters for the mock agent, the Codex CLI, and generic commands.
 - Isolated per-run workspaces and immutable artifacts.
 - Honest reporting of the isolation level that was actually reached.
+
+Stateful scenario serving is not part of this build. `oal serve --mode
+scenario` and `oal run --exposure direct-tools|catalog-tools` refuse with
+exit code `4`. See the [review fix plan](review-fix-plan.md) for the work
+that connects those paths.
 
 ## Ingestion and the capability report
 
@@ -68,12 +73,16 @@ The `@oal/gateway` package routes requests, validates input, emulates
 authentication, and generates responses.
 
 Contract mode serves schema-valid responses with no claimed business
-behavior. Scenario mode applies pack fixtures, state, and faults:
+behavior. Packs add static response fixtures on top of contract mode. A
+stateful scenario backend is not connected in this build:
 
 ```sh
 oal serve examples/quickstart.json --port 4010 --run-seed 42
-oal serve packs/steel-computer --mode scenario --scenario baseline
 ```
+
+`--mode scenario` exists as a flag but refuses to serve. The run engine has
+no scenario backend to start yet, so the command exits with code `4` before
+it binds a port.
 
 The server:
 
@@ -97,9 +106,15 @@ A pack is a versioned bundle. It holds a contract plus optional behavior,
 fixtures, prompts, tasks, result schemas, workflows, and rubrics. The
 `@oal/pack` package loads and validates packs.
 
-The repository ships one pack, `packs/steel-computer`. It migrates the Steel
-v1 browser-session API. The manifest declares three evals and one `baseline`
-scenario.
+The repository ships three packs:
+
+- `packs/steel-computer` migrates the Steel v1 browser-session API. The
+  manifest declares three evals and one `baseline` scenario.
+- `packs/slack` is built from the Slack Web API snapshot. It ships one
+  diagnostic eval in which an operator agent probes operations and authors
+  response fixtures.
+- `packs/webclip` is the greenfield friction-loop demonstration pack. Its
+  [README](../packs/webclip/README.md) records the measured loop.
 
 Work with packs through three commands:
 
@@ -148,7 +163,10 @@ mismatch. It never rewrites the manifest.
 An eval binds one task, one prompt set, one scenario, one result schema, and
 one rubric. A rubric is a declarative list of checks. The `@oal/evaluator`
 package grades runs from frozen evidence. It reads the normalized trace, the
-documentation events, the final state, and the participant report.
+documentation events, the final state, and the participant report. In this
+build the final state stays empty: contract mode keeps no product state, so
+`state.final.json` records the empty snapshot and final-state checks grade
+against it.
 
 Rubrics support these check kinds:
 

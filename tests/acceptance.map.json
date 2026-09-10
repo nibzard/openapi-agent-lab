@@ -708,21 +708,29 @@
       "packages/runner/src/exposure.test.ts > answers 413 when the body exceeds the limit",
       "packages/runner/src/exposure.test.ts > closes within the bound when a client leaves a body incomplete",
       "packages/behavior-api/src/execute.test.ts > rejects a nextState beyond the byte bound"
-    ]
+    ],
+    "deferred": {
+      "summary": "Compiler, request, connection, state, and configured ceiling paths have bounded tests. Study-surface limits land with durable study execution; log, disk, and full wall-time enforcement have no owner yet.",
+      "owner": "F7"
+    }
   },
   {
     "id": "AC-061",
     "group": "42.6",
     "claim": "YAML alias bombs, regex bombs, reference bombs, multipart floods, and connection floods remain within test resource ceilings.",
     "milestone": "raw-http-mvp",
-    "status": "covered",
+    "status": "partial",
     "tests": [
       "packages/openapi/tests/yaml.test.ts > fails closed on alias expansion bombs",
       "packages/openapi/tests/corpus.test.ts > rejects every adversarial fixture with a stable code",
       "packages/gateway/src/conformance.test.ts > answers 501 quickly when generation is unsupported",
       "packages/runner/src/exposure.test.ts > bounds the request queue and answers 429",
       "packages/gateway/src/multipart.test.ts > fails once the parts limit is exceeded"
-    ]
+    ],
+    "deferred": {
+      "summary": "Alias bombs, adversarial fixtures, queue bounds, and multipart floods have bounded tests. Contract- and pack-supplied regular expressions evaluate synchronously with no deadline, so regex bombs stay unbounded.",
+      "owner": "F2"
+    }
   },
   {
     "id": "AC-062",
@@ -881,7 +889,11 @@
       "packages/tools/src/catalog.test.ts > serves a direct tool name through the same envelope",
       "packages/tools/src/invoke.test.ts > reports the direct transport when configured",
       "packages/runner/src/exposure.test.ts > serves the product pipeline and records api exchanges"
-    ]
+    ],
+    "deferred": {
+      "summary": "Direct and catalog invocation run through their own envelopes in unit tests; the runner refuses runs that request those exposure modes, so cross-exposure equivalence is unproven.",
+      "owner": "F6"
+    }
   },
   {
     "id": "AC-075",
@@ -920,7 +932,11 @@
       "packages/tools/src/catalog.test.ts > describes every direct tool without trusting contract prose",
       "packages/tools/src/description.test.ts > places source text under the untrusted label",
       "packages/tools/src/describe.test.ts > bounds and normalizes the source description"
-    ]
+    ],
+    "deferred": {
+      "summary": "Catalog descriptions are bounded and labeled in unit tests; hiding behavior content from live tool metadata across exposures waits on the tool bridge.",
+      "owner": "F6"
+    }
   },
   {
     "id": "AC-078",
@@ -953,15 +969,14 @@
     "group": "42.9",
     "claim": "Steel ContractIR contains exactly 37 path operations.",
     "milestone": "raw-http-mvp",
-    "status": "partial",
+    "status": "corrected",
     "tests": [
       "packages/testkit/src/steel-pack.test.ts > keeps all 41 Steel v1 operations in the contract",
       "packages/testkit/src/steel-parity.test.ts > compiles source and pack to the same 41 operations"
     ],
-    "deviation": {
+    "correction": {
       "summary": "The frozen Steel source declares 41 operations, not 37.",
-      "spec_ref": "SPEC.md section 39.1 (source of truth) and section 42.9",
-      "enforced": "steel-pack and steel-parity tests pin the 41-operation surface"
+      "basis": "SPEC.md section 39.1 (source of truth) and section 42.9"
     }
   },
   {
@@ -969,16 +984,15 @@
     "group": "42.9",
     "claim": "Steel exact-completeness maps all 37 operations once with no extra key.",
     "milestone": "raw-http-mvp",
-    "status": "partial",
+    "status": "corrected",
     "tests": [
       "packages/testkit/src/steel-parity.test.ts > compiles source and pack to the same 41 operations",
       "packages/testkit/src/steel-parity.test.ts > keeps every operation reachable through the router",
       "packages/testkit/src/steel-parity.test.ts > resolves every eval to the exact full contract surface"
     ],
-    "deviation": {
+    "correction": {
       "summary": "Exact completeness holds for all 41 declared operations, not 37.",
-      "spec_ref": "SPEC.md section 39.1 (source of truth) and section 42.9",
-      "enforced": "steel-parity tests map every declared operation exactly once"
+      "basis": "SPEC.md section 39.1 (source of truth) and section 42.9"
     }
   },
   {
@@ -997,6 +1011,10 @@
       "summary": "Seven of the ten prototype signal areas have one-to-one parity tests; three stay recorded absences that need behavior handlers.",
       "spec_ref": "SPEC.md section 39.5 signal list and MIGRATION-NOTES drift item 17",
       "enforced": "PARITY.md maps all ten areas; every mapped area cites a real test or a recorded absence with its reason"
+    },
+    "deferred": {
+      "summary": "Seven of ten prototype signal areas have parity tests; three need scenario behavior handlers that the run commands do not serve.",
+      "owner": "F5"
     }
   },
   {
@@ -1014,7 +1032,13 @@
       "summary": "The rubric passes on the recorded golden trace; a live end-to-end pass needs scenario behavior handlers, which the contract-mode pack defers.",
       "spec_ref": "SPEC.md section 39.2 and MIGRATION-NOTES drift item 17",
       "enforced": "The checkpoint-recovery rubric scores the nine-event golden trace as passed, the shipped eval freezes a clean plan at preflight, and the same pipeline runs a steel trial end to end"
-    }
+    },
+    "deferred": {
+      "summary": "The rubric passes on the recorded golden trace only. A live end-to-end pass needs the scenario backend; contract-mode responses are stateless.",
+      "owner": "F5"
+    },
+    "requires_live": true,
+    "evidence": "constructed"
   },
   {
     "id": "AC-084",
@@ -1032,6 +1056,10 @@
       "summary": "Auth, lifecycle, files, checkpoints, and binary responses match frozen goldens in contract mode; idempotency replay, SSE streams, and safe stand-ins need the scenario backend.",
       "spec_ref": "SPEC.md section 39.2 and MIGRATION-NOTES drift items 17 through 19",
       "enforced": "Golden fixture bytes serve verbatim for all 41 operations, credentials mint and authenticate, and undeclared idempotency headers stay inert"
+    },
+    "deferred": {
+      "summary": "Auth, lifecycle, files, checkpoints, and binary responses match frozen goldens in contract mode; idempotency replay, SSE streams, and safe stand-ins need the scenario backend.",
+      "owner": "F5"
     }
   },
   {
@@ -1242,7 +1270,11 @@
       "packages/arazzo/src/compile.test.ts > orders steps by dependency and maps canonical keys",
       "packages/arazzo/src/compile.test.ts > rejects unsupported runtime expressions",
       "packages/arazzo/src/align.test.ts > backtracks instead of consuming the first candidate"
-    ]
+    ],
+    "deferred": {
+      "summary": "The Arazzo compiler and aligner have unit tests; hidden grading over executed workflows has no implementation owner in the review plan.",
+      "owner": "unassigned"
+    }
   },
   {
     "id": "AC-101",
@@ -1254,7 +1286,11 @@
       "packages/study-ir/src/compile.test.ts > compiles a validated protocol into schema-valid IR",
       "packages/study-ir/src/lock.test.ts > creates a schema-valid lock over every member",
       "packages/study-ir/src/lock.test.ts > never contains its own digest"
-    ]
+    ],
+    "deferred": {
+      "summary": "Protocol compile and lock tests exist; the study run command refuses to launch, so its CLI contract covers the refusal, not execution.",
+      "owner": "F7"
+    }
   },
   {
     "id": "AC-102",
@@ -1275,8 +1311,12 @@
     "group": "42.12",
     "claim": "After the first paid trial reaches participant_spawned, protocol or phase changes are refused; amendments need a new version with lineage while original locks stay byte-identical.",
     "milestone": "research-protocol",
-    "status": "gap",
-    "tests": []
+    "status": "missing",
+    "tests": [],
+    "deferred": {
+      "summary": "No test enforces amendment lineage after the first paid trial; participant launch is not connected, so the trigger cannot fire.",
+      "owner": "F7"
+    }
   },
   {
     "id": "AC-104",
@@ -1320,7 +1360,11 @@
       "packages/scheduler/src/ids.test.ts > rejects a duplicate key",
       "packages/study/src/compatibility.test.ts > rejects a level the factor does not declare",
       "packages/study/src/run.test.ts > refuses to assemble a header when preflight failed"
-    ]
+    ],
+    "deferred": {
+      "summary": "Scheduler-side rejection tests exist; bindings cannot be imposed on the batch runner yet, so the pre-startup refusal path for imposed bindings is unproven.",
+      "owner": "F7"
+    }
   },
   {
     "id": "AC-107",
@@ -1355,7 +1399,11 @@
       "packages/study/src/validate.test.ts > allows a smoke phase without a lock and warns",
       "packages/study/src/run.test.ts > refuses to assemble a header when preflight holds an error",
       "packages/report/src/aggregate.test.ts > aggregates API behavior without pooling smoke traffic"
-    ]
+    ],
+    "deferred": {
+      "summary": "Runner preflight exists for batches; the paid analytical launch gate across a study phase waits for durable study execution.",
+      "owner": "F7"
+    }
   },
   {
     "id": "AC-109",
@@ -1403,7 +1451,11 @@
       "packages/report/src/compare.test.ts > refuses pooled estimates when compatibility keys differ",
       "packages/report/src/compare.test.ts > computes the paired difference and exact McNemar p-value",
       "packages/study/src/analyze.test.ts > refuses pooled estimates when a required block stays incomplete"
-    ]
+    ],
+    "deferred": {
+      "summary": "The compatibility gate and paired methods have unit tests; the analyzer refuses a second StudyRun, so multi-study synthesis lineage is unexercised.",
+      "owner": "unassigned"
+    }
   },
   {
     "id": "AC-112",
@@ -1438,7 +1490,11 @@
       "packages/runner/src/exposure.test.ts > records documentation exchanges with their own stream identity",
       "packages/runner/src/exposure.test.ts > serves the declared synthetic credential",
       "packages/state-store/src/store.test.ts > records documentation exchanges on their own sequence"
-    ]
+    ],
+    "deferred": {
+      "summary": "The documentation facade serves frozen bytes with its own stream; scenario-backend interactions with the documentation plane stay open.",
+      "owner": "unassigned"
+    }
   },
   {
     "id": "AC-114",
@@ -1478,7 +1534,11 @@
       "packages/state-store/src/store.test.ts > links semantic events to their request and parent",
       "packages/evidence/src/artifacts.test.ts > semantic events number sequentially in commit order",
       "packages/report/src/replay.test.ts > verifies every recorded exchange of a faithful run"
-    ]
+    ],
+    "deferred": {
+      "summary": "Semantic events validate and commit atomically over HTTP; parity of one declared meaning across direct and catalog variants waits on the tool bridge.",
+      "owner": "F6"
+    }
   },
   {
     "id": "AC-117",
@@ -1522,7 +1582,11 @@
     "tests": [
       "packages/evaluator/src/rubric.test.ts > rejects a forbidden host global in an expression",
       "packages/evaluator/src/rubric.test.ts > rejects weights that are negative or all zero"
-    ]
+    ],
+    "deferred": {
+      "summary": "The expression sandbox rejects host globals; the trusted-or-isolated custom evaluator profile with digest pinning is not implemented.",
+      "owner": "unassigned"
+    }
   },
   {
     "id": "AC-120",
@@ -1533,6 +1597,98 @@
     "tests": [
       "packages/testkit/src/steel-parity.test.ts > rejects a checkpoint-on-create attempt",
       "packages/testkit/src/steel-parity.test.ts > answers invented routes with the same neutral problem"
-    ]
+    ],
+    "deferred": {
+      "summary": "The reference study pins the pack and rejects checkpoint_id; drawing participant assets under StudyRun provenance needs scenario execution and durable study runs.",
+      "owner": "F5, F7"
+    }
+  },
+  {
+    "id": "AC-121",
+    "group": "review",
+    "claim": "A hostile pattern supplied by a contract or pack terminates within the configured worker deadline when served through `oal serve --strict`; the controller and an unrelated request stay responsive, worker cleanup and bounded repeated attacks hold, and later valid requests succeed through request validation, response generation, and report evaluation.",
+    "milestone": "review-remediation",
+    "status": "missing",
+    "tests": [],
+    "requires_live": true,
+    "deferred": {
+      "summary": "Acceptance control of the review fix plan; no test enforces it yet.",
+      "owner": "F2"
+    }
+  },
+  {
+    "id": "AC-122",
+    "group": "review",
+    "claim": "An analysis plan requesting an unsupported option, including risk_ratio, generic difference, and Wald intervals, fails a shared support check during study validation, planning, analytical preflight, and analyzeStudyRun with a stable diagnostic that names the option; no substitute estimate is returned.",
+    "milestone": "review-remediation",
+    "status": "missing",
+    "tests": [],
+    "deferred": {
+      "summary": "Acceptance control of the review fix plan; no test enforces it yet.",
+      "owner": "F3"
+    }
+  },
+  {
+    "id": "AC-123",
+    "group": "review",
+    "claim": "Main and sensitivity outcomes resolve every primary slot once from one replacement-chain resolution: a pre-control-censored original with a passing replacement gives that slot one sensitivity failure, a chain of only pre-control failures contributes no invented task failure, and remaining unresolved slots are tracked under the registered policy.",
+    "milestone": "review-remediation",
+    "status": "missing",
+    "tests": [],
+    "deferred": {
+      "summary": "Acceptance control of the review fix plan; no test enforces it yet.",
+      "owner": "F3"
+    }
+  },
+  {
+    "id": "AC-124",
+    "group": "review",
+    "claim": "Removing any required webclip task step separately fails the task; duplicate identifiers, swapped formats or URLs, the wrong deleted clip, incorrect representations, and reports that contradict the evidence fail; a complete trace passes, and the two review probes stay permanent negative controls.",
+    "milestone": "review-remediation",
+    "status": "missing",
+    "tests": [],
+    "deferred": {
+      "summary": "Acceptance control of the review fix plan; no test enforces it yet.",
+      "owner": "F4"
+    }
+  },
+  {
+    "id": "AC-125",
+    "group": "review",
+    "claim": "A scripted participant completes the corrected webclip errand through the public run command against a stateful scenario backend, reading returned identifiers and sending real Accept headers; trace, report, final state, and score agree, a second trial proves isolation, a repeated seed proves determinism, an injected backend failure proves rollback and cleanup, and a failing scripted participant stays failed.",
+    "milestone": "review-remediation",
+    "status": "missing",
+    "tests": [],
+    "requires_live": true,
+    "deferred": {
+      "summary": "Acceptance control of the review fix plan; no test enforces it yet.",
+      "owner": "F5"
+    }
+  },
+  {
+    "id": "AC-126",
+    "group": "review",
+    "claim": "The same webclip task completes over raw HTTP, direct tools, and catalog tools with equivalent API semantics and final state under the same authentication, limits, state transitions, response validation, and trace rules; discovery, invalid calls, cancellation, and endpoint cleanup behave, and an adapter without tool support fails preflight with an accurate reason.",
+    "milestone": "review-remediation",
+    "status": "missing",
+    "tests": [],
+    "requires_live": true,
+    "deferred": {
+      "summary": "Acceptance control of the review fix plan; no test enforces it yet.",
+      "owner": "F6"
+    }
+  },
+  {
+    "id": "AC-127",
+    "group": "review",
+    "claim": "A two-cell study validates, locks, schedules, runs, and analyzes through the public commands with scripted participants; frozen identifiers, seeds, digests, cell membership, and one denominator entry per slot hold, a declared corrupt-evidence replacement activates, interruption and a never-started assignment are recorded, intact task failure never triggers replacement, and a crash leaves a readable ledger with no implicit duplicate launch.",
+    "milestone": "review-remediation",
+    "status": "missing",
+    "tests": [],
+    "requires_live": true,
+    "deferred": {
+      "summary": "Acceptance control of the review fix plan; no test enforces it yet.",
+      "owner": "F7"
+    }
   }
 ]

@@ -77,6 +77,14 @@ pending. Every gate below names its local command where one exists.
 
 - PR and nightly gates green: run `pnpm run ci`, then the three nightly
   jobs. Covered by the workflows once branch protection requires them.
+- Acceptance completeness: run `pnpm run readiness`. The command reads
+  `tests/acceptance.map.json` and exits `1` while any criterion of a
+  required milestone is partial, missing, or proven only by constructed
+  evidence where live evidence is required. Continuous integration does
+  not run it on purpose: `pnpm run ci` verifies an honest map, and the
+  readiness gate fails while required behavior is missing. Covered by
+  `tests/release-readiness.test.ts`, which pins the gate semantics and
+  the command-line exit.
 - No unwaived critical or high vulnerability: run
   `pnpm audit --prod --audit-level=high`. The CI job reports it. The
   waiver list is pending, owner: release engineering.

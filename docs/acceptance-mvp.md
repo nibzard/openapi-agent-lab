@@ -1,82 +1,133 @@
 # MVP acceptance report
 
 This report records how the repository proves the acceptance criteria of
-specification section 42. Task T053 produced the map, the enforcing suite,
-and this report. The map is `tests/acceptance.map.json`; the suite is
-`tests/acceptance.test.ts`.
+specification section 42, plus the acceptance controls that the
+[review fix plan](review-fix-plan.md) added. The map is
+`tests/acceptance.map.json`; the suite is `tests/acceptance.test.ts`.
 
 ## Method
 
-The work followed four steps:
+The work followed these steps:
 
-1. Map every criterion AC-001 through AC-120 to the automated tests that
-   prove it. One entry per criterion records the group, the claim, the
-   milestone, the status, and the proving tests.
-2. Run the full suite with `pnpm run test`. The acceptance suite itself
-   checks the map: every referenced file exists and every referenced test
-   title appears in that file.
-3. Fix every gap that blocked the Raw-HTTP MVP gate. A criterion only
-   counts as satisfied when at least one test enforces it.
-4. Publish this report. Every deviation from the literal criterion text is
-   recorded here next to its criterion identifier.
-
-## Milestone gates
-
-Section 42 defines the gates:
-
-- Raw-HTTP MVP: AC-001 through AC-073 and AC-080 through AC-099.
-- Agent-native tools: AC-074 through AC-079 plus the MVP set.
-- Workflow: AC-100 plus the prior sets.
-- Research protocol: AC-101 through AC-120 plus the MVP set.
-- Product 1.0: all criteria.
-
-The acceptance suite asserts that every Raw-HTTP MVP criterion is covered,
-or carries a deviation recorded in this report. Criteria of later
-milestones carry their mapped status but do not block this gate.
+1. Map every criterion AC-001 through AC-120, plus the remediation
+   controls AC-121 through AC-127, to the automated tests that prove it.
+   One entry per criterion records the group, the claim, the milestone,
+   the status, and the proving tests.
+2. Run the full suite with `pnpm run test`. The acceptance suite checks
+   the map: every referenced file exists, every referenced test title
+   appears in that file, and the coverage counts below are generated
+   from the map itself.
+3. Keep the map honest about what is not done. A criterion that is
+   partially enforced or not enforced carries a deferred record that
+   names its owner.
+4. Keep completeness out of continuous integration. The suite verifies
+   an honest map; `pnpm run readiness` (section below) is the gate that
+   fails while required behavior is missing.
 
 ## Status vocabulary
 
 - **covered**: at least one automated test enforces the claim.
-- **partial**: the enforcing tests cover the claim in part, and the
-  remainder is either deferred by a recorded deviation or owned by a later
-  milestone surface.
-- **gap**: no test enforces the claim yet.
+- **corrected**: the requirement text itself was wrong. The correction
+  record names the corrected requirement and its authority, and the
+  enforcing tests satisfy the corrected requirement in full.
+- **partial**: the enforcing tests cover the claim in part. The
+  remainder is deferred with a named owner. Partial never satisfies
+  release readiness.
+- **missing**: no test enforces the claim yet.
+
+A criterion marked `requires_live` demands success through a real
+execution path. Constructed traces and replayed goldens cannot satisfy
+it; the recorded evidence must be live.
+
+## Corrections
+
+A correction records where the specification text, not the build, was
+wrong. The specification stays normative for future revisions; the map
+enforces the corrected requirement.
+
+| Identifier | Specification text | Correction | Basis |
+| --- | --- | --- | --- |
+| AC-080 | "Steel ContractIR contains exactly 37 path operations." | The frozen Steel source declares 41 operations. The pack compiles all 41 keys; exact-completeness holds against the frozen source inventory. | SPEC.md section 39.1 (source of truth); `packages/testkit/src/steel-pack.test.ts` and `steel-parity.test.ts` pin the 41-operation surface. |
+| AC-081 | "Steel exact-completeness maps all 37 operations once with no extra key." | Every one of the 41 declared operations maps exactly once and no undeclared key appears. | SPEC.md section 39.1; `packages/testkit/src/steel-parity.test.ts` compares the pack surface with the compiled source surface. |
 
 ## Deviations
 
 A deviation records where this build enforces the intent of a criterion
-but not its literal text. The specification text stays normative; the
-deviation names the enforcing tests and the reason.
+but not its literal text. Unlike a correction, the remainder stays
+deferred and blocks release readiness.
 
 | Identifier | Specification text | Deviation | Enforced by |
 | --- | --- | --- | --- |
-| AC-080 | "Steel ContractIR contains exactly 37 path operations." | The Steel source repository is the source of truth (section 39.1) and declares 41 operations. The pack compiles all 41 keys; exact-completeness holds against the frozen source inventory, not the prototype count of 37. | `packages/testkit/src/steel-pack.test.ts` and `packages/testkit/src/steel-parity.test.ts` assert the full 41-operation surface with no duplicates and no extra keys. |
-| AC-081 | "Steel exact-completeness maps all 37 operations once with no extra key." | Same source-of-truth drift as AC-080: every one of the 41 declared operations maps exactly once, and no undeclared key appears. | `packages/testkit/src/steel-parity.test.ts` compares the pack surface with the compiled source surface operation for operation. |
-| AC-082 | "Existing ten prototype tests pass or have one-to-one equivalent parity tests with recorded mapping." | Seven of the ten prototype signal areas map to real parity tests. Three areas — invalid transition, argv versus shell exec, and streaming — stay recorded absences because they exercise behavior handlers, which the contract-mode pack defers (MIGRATION-NOTES drift item 17). | `packs/steel-computer/PARITY.md` maps all ten areas with a test or a reasoned absence; `packages/testkit/src/steel-parity.test.ts` enforces the mapped areas. |
-| AC-083 | "Golden fake-agent checkpoint recovery passes the ordered trace and final-state rubric." | The rubric passes on the recorded golden trace. A live end-to-end pass needs scenario behavior handlers, which the contract-mode pack defers (MIGRATION-NOTES drift item 17); contract-mode responses are deterministic but stateless, so a state-machine rubric cannot pass against the live mock. | `packages/testkit/src/steel-pack.test.ts` scores the nine-event golden trace as passed; `packages/runner/src/integration-trial.test.ts` freezes the shipped eval at preflight and runs a steel trial end to end. |
-| AC-084 | "Current Steel auth, lifecycle, file, environment, checkpoint, idempotency, SSE, binary, and safe-stand-in behavior matches frozen golden cases." | Auth, lifecycle, files, checkpoints, and binary responses match frozen goldens in contract mode. Idempotency replay, SSE streams, and safe stand-ins need the scenario backend of MIGRATION-NOTES drift items 17 through 19. | `packages/testkit/src/steel-parity-golden.test.ts` serves frozen bytes for all 41 operations; `packages/testkit/src/steel-parity.test.ts` proves minted credentials authenticate and undeclared idempotency headers stay inert. |
+| AC-060 | Limit coverage with bounded failure tests. | Compiler, request, connection, state, and configured ceiling paths have bounded tests. Study surface, log, disk, and full wall-time enforcement remain incomplete. | `packages/config/src/limits.test.ts`, `packages/openapi/tests/yaml.test.ts`, `packages/runner/src/exposure.test.ts`. |
+| AC-082 | "Existing ten prototype tests pass or have one-to-one equivalent parity tests with recorded mapping." | Seven of the ten prototype signal areas map to real parity tests. Three need scenario behavior handlers. | `packs/steel-computer/PARITY.md`; `packages/testkit/src/steel-parity.test.ts`. |
+| AC-083 | "Golden fake-agent checkpoint recovery passes the ordered trace and final-state rubric." | The rubric passes on the recorded golden trace. A live end-to-end pass needs the scenario backend; contract-mode responses are stateless. This criterion requires live evidence, which the golden replay cannot provide. | `packages/testkit/src/steel-pack.test.ts`; `packages/runner/src/integration-trial.test.ts`. |
+| AC-084 | "Current Steel auth, lifecycle, file, environment, checkpoint, idempotency, SSE, binary, and stand-in behavior matches frozen golden cases." | Auth, lifecycle, files, checkpoints, and binary responses match frozen goldens in contract mode. Idempotency replay, SSE streams, and safe stand-ins need the scenario backend. | `packages/testkit/src/steel-parity-golden.test.ts`; `packages/testkit/src/steel-parity.test.ts`. |
+
+## Deferred registry
+
+Every partial or missing criterion names the work package that owns the
+remainder. `F2` through `F7` refer to the
+[review fix plan](review-fix-plan.md); `unassigned` means no package
+owns it yet.
+
+| Owner | Criteria |
+| --- | --- |
+| F2 (bounded patterns) | AC-061, AC-121 |
+| F3 (analysis correctness) | AC-122, AC-123 |
+| F4 (webclip grading) | AC-124 |
+| F5 (scenario execution) | AC-082, AC-083, AC-084, AC-120, AC-125 |
+| F6 (tool execution) | AC-074, AC-077, AC-116, AC-126 |
+| F7 (study execution) | AC-060, AC-101, AC-103, AC-106, AC-108, AC-120, AC-127 |
+| unassigned | AC-100, AC-111, AC-113, AC-119 |
+
+AC-120 appears under both F5 and F7 because its remainder needs both the
+scenario backend and durable study runs.
 
 ## Coverage summary
 
-Status counts per specification group. `Deviated` counts partial
-criteria with a recorded deviation.
+Status counts per specification group, generated from
+`tests/acceptance.map.json` by the acceptance suite.
 
-| Group | Focus | Criteria | Covered | Deviated | Partial | Gap |
-| --- | --- | --- | --- | --- | --- | --- |
+| Group | Focus | Criteria | Covered | Corrected | Partial | Missing |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
 | 42.1 | Compiler and capability | 12 | 12 | 0 | 0 | 0 |
 | 42.2 | Gateway and contract behavior | 15 | 15 | 0 | 0 | 0 |
 | 42.3 | State, behavior, and determinism | 10 | 10 | 0 | 0 | 0 |
 | 42.4 | Trace and evidence | 8 | 8 | 0 | 0 | 0 |
 | 42.5 | Runner, adapters, and isolation | 10 | 10 | 0 | 0 | 0 |
-| 42.6 | Redaction and limits | 6 | 6 | 0 | 0 | 0 |
+| 42.6 | Redaction and limits | 6 | 4 | 0 | 2 | 0 |
 | 42.7 | Evaluator and reports | 12 | 12 | 0 | 0 | 0 |
 | 42.8 | Tool exposure | 6 | 4 | 0 | 2 | 0 |
-| 42.9 | Steel migration | 8 | 3 | 5 | 0 | 0 |
+| 42.9 | Steel migration | 8 | 3 | 2 | 3 | 0 |
 | 42.10 | Release completeness | 3 | 3 | 0 | 0 | 0 |
 | 42.11 | Cross-cutting and workflow | 10 | 9 | 0 | 1 | 0 |
 | 42.12 | Research protocols | 20 | 11 | 0 | 8 | 1 |
+| review | Review remediation | 7 | 0 | 0 | 0 | 7 |
+| total | | 127 | 101 | 2 | 16 | 8 |
 
-Raw-HTTP MVP gate: 93 of 93 criteria satisfied.
+## Release readiness
+
+Section 42 defines the milestone gates: Raw-HTTP MVP, agent-native
+tools, workflow, research protocol, and product 1.0 over all of them.
+The review found that the previous report treated deferred behavior as
+satisfying the Raw-HTTP MVP gate. It does not.
+
+Continuous integration no longer asserts milestone completeness. The
+acceptance suite verifies that the map is honest: statuses are valid,
+deferred remainders name an owner, and the counts above are generated
+from the map.
+
+Release readiness is a separate command:
+
+```bash
+pnpm run readiness
+```
+
+It exits `1` while any criterion blocks and lists every blocker with its
+owner. As of this report, 24 criteria block: 5 in the Raw-HTTP MVP set,
+2 in agent-native tools, 1 in workflow, 9 in research protocol, and the
+7 remediation controls. The gate passes when every required outcome has
+passing evidence, live where live is required.
 
 ## Running the acceptance suite
 
@@ -91,8 +142,3 @@ Run only the acceptance map checks:
 ```bash
 npx vitest run tests/acceptance.test.ts
 ```
-# AC-060 limit coverage deviation
-
-AC-060 is partial. Compiler, request, connection, state, and configuration
-ceilings have bounded tests. Study surface, log, disk, and full wall-time
-enforcement remain incomplete.

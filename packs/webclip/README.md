@@ -62,7 +62,7 @@ created a third clip, and failed the exactly-two-clips check. One
 session log says it plainly: "The retry had the same misleading
 result."
 
-### The repair
+### The fixture change
 
 Six fixtures now cover the operations the errand touches. The list
 page shows both clips. The account read reports one clip in use, which
@@ -71,12 +71,28 @@ fixture overrides Accept negotiation in the gateway, so wiring
 `image/svg+xml` would serve the picture to a `text/markdown` request.
 The delete keeps its generated empty 204.
 
-### What the loop proved, and what it missed
+### What the re-measure observed, and what it did not establish
 
-The re-measure confirms the repair: three of three trials passed, each
-with exactly two create calls. The provenance mix moved from
-`fixture: 0` on every operation to six fixture-served operations, and
-the report quotes that mix per operation.
+The recorded re-measure observed three of three trials passing the
+rubric as authored, each with exactly two create calls, with the
+provenance mix moved from `fixture: 0` on every operation to six
+fixture-served operations. The report quotes that mix per operation.
+
+Those observations do not establish a general repair:
+
+- Three trials with no control group show the pass rate moved together
+  with the fixture change. They do not isolate the cause, and they do
+  not bound the pass rate of a fourth trial.
+- The mock remains stateless. Every `create_clip` serves the same
+  fixture body, so an image create still returns the markdown clip
+  body. The passing participants tolerated that mismatch; the errand
+  does not verify it, and the full repair needs the behavior backend
+  (plan F5 in `docs/review-fix-plan.md`).
+- The rubric that produced score 1.0 checks the create-call count and
+  the errand shape, not the served representations. The corrected
+  grading rules (plan F4) demand more than the static fixtures can
+  serve, so the recorded pass rate does not transfer to the corrected
+  errand.
 
 The friction report itself recorded zero incidents in both batches.
 Its detectors are error-shaped: route misses, schema rejections,
@@ -86,12 +102,9 @@ detector gap, not a clean bill of health, and it is the next analyzer
 work item: a detector for response bodies that contradict the request
 they answer.
 
-Two limits remain and are on purpose. A static fixture cannot echo the
-request, so an image create still returns the markdown clip body; the
-participants tolerated it, and the full repair needs the behavior
-backend. And the seeded error friction (enum guesses, route misses)
-never fired, because the participants read the specification before
-their first call.
+One more limit is on purpose: the seeded error friction (enum guesses,
+route misses) never fired, because the participants read the
+specification before their first call.
 
 ## Layout
 

@@ -34,7 +34,7 @@ that owns the behavior.
 | Capability | MVP status | Implementation |
 | --- | --- | --- |
 | Contract mode | Required | `@oal/gateway` without pack code |
-| Scenario module | Required for approved packs | `@oal/behavior-runtime` child process |
+| Scenario module | Required for approved packs | `@oal/behavior-runtime` child process; component tested, not wired to `oal serve` or `oal run` (plan F5) |
 | Raw HTTP exposure | Required MVP | `@oal/gateway` server |
 | Documentation facade | Phase 6 | `@oal/documentation-facade` |
 | No-complete-contract treatment | Phase 6 | Planned in runner |
@@ -43,8 +43,8 @@ that owns the behavior.
 | Deterministic rubric | Required MVP | `@oal/evaluator` |
 | Model judge | Optional later | Not implemented |
 | Trusted custom evaluator | Optional later | Disabled in safe mode |
-| Direct tools | Post-MVP reserved | `@oal/tools` naming and envelope |
-| Catalog tools | Post-MVP reserved | `@oal/tools` search, describe, invoke |
+| Direct tools | Post-MVP reserved | `@oal/tools` naming and envelope; `oal run --exposure direct-tools` refuses (plan F6) |
+| Catalog tools | Post-MVP reserved | `@oal/tools` search, describe, invoke; `oal run --exposure catalog-tools` refuses (plan F6) |
 | Arazzo hidden grading | Post-MVP reserved | Planned compiler subset |
 
 ## Studies and adapters
@@ -52,8 +52,9 @@ that owns the behavior.
 | Capability | MVP status | Implementation |
 | --- | --- | --- |
 | StudyProtocol and PhasePlan | Phase 6 | `@oal/study-ir`, `@oal/study` |
+| Study scheduling | Phase 6 | `@oal/scheduler` produces schedules, seeds, and ledgers; `oal study schedule` works, `oal study run` refuses to launch (plan F7) |
+| Inferential study analysis | Phase 6 | `@oal/statistics` estimators; `oal study analyze` runs on an assembled study-run directory |
 | Counterfactual ContractVariant | Phase 6 | `@oal/contract-variant` |
-| Inferential study analysis | Phase 6 | `@oal/statistics`, `@oal/scheduler` |
 | Codex CLI adapter | Required MVP | `@oal/agent-codex` |
 | Generic command adapter | Required MVP | `@oal/agent-generic` |
 | Local hard sandbox | Platform dependent | Adapter capability declaration |
