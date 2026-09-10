@@ -910,7 +910,7 @@
       "id": "T054",
       "title": "Align capability claims and the acceptance gate",
       "priority": 1,
-      "status": "doing",
+      "status": "done",
       "details": "Correct README, usage, research-methods, and capability-matrix claims to match demonstrated behavior; separate corrected from missing requirements in tests/acceptance.map.json and acceptance.test.ts; generate coverage counts from the map; keep release readiness failing while required behavior is missing; record acceptance dependencies for T055-T060.",
       "steps": [
         "Audit each documented workflow against the CLI and tests.",
@@ -921,7 +921,7 @@
       ],
       "tags": ["docs", "acceptance"],
       "files": ["docs/review-fix-plan.md"],
-      "updated_at": "2026-09-10T05:45:52.017Z"
+      "updated_at": "2026-09-10T05:58:16.599Z"
     },
     {
       "id": "T055",
