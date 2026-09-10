@@ -409,7 +409,21 @@ const MOCK: FailureClass[] = [
     "error",
     "serve"
   ),
-  entry("OAL-MOCK-INTERNAL", "mock", "infrastructure_failed", "error", "serve")
+  entry("OAL-MOCK-INTERNAL", "mock", "infrastructure_failed", "error", "serve"),
+  entry(
+    "OAL-SCHEMA-WORKER-TIMEOUT",
+    "mock",
+    "infrastructure_failed",
+    "error",
+    "serve"
+  ),
+  entry(
+    "OAL-SCHEMA-WORKER-FAILED",
+    "mock",
+    "infrastructure_failed",
+    "error",
+    "serve"
+  )
 ];
 
 const EVALUATION: FailureClass[] = [

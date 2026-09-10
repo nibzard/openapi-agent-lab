@@ -43,6 +43,16 @@ export interface LimitTable {
   maxExtensionMemoryBytes: number;
   maxExtensionCores: number;
   maxExtensionProcesses: number;
+  /** Deadline of one schema-worker job, in milliseconds. */
+  schemaWorkerDeadlineMs: number;
+  /** Worker threads that evaluate contract and pack patterns. */
+  schemaWorkerCount: number;
+  /** Jobs that may wait for a worker before new work is refused. */
+  schemaWorkerMaxPending: number;
+  /** Serialized byte bound of one schema-worker message. */
+  schemaWorkerMaxMessageBytes: number;
+  /** Heap bound of one schema worker, in bytes. */
+  schemaWorkerMemoryBytes: number;
 }
 
 export const LIMIT_DEFAULTS: LimitTable = {
@@ -83,7 +93,12 @@ export const LIMIT_DEFAULTS: LimitTable = {
   maxParallelTrials: 1,
   maxExtensionMemoryBytes: 512 * 1024 * 1024,
   maxExtensionCores: 1,
-  maxExtensionProcesses: 64
+  maxExtensionProcesses: 64,
+  schemaWorkerDeadlineMs: 1_000,
+  schemaWorkerCount: 2,
+  schemaWorkerMaxPending: 128,
+  schemaWorkerMaxMessageBytes: 8 * 1024 * 1024,
+  schemaWorkerMemoryBytes: 256 * 1024 * 1024
 };
 
 export const LIMIT_CEILINGS: LimitTable = {
@@ -124,7 +139,12 @@ export const LIMIT_CEILINGS: LimitTable = {
   maxParallelTrials: 10,
   maxExtensionMemoryBytes: 1024 * 1024 * 1024,
   maxExtensionCores: 2,
-  maxExtensionProcesses: 128
+  maxExtensionProcesses: 128,
+  schemaWorkerDeadlineMs: 30_000,
+  schemaWorkerCount: 8,
+  schemaWorkerMaxPending: 1_024,
+  schemaWorkerMaxMessageBytes: 32 * 1024 * 1024,
+  schemaWorkerMemoryBytes: 1024 * 1024 * 1024
 };
 
 /** Apply operator overrides, refusing any value above the hard ceiling. */

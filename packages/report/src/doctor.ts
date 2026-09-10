@@ -172,7 +172,12 @@ export const DOCTOR_PROBE_LIMITS: DoctorLimitTable = {
   maxParallelTrials: 2,
   maxExtensionMemoryBytes: 256 * 1024 * 1024,
   maxExtensionCores: 1,
-  maxExtensionProcesses: 16
+  maxExtensionProcesses: 16,
+  schemaWorkerDeadlineMs: 5_000,
+  schemaWorkerCount: 1,
+  schemaWorkerMaxPending: 16,
+  schemaWorkerMaxMessageBytes: 1024 * 1024,
+  schemaWorkerMemoryBytes: 128 * 1024 * 1024
 };
 
 /** Minimal one-operation contract the gateway self-check issues. */

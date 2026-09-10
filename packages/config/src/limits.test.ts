@@ -52,7 +52,12 @@ const TABLE: Array<[keyof LimitTable, number, number]> = [
   ["maxParallelTrials", 1, 10],
   ["maxExtensionMemoryBytes", 512 * MIB, 1 * GIB],
   ["maxExtensionCores", 1, 2],
-  ["maxExtensionProcesses", 64, 128]
+  ["maxExtensionProcesses", 64, 128],
+  ["schemaWorkerDeadlineMs", 1_000, 30_000],
+  ["schemaWorkerCount", 2, 8],
+  ["schemaWorkerMaxPending", 128, 1_024],
+  ["schemaWorkerMaxMessageBytes", 8 * MIB, 32 * MIB],
+  ["schemaWorkerMemoryBytes", 256 * MIB, 1 * GIB]
 ];
 
 const AGENT = {

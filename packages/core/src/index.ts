@@ -93,6 +93,27 @@ export type {
   SchemaViolation
 } from "./schema/validator.ts";
 export {
+  closeSchemaWorker,
+  configureSchemaWorker,
+  DEFAULT_SCHEMA_WORKER_SETTINGS,
+  firstPrintableMatchInWorker,
+  patternAcceptsInWorker,
+  scanForbiddenTextInWorker,
+  schemaWorkerService,
+  SchemaWorkerError,
+  SchemaWorkerService,
+  validateSchemaInstance
+} from "./schema/worker-service.ts";
+export type {
+  SchemaWorkerErrorCode,
+  SchemaWorkerSettings
+} from "./schema/worker-service.ts";
+export type {
+  SchemaWorkerReply,
+  SchemaWorkerRequest,
+  SchemaWorkerResult
+} from "./schema/worker-protocol.ts";
+export {
   CREDENTIAL_KEY_FRAGMENTS,
   CREDENTIAL_KEY_PATTERN,
   isCredentialKey,
