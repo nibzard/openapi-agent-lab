@@ -74,11 +74,13 @@ owns it yet.
 | --- | --- |
 | F2 (bounded patterns) | AC-061, AC-121 |
 | F3 (analysis correctness) | AC-122, AC-123 |
-| F4 (webclip grading) | AC-124 |
 | F5 (scenario execution) | AC-082, AC-083, AC-084, AC-120, AC-125 |
 | F6 (tool execution) | AC-074, AC-077, AC-116, AC-126 |
 | F7 (study execution) | AC-060, AC-101, AC-103, AC-106, AC-108, AC-120, AC-127 |
 | unassigned | AC-100, AC-111, AC-113, AC-119 |
+
+F4 (webclip grading) closed with AC-124: the corrected rubric and its
+negative controls are permanent tests.
 
 AC-120 appears under both F5 and F7 because its remainder needs both the
 scenario backend and durable study runs.
@@ -102,8 +104,8 @@ Status counts per specification group, generated from
 | 42.10 | Release completeness | 3 | 3 | 0 | 0 | 0 |
 | 42.11 | Cross-cutting and workflow | 10 | 9 | 0 | 1 | 0 |
 | 42.12 | Research protocols | 20 | 11 | 0 | 8 | 1 |
-| review | Review remediation | 7 | 0 | 0 | 0 | 7 |
-| total | | 127 | 101 | 2 | 16 | 8 |
+| review | Review remediation | 7 | 1 | 0 | 0 | 6 |
+| total | | 127 | 102 | 2 | 16 | 7 |
 
 ## Release readiness
 
@@ -124,9 +126,9 @@ pnpm run readiness
 ```
 
 It exits `1` while any criterion blocks and lists every blocker with its
-owner. As of this report, 24 criteria block: 5 in the Raw-HTTP MVP set,
-2 in agent-native tools, 1 in workflow, 9 in research protocol, and the
-7 remediation controls. The gate passes when every required outcome has
+owner. As of this report, 23 criteria block: 5 in the Raw-HTTP MVP set,
+2 in agent-native tools, 1 in workflow, 9 in research protocol, and 6
+remediation controls. The gate passes when every required outcome has
 passing evidence, live where live is required.
 
 ## Running the acceptance suite

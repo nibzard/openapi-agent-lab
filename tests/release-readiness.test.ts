@@ -92,7 +92,8 @@ describe("the release readiness gate", () => {
     for (const id of ["AC-061", "AC-083", "AC-103", "AC-121", "AC-127"]) {
       expect(result.stdout).toContain(id);
     }
-    for (const owner of ["F2", "F3", "F4", "F5", "F6", "F7"]) {
+    // F4 closed with the webclip negative controls; it owns no blocker.
+    for (const owner of ["F2", "F3", "F5", "F6", "F7"]) {
       expect(result.stdout).toContain(`owner ${owner}`);
     }
   });

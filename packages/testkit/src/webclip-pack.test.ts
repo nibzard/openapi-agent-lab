@@ -497,52 +497,99 @@ describe("the corrected webclip site-errand rubric", () => {
   });
 });
 
-/** Each removed errand step and the check that must catch it. */
-const REQUIRED_STEPS: readonly (readonly [ErrandPartId, string])[] = [
-  ["create_markdown", "markdown_clip_chain"],
-  ["render_markdown", "markdown_clip_chain"],
-  ["fetch_markdown", "markdown_clip_chain"],
-  ["extract_markdown", "markdown_clip_chain"],
-  ["delete_markdown", "markdown_clip_chain"],
-  ["read_quota", "markdown_clip_chain"],
-  ["create_image", "image_clip_chain"],
-  ["render_image", "image_clip_chain"],
-  ["fetch_image", "image_clip_chain"]
-];
-
-/** Each report claim and the check whose postcondition reads it. */
-const CLAIM_CHECKS: readonly (readonly [string, string])[] = [
-  ["clips_created", "markdown_clip_chain"],
-  ["markdown_clipped", "markdown_clip_chain"],
-  ["markdown_content_fetched", "markdown_clip_chain"],
-  ["text_extracted", "markdown_clip_chain"],
-  ["clip_deleted", "markdown_clip_chain"],
-  ["quota_checked", "markdown_clip_chain"],
-  ["image_clipped", "image_clip_chain"],
-  ["both_rendered", "image_clip_chain"],
-  ["image_content_fetched", "image_clip_chain"]
-];
-
 describe("the corrected webclip site-errand rubric against failing traces", () => {
-  for (const [part, check] of REQUIRED_STEPS) {
-    it(`fails the task when ${part} is missing`, () => {
-      const result = evaluate(
-        errandEvents(CANONICAL_ORDER, { omit: part }),
-        errandReport()
-      );
-      expect(result.status).toBe("failed");
-      expect(checkStatus(result, check)).toBe("failed");
-    });
+  /**
+   * Each control below is named literally, not generated from a
+   * table, because the acceptance map cites test titles as they
+   * appear in this file.
+   */
+  function expectMissingStepToFail(part: ErrandPartId, check: string): void {
+    const result = evaluate(
+      errandEvents(CANONICAL_ORDER, { omit: part }),
+      errandReport()
+    );
+    expect(result.status).toBe("failed");
+    expect(checkStatus(result, check)).toBe("failed");
   }
 
-  for (const [field, check] of CLAIM_CHECKS) {
-    it(`fails the task when the report denies ${field}`, () => {
-      const claims: Partial<Record<string, boolean>> = { [field]: false };
-      const result = evaluate(errandEvents(), errandReport(claims));
-      expect(result.status).toBe("failed");
-      expect(checkStatus(result, check)).toBe("failed");
-    });
+  function expectDeniedClaimToFail(field: string, check: string): void {
+    const claims: Partial<Record<string, boolean>> = { [field]: false };
+    const result = evaluate(errandEvents(), errandReport(claims));
+    expect(result.status).toBe("failed");
+    expect(checkStatus(result, check)).toBe("failed");
   }
+
+  it("fails the task when create_markdown is missing", () => {
+    expectMissingStepToFail("create_markdown", "markdown_clip_chain");
+  });
+
+  it("fails the task when render_markdown is missing", () => {
+    expectMissingStepToFail("render_markdown", "markdown_clip_chain");
+  });
+
+  it("fails the task when fetch_markdown is missing", () => {
+    expectMissingStepToFail("fetch_markdown", "markdown_clip_chain");
+  });
+
+  it("fails the task when extract_markdown is missing", () => {
+    expectMissingStepToFail("extract_markdown", "markdown_clip_chain");
+  });
+
+  it("fails the task when delete_markdown is missing", () => {
+    expectMissingStepToFail("delete_markdown", "markdown_clip_chain");
+  });
+
+  it("fails the task when read_quota is missing", () => {
+    expectMissingStepToFail("read_quota", "markdown_clip_chain");
+  });
+
+  it("fails the task when create_image is missing", () => {
+    expectMissingStepToFail("create_image", "image_clip_chain");
+  });
+
+  it("fails the task when render_image is missing", () => {
+    expectMissingStepToFail("render_image", "image_clip_chain");
+  });
+
+  it("fails the task when fetch_image is missing", () => {
+    expectMissingStepToFail("fetch_image", "image_clip_chain");
+  });
+
+  it("fails the task when the report denies clips_created", () => {
+    expectDeniedClaimToFail("clips_created", "markdown_clip_chain");
+  });
+
+  it("fails the task when the report denies markdown_clipped", () => {
+    expectDeniedClaimToFail("markdown_clipped", "markdown_clip_chain");
+  });
+
+  it("fails the task when the report denies markdown_content_fetched", () => {
+    expectDeniedClaimToFail("markdown_content_fetched", "markdown_clip_chain");
+  });
+
+  it("fails the task when the report denies text_extracted", () => {
+    expectDeniedClaimToFail("text_extracted", "markdown_clip_chain");
+  });
+
+  it("fails the task when the report denies clip_deleted", () => {
+    expectDeniedClaimToFail("clip_deleted", "markdown_clip_chain");
+  });
+
+  it("fails the task when the report denies quota_checked", () => {
+    expectDeniedClaimToFail("quota_checked", "markdown_clip_chain");
+  });
+
+  it("fails the task when the report denies image_clipped", () => {
+    expectDeniedClaimToFail("image_clipped", "image_clip_chain");
+  });
+
+  it("fails the task when the report denies both_rendered", () => {
+    expectDeniedClaimToFail("both_rendered", "image_clip_chain");
+  });
+
+  it("fails the task when the report denies image_content_fetched", () => {
+    expectDeniedClaimToFail("image_content_fetched", "image_clip_chain");
+  });
 
   it("fails the task when both creates return one identifier", () => {
     const result = evaluate(

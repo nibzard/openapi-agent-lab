@@ -232,7 +232,7 @@ describe("the acceptance map", () => {
     expect(absent).toEqual([]);
   });
 
-  it("records an owner for every remediation work package", async () => {
+  it("records an owner for every open remediation work package", async () => {
     const entries = await entriesPromise;
     const owned = new Set(
       entries
@@ -242,10 +242,12 @@ describe("the acceptance map", () => {
             entry.deferred?.owner.split(",").map((part) => part.trim()) ?? []
         )
     );
-    const missing = ["F2", "F3", "F4", "F5", "F6", "F7"].filter(
-      (owner) => !owned.has(owner)
-    );
-    expect(missing).toEqual([]);
+    // F4 closed when the webclip negative controls landed; remove a
+    // package here only when its last deferral is satisfied.
+    const open = ["F2", "F3", "F5", "F6", "F7"];
+    const missing = open.filter((owner) => !owned.has(owner));
+    const closed = ["F4"].filter((owner) => owned.has(owner));
+    expect({ missing, closed }).toEqual({ missing: [], closed: [] });
   });
 
   it("generates the deferred registry in the acceptance report", async () => {
