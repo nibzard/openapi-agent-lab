@@ -10,7 +10,13 @@ import { DiagnosticCode, type JsonObject } from "@oal/core";
 
 export const EVALUATION_SCHEMA_VERSION = 1;
 export const EVALUATOR_NAME = "@oal/evaluator";
-export const EVALUATOR_VERSION = "0.0.0";
+/**
+ * Evaluator implementation version. Version 0.1.0 adds the normalized
+ * header view (event.request.header_values and
+ * event.response.header_values) to expression scopes. Both evaluation
+ * documents and derived re-evaluations record this identity.
+ */
+export const EVALUATOR_VERSION = "0.1.0";
 
 /** Status of one check, one signal outcome, or the whole run. */
 export type EvaluationStatus = "passed" | "failed" | "error" | "skipped";

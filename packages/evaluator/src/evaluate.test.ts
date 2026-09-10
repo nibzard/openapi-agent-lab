@@ -12,7 +12,8 @@ import type {
   DocumentationExchange,
   SemanticEvent,
   TraceBody,
-  TraceEvent
+  TraceEvent,
+  TraceHeader
 } from "@oal/evidence";
 import { EVALUATOR_NAME, EVALUATOR_VERSION } from "./evaluation.ts";
 import { loadRubric } from "./rubric.ts";
@@ -219,6 +220,8 @@ interface ExchangeInit {
   path: string;
   status: number;
   path_parameters?: Record<string, string>;
+  request_headers?: TraceHeader[];
+  response_headers?: TraceHeader[];
   request_body?: TraceBody;
   response_body?: TraceBody;
 }
@@ -253,7 +256,7 @@ function exchange(init: ExchangeInit): TraceEvent {
       query_string: "",
       query: [],
       path_parameters: init.path_parameters ?? {},
-      headers: [],
+      headers: init.request_headers ?? [],
       credential_present: true,
       content_type: "application/json",
       body: init.request_body ?? NO_BODY
@@ -272,7 +275,7 @@ function exchange(init: ExchangeInit): TraceEvent {
     response: {
       completed_at: "2026-01-01T00:00:00.000Z",
       status: init.status,
-      headers: [],
+      headers: init.response_headers ?? [],
       content_type: "application/json",
       body: init.response_body ?? NO_BODY
     },
@@ -1236,6 +1239,195 @@ describe("documentation and semantic streams", () => {
       documentationEvents: [SERVED, documentation("doc-2", 2, "error")]
     });
     expect(checkOf(failing, "all_served").status).toBe("failed");
+  });
+});
+
+describe("the normalized header view", () => {
+  function headerEvent(init: {
+    requestHeaders?: TraceHeader[];
+    responseHeaders?: TraceHeader[];
+  }): TraceEvent {
+    return exchange({
+      event_id: "evt-header-1",
+      sequence: 1,
+      operation_id: "getClipContent",
+      method: "GET",
+      path: "/clips/c-1/content",
+      status: 200,
+      ...(init.requestHeaders === undefined
+        ? {}
+        : { request_headers: init.requestHeaders }),
+      ...(init.responseHeaders === undefined
+        ? {}
+        : { response_headers: init.responseHeaders })
+    });
+  }
+
+  function headerRubric(init: { where?: string; expression?: string }): Rubric {
+    return loadFixture({
+      rubric_version: 1,
+      id: "header-view",
+      scoring: { method: "weighted_binary", pass_threshold: 1 },
+      checks:
+        init.where === undefined
+          ? [
+              {
+                id: "trivial_probe",
+                kind: "predicate",
+                expression: "true",
+                weight: 1,
+                required: true
+              }
+            ]
+          : [
+              {
+                id: "header_probe",
+                kind: "event",
+                match: "counted",
+                where: init.where,
+                min_count: 1,
+                weight: 1,
+                required: true
+              }
+            ],
+      signals:
+        init.expression === undefined
+          ? []
+          : [
+              {
+                id: "header_signal",
+                kind: "predicate",
+                expression: init.expression
+              }
+            ]
+    });
+  }
+
+  it("reads request and response headers by lowercase name", () => {
+    const event = headerEvent({
+      requestHeaders: [
+        { name: "Accept", values: ["text/markdown"], redacted: false }
+      ],
+      responseHeaders: [
+        { name: "Content-Type", values: ["text/markdown"], redacted: false }
+      ]
+    });
+    const result = evaluate(
+      headerRubric({
+        where:
+          "event.request.header_values.accept != null && " +
+          '"text/markdown" in event.request.header_values.accept && ' +
+          'event.response.header_values["content-type"] != null && ' +
+          '"text/markdown" in event.response.header_values["content-type"]'
+      }),
+      { events: [event] }
+    );
+    expect(checkOf(result, "header_probe").status).toBe("passed");
+  });
+
+  it("keeps the wire order when repeated lines group into one record", () => {
+    const event = headerEvent({
+      requestHeaders: [
+        {
+          name: "accept",
+          values: ["image/svg+xml", "text/markdown"],
+          redacted: false
+        }
+      ]
+    });
+    const result = evaluate(
+      headerRubric({
+        where:
+          "event.request.header_values.accept == " +
+          '["image/svg+xml", "text/markdown"]'
+      }),
+      { events: [event] }
+    );
+    expect(checkOf(result, "header_probe").status).toBe("passed");
+  });
+
+  it("matches header names without case and keeps record order", () => {
+    const event = headerEvent({
+      requestHeaders: [
+        { name: "Accept", values: ["text/markdown"], redacted: false },
+        { name: "accept", values: ["image/svg+xml"], redacted: false }
+      ]
+    });
+    const result = evaluate(
+      headerRubric({
+        where:
+          "event.request.header_values.accept == " +
+          '["text/markdown", "image/svg+xml"]'
+      }),
+      { events: [event] }
+    );
+    expect(checkOf(result, "header_probe").status).toBe("passed");
+  });
+
+  it("answers null for an absent header", () => {
+    const result = evaluate(
+      headerRubric({ where: "event.request.header_values.accept == null" }),
+      { events: [headerEvent({})] }
+    );
+    expect(checkOf(result, "header_probe").status).toBe("passed");
+  });
+
+  it("fails a guarded membership test on an absent header", () => {
+    const result = evaluate(
+      headerRubric({
+        where:
+          "event.request.header_values.accept != null && " +
+          '"text/markdown" in event.request.header_values.accept'
+      }),
+      { events: [headerEvent({})] }
+    );
+    expect(checkOf(result, "header_probe").status).toBe("failed");
+    expect(result.infrastructureErrors).toEqual([]);
+  });
+
+  it("raises a type error when a membership test reads null directly", () => {
+    const result = evaluate(
+      headerRubric({
+        where: '"text/markdown" in event.request.header_values.accept'
+      }),
+      { events: [headerEvent({})] }
+    );
+    expect(checkOf(result, "header_probe").status).toBe("error");
+    expect(result.infrastructureErrors).toHaveLength(1);
+  });
+
+  it("exposes the view on the events array of a signal", () => {
+    const event = headerEvent({
+      requestHeaders: [
+        { name: "accept", values: ["text/markdown"], redacted: false }
+      ]
+    });
+    const result = evaluate(
+      headerRubric({
+        expression: '"text/markdown" in events[0].request.header_values.accept'
+      }),
+      { events: [event] }
+    );
+    expect(result.signals.header_signal).toBe(true);
+  });
+
+  it("bounds the values kept per header name", () => {
+    const event = headerEvent({
+      requestHeaders: [
+        {
+          name: "accept",
+          values: ["image/svg+xml", "text/markdown"],
+          redacted: false
+        }
+      ]
+    });
+    const result = evaluate(
+      headerRubric({
+        where: '"text/markdown" in event.request.header_values.accept'
+      }),
+      { events: [event], limits: { maxHeaderValues: 1 } }
+    );
+    expect(checkOf(result, "header_probe").status).toBe("failed");
   });
 });
 

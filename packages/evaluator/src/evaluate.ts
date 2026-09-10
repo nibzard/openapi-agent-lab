@@ -24,7 +24,8 @@ import {
 import type {
   DocumentationExchange,
   SemanticEvent,
-  TraceEvent
+  TraceEvent,
+  TraceHeader
 } from "@oal/evidence";
 import {
   compileExpression,
@@ -66,6 +67,10 @@ export interface EvaluatorLimits extends ExpressionLimits {
   maxCandidates: number;
   /** Maximum canonical JSON length of one captured value. */
   maxCaptureBytes: number;
+  /** Maximum distinct header names kept in one header view. */
+  maxHeaderNames: number;
+  /** Maximum values kept per header name in one header view. */
+  maxHeaderValues: number;
 }
 
 export const DEFAULT_EVALUATOR_LIMITS: EvaluatorLimits = {
@@ -73,7 +78,9 @@ export const DEFAULT_EVALUATOR_LIMITS: EvaluatorLimits = {
   maxDepth: 64,
   maxSteps: 200000,
   maxCandidates: 200000,
-  maxCaptureBytes: 4096
+  maxCaptureBytes: 4096,
+  maxHeaderNames: 100,
+  maxHeaderValues: 64
 };
 
 /**
@@ -157,6 +164,8 @@ export interface EvaluationResult {
 
 interface EvaluationContext {
   events: readonly TraceEvent[];
+  /** Scope views of the api events, in the same order as events. */
+  eventViews: readonly Json[];
   documentationEvents: readonly DocumentationExchange[];
   semanticEvents: readonly SemanticEvent[];
   state: Json;
@@ -199,12 +208,86 @@ function toJsonValue(value: unknown): Json {
   return value as Json;
 }
 
-function apiCandidates(events: readonly TraceEvent[]): StreamCandidate[] {
-  return events.map((event) => ({
-    event: toJsonValue(event),
-    eventId: event.event_id,
-    sequence: event.sequence
-  }));
+/**
+ * Normalized header view for expression scopes. The view maps each
+ * lowercase header name to the values of every record that carries
+ * that name, in record order, so a rubric asks for a header by name
+ * instead of by array position. Names keep their hyphens, so a name
+ * such as content-type is read with bracket indexing. The view stays
+ * bounded at maxHeaderNames names and maxHeaderValues values per
+ * name, so a pathological trace cannot grow the scope without bound.
+ * The view exists only inside expression scopes; it is never
+ * persisted as evidence.
+ */
+function headerValuesView(
+  headers: readonly TraceHeader[],
+  limits: EvaluatorLimits
+): JsonObject {
+  const collected = new Map<string, string[]>();
+  for (const header of headers) {
+    const name = header.name.toLowerCase();
+    let values = collected.get(name);
+    if (values === undefined) {
+      if (collected.size >= limits.maxHeaderNames) {
+        continue;
+      }
+      values = [];
+      collected.set(name, values);
+    }
+    for (const value of header.values) {
+      if (values.length >= limits.maxHeaderValues) {
+        break;
+      }
+      values.push(value);
+    }
+  }
+  const view: JsonObject = {};
+  for (const [name, values] of collected) {
+    view[name] = values;
+  }
+  return view;
+}
+
+/**
+ * One api.exchange event as expressions see it: the recorded event
+ * plus the header view on the request and the response sides. The
+ * recorded fields stay untouched; only the scope gains the view.
+ */
+function apiEventView(event: TraceEvent, limits: EvaluatorLimits): Json {
+  return toJsonValue({
+    ...event,
+    request:
+      event.request === null
+        ? null
+        : {
+            ...event.request,
+            header_values: headerValuesView(event.request.headers, limits)
+          },
+    response:
+      event.response === null
+        ? null
+        : {
+            ...event.response,
+            header_values: headerValuesView(event.response.headers, limits)
+          }
+  });
+}
+
+function apiCandidates(context: EvaluationContext): StreamCandidate[] {
+  const candidates: StreamCandidate[] = [];
+  for (let index = 0; index < context.events.length; index += 1) {
+    const event = context.events[index];
+    const view = context.eventViews[index];
+    if (event === undefined || view === undefined) {
+      continue;
+    }
+    candidates.push({
+      event: view,
+      eventId: event.event_id,
+      sequence: event.sequence
+    });
+  }
+  return candidates;
 }
 
 function documentationCandidates(
@@ -266,8 +349,10 @@ export function evaluateRubric(options: EvaluateOptions): EvaluationResult {
     ...(options.limits ?? {})
   };
   const cache = new Map<string, CompiledExpression>();
+  const eventViews = options.events.map((event) => apiEventView(event, limits));
   const context: EvaluationContext = {
     events: options.events,
+    eventViews,
     documentationEvents: options.documentationEvents ?? [],
     semanticEvents: options.semanticEvents ?? [],
     state: options.state,
@@ -373,7 +458,7 @@ function evaluateCheck(
       case "predicate":
         return predicateCheck(check, context, base);
       case "event":
-        return streamCheck(check, context, base, apiCandidates(context.events));
+        return streamCheck(check, context, base, apiCandidates(context));
       case "documentation_event":
         return orderedOrQuantifiedCheck(
           check,
@@ -397,7 +482,7 @@ function evaluateCheck(
             maxCandidates: check.max_candidates
           },
           check.match,
-          apiCandidates(context.events),
+          apiCandidates(context),
           context,
           base
         );
@@ -466,7 +551,7 @@ function predicateScope(context: EvaluationContext): JsonObject {
     report: context.report,
     run: context.run,
     artifacts: toJsonValue(context.artifacts),
-    events: toJsonValue(context.events),
+    events: [...context.eventViews],
     documentation_events: toJsonValue(context.documentationEvents),
     semantic_events: toJsonValue(context.semanticEvents)
   };
