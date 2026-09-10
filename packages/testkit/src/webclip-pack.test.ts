@@ -429,4 +429,172 @@ describe("the corrected webclip site-errand rubric", () => {
     expect(checkStatus(result, "markdown_clip_chain")).toBe("passed");
     expect(checkStatus(result, "image_clip_chain")).toBe("passed");
   });
+
+  it("accepts a report with an empty uncertainties list", () => {
+    const result = evaluate(errandEvents(), errandReport());
+    expect(errandReport().uncertainties).toEqual([]);
+    expect(checkStatus(result, "result_report")).toBe("passed");
+    expect(result.status).toBe("passed");
+  });
+});
+
+/** Each removed errand step and the check that must catch it. */
+const REQUIRED_STEPS: readonly (readonly [ErrandPartId, string])[] = [
+  ["create_markdown", "markdown_clip_chain"],
+  ["render_markdown", "markdown_clip_chain"],
+  ["fetch_markdown", "markdown_clip_chain"],
+  ["extract_markdown", "markdown_clip_chain"],
+  ["delete_markdown", "markdown_clip_chain"],
+  ["read_quota", "markdown_clip_chain"],
+  ["create_image", "image_clip_chain"],
+  ["render_image", "image_clip_chain"],
+  ["fetch_image", "image_clip_chain"]
+];
+
+/** Each report claim and the check whose postcondition reads it. */
+const CLAIM_CHECKS: readonly (readonly [string, string])[] = [
+  ["clips_created", "markdown_clip_chain"],
+  ["markdown_clipped", "markdown_clip_chain"],
+  ["markdown_content_fetched", "markdown_clip_chain"],
+  ["text_extracted", "markdown_clip_chain"],
+  ["clip_deleted", "markdown_clip_chain"],
+  ["quota_checked", "markdown_clip_chain"],
+  ["image_clipped", "image_clip_chain"],
+  ["both_rendered", "image_clip_chain"],
+  ["image_content_fetched", "image_clip_chain"]
+];
+
+describe("the corrected webclip site-errand rubric against failing traces", () => {
+  for (const [part, check] of REQUIRED_STEPS) {
+    it(`fails the task when ${part} is missing`, () => {
+      const result = evaluate(
+        errandEvents(CANONICAL_ORDER, { omit: part }),
+        errandReport()
+      );
+      expect(result.status).toBe("failed");
+      expect(checkStatus(result, check)).toBe("failed");
+    });
+  }
+
+  for (const [field, check] of CLAIM_CHECKS) {
+    it(`fails the task when the report denies ${field}`, () => {
+      const claims: Partial<Record<string, boolean>> = { [field]: false };
+      const result = evaluate(errandEvents(), errandReport(claims));
+      expect(result.status).toBe("failed");
+      expect(checkStatus(result, check)).toBe("failed");
+    });
+  }
+
+  it("fails the task when both creates return one identifier", () => {
+    const result = evaluate(
+      errandEvents(CANONICAL_ORDER, { imageId: MARKDOWN_ID }),
+      errandReport()
+    );
+    expect(result.status).toBe("failed");
+    expect(checkStatus(result, "clip_ids_distinct")).toBe("failed");
+    expect(checkStatus(result, "markdown_clip_chain")).toBe("passed");
+    expect(checkStatus(result, "image_clip_chain")).toBe("passed");
+  });
+
+  it("fails the task when the two formats are swapped", () => {
+    const result = evaluate(
+      errandEvents(CANONICAL_ORDER, {
+        markdownCreate: { url: ESSAY_URL, format: "image" },
+        imageCreate: { url: DASHBOARD_URL, format: "markdown" }
+      }),
+      errandReport()
+    );
+    expect(result.status).toBe("failed");
+    expect(checkStatus(result, "markdown_clip_chain")).toBe("failed");
+    expect(checkStatus(result, "image_clip_chain")).toBe("failed");
+  });
+
+  it("fails the task when the two URLs are swapped", () => {
+    const result = evaluate(
+      errandEvents(CANONICAL_ORDER, {
+        markdownCreate: { url: DASHBOARD_URL, format: "markdown" },
+        imageCreate: { url: ESSAY_URL, format: "image" }
+      }),
+      errandReport()
+    );
+    expect(result.status).toBe("failed");
+    expect(checkStatus(result, "markdown_clip_chain")).toBe("failed");
+    expect(checkStatus(result, "image_clip_chain")).toBe("failed");
+  });
+
+  it("fails the task when the image clip is the deleted one", () => {
+    const result = evaluate(
+      errandEvents(CANONICAL_ORDER, { deletedClip: "image" }),
+      errandReport()
+    );
+    expect(result.status).toBe("failed");
+    expect(checkStatus(result, "markdown_clip_chain")).toBe("failed");
+    expect(checkStatus(result, "single_clip_deletion")).toBe("passed");
+  });
+
+  it("fails the task when the markdown fetch asks for the picture", () => {
+    const result = evaluate(
+      errandEvents(CANONICAL_ORDER, {
+        markdownFetch: { accept: "image/svg+xml" }
+      }),
+      errandReport()
+    );
+    expect(result.status).toBe("failed");
+    expect(checkStatus(result, "markdown_clip_chain")).toBe("failed");
+  });
+
+  it("fails the task when the image fetch is served markdown", () => {
+    const result = evaluate(
+      errandEvents(CANONICAL_ORDER, {
+        imageFetch: { contentType: "text/markdown" }
+      }),
+      errandReport()
+    );
+    expect(result.status).toBe("failed");
+    expect(checkStatus(result, "image_clip_chain")).toBe("failed");
+  });
+
+  it("fails the task when the quota read precedes the deletion", () => {
+    const events = errandEvents([
+      "create_markdown",
+      "create_image",
+      "render_markdown",
+      "render_image",
+      "fetch_markdown",
+      "fetch_image",
+      "extract_markdown",
+      "read_quota",
+      "delete_markdown"
+    ]);
+    const result = evaluate(events, errandReport());
+    expect(result.status).toBe("failed");
+    expect(checkStatus(result, "markdown_clip_chain")).toBe("failed");
+  });
+
+  it("keeps passing when the api_model answer avoids the word clip", () => {
+    const report = {
+      ...errandReport(),
+      api_model:
+        "The service stores captures of web pages. A capture is created " +
+        "with a URL and a fixed format, then rendered, and its content is " +
+        "fetched as markdown or as a picture. Extraction and deletion " +
+        "close the capture lifecycle, and the account endpoint reports " +
+        "the quota."
+    };
+    const result = evaluate(errandEvents(), report);
+    expect(result.status).toBe("passed");
+    expect(result.score).toBe(1);
+    expect(checkStatus(result, "comprehension_probe")).toBe("failed");
+  });
+
+  it("keeps passing with an extra create call and records it", () => {
+    const result = evaluate(
+      errandEvents(CANONICAL_ORDER, { extraCreate: true }),
+      errandReport()
+    );
+    expect(result.status).toBe("passed");
+    expect(result.score).toBe(1);
+    expect(checkStatus(result, "two_clips_created")).toBe("passed");
+    expect(checkStatus(result, "extra_create_calls")).toBe("failed");
+  });
 });
