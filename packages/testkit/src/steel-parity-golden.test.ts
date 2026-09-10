@@ -119,7 +119,7 @@ beforeAll(async () => {
   );
   const apiKey = parityApiKey(compiled.contract);
   requests = scriptedSteelRequests(compiled.contract, apiKey);
-  responses = runScriptedSet(
+  responses = await runScriptedSet(
     parityGatewayOptions(compiled.contract, fixtures),
     requests
   );
@@ -163,7 +163,7 @@ describe("the frozen Steel golden trace", () => {
       pack.loaded.manifest
     );
     const apiKey = parityApiKey(compiled.contract);
-    const second = runScriptedSet(
+    const second = await runScriptedSet(
       parityGatewayOptions(compiled.contract, fixtures),
       scriptedSteelRequests(compiled.contract, apiKey)
     );
@@ -221,14 +221,16 @@ describe("the frozen Steel golden trace", () => {
         }
       })
     );
-    const result = verifyDeterminism(adapter, candidates);
+    const result = await verifyDeterminism(adapter, candidates);
     expect(result.ok).toBe(true);
     expect(result.checked).toBe(41);
-    const served = candidates
-      .map((candidate) => adapter.respond(candidate))
-      .filter((response): response is NonNullable<typeof response> => {
-        return response !== null;
-      });
+    const served = (
+      await Promise.all(
+        candidates.map(async (candidate) => adapter.respond(candidate))
+      )
+    ).filter((response): response is NonNullable<typeof response> => {
+      return response !== null;
+    });
     expect(served).toHaveLength(41 - GOLDEN_FRAMEWORK_OUTCOMES);
     expect(served.map(serializeMockResponse)).toHaveLength(
       41 - GOLDEN_FRAMEWORK_OUTCOMES

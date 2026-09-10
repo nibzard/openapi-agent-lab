@@ -10,11 +10,14 @@ import {
 
 const unbounded: PatternBounds = { minLength: null, maxLength: null };
 
-function assertRoundTrip(pattern: string, bounds: PatternBounds): string {
-  const produced = synthesizePattern(pattern, bounds);
+async function assertRoundTrip(
+  pattern: string,
+  bounds: PatternBounds
+): Promise<string> {
+  const produced = await synthesizePattern(pattern, bounds);
   expect(produced).not.toBeNull();
   const value = produced as string;
-  expect(patternAccepts(pattern, value)).toBe(true);
+  expect(await patternAccepts(pattern, value)).toBe(true);
   if (bounds.minLength !== null) {
     expect(value.length).toBeGreaterThanOrEqual(bounds.minLength);
   }
@@ -35,65 +38,87 @@ function assertRoundTrip(pattern: string, bounds: PatternBounds): string {
 }
 
 describe("pattern synthesis", () => {
-  it("produces first-declared members for slack patterns", () => {
-    expect(assertRoundTrip("^[TE][A-Z0-9]{8,}$", unbounded)).toBe("TAAAAAAAA");
-    expect(assertRoundTrip("^[UW][A-Z0-9]{8,}|^$", unbounded)).toBe(
+  it("produces first-declared members for slack patterns", async () => {
+    expect(await assertRoundTrip("^[TE][A-Z0-9]{8,}$", unbounded)).toBe(
+      "TAAAAAAAA"
+    );
+    expect(await assertRoundTrip("^[UW][A-Z0-9]{8,}|^$", unbounded)).toBe(
       "UAAAAAAAA"
     );
-    expect(assertRoundTrip("^\\d{10}$", unbounded)).toBe("0000000000");
-    expect(assertRoundTrip("^X[a-zA-Z0-9]{9,}$", unbounded)).toBe("Xaaaaaaaaa");
-    expect(assertRoundTrip("^([a-fA-F0-9]{6})?$", unbounded)).toBe("");
-    expect(assertRoundTrip("^[0-9a-f]{12}$", unbounded)).toBe("000000000000");
-  });
-
-  it("handles negated classes, counted ranges, and escapes", () => {
-    // Space is the first printable ASCII character [^abc] accepts.
-    expect(assertRoundTrip("^[^abc]+$", unbounded)).toBe(" ");
-    expect(assertRoundTrip("^a{3,5}$", unbounded)).toBe("aaa");
-    expect(assertRoundTrip("^\\d{1,3}\\.\\d{2}$", unbounded)).toBe("0.00");
-    expect(assertRoundTrip("^\\\\x\\.$", unbounded)).toBe("\\x.");
-    expect(assertRoundTrip("^[A-Z]{2}-[0-9]{4}$", unbounded)).toBe("AA-0000");
-  });
-
-  it("leaves unanchored patterns unanchored", () => {
-    expect(assertRoundTrip("\\d+", unbounded)).toBe("0");
-    expect(assertRoundTrip("unanchored-\\d+", unbounded)).toBe("unanchored-0");
-  });
-
-  it("inflates an elastic term to reach minLength", () => {
-    expect(
-      assertRoundTrip("^[TE][A-Z0-9]{8,}$", { minLength: 20, maxLength: null })
-    ).toBe("TAAAAAAAAAAAAAAAAAAA");
-    expect(assertRoundTrip("^x*$", { minLength: 3, maxLength: null })).toBe(
-      "xxx"
+    expect(await assertRoundTrip("^\\d{10}$", unbounded)).toBe("0000000000");
+    expect(await assertRoundTrip("^X[a-zA-Z0-9]{9,}$", unbounded)).toBe(
+      "Xaaaaaaaaa"
+    );
+    expect(await assertRoundTrip("^([a-fA-F0-9]{6})?$", unbounded)).toBe("");
+    expect(await assertRoundTrip("^[0-9a-f]{12}$", unbounded)).toBe(
+      "000000000000"
     );
   });
 
-  it("respects maxLength and refuses impossible bounds", () => {
+  it("handles negated classes, counted ranges, and escapes", async () => {
+    // Space is the first printable ASCII character [^abc] accepts.
+    expect(await assertRoundTrip("^[^abc]+$", unbounded)).toBe(" ");
+    expect(await assertRoundTrip("^a{3,5}$", unbounded)).toBe("aaa");
+    expect(await assertRoundTrip("^\\d{1,3}\\.\\d{2}$", unbounded)).toBe(
+      "0.00"
+    );
+    expect(await assertRoundTrip("^\\\\x\\.$", unbounded)).toBe("\\x.");
+    expect(await assertRoundTrip("^[A-Z]{2}-[0-9]{4}$", unbounded)).toBe(
+      "AA-0000"
+    );
+  });
+
+  it("leaves unanchored patterns unanchored", async () => {
+    expect(await assertRoundTrip("\\d+", unbounded)).toBe("0");
+    expect(await assertRoundTrip("unanchored-\\d+", unbounded)).toBe(
+      "unanchored-0"
+    );
+  });
+
+  it("inflates an elastic term to reach minLength", async () => {
     expect(
-      synthesizePattern("^A{5}$", { minLength: null, maxLength: 3 })
+      await assertRoundTrip("^[TE][A-Z0-9]{8,}$", {
+        minLength: 20,
+        maxLength: null
+      })
+    ).toBe("TAAAAAAAAAAAAAAAAAAA");
+    expect(
+      await assertRoundTrip("^x*$", { minLength: 3, maxLength: null })
+    ).toBe("xxx");
+  });
+
+  it("respects maxLength and refuses impossible bounds", async () => {
+    expect(
+      await synthesizePattern("^A{5}$", { minLength: null, maxLength: 3 })
     ).toBeNull();
     expect(
-      synthesizePattern("^\\d+$", { minLength: 300, maxLength: null })
+      await synthesizePattern("^\\d+$", { minLength: 300, maxLength: null })
     ).toBeNull();
     expect(
-      synthesizePattern("^[a-z]+$", { minLength: 5, maxLength: 3 })
+      await synthesizePattern("^[a-z]+$", { minLength: 5, maxLength: 3 })
     ).toBeNull();
   });
 
-  it("is pure: repeated calls and unrelated seeds agree", () => {
-    const first = synthesizePattern("^[TE][A-Z0-9]{8,}$", unbounded);
+  it("is pure: repeated calls and unrelated seeds agree", async () => {
+    const first = await synthesizePattern("^[TE][A-Z0-9]{8,}$", unbounded);
     for (let i = 0; i < 3; i += 1) {
-      expect(synthesizePattern("^[TE][A-Z0-9]{8,}$", unbounded)).toBe(first);
+      expect(await synthesizePattern("^[TE][A-Z0-9]{8,}$", unbounded)).toBe(
+        first
+      );
     }
     // The pattern branch of the generator takes no seed input.
-    const seeds = ["op_a", "op_b", "op_c"].map((seed) =>
-      generateValue({ type: "string", pattern: "^[TE][A-Z0-9]{8,}$" }, { seed })
+    const seeds = await Promise.all(
+      ["op_a", "op_b", "op_c"].map(async (seed) =>
+        generateValue(
+          { type: "string", pattern: "^[TE][A-Z0-9]{8,}$" },
+          { seed }
+        )
+      )
     );
     expect(new Set(seeds).size).toBe(1);
   });
 
-  it("fails closed on unsupported constructs", () => {
+  it("fails closed on unsupported constructs", async () => {
     const refused = [
       "^(?=A)[A-Z]+$",
       "^(?<=x)y",
@@ -106,34 +131,43 @@ describe("pattern synthesis", () => {
       "^a{2,80}$"
     ];
     for (const pattern of refused) {
-      expect(synthesizePattern(pattern, unbounded)).toBeNull();
-      expect(() =>
+      expect(await synthesizePattern(pattern, unbounded)).toBeNull();
+      await expect(
         generateValue({ type: "string", pattern }, { seed: "op_test" })
-      ).toThrow(GenerationUnsupportedError);
+      ).rejects.toThrow(GenerationUnsupportedError);
     }
   });
 
-  it("keeps the frozen literal shortcuts untouched", () => {
+  it("keeps the frozen literal shortcuts untouched", async () => {
     // The format-first branch returns a seeded token that satisfies
     // some patterns; these five refuse the token, so the shortcut
     // literals surface unchanged.
     expect(
-      generateValue({ type: "string", pattern: "^[a-z]+$" }, { seed: "s" })
+      await generateValue(
+        { type: "string", pattern: "^[a-z]+$" },
+        { seed: "s" }
+      )
     ).toBe("generated");
     expect(
-      generateValue({ type: "string", pattern: "^[A-Za-z]+$" }, { seed: "s" })
+      await generateValue(
+        { type: "string", pattern: "^[A-Za-z]+$" },
+        { seed: "s" }
+      )
     ).toBe("generated");
     expect(
-      generateValue({ type: "string", pattern: "^[0-9]+$" }, { seed: "s" })
+      await generateValue(
+        { type: "string", pattern: "^[0-9]+$" },
+        { seed: "s" }
+      )
     ).toBe("2000");
     expect(
-      generateValue(
+      await generateValue(
         { type: "string", pattern: "^[A-Z]{2}-[0-9]{3}$" },
         { seed: "s" }
       )
     ).toBe("XX-000");
     expect(
-      generateValue(
+      await generateValue(
         { type: "string", pattern: "^[a-z][a-z0-9-]*$" },
         { seed: "s" }
       )
@@ -141,7 +175,7 @@ describe("pattern synthesis", () => {
     // A shortcut that violates the declared bounds falls through to
     // synthesis instead of being padded into an invalid value.
     expect(
-      generateValue(
+      await generateValue(
         { type: "string", pattern: "^[0-9]+$", minLength: 6 },
         { seed: "s" }
       )

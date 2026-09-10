@@ -342,10 +342,12 @@ describe("deriveSingleOperation", () => {
 });
 
 describe("BuiltinMockAdapter", () => {
-  it("resolves declared examples deterministically", () => {
+  it("resolves declared examples deterministically", async () => {
     const source = contract();
     const adapter = new BuiltinMockAdapter();
-    const first = adapter.respond(candidate(source, "path:POST /v1/computers"));
+    const first = await adapter.respond(
+      candidate(source, "path:POST /v1/computers")
+    );
     expect(first).not.toBeNull();
     expect(first?.status).toBe(200);
     expect(first?.provenance).toContain("example");
@@ -355,18 +357,18 @@ describe("BuiltinMockAdapter", () => {
     });
   });
 
-  it("negotiates the response media type from accept", () => {
+  it("negotiates the response media type from accept", async () => {
     const source = contract();
     const adapter = new BuiltinMockAdapter();
     const input = candidate(source, "path:POST /v1/computers");
-    const selected = adapter.respond({
+    const selected = await adapter.respond({
       ...input,
       request: { ...input.request, accept: "application/json" }
     });
     expect(selected?.mediaType).toBe("application/json");
   });
 
-  it("serves a fixture under its declared media type, not a relabeled one", () => {
+  it("serves a fixture under its declared media type, not a relabeled one", async () => {
     const adapter = new BuiltinMockAdapter([
       {
         id: "fx_json",
@@ -377,7 +379,7 @@ describe("BuiltinMockAdapter", () => {
         body: { kind: "json_inline", value: { id: "computer_fixture" } }
       }
     ]);
-    const served = adapter.respond({
+    const served = await adapter.respond({
       ...candidate(dualMediaContract(), "path:POST /v1/computers"),
       request: {
         ...candidate(dualMediaContract(), "path:POST /v1/computers").request,
@@ -389,10 +391,10 @@ describe("BuiltinMockAdapter", () => {
     expect(served?.provenance).toBe("fixture:fx_json");
   });
 
-  it("keeps negotiating when no fixture is selected", () => {
+  it("keeps negotiating when no fixture is selected", async () => {
     const adapter = new BuiltinMockAdapter();
     const input = candidate(dualMediaContract(), "path:POST /v1/computers");
-    const served = adapter.respond({
+    const served = await adapter.respond({
       ...input,
       request: { ...input.request, accept: "text/plain" }
     });
@@ -400,20 +402,20 @@ describe("BuiltinMockAdapter", () => {
     expect(served?.provenance).toBe("none");
   });
 
-  it("serves the documented default media type without accept", () => {
+  it("serves the documented default media type without accept", async () => {
     const adapter = new BuiltinMockAdapter();
     const input = candidate(dualMediaContract(), "path:POST /v1/computers");
-    const served = adapter.respond({
+    const served = await adapter.respond({
       ...input,
       request: { ...input.request, accept: null }
     });
     expect(served?.mediaType).toBe("application/json");
   });
 
-  it("returns null for an operation outside the contract", () => {
+  it("returns null for an operation outside the contract", async () => {
     const adapter = new BuiltinMockAdapter();
     expect(
-      adapter.respond({
+      await adapter.respond({
         contract: contract(),
         seed: SEED,
         request: {
@@ -430,10 +432,10 @@ describe("BuiltinMockAdapter", () => {
     ).toBeNull();
   });
 
-  it("resolves preserved recursive references like the gateway (V2X)", () => {
+  it("resolves preserved recursive references like the gateway (V2X)", async () => {
     const source = recursiveContract();
     const adapter = new BuiltinMockAdapter();
-    const served = adapter.respond(
+    const served = await adapter.respond(
       candidate(source, "path:POST /v1/computers")
     );
     expect(served).not.toBeNull();
@@ -468,19 +470,19 @@ describe("BuiltinMockAdapter", () => {
     expect(new SchemaValidator(documentRoot).errors(servedBody)).toEqual([]);
   });
 
-  it("returns null when tuple generation admits no valid count", () => {
+  it("returns null when tuple generation admits no valid count", async () => {
     const adapter = new BuiltinMockAdapter();
     expect(
-      adapter.respond(
+      await adapter.respond(
         candidate(closedTupleContract(), "path:POST /v1/computers")
       )
     ).toBeNull();
   });
 
-  it("serves a generated tuple that fits the count bound", () => {
+  it("serves a generated tuple that fits the count bound", async () => {
     const source = boundedTupleContract();
     const adapter = new BuiltinMockAdapter();
-    const served = adapter.respond(
+    const served = await adapter.respond(
       candidate(source, "path:POST /v1/computers")
     );
     expect(served?.provenance).toBe("schema_generation");
@@ -497,28 +499,28 @@ describe("BuiltinMockAdapter", () => {
     expect(new SchemaValidator(tupleSchema).errors(body)).toEqual([]);
   });
 
-  it("serves the recursive schema byte-identically on repeat calls", () => {
+  it("serves the recursive schema byte-identically on repeat calls", async () => {
     const adapter = new BuiltinMockAdapter();
     const input = candidate(recursiveContract(), "path:POST /v1/computers");
-    const first = adapter.respond(input);
-    const second = adapter.respond(input);
+    const first = await adapter.respond(input);
+    const second = await adapter.respond(input);
     expect(second).not.toBeNull();
     expect(serializeMockResponse(second as NonNullable<typeof first>)).toBe(
       serializeMockResponse(first as NonNullable<typeof first>)
     );
   });
 
-  it("is byte-identical across double invocation", () => {
+  it("is byte-identical across double invocation", async () => {
     const source = contract();
     const adapter = new BuiltinMockAdapter();
-    const result = verifyDeterminism(adapter, [
+    const result = await verifyDeterminism(adapter, [
       candidate(source, "path:POST /v1/computers"),
       candidate(source, "path:GET /v1/computers")
     ]);
     expect(result).toEqual({ ok: true, checked: 2, problems: [] });
   });
 
-  it("detects a nondeterministic adapter", () => {
+  it("detects a nondeterministic adapter", async () => {
     const source = contract();
     let flip = false;
     const flaky = {
@@ -532,17 +534,17 @@ describe("BuiltinMockAdapter", () => {
       }),
       respond: () => {
         flip = !flip;
-        return {
+        return Promise.resolve({
           status: 200,
           mediaType: "application/json",
           headers: {},
           body: flip ? 1 : 2,
           provenance: "example:x",
           approximation: null
-        };
+        });
       }
     };
-    const result = verifyDeterminism(flaky, [
+    const result = await verifyDeterminism(flaky, [
       candidate(source, "path:POST /v1/computers")
     ]);
     expect(result.ok).toBe(false);

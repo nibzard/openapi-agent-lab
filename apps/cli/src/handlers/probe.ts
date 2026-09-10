@@ -979,10 +979,12 @@ export const probeCommand: CommandHandler = async (args, io) => {
         provenance: "external",
         approximation: null
       } satisfies SelectedResponse;
-      const answered = validateResponse(
-        candidate.operation.responses,
-        selected,
-        schemaLookup
+      const answered = (
+        await validateResponse(
+          candidate.operation.responses,
+          selected,
+          schemaLookup
+        )
       ).violations;
       // A body that claims a JSON media type but does not parse is a
       // violation of its own; validation sees no value, because the raw

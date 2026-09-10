@@ -206,8 +206,8 @@ describe("doctor check units", () => {
     ]);
   });
 
-  it("confirms gateway determinism through the full pipeline", () => {
-    const check = checkGatewayDeterminism();
+  it("confirms gateway determinism through the full pipeline", async () => {
+    const check = await checkGatewayDeterminism();
     expect(check.status).toBe("pass");
     expect(check.detail?.["status"]).toBe(200);
   });

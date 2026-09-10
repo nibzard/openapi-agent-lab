@@ -179,7 +179,7 @@ async function recordExchange(
     headers: init.headers,
     body: bytes
   };
-  const response = handleGatewayRequest(options, init.sequence, raw);
+  const response = await handleGatewayRequest(options, init.sequence, raw);
   const wire = (headers: Record<string, string>) =>
     traceHeaders(
       Object.entries(headers).map(([name, value]) => [name, [value]]),

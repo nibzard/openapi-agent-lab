@@ -6,19 +6,25 @@
  * backreferences, named groups, inline flags, unicode property escapes,
  * word boundaries outside classes — return null so the caller can fail
  * closed with a named cause.
+ *
+ * Every raw expression this module would execute runs inside the
+ * bounded schema worker boundary, so a hostile pattern can never block
+ * the serving event loop (review remediation F2).
  */
 
+import { firstPrintableMatchInWorker, patternAcceptsInWorker } from "@oal/core";
+
 /**
- * Test one candidate against a vendor pattern. The schema validator
- * compiles the same expression against the same schema, so this adds
- * no new trust boundary; an untestable pattern accepts nothing.
+ * Test one candidate against a vendor pattern inside the worker
+ * boundary. The schema validator compiles the same expression against
+ * the same schema, so this adds no new trust boundary; an untestable
+ * pattern accepts nothing.
  */
-export function patternAccepts(pattern: string, candidate: string): boolean {
-  try {
-    return new RegExp(pattern).test(candidate);
-  } catch {
-    return false;
-  }
+export async function patternAccepts(
+  pattern: string,
+  candidate: string
+): Promise<boolean> {
+  return patternAcceptsInWorker(pattern, candidate);
 }
 
 /** Declared JSON Schema length bounds; null means undeclared. */
@@ -32,6 +38,9 @@ const MAX_NODES = 256;
 const MAX_REPEAT = 64;
 const MAX_SYNTH_LENGTH = 256;
 const MAX_ATTEMPTS = 96;
+
+/** Probe cache bound; distinct probe sources stay few per contract. */
+const MAX_FIRST_PRINTABLE_CACHE = 512;
 
 /** One quantified atom reduced to its first declared member. */
 interface Term {
@@ -50,20 +59,43 @@ interface ParseState {
 }
 
 /**
+ * First-printable probes by source text, so one pattern that repeats
+ * the same class or escape costs one worker round trip, not one per
+ * node. A missing entry is an unprobed source.
+ */
+const firstPrintableCache = new Map<string, string | null>();
+
+/**
+ * First printable ASCII character one raw source accepts, computed
+ * inside the worker boundary and cached per source.
+ */
+async function firstPrintableMatch(source: string): Promise<string | null> {
+  if (firstPrintableCache.has(source)) {
+    return firstPrintableCache.get(source) ?? null;
+  }
+  const found = await firstPrintableMatchInWorker(source);
+  if (firstPrintableCache.size > MAX_FIRST_PRINTABLE_CACHE) {
+    firstPrintableCache.clear();
+  }
+  firstPrintableCache.set(source, found);
+  return found;
+}
+
+/**
  * Synthesize a string the pattern accepts within the declared bounds.
  * Deterministic: first alternative, first declared member of every
  * atom, minimum counts, then an odometer over the count vector when
  * the bounds demand more length.
  */
-export function synthesizePattern(
+export async function synthesizePattern(
   pattern: string,
   bounds: PatternBounds
-): string | null {
+): Promise<string | null> {
   if (pattern.length > MAX_PATTERN_CHARS) {
     return null;
   }
   const state: ParseState = { source: pattern, pos: 0, nodes: 0 };
-  const alternatives = parseDisjunction(state);
+  const alternatives = await parseDisjunction(state);
   if (alternatives === null || state.pos !== pattern.length) {
     // Unbalanced ")" or other trailing syntax the parser refuses.
     return null;
@@ -78,7 +110,7 @@ export function synthesizePattern(
   }
   for (const terms of alternatives) {
     const candidate = synthesizeAlternative(terms, minLength, maxLength);
-    if (candidate !== null && patternAccepts(pattern, candidate)) {
+    if (candidate !== null && (await patternAccepts(pattern, candidate))) {
       return candidate;
     }
   }
@@ -93,10 +125,10 @@ export function synthesizePattern(
  *   quantifier  := "*" | "+" | "?" | "{n}" | "{n,}" | "{n,m}"
  *   atom        := anchor | "." | class | group | escape | literal
  */
-function parseDisjunction(state: ParseState): Term[][] | null {
+async function parseDisjunction(state: ParseState): Promise<Term[][] | null> {
   const alternatives: Term[][] = [];
   for (;;) {
-    const terms = parseSequence(state);
+    const terms = await parseSequence(state);
     if (terms === null) {
       return null;
     }
@@ -110,14 +142,14 @@ function parseDisjunction(state: ParseState): Term[][] | null {
   return alternatives;
 }
 
-function parseSequence(state: ParseState): Term[] | null {
+async function parseSequence(state: ParseState): Promise<Term[] | null> {
   const terms: Term[] = [];
   while (state.pos < state.source.length) {
     const ch = state.source[state.pos];
     if (ch === "|" || ch === ")") {
       break;
     }
-    const atom = parseAtom(state);
+    const atom = await parseAtom(state);
     if (atom === null) {
       return null;
     }
@@ -135,7 +167,7 @@ function parseSequence(state: ParseState): Term[] | null {
  * the first declared member of a class, the lower bound of a range,
  * a group flattened at its own minimum counts.
  */
-function parseAtom(state: ParseState): string | null {
+async function parseAtom(state: ParseState): Promise<string | null> {
   if (state.nodes > MAX_NODES) {
     return null;
   }
@@ -242,7 +274,7 @@ function parseCounted(
   return { min: low, max: high, declared: !open };
 }
 
-function parseGroup(state: ParseState): string | null {
+async function parseGroup(state: ParseState): Promise<string | null> {
   state.pos += 1; // "("
   if (state.source[state.pos] === "?") {
     if (state.source[state.pos + 1] !== ":") {
@@ -251,7 +283,7 @@ function parseGroup(state: ParseState): string | null {
     }
     state.pos += 2; // "?:"
   }
-  const nested = parseDisjunction(state);
+  const nested = await parseDisjunction(state);
   if (nested === null || state.source[state.pos] !== ")") {
     return null;
   }
@@ -272,7 +304,7 @@ function flattenAtMinimum(terms: readonly Term[]): string {
   return out;
 }
 
-function parseClass(state: ParseState): string | null {
+async function parseClass(state: ParseState): Promise<string | null> {
   const start = state.pos;
   state.pos += 1; // "["
   const negated = state.source[state.pos] === "^";
@@ -307,7 +339,7 @@ function parseClass(state: ParseState): string | null {
   return firstDeclaredMember(state.source.slice(bodyStart, state.pos - 1));
 }
 
-function parseEscape(state: ParseState): string | null {
+async function parseEscape(state: ParseState): Promise<string | null> {
   state.pos += 1; // "\"
   const ch = state.source[state.pos];
   if (ch === undefined) {
@@ -382,7 +414,7 @@ function parseEscape(state: ParseState): string | null {
  * First declared member of a positive class body: a literal, a range
  * lower bound, or a class escape's canonical first member.
  */
-function firstDeclaredMember(body: string): string | null {
+async function firstDeclaredMember(body: string): Promise<string | null> {
   const ch = body[0];
   if (ch === undefined) {
     return null;
@@ -439,23 +471,6 @@ function firstDeclaredMember(body: string): string | null {
       // Identity escape: the character itself.
       return escape;
   }
-}
-
-/** First printable ASCII character the source accepts. */
-function firstPrintableMatch(source: string): string | null {
-  let probe: RegExp;
-  try {
-    probe = new RegExp(source);
-  } catch {
-    return null;
-  }
-  for (let code = 0x20; code <= 0x7e; code += 1) {
-    const ch = String.fromCharCode(code);
-    if (probe.test(ch)) {
-      return ch;
-    }
-  }
-  return null;
 }
 
 /** Build one alternative's candidate from a count vector. */

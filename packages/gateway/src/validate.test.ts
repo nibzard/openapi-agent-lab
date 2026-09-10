@@ -168,7 +168,7 @@ describe("contract schema lookup", () => {
     expect(lookup("duplicate.yaml#/components/schemas/Shared")).toBeDefined();
   });
 
-  it("validates a body whose schema reaches the duplicate through a ref", () => {
+  it("validates a body whose schema reaches the duplicate through a ref", async () => {
     const lookup = createContractSchemaLookup({
       sch_wrapper: schemaIr(
         "sch_wrapper",
@@ -193,7 +193,7 @@ describe("contract schema lookup", () => {
         "a.yaml"
       )
     });
-    const result = validateBody(
+    const result = await validateBody(
       bodyOperation("sch_wrapper", "application/json"),
       parsed({ shared: { name: "n" } }, "application/json"),
       lookup
@@ -244,12 +244,12 @@ describe("recursive schema references (R02)", () => {
     sch_node: schemaIr("sch_node", nodeSchema, NODE_POINTER, "openapi.yaml")
   });
 
-  it("accepts a valid recursive body the compiler's pointers describe", () => {
+  it("accepts a valid recursive body the compiler's pointers describe", async () => {
     const body = {
       name: "a",
       children: [{ name: "b", children: [{ name: "c", children: [] }] }]
     };
-    const result = validateBody(
+    const result = await validateBody(
       bodyOperation("sch_node", "application/json"),
       parsed(body, "application/json"),
       lookup
@@ -257,12 +257,12 @@ describe("recursive schema references (R02)", () => {
     expect(result.violations).toEqual([]);
   });
 
-  it("reports violations inside the referenced schema", () => {
+  it("reports violations inside the referenced schema", async () => {
     const body = {
       name: "a",
       children: [{ name: 5, children: [] }]
     };
-    const result = validateBody(
+    const result = await validateBody(
       bodyOperation("sch_node", "application/json"),
       parsed(body, "application/json"),
       lookup
@@ -287,7 +287,7 @@ describe("body value coverage (R09)", () => {
     return createContractSchemaLookup(registry);
   };
 
-  it("validates an array body against an array schema", () => {
+  it("validates an array body against an array schema", async () => {
     const lookup = uidLookup({
       sch_tags: {
         type: "array",
@@ -295,7 +295,7 @@ describe("body value coverage (R09)", () => {
         items: { type: "string", maxLength: 3 }
       }
     });
-    const result = validateBody(
+    const result = await validateBody(
       bodyOperation("sch_tags", "application/json"),
       parsed(["toolong1", "toolong2", "toolong3"], "application/json"),
       lookup
@@ -308,19 +308,19 @@ describe("body value coverage (R09)", () => {
     ]);
   });
 
-  it("validates scalar and null JSON bodies", () => {
+  it("validates scalar and null JSON bodies", async () => {
     const lookup = uidLookup({
       sch_count: { type: "integer", maximum: 10 },
       sch_nullable: { type: ["string", "null"] }
     });
-    const over = validateBody(
+    const over = await validateBody(
       bodyOperation("sch_count", "application/json"),
       parsed(11, "application/json"),
       lookup
     );
     expect(over.violations.map((entry) => entry.code)).toEqual(["maximum"]);
 
-    const nulled = validateBody(
+    const nulled = await validateBody(
       bodyOperation("sch_nullable", "application/json"),
       parsed(null, "application/json"),
       lookup
@@ -328,19 +328,19 @@ describe("body value coverage (R09)", () => {
     expect(nulled.violations).toEqual([]);
   });
 
-  it("validates text bodies only when the schema declares strings", () => {
+  it("validates text bodies only when the schema declares strings", async () => {
     const lookup = uidLookup({
       sch_text: { type: "string", maxLength: 4 },
       sch_json: { type: "object", required: ["name"] }
     });
-    const text = validateBody(
+    const text = await validateBody(
       bodyOperation("sch_text", "text/plain"),
       parsed("toolong", "text/plain"),
       lookup
     );
     expect(text.violations.map((entry) => entry.code)).toEqual(["maxLength"]);
 
-    const passthrough = validateBody(
+    const passthrough = await validateBody(
       bodyOperation("sch_json", "text/plain"),
       parsed("not-an-object", "text/plain"),
       lookup
@@ -348,7 +348,7 @@ describe("body value coverage (R09)", () => {
     expect(passthrough.violations).toEqual([]);
   });
 
-  it("validates URL-encoded form bodies parsed into objects (V2A)", () => {
+  it("validates URL-encoded form bodies parsed into objects (V2A)", async () => {
     // The server parses `id=5` into { id: 5 } through form coercion.
     const lookup = uidLookup({
       sch_form: {
@@ -357,7 +357,7 @@ describe("body value coverage (R09)", () => {
         properties: { id: { type: "string" } }
       }
     });
-    const invalid = validateBody(
+    const invalid = await validateBody(
       bodyOperation("sch_form", "application/x-www-form-urlencoded"),
       parsed({ id: 5 }, "application/x-www-form-urlencoded"),
       lookup
@@ -371,7 +371,7 @@ describe("body value coverage (R09)", () => {
       }
     ]);
 
-    const valid = validateBody(
+    const valid = await validateBody(
       bodyOperation("sch_form", "application/x-www-form-urlencoded"),
       parsed({ id: "thing_1" }, "application/x-www-form-urlencoded"),
       lookup
@@ -393,11 +393,11 @@ describe("readOnly stripping recursion (R12)", () => {
     }
   };
 
-  it("accepts a conforming request that omits nested readOnly fields", () => {
+  it("accepts a conforming request that omits nested readOnly fields", async () => {
     const lookup = createContractSchemaLookup({
       sch_nested: schemaIr("sch_nested", nestedReadOnly)
     });
-    const result = validateBody(
+    const result = await validateBody(
       bodyOperation("sch_nested", "application/json"),
       parsed({ name: "n", nested: {} }, "application/json"),
       lookup
@@ -496,8 +496,8 @@ describe("flagged properties behind references (V2B)", () => {
     })
   });
 
-  it("accepts a request that omits a required readOnly field behind a ref", () => {
-    const result = validateBody(
+  it("accepts a request that omits a required readOnly field behind a ref", async () => {
+    const result = await validateBody(
       bodyOperation("sch_cart", "application/json"),
       parsed({ item: { label: "l" } }, "application/json"),
       refLookup
@@ -505,8 +505,8 @@ describe("flagged properties behind references (V2B)", () => {
     expect(result.violations).toEqual([]);
   });
 
-  it("still enforces the unflagged required fields behind a ref", () => {
-    const result = validateBody(
+  it("still enforces the unflagged required fields behind a ref", async () => {
+    const result = await validateBody(
       bodyOperation("sch_cart", "application/json"),
       parsed({ item: {} }, "application/json"),
       refLookup
@@ -523,7 +523,7 @@ describe("flagged properties behind references (V2B)", () => {
     ]);
   });
 
-  it("strips through a cyclic reference without hanging", () => {
+  it("strips through a cyclic reference without hanging", async () => {
     const CYCLIC_POINTER = "#/components/schemas/Cyclic";
     const cyclicLookup = createContractSchemaLookup({
       sch_cyclic: schemaIr(
@@ -541,7 +541,7 @@ describe("flagged properties behind references (V2B)", () => {
         "openapi.yaml"
       )
     });
-    const result = validateBody(
+    const result = await validateBody(
       bodyOperation("sch_cyclic", "application/json"),
       parsed(
         {

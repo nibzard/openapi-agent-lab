@@ -6,7 +6,7 @@
  * stored exchange event shape.
  */
 
-import { canonicalJson, type Json } from "@oal/core";
+import { canonicalJson, SchemaWorkerError, type Json } from "@oal/core";
 import { CONTRACT_IR_SCHEMA_VERSION, type ContractIR } from "@oal/contract-ir";
 import type { LimitTable } from "@oal/config";
 import {
@@ -16,21 +16,27 @@ import {
 } from "./auth.ts";
 import { parseMultipart, type MultipartPart } from "./multipart.ts";
 import { FRAMEWORK_ERRORS, problemDocument } from "./problem.ts";
-import { validateResponse } from "./response.ts";
+import { validateResponse, type ResponseValidationResult } from "./response.ts";
 import { matchRoute } from "./router.ts";
 import { matchRequestMedia } from "./negotiate.ts";
 import {
   compilePathParameterPatterns,
   pathFamilyKey
 } from "./path-patterns.ts";
-import { selectResponse, type ContractFixture } from "./select.ts";
+import {
+  selectResponse,
+  type ContractFixture,
+  type SelectedResponse
+} from "./select.ts";
 import type { GatewayState } from "./state.ts";
 import {
   createContractSchemaLookup,
   validateBody,
   validateParameters,
+  type BodyValidationResult,
   type ParsedRequest,
-  type SchemaLookup
+  type SchemaLookup,
+  type ValidationResult
 } from "./validate.ts";
 
 /** Raw wire request before any parsing. */
@@ -154,12 +160,70 @@ function credentialsForRun(
  * Handle one request through the full product pipeline. Pure with
  * respect to the contract, fixtures, limits, and the ingress sequence:
  * identical inputs produce identical responses.
+ *
+ * The pipeline is asynchronous because schema and pattern evaluation
+ * runs inside the bounded worker boundary. A worker-bound failure is
+ * an infrastructure outcome: the request receives a framework error
+ * response, a staged state transaction rolls back, and no hostile
+ * pattern can block the serving event loop.
  */
 export function handleGatewayRequest(
   options: GatewayOptions,
   sequence: number,
   raw: RawRequest
-): GatewayResponse {
+): Promise<GatewayResponse> {
+  return serializeState(options.state, () => pipeline(options, sequence, raw));
+}
+
+/**
+ * One state transaction at a time. The pipeline awaits worker replies
+ * between staging and commit, so concurrent requests over one
+ * transactional state are serialized per state object; requests
+ * without state run concurrently.
+ */
+const stateChains = new WeakMap<GatewayState, Promise<void>>();
+
+function serializeState(
+  state: GatewayState | undefined,
+  run: () => Promise<GatewayResponse>
+): Promise<GatewayResponse> {
+  if (state === undefined) {
+    return run();
+  }
+  const previous = stateChains.get(state) ?? Promise.resolve();
+  const result = previous.then(run, run);
+  stateChains.set(
+    state,
+    result.then(
+      () => undefined,
+      () => undefined
+    )
+  );
+  return result;
+}
+
+/**
+ * Map one schema worker failure to its framework response. Timeouts
+ * are 504 infrastructure outcomes; every other boundary failure is a
+ * 500 infrastructure outcome. Anything else is not a worker failure
+ * and keeps propagating.
+ */
+function schemaWorkerFramework(
+  error: unknown
+): (typeof FRAMEWORK_ERRORS)[keyof typeof FRAMEWORK_ERRORS] {
+  if (error instanceof SchemaWorkerError) {
+    return error.code === "OAL-SCHEMA-WORKER-TIMEOUT"
+      ? FRAMEWORK_ERRORS.schemaWorkerTimeout
+      : FRAMEWORK_ERRORS.schemaWorkerFailed;
+  }
+  throw error;
+}
+
+async function pipeline(
+  options: GatewayOptions,
+  sequence: number,
+  raw: RawRequest
+): Promise<GatewayResponse> {
   const { contract, limits } = options;
   const requestId = `req_${sequence.toString(10).padStart(8, "0")}`;
 
@@ -282,9 +346,20 @@ export function handleGatewayRequest(
     }
   }
 
-  // Step 8: request validation.
-  const parameterResult = validateParameters(operation, request, schemaLookup);
-  const bodyResult = validateBody(operation, request, schemaLookup);
+  // Step 8: request validation. A worker-bound failure here happens
+  // before any state staging, so nothing has to roll back.
+  let parameterResult: ValidationResult;
+  let bodyResult: BodyValidationResult;
+  try {
+    parameterResult = await validateParameters(
+      operation,
+      request,
+      schemaLookup
+    );
+    bodyResult = await validateBody(operation, request, schemaLookup);
+  } catch (error) {
+    return framework(schemaWorkerFramework(error), requestId, detailOf(error));
+  }
   const violations = [...parameterResult.violations, ...bodyResult.violations];
   if (violations.length > 0) {
     const document = problemDocument(
@@ -307,7 +382,9 @@ export function handleGatewayRequest(
   // Steps 10 to 12: contract backend selection. The Accept header joins
   // selection so the value comes from the media type that is served.
   // The backend runs inside a state transaction: the staged mutation
-  // stays invisible until response validation commits it.
+  // stays invisible until response validation commits it. A
+  // worker-bound failure rolls the transaction back, so a timeout
+  // never mutates state.
   options.state?.stage(operation.key);
   // A generated id must satisfy the strictest pattern any path
   // parameter of the served operation's family declares, so the table
@@ -315,20 +392,27 @@ export function handleGatewayRequest(
   const parameterPatterns = pathPatternsFor(contract).get(
     pathFamilyKey(operation)
   );
-  const selected = selectResponse(
-    operation.key,
-    operation.responses,
-    options.fixtures ?? [],
-    {
-      seed: `${options.runSeed}:${operation.uid}`,
-      lookup: schemaLookup,
-      ...(parameterPatterns === undefined ? {} : { parameterPatterns })
-    },
-    headerValue(raw.headers, "accept")
-  );
-  if (selected === null) {
+  let selected: SelectedResponse;
+  try {
+    const candidate = await selectResponse(
+      operation.key,
+      operation.responses,
+      options.fixtures ?? [],
+      {
+        seed: `${options.runSeed}:${operation.uid}`,
+        lookup: schemaLookup,
+        ...(parameterPatterns === undefined ? {} : { parameterPatterns })
+      },
+      headerValue(raw.headers, "accept")
+    );
+    if (candidate === null) {
+      options.state?.rollback();
+      return framework(FRAMEWORK_ERRORS.mockBehaviorUnavailable, requestId);
+    }
+    selected = candidate;
+  } catch (error) {
     options.state?.rollback();
-    return framework(FRAMEWORK_ERRORS.mockBehaviorUnavailable, requestId);
+    return framework(schemaWorkerFramework(error), requestId, detailOf(error));
   }
 
   // Response media negotiation.
@@ -343,11 +427,17 @@ export function handleGatewayRequest(
   // Step 12: response validation before commit. Status, required
   // headers, media type, and body are checked against the declared
   // response; an invalid backend result never mutates state.
-  const responseViolations = validateResponse(
-    operation.responses,
-    selected,
-    schemaLookup
-  );
+  let responseViolations: ResponseValidationResult;
+  try {
+    responseViolations = await validateResponse(
+      operation.responses,
+      selected,
+      schemaLookup
+    );
+  } catch (error) {
+    options.state?.rollback();
+    return framework(schemaWorkerFramework(error), requestId, detailOf(error));
+  }
   if (responseViolations.violations.length > 0) {
     options.state?.rollback();
     return framework(FRAMEWORK_ERRORS.mockResponseInvalid, requestId);
@@ -432,17 +522,29 @@ function isJsonType(media: string): boolean {
 
 function framework(
   error: (typeof FRAMEWORK_ERRORS)[keyof typeof FRAMEWORK_ERRORS],
-  requestId: string
+  requestId: string,
+  detail?: string
 ): GatewayResponse {
   return {
     status: error.status,
     headers: { "content-type": "application/problem+json" },
-    body: JSON.stringify(problemDocument(error, requestId)),
+    body: JSON.stringify(problemDocument(error, requestId, detail)),
     requestId,
     provenance: null,
     approximation: null,
     frameworkCode: error.code
   };
+}
+
+/**
+ * Stable detail line of one worker-bound failure. Only the registry
+ * code and message of the typed error are exposed; unexpected errors
+ * carry no detail.
+ */
+function detailOf(error: unknown): string | undefined {
+  return error instanceof SchemaWorkerError
+    ? `${error.code}: ${error.message}`
+    : undefined;
 }
 
 function headerValue(

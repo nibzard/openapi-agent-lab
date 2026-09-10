@@ -26,17 +26,17 @@ function response(init: Partial<ResponseIR>): ResponseIR {
 describe("deterministic generation", () => {
   const options = { seed: "op_test" };
 
-  it("respects const, enum order, and default", () => {
-    expect(generateValue({ const: "pinned" }, options)).toBe("pinned");
-    expect(generateValue({ default: 41 }, options)).toBe(41);
-    expect(generateValue({ enum: ["zebra", "apple", "apple"] }, options)).toBe(
-      "apple"
-    );
+  it("respects const, enum order, and default", async () => {
+    expect(await generateValue({ const: "pinned" }, options)).toBe("pinned");
+    expect(await generateValue({ default: 41 }, options)).toBe(41);
+    expect(
+      await generateValue({ enum: ["zebra", "apple", "apple"] }, options)
+    ).toBe("apple");
   });
 
-  it("applies the section 15.5 order: example, const, default, enum", () => {
+  it("applies the section 15.5 order: example, const, default, enum", async () => {
     expect(
-      generateValue(
+      await generateValue(
         {
           examples: ["from-examples"],
           example: "from-example",
@@ -48,15 +48,17 @@ describe("deterministic generation", () => {
       )
     ).toBe("from-examples");
     expect(
-      generateValue({ example: "from-example", const: "pinned" }, options)
+      await generateValue({ example: "from-example", const: "pinned" }, options)
     ).toBe("from-example");
-    expect(generateValue({ const: "pinned", default: 41 }, options)).toBe(
+    expect(await generateValue({ const: "pinned", default: 41 }, options)).toBe(
       "pinned"
     );
-    expect(generateValue({ default: 41, enum: [7, 41] }, options)).toBe(41);
+    expect(await generateValue({ default: 41, enum: [7, 41] }, options)).toBe(
+      41
+    );
   });
 
-  it("honors numeric exclusive bounds for integers and numbers", () => {
+  it("honors numeric exclusive bounds for integers and numbers", async () => {
     const cases: Json[] = [
       { type: "integer", exclusiveMinimum: 1 },
       { type: "integer", exclusiveMaximum: 0 },
@@ -67,46 +69,46 @@ describe("deterministic generation", () => {
       { type: "number", minimum: 0.3, multipleOf: 0.1 }
     ];
     for (const schema of cases) {
-      const value = generateValue(schema, options);
+      const value = await generateValue(schema, options);
       expect(
         new SchemaValidator(schema).errors(value),
         JSON.stringify(schema)
       ).toEqual([]);
     }
     expect(
-      generateValue({ type: "integer", exclusiveMinimum: 1 }, options)
+      await generateValue({ type: "integer", exclusiveMinimum: 1 }, options)
     ).toBe(2);
     expect(
-      generateValue(
+      await generateValue(
         { type: "integer", minimum: 5, exclusiveMinimum: true },
         options
       )
     ).toBe(6);
     expect(
-      generateValue(
+      await generateValue(
         { type: "integer", exclusiveMinimum: 0, maximum: 10, multipleOf: 4 },
         options
       )
     ).toBe(4);
   });
 
-  it("fails closed when the numeric bounds admit no value", () => {
-    expect(() =>
+  it("fails closed when the numeric bounds admit no value", async () => {
+    await expect(
       generateValue(
         { type: "integer", exclusiveMinimum: 1, exclusiveMaximum: 2 },
         options
       )
-    ).toThrow(GenerationUnsupportedError);
-    expect(() =>
+    ).rejects.toThrow(GenerationUnsupportedError);
+    await expect(
       generateValue(
         { type: "integer", minimum: 3, maximum: 3, exclusiveMinimum: 3 },
         options
       )
-    ).toThrow(GenerationUnsupportedError);
+    ).rejects.toThrow(GenerationUnsupportedError);
   });
 
-  it("generates bounded strings and numbers within bounds", () => {
-    const value = generateValue(
+  it("generates bounded strings and numbers within bounds", async () => {
+    const value = await generateValue(
       { type: "string", minLength: 3, maxLength: 40 },
       options
     );
@@ -115,24 +117,24 @@ describe("deterministic generation", () => {
     expect((value as string).length).toBeLessThanOrEqual(40);
 
     expect(
-      generateValue({ type: "integer", minimum: 5, maximum: 9 }, options)
+      await generateValue({ type: "integer", minimum: 5, maximum: 9 }, options)
     ).toBe(7);
     expect(
-      generateValue(
+      await generateValue(
         { type: "integer", minimum: 0, maximum: 100, multipleOf: 10 },
         options
       )
     ).toBe(50);
     expect(
-      generateValue(
+      await generateValue(
         { type: "number", exclusiveMinimum: 0, minimum: 0, maximum: 10 },
         options
       )
     ).toBe(5);
   });
 
-  it("generates objects with required properties in stable order", () => {
-    const value = generateValue(
+  it("generates objects with required properties in stable order", async () => {
+    const value = await generateValue(
       {
         type: "object",
         required: ["beta", "alpha"],
@@ -147,14 +149,14 @@ describe("deterministic generation", () => {
     expect((value as { alpha: number }).alpha).toBeGreaterThanOrEqual(0);
   });
 
-  it("fills minProperties and dedupes unique arrays", () => {
-    const filled = generateValue(
+  it("fills minProperties and dedupes unique arrays", async () => {
+    const filled = (await generateValue(
       { type: "object", minProperties: 2 },
       options
-    ) as Record<string, unknown>;
+    )) as Record<string, unknown>;
     expect(Object.keys(filled).length).toBeGreaterThanOrEqual(2);
 
-    const unique = generateValue(
+    const unique = (await generateValue(
       {
         type: "array",
         items: { type: "integer" },
@@ -162,12 +164,12 @@ describe("deterministic generation", () => {
         uniqueItems: true
       },
       options
-    ) as Json[];
+    )) as Json[];
     const keys = unique.map((item) => JSON.stringify(item));
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it("generates a schema of only additionalProperties as a map", () => {
+  it("generates a schema of only additionalProperties as a map", async () => {
     // Shape of the e2b metrics response: no type word, no properties,
     // one value schema under additionalProperties.
     const template = {
@@ -175,7 +177,7 @@ describe("deterministic generation", () => {
       required: ["cpuUsedPct"],
       properties: { cpuUsedPct: { type: "number" } }
     };
-    const value = generateValue(
+    const value = (await generateValue(
       {
         required: ["sandboxes"],
         properties: {
@@ -183,7 +185,7 @@ describe("deterministic generation", () => {
         }
       },
       options
-    ) as { sandboxes: Record<string, { cpuUsedPct: number }> };
+    )) as { sandboxes: Record<string, { cpuUsedPct: number }> };
     const entries = Object.entries(value.sandboxes);
     expect(entries).toHaveLength(1);
     const [key, metric] = entries[0] as [string, { cpuUsedPct: number }];
@@ -196,25 +198,29 @@ describe("deterministic generation", () => {
     ).toEqual([]);
   });
 
-  it("keeps a boolean additionalProperties a free-form object", () => {
-    expect(generateValue({ additionalProperties: true }, options)).toEqual({});
-    expect(generateValue({ additionalProperties: false }, options)).toEqual({});
+  it("keeps a boolean additionalProperties a free-form object", async () => {
+    expect(
+      await generateValue({ additionalProperties: true }, options)
+    ).toEqual({});
+    expect(
+      await generateValue({ additionalProperties: false }, options)
+    ).toEqual({});
   });
 
-  it("generates a tuple that fits the count bound from prefixItems", () => {
+  it("generates a tuple that fits the count bound from prefixItems", async () => {
     const schema = {
       type: "array",
       prefixItems: [{ type: "string" }, { type: "integer" }],
       items: false
     };
-    const value = generateValue(schema, options) as Json[];
+    const value = (await generateValue(schema, options)) as Json[];
     expect(value).toHaveLength(2);
     expect(typeof value[0]).toBe("string");
     expect(typeof value[1]).toBe("number");
     expect(new SchemaValidator(schema).errors(value)).toHaveLength(0);
   });
 
-  it("fails closed when a closed tuple exceeds the count bound", () => {
+  it("fails closed when a closed tuple exceeds the count bound", async () => {
     // The V2U normalization maps a 3.0 tuple with `additionalItems:
     // false` to `prefixItems` plus `items: false`.
     const schema = {
@@ -227,22 +233,22 @@ describe("deterministic generation", () => {
       ],
       items: false
     };
-    expect(() => generateValue(schema, options)).toThrow(
+    await expect(generateValue(schema, options)).rejects.toThrow(
       GenerationUnsupportedError
     );
   });
 
-  it("extends a tuple past its prefix from the rest schema", () => {
+  it("extends a tuple past its prefix from the rest schema", async () => {
     const schema = {
       type: "array",
       minItems: 5,
       prefixItems: [{ type: "string" }, { type: "integer" }],
       items: { type: "boolean" }
     };
-    const value = generateValue(schema, {
+    const value = (await generateValue(schema, {
       seed: "op_test",
       arrayBound: 8
-    }) as Json[];
+    })) as Json[];
     expect(value).toHaveLength(5);
     expect(typeof value[0]).toBe("string");
     expect(typeof value[1]).toBe("number");
@@ -250,60 +256,60 @@ describe("deterministic generation", () => {
     expect(new SchemaValidator(schema).errors(value)).toHaveLength(0);
   });
 
-  it("fails closed when a declared minimum exceeds the closed prefix", () => {
+  it("fails closed when a declared minimum exceeds the closed prefix", async () => {
     const schema = {
       type: "array",
       minItems: 4,
       prefixItems: [{ type: "string" }, { type: "integer" }],
       items: false
     };
-    expect(() =>
+    await expect(
       generateValue(schema, { seed: "op_test", arrayBound: 8 })
-    ).toThrow(GenerationUnsupportedError);
+    ).rejects.toThrow(GenerationUnsupportedError);
   });
 
-  it("fails closed when maxItems undercuts the prefix length", () => {
+  it("fails closed when maxItems undercuts the prefix length", async () => {
     const schema = {
       type: "array",
       maxItems: 2,
       prefixItems: [{ type: "string" }, { type: "integer" }, { type: "string" }]
     };
-    expect(() => generateValue(schema, options)).toThrow(
+    await expect(generateValue(schema, options)).rejects.toThrow(
       GenerationUnsupportedError
     );
   });
 
-  it("keeps the count cap for plain item arrays", () => {
-    const capped = generateValue(
+  it("keeps the count cap for plain item arrays", async () => {
+    const capped = (await generateValue(
       { type: "array", items: { type: "integer" }, minItems: 3 },
       options
-    ) as Json[];
+    )) as Json[];
     expect(capped).toHaveLength(2);
-    const bounded = generateValue(
+    const bounded = (await generateValue(
       { type: "array", items: { type: "integer" }, minItems: 3, maxItems: 5 },
       options
-    ) as Json[];
+    )) as Json[];
     expect(bounded).toHaveLength(3);
-    const single = generateValue(
+    const single = (await generateValue(
       { type: "array", items: { type: "integer" } },
       options
-    ) as Json[];
+    )) as Json[];
     expect(single).toHaveLength(1);
   });
 
-  it("produces reserved-domain values for formats", () => {
-    expect(generateValue({ type: "string", format: "uri" }, options)).toMatch(
-      /^https:\/\/example\.invalid\//
-    );
+  it("produces reserved-domain values for formats", async () => {
     expect(
-      generateValue({ type: "string", format: "date-time" }, options)
+      await generateValue({ type: "string", format: "uri" }, options)
+    ).toMatch(/^https:\/\/example\.invalid\//);
+    expect(
+      await generateValue({ type: "string", format: "date-time" }, options)
     ).toBe("2000-01-01T00:00:00.000Z");
-    expect(generateValue({ type: "string", format: "email" }, options)).toMatch(
-      /@example\.invalid$/
-    );
+    expect(
+      await generateValue({ type: "string", format: "email" }, options)
+    ).toMatch(/@example\.invalid$/);
   });
 
-  it("produces values that validate against their schema", () => {
+  it("produces values that validate against their schema", async () => {
     const schema = {
       type: "object",
       required: ["name", "count"],
@@ -314,11 +320,11 @@ describe("deterministic generation", () => {
       },
       additionalProperties: false
     };
-    const value = generateValue(schema, options);
+    const value = await generateValue(schema, options);
     expect(new SchemaValidator(schema).errors(value)).toHaveLength(0);
   });
 
-  it("strips writeOnly properties on the response side", () => {
+  it("strips writeOnly properties on the response side", async () => {
     const schema = {
       type: "object",
       required: ["name", "secret"],
@@ -327,23 +333,26 @@ describe("deterministic generation", () => {
         secret: { type: "string", writeOnly: true }
       }
     };
-    const value = generateValue(schema, options) as Record<string, unknown>;
+    const value = (await generateValue(schema, options)) as Record<
+      string,
+      unknown
+    >;
     expect(value.name).toBeDefined();
     expect(value.secret).toBeUndefined();
   });
 
-  it("picks oneOf branches deterministically and validly", () => {
+  it("picks oneOf branches deterministically and validly", async () => {
     const schema = {
       oneOf: [{ type: "integer" }, { type: "string" }]
     };
-    const first = generateValue(schema, options);
-    const second = generateValue(schema, options);
+    const first = await generateValue(schema, options);
+    const second = await generateValue(schema, options);
     expect(first).toEqual(second);
     expect(new SchemaValidator(schema).errors(first)).toHaveLength(0);
   });
 
-  it("merges allOf constraints", () => {
-    const value = generateValue(
+  it("merges allOf constraints", async () => {
+    const value = await generateValue(
       {
         allOf: [
           {
@@ -359,16 +368,16 @@ describe("deterministic generation", () => {
     expect(Object.keys(value as object).sort()).toEqual(["a", "b"]);
   });
 
-  it("fails closed on unproducible schemas", () => {
-    expect(() =>
+  it("fails closed on unproducible schemas", async () => {
+    await expect(
       generateValue({ type: "string", pattern: "^(?!x)(?=y).*$" }, options)
-    ).toThrow(GenerationUnsupportedError);
-    expect(() => generateValue(false, options)).toThrow(
+    ).rejects.toThrow(GenerationUnsupportedError);
+    await expect(generateValue(false, options)).rejects.toThrow(
       GenerationUnsupportedError
     );
   });
 
-  it("accepts a format value that satisfies a strict vendor pattern", () => {
+  it("accepts a format value that satisfies a strict vendor pattern", async () => {
     // The Steel v1 contract narrows uuid and date-time with full regexes
     // that no bounded pattern producer covers; the format shape must be
     // accepted when it satisfies the pattern.
@@ -377,32 +386,32 @@ describe("deterministic generation", () => {
     const dateTimePattern =
       "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$";
     expect(
-      generateValue(
+      await generateValue(
         { type: "string", format: "uuid", pattern: uuidPattern },
         options
       )
     ).toBe("00000000-0000-4000-8000-000000000001");
     expect(
-      generateValue(
+      await generateValue(
         { type: "string", format: "date-time", pattern: dateTimePattern },
         options
       )
     ).toBe("2000-01-01T00:00:00.000Z");
   });
 
-  it("rejects a format value the pattern refuses", () => {
+  it("rejects a format value the pattern refuses", async () => {
     // The lookahead keeps the pattern outside the synthesizer's
     // supported set, so the refused format value fails closed.
-    expect(() =>
+    await expect(
       generateValue(
         { type: "string", format: "uuid", pattern: "^(?=A)[A-Z]+$" },
         options
       )
-    ).toThrow(GenerationUnsupportedError);
+    ).rejects.toThrow(GenerationUnsupportedError);
   });
 
-  it("synthesizes a pattern string when the format value is refused", () => {
-    const value = generateValue(
+  it("synthesizes a pattern string when the format value is refused", async () => {
+    const value = await generateValue(
       { type: "string", format: "uuid", pattern: "^[A-Z]+$" },
       options
     );
@@ -412,7 +421,7 @@ describe("deterministic generation", () => {
     ).toHaveLength(0);
   });
 
-  it("applies sibling keywords beside oneOf to the chosen branch", () => {
+  it("applies sibling keywords beside oneOf to the chosen branch", async () => {
     // Shape of slack's profile.fields: `items` sits beside `oneOf`, so
     // the array variant still generates object elements.
     const schema = {
@@ -420,7 +429,7 @@ describe("deterministic generation", () => {
       nullable: true,
       oneOf: [{ type: "object" }, { items: {}, type: "array" }]
     };
-    const value = generateValue(schema, options) as Json[];
+    const value = (await generateValue(schema, options)) as Json[];
     expect(Array.isArray(value)).toBe(true);
     for (const element of value) {
       expect(typeof element).toBe("object");
@@ -428,7 +437,7 @@ describe("deterministic generation", () => {
     expect(new SchemaValidator(schema).errors(value)).toHaveLength(0);
   });
 
-  it("prefers small values when only safe-integer bounds apply", () => {
+  it("prefers small values when only safe-integer bounds apply", async () => {
     // Only a closing bound at the safe-integer extreme is a guard: a
     // maximum at the positive extreme, a minimum at the negative one.
     // The [0, safe-max] midpoint is huge, so the selection takes the
@@ -436,51 +445,54 @@ describe("deterministic generation", () => {
     const safeMaximum = 9007199254740991;
     const safeMinimum = -9007199254740991;
     expect(
-      generateValue(
+      await generateValue(
         { type: "integer", minimum: 0, maximum: safeMaximum },
         options
       )
     ).toBe(0);
     expect(
-      generateValue(
+      await generateValue(
         { type: "integer", minimum: 1, maximum: safeMaximum },
         options
       )
     ).toBe(1);
     expect(
-      generateValue(
+      await generateValue(
         { type: "integer", minimum: 0, maximum: safeMaximum, multipleOf: 3 },
         options
       )
     ).toBe(0);
     expect(
-      generateValue(
+      await generateValue(
         { type: "number", minimum: 0, maximum: safeMaximum },
         options
       )
     ).toBe(0);
     expect(
-      generateValue({ type: "integer", minimum: safeMinimum }, options)
+      await generateValue({ type: "integer", minimum: safeMinimum }, options)
     ).toBe(1);
     expect(
-      generateValue({ type: "integer", maximum: safeMaximum }, options)
+      await generateValue({ type: "integer", maximum: safeMaximum }, options)
     ).toBe(1);
     expect(
-      generateValue(
+      await generateValue(
         { type: "integer", minimum: safeMinimum, maximum: safeMaximum },
         options
       )
     ).toBe(1);
     expect(
-      generateValue({ type: "integer", exclusiveMaximum: safeMaximum }, options)
+      await generateValue(
+        { type: "integer", exclusiveMaximum: safeMaximum },
+        options
+      )
     ).toBe(1);
     // Small declared bounds keep the midpoint selection.
     expect(
-      generateValue({ type: "integer", minimum: 5, maximum: 9 }, options)
+      await generateValue({ type: "integer", minimum: 5, maximum: 9 }, options)
     ).toBe(7);
   });
 
-  it("keeps the non-closing safe-integer bounds operative", () => {
+  it("keeps the non-closing safe-integer bounds operative", async () => {
     // Only the two closing bounds are guards (section 15.4). Dropping
     // every extreme bound instead erased operative pins: selection
     // started at 1, the single-step correction missed the valid
@@ -497,41 +509,48 @@ describe("deterministic generation", () => {
       { type: "integer", minimum: safeMaximum, multipleOf: 3 }
     ];
     for (const schema of pinned) {
+      const value = await generateValue(schema, options);
       expect(
-        new SchemaValidator(schema).errors(generateValue(schema, options)),
+        new SchemaValidator(schema).errors(value),
         JSON.stringify(schema)
       ).toEqual([]);
     }
     expect(
-      generateValue({ type: "integer", minimum: safeMaximum }, options)
+      await generateValue({ type: "integer", minimum: safeMaximum }, options)
     ).toBe(safeMaximum);
     expect(
-      generateValue({ type: "integer", maximum: safeMinimum }, options)
+      await generateValue({ type: "integer", maximum: safeMinimum }, options)
     ).toBe(safeMinimum);
     expect(
-      generateValue(
+      await generateValue(
         { type: "integer", minimum: safeMaximum, maximum: safeMaximum },
         options
       )
     ).toBe(safeMaximum);
     expect(
-      generateValue({ type: "number", minimum: safeMaximum }, options)
+      await generateValue({ type: "number", minimum: safeMaximum }, options)
     ).toBe(safeMaximum);
     expect(
-      generateValue({ type: "integer", exclusiveMinimum: safeMaximum }, options)
+      await generateValue(
+        { type: "integer", exclusiveMinimum: safeMaximum },
+        options
+      )
     ).toBe(9007199254740992);
     expect(
-      generateValue({ type: "integer", exclusiveMaximum: safeMinimum }, options)
+      await generateValue(
+        { type: "integer", exclusiveMaximum: safeMinimum },
+        options
+      )
     ).toBe(-9007199254740992);
     expect(
-      generateValue(
+      await generateValue(
         { type: "integer", minimum: safeMaximum, multipleOf: 3 },
         options
       )
     ).toBe(9007199254740992);
   });
 
-  it("generates safe-integer-bounded values that still validate", () => {
+  it("generates safe-integer-bounded values that still validate", async () => {
     const safeMaximum = 9007199254740991;
     const cases: Json[] = [
       { type: "integer", minimum: 0, maximum: safeMaximum },
@@ -542,31 +561,32 @@ describe("deterministic generation", () => {
       { type: "number", minimum: 0, maximum: safeMaximum }
     ];
     for (const schema of cases) {
+      const value = await generateValue(schema, options);
       expect(
-        new SchemaValidator(schema).errors(generateValue(schema, options)),
+        new SchemaValidator(schema).errors(value),
         JSON.stringify(schema)
       ).toEqual([]);
     }
   });
 
-  it("applies a path parameter pattern to an unpatterned id property", () => {
+  it("applies a path parameter pattern to an unpatterned id property", async () => {
     const responseSchema = {
       type: "object",
       required: ["id"],
       properties: { id: { type: "string" } }
     };
-    const value = generateValue(responseSchema, {
+    const value = (await generateValue(responseSchema, {
       seed: "op_path",
       parameterPatterns: { id: "^cmp_[a-z0-9]{29}$" }
-    }) as { id: string };
+    })) as { id: string };
     expect(value.id).toMatch(/^cmp_[a-z0-9]{29}$/);
     // Response validation is unchanged: the generated value still
     // satisfies the unpatterned response schema.
     expect(new SchemaValidator(responseSchema).errors(value)).toHaveLength(0);
   });
 
-  it("lets a schema-declared pattern outrank the path pattern hint", () => {
-    const value = generateValue(
+  it("lets a schema-declared pattern outrank the path pattern hint", async () => {
+    const value = (await generateValue(
       {
         type: "object",
         required: ["id"],
@@ -575,12 +595,12 @@ describe("deterministic generation", () => {
         }
       },
       { seed: "op_path", parameterPatterns: { id: "^cmp_[a-z0-9]{29}$" } }
-    ) as { id: string };
+    )) as { id: string };
     expect(value.id).toBe("XX-000");
   });
 
-  it("leaves properties without a matching path parameter alone", () => {
-    const value = generateValue(
+  it("leaves properties without a matching path parameter alone", async () => {
+    const value = (await generateValue(
       {
         type: "object",
         required: ["id", "token"],
@@ -590,36 +610,36 @@ describe("deterministic generation", () => {
         }
       },
       { seed: "op_path", parameterPatterns: { handle: "^cmp_[a-z0-9]{29}$" } }
-    ) as { id: string; token: string };
+    )) as { id: string; token: string };
     expect(value.id).toMatch(/^gen_/);
     expect(value.token).toMatch(/^gen_/);
   });
 
-  it("keeps path pattern generation deterministic under the seed", () => {
+  it("keeps path pattern generation deterministic under the seed", async () => {
     const schema = {
       type: "object",
       required: ["id"],
       properties: { id: { type: "string" } }
     };
-    const first = generateValue(schema, {
+    const first = await generateValue(schema, {
       seed: "op_path",
       parameterPatterns: { id: "^cmp_[a-z0-9]{29}$" }
     });
-    const second = generateValue(schema, {
+    const second = await generateValue(schema, {
       seed: "op_path",
       parameterPatterns: { id: "^cmp_[a-z0-9]{29}$" }
     });
     expect(first).toEqual(second);
   });
 
-  it("namespaces seeds so unrelated paths differ", () => {
+  it("namespaces seeds so unrelated paths differ", async () => {
     const schema = { type: "string" };
-    const left = generateValue(schema, { seed: "op_a" });
-    const right = generateValue(schema, { seed: "op_b" });
+    const left = await generateValue(schema, { seed: "op_a" });
+    const right = await generateValue(schema, { seed: "op_b" });
     expect(left).not.toEqual(right);
   });
 
-  it("generates a finite valid value for a recursive schema", () => {
+  it("generates a finite valid value for a recursive schema", async () => {
     const nodePointer = "#/components/schemas/Node";
     const nodeSchema = {
       type: "object",
@@ -640,10 +660,10 @@ describe("deterministic generation", () => {
     const lookup = createContractSchemaLookup(registry);
     const generationOptions = { seed: "op_recursive", lookup };
 
-    const value = generateValue({ $ref: "sch_node" }, generationOptions);
-    expect(generateValue({ $ref: "sch_node" }, generationOptions)).toEqual(
-      value
-    );
+    const value = await generateValue({ $ref: "sch_node" }, generationOptions);
+    expect(
+      await generateValue({ $ref: "sch_node" }, generationOptions)
+    ).toEqual(value);
     expect(
       new SchemaValidator(lookup("sch_node") as Json, {
         resolveRef: lookup
@@ -678,7 +698,7 @@ describe("response selection precedence", () => {
     ).toBe(202);
   });
 
-  it("takes the lowest other 2xx and emits 2XX as concrete 200", () => {
+  it("takes the lowest other 2xx and emits 2XX as concrete 200", async () => {
     expect(
       chooseSuccessResponse([response({ selector: "206", status: 206 })])
         ?.status
@@ -687,7 +707,7 @@ describe("response selection precedence", () => {
       response({ selector: "2XX", selector_kind: "range", status: null })
     ]);
     expect(range?.selector_kind).toBe("range");
-    const selected = selectResponse(
+    const selected = await selectResponse(
       "path:GET /x",
       [
         response({
@@ -741,8 +761,8 @@ describe("response selection precedence", () => {
     expect(findResponseForStatus([fallback], 404)).toBe(fallback);
   });
 
-  it("lets fixtures win with recorded provenance", () => {
-    const selected = selectResponse(
+  it("lets fixtures win with recorded provenance", async () => {
+    const selected = await selectResponse(
       "path:POST /v1/widgets",
       [response({ selector: "201", status: 201 })],
       [

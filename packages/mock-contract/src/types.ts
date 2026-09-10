@@ -60,7 +60,7 @@ export interface MockAdapter {
   readonly id: string;
   readonly version: string;
   capabilities(): MockAdapterCapabilities;
-  respond(input: MockRespondInput): MockResponse | null;
+  respond(input: MockRespondInput): Promise<MockResponse | null>;
 }
 
 /** Byte-identical serialization used for determinism comparison. */

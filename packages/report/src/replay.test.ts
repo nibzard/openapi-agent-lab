@@ -313,7 +313,7 @@ async function recordExchange(
     headers: init.headers,
     body: bytes
   };
-  const response = handleGatewayRequest(options, init.sequence, raw);
+  const response = await handleGatewayRequest(options, init.sequence, raw);
   const requestHeaders = traceHeaders(
     Object.entries(init.headers).map(([name, value]) => [name, [value]]),
     redactor
@@ -465,7 +465,7 @@ function replayInput(events: readonly ReplayEvidenceEvent[]) {
 describe("replayRun", () => {
   it("verifies every recorded exchange of a faithful run", async () => {
     const events = await recordedRun(fullRedactor());
-    const result = replayRun(replayInput(events));
+    const result = await replayRun(replayInput(events));
 
     expect(result.counts).toEqual({
       in_scope: 4,
@@ -516,7 +516,7 @@ describe("replayRun", () => {
       mutatedBody.response.body.value = { fixed: false, id: "c-7" };
     }
 
-    const lenient = replayRun({ ...replayInput(events), verify: false });
+    const lenient = await replayRun({ ...replayInput(events), verify: false });
     expect(lenient.counts).toEqual({
       in_scope: 4,
       replayed: 4,
@@ -546,7 +546,7 @@ describe("replayRun", () => {
       )
     ).toBe(true);
 
-    const strict = replayRun({ ...replayInput(events), verify: true });
+    const strict = await replayRun({ ...replayInput(events), verify: true });
     expect(
       strict.diagnostics
         .filter((diagnostic) => diagnostic.code === "replay.mismatch")
@@ -565,7 +565,7 @@ describe("replayRun", () => {
       });
     }
 
-    const result = replayRun(replayInput(events));
+    const result = await replayRun(replayInput(events));
 
     expect(result.counts.verified).toBe(4);
     expect(result.full_verification).toBe(true);
@@ -591,7 +591,7 @@ describe("replayRun", () => {
       };
     }
 
-    const result = replayRun(replayInput(events));
+    const result = await replayRun(replayInput(events));
 
     expect(result.counts.skipped).toBe(1);
     expect(result.counts.verified).toBe(3);
@@ -621,7 +621,7 @@ describe("replayRun", () => {
       };
     }
 
-    const result = replayRun(replayInput(events));
+    const result = await replayRun(replayInput(events));
 
     expect(result.outcomes[1]?.status).toBe("skipped");
     expect(result.outcomes[1]?.reason_code).toBe(
@@ -637,7 +637,7 @@ describe("replayRun", () => {
       absent.response = null;
     }
 
-    const result = replayRun(replayInput(events));
+    const result = await replayRun(replayInput(events));
 
     expect(result.outcomes[2]?.status).toBe("skipped");
     expect(result.outcomes[2]?.reason_code).toBe("response_absent");
@@ -646,7 +646,7 @@ describe("replayRun", () => {
   it("replays only the requested sequence", async () => {
     const events = await recordedRun(fullRedactor());
 
-    const one = replayRun({
+    const one = await replayRun({
       ...replayInput(events),
       request: 3,
       verify: false
@@ -662,7 +662,7 @@ describe("replayRun", () => {
     expect(one.outcomes[0]?.sequence).toBe(3);
     expect(one.request_filter).toBe(3);
 
-    const none = replayRun({ ...replayInput(events), request: 99 });
+    const none = await replayRun({ ...replayInput(events), request: 99 });
     expect(none.counts.in_scope).toBe(0);
     expect(none.coverage).toBe(0);
     expect(none.full_verification).toBe(false);
@@ -675,7 +675,7 @@ describe("replayRun", () => {
 
   it("fails the frozen contract digest check on drift", async () => {
     const events = await recordedRun(fullRedactor());
-    const result = replayRun({
+    const result = await replayRun({
       ...replayInput(events),
       contractSha256: "0".repeat(64)
     });
@@ -699,7 +699,7 @@ describe("replayRun", () => {
       status: 200
     });
 
-    const unfinished = replayRun({
+    const unfinished = await replayRun({
       ...replayInput([
         runCreatedEvent({ runId: RUN_ID, sequence: 1 }),
         ...traces
@@ -712,7 +712,7 @@ describe("replayRun", () => {
       )
     ).toBe(true);
 
-    const foreignRun = replayRun({
+    const foreignRun = await replayRun({
       ...replayInput([...traces, foreign]),
       verify: false
     });
@@ -723,7 +723,7 @@ describe("replayRun", () => {
       )
     ).toBe(true);
 
-    const bare = replayRun({ ...replayInput(traces), verify: false });
+    const bare = await replayRun({ ...replayInput(traces), verify: false });
     expect(
       bare.diagnostics.some(
         (diagnostic) => diagnostic.code === "replay.lifecycle_absent"
@@ -733,11 +733,11 @@ describe("replayRun", () => {
 
   it("produces a stable digest over the replay", async () => {
     const events = await recordedRun(fullRedactor());
-    const first = replayRun(replayInput(events));
-    const second = replayRun(replayInput(structuredClone(events)));
+    const first = await replayRun(replayInput(events));
+    const second = await replayRun(replayInput(structuredClone(events)));
     expect(second.replay_sha256).toBe(first.replay_sha256);
 
-    const strict = replayRun({ ...replayInput(events), verify: false });
+    const strict = await replayRun({ ...replayInput(events), verify: false });
     expect(strict.replay_sha256).not.toBe(first.replay_sha256);
   });
 
@@ -758,8 +758,8 @@ describe("replayRun", () => {
     expect(earlier[2]?.observed_at).toBe("2026-01-01T00:00:00.000Z");
     expect(later[2]?.observed_at).toBe("2027-03-09T08:17:42.513Z");
 
-    const first = replayRun(replayInput(earlier));
-    const second = replayRun(replayInput(later));
+    const first = await replayRun(replayInput(earlier));
+    const second = await replayRun(replayInput(later));
 
     for (const result of [first, second]) {
       expect(result.counts).toEqual({
@@ -792,7 +792,7 @@ describe("replayRun", () => {
       contentType.values = ["text/plain"];
     }
 
-    const result = replayRun(replayInput(events));
+    const result = await replayRun(replayInput(events));
 
     expect(result.counts.verified).toBe(3);
     expect(result.counts.mismatched).toBe(1);

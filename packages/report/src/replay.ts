@@ -707,7 +707,7 @@ function outcomeDiagnostics(
 }
 
 /** Replay one recorded run and compare every in-scope exchange. */
-export function replayRun(input: ReplayInput): ReplayResult {
+export async function replayRun(input: ReplayInput): Promise<ReplayResult> {
   const verify = input.verify ?? false;
   const diagnostics: ReplayDiagnostic[] = [];
 
@@ -785,7 +785,7 @@ export function replayRun(input: ReplayInput): ReplayResult {
       input.runSeed,
       exchange
     );
-    const outcome = replayExchange(
+    const outcome = await replayExchange(
       exchange,
       reconstruction,
       gatewayOptions,
@@ -846,12 +846,12 @@ export function replayRun(input: ReplayInput): ReplayResult {
   return { ...partial, replay_sha256: canonicalJsonSha256(asJson(partial)) };
 }
 
-function replayExchange(
+async function replayExchange(
   exchange: TraceEvent,
   reconstruction: Reconstruction,
   options: GatewayOptions,
   sequence: number
-): ReplayOutcome {
+): Promise<ReplayOutcome> {
   const base = {
     sequence,
     request_id: requestIdOf(sequence),
@@ -885,7 +885,11 @@ function replayExchange(
   }
   let response: GatewayResponse;
   try {
-    response = handleGatewayRequest(options, sequence, reconstruction.raw);
+    response = await handleGatewayRequest(
+      options,
+      sequence,
+      reconstruction.raw
+    );
   } catch (error) {
     return {
       ...base,

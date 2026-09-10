@@ -23,14 +23,14 @@ export interface DeterminismResult {
  * Run every candidate twice against the adapter and compare the
  * serialized responses byte-for-byte.
  */
-export function verifyDeterminism(
+export async function verifyDeterminism(
   adapter: MockAdapter,
   candidates: readonly MockRespondInput[]
-): DeterminismResult {
+): Promise<DeterminismResult> {
   const problems: DeterminismProblem[] = [];
   for (const candidate of candidates) {
-    const first = adapter.respond(candidate);
-    const second = adapter.respond(candidate);
+    const first = await adapter.respond(candidate);
+    const second = await adapter.respond(candidate);
     const firstBytes = first === null ? "null" : serializeMockResponse(first);
     const secondBytes =
       second === null ? "null" : serializeMockResponse(second);

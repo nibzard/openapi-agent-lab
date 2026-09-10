@@ -30,11 +30,11 @@ export interface ResponseValidationResult {
  * The selected response carries the declaration its value came from,
  * so header, media type, and body checks use that declaration.
  */
-export function validateResponse(
+export async function validateResponse(
   responses: readonly ResponseIR[],
   selected: SelectedResponse,
   schemaLookup: (ref: string) => Json | undefined
-): ResponseValidationResult {
+): Promise<ResponseValidationResult> {
   const violations: ResponseViolation[] = [];
 
   // Status: an exact, range, or default declaration must match.
@@ -110,7 +110,7 @@ export function validateResponse(
       const fixtureId = selected.provenance.startsWith("fixture:")
         ? selected.provenance.slice("fixture:".length)
         : null;
-      for (const violation of responseBodyViolations(
+      for (const violation of await responseBodyViolations(
         content,
         selected.body,
         schemaLookup

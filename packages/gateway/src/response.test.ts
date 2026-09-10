@@ -70,19 +70,20 @@ const lookup = createContractSchemaLookup({
 describe("response validation with recursive references (R02)", () => {
   const response = jsonResponse("sch_node");
 
-  it("accepts a valid recursive body", () => {
+  it("accepts a valid recursive body", async () => {
     const body = {
       name: "a",
       children: [{ name: "b", children: [{ name: "c", children: [] }] }]
     };
     expect(
-      validateResponse([response], selected(response, body), lookup).violations
+      (await validateResponse([response], selected(response, body), lookup))
+        .violations
     ).toEqual([]);
   });
 
-  it("reports the violation inside the referenced schema", () => {
+  it("reports the violation inside the referenced schema", async () => {
     const body = { name: "a", children: [{ name: 5, children: [] }] };
-    const result = validateResponse(
+    const result = await validateResponse(
       [response],
       selected(response, body),
       lookup
@@ -117,8 +118,8 @@ describe("response validation with nested writeOnly (R12)", () => {
         }
       : undefined;
 
-  it("accepts a response that omits nested writeOnly fields", () => {
-    const result = validateResponse(
+  it("accepts a response that omits nested writeOnly fields", async () => {
+    const result = await validateResponse(
       [response],
       selected(response, { nested: { id: "thing_1" } }),
       reportLookup
@@ -126,8 +127,8 @@ describe("response validation with nested writeOnly (R12)", () => {
     expect(result.violations).toEqual([]);
   });
 
-  it("still requires a nested property that is not writeOnly", () => {
-    const result = validateResponse(
+  it("still requires a nested property that is not writeOnly", async () => {
+    const result = await validateResponse(
       [response],
       selected(response, { nested: {} }),
       reportLookup
@@ -154,8 +155,8 @@ describe("writeOnly fields behind references on the response side (V2B)", () => 
   });
   const response = jsonResponse("sch_report");
 
-  it("accepts a generated response that omits writeOnly behind a ref", () => {
-    const result = validateResponse(
+  it("accepts a generated response that omits writeOnly behind a ref", async () => {
+    const result = await validateResponse(
       [response],
       selected(response, { item: { label: "l" } }),
       refLookup
@@ -163,8 +164,8 @@ describe("writeOnly fields behind references on the response side (V2B)", () => 
     expect(result.violations).toEqual([]);
   });
 
-  it("still requires the unflagged fields behind a ref", () => {
-    const result = validateResponse(
+  it("still requires the unflagged fields behind a ref", async () => {
+    const result = await validateResponse(
       [response],
       selected(response, { item: {} }),
       refLookup
@@ -199,8 +200,8 @@ describe("fixture bodies under the declared schema (V2D)", () => {
     approximation: null
   });
 
-  it("accepts a fixture body that satisfies the declared schema", () => {
-    const result = validateResponse(
+  it("accepts a fixture body that satisfies the declared schema", async () => {
+    const result = await validateResponse(
       [listResponse],
       fixtureSelected([{ id: "thing_1" }]),
       listLookup
@@ -208,8 +209,8 @@ describe("fixture bodies under the declared schema (V2D)", () => {
     expect(result.violations).toEqual([]);
   });
 
-  it("rejects a fixture body that violates the declared schema", () => {
-    const result = validateResponse(
+  it("rejects a fixture body that violates the declared schema", async () => {
+    const result = await validateResponse(
       [listResponse],
       fixtureSelected({ id: "thing_1" }),
       listLookup

@@ -465,12 +465,16 @@ export async function checkAdapter(
 }
 
 /** Gateway determinism double-check through the full pipeline. */
-export function checkGatewayDeterminism(): DoctorCheck {
+export async function checkGatewayDeterminism(): Promise<DoctorCheck> {
   const asJson = (value: unknown): Json => value as Json;
   const options = probeGatewayOptions();
-  const first = handleGatewayRequest(options, 1, PROBE_REQUEST);
-  const second = handleGatewayRequest(options, 1, PROBE_REQUEST);
-  const third = handleGatewayRequest(probeGatewayOptions(), 1, PROBE_REQUEST);
+  const first = await handleGatewayRequest(options, 1, PROBE_REQUEST);
+  const second = await handleGatewayRequest(options, 1, PROBE_REQUEST);
+  const third = await handleGatewayRequest(
+    probeGatewayOptions(),
+    1,
+    PROBE_REQUEST
+  );
   const firstJson = canonicalJson(asJson(first));
   const same =
     firstJson === canonicalJson(asJson(second)) &&
@@ -674,7 +678,7 @@ export async function runDoctor(input: DoctorInput): Promise<DoctorReport> {
     checkSqliteStore(),
     ...checkSchemaFiles(input.schemaFiles ?? []),
     await checkAdapter(input.adapter ?? null),
-    checkGatewayDeterminism(),
+    await checkGatewayDeterminism(),
     await checkDiskArtifacts(input.diskArtifact ?? null),
     checkLimits(input.limits ?? null)
   ];

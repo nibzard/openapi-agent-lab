@@ -319,50 +319,56 @@ async function importHarEntry(
     operation === null
       ? []
       : [
-          ...validateParameters(
-            operation,
-            {
-              pathParameters: route.match?.pathParameters ?? {},
-              query: queryRecordOf(queryPairs),
-              headers: headerRecordOf(headerPairs),
-              cookies: cookieRecordOf(request["cookies"]),
-              body: requestJson,
-              contentType: requestContentType
-            },
-            state.schemaLookup
+          ...(
+            await validateParameters(
+              operation,
+              {
+                pathParameters: route.match?.pathParameters ?? {},
+                query: queryRecordOf(queryPairs),
+                headers: headerRecordOf(headerPairs),
+                cookies: cookieRecordOf(request["cookies"]),
+                body: requestJson,
+                contentType: requestContentType
+              },
+              state.schemaLookup
+            )
           ).violations,
-          ...validateBody(
-            operation,
-            {
-              pathParameters: route.match?.pathParameters ?? {},
-              query: queryRecordOf(queryPairs),
-              headers: headerRecordOf(headerPairs),
-              cookies: cookieRecordOf(request["cookies"]),
-              body: requestJson,
-              contentType: requestContentType
-            },
-            state.schemaLookup
+          ...(
+            await validateBody(
+              operation,
+              {
+                pathParameters: route.match?.pathParameters ?? {},
+                query: queryRecordOf(queryPairs),
+                headers: headerRecordOf(headerPairs),
+                cookies: cookieRecordOf(request["cookies"]),
+                body: requestJson,
+                contentType: requestContentType
+              },
+              state.schemaLookup
+            )
           ).violations
         ];
   const responseViolations =
     operation === null || status === null
       ? []
-      : validateResponse(
-          operation.responses,
-          {
-            status,
-            response: findResponseForStatus(operation.responses, status),
-            mediaType:
-              responseContentType === null
-                ? null
-                : (responseContentType.split(";")[0]?.trim().toLowerCase() ??
-                  responseContentType),
-            headers: headerRecordOf(groupHarHeaders(response?.["headers"])),
-            body: responseJson,
-            provenance: "external",
-            approximation: null
-          } satisfies SelectedResponse,
-          state.schemaLookup
+      : (
+          await validateResponse(
+            operation.responses,
+            {
+              status,
+              response: findResponseForStatus(operation.responses, status),
+              mediaType:
+                responseContentType === null
+                  ? null
+                  : (responseContentType.split(";")[0]?.trim().toLowerCase() ??
+                    responseContentType),
+              headers: headerRecordOf(groupHarHeaders(response?.["headers"])),
+              body: responseJson,
+              provenance: "external",
+              approximation: null
+            } satisfies SelectedResponse,
+            state.schemaLookup
+          )
         ).violations;
 
   const event: TraceEvent = {

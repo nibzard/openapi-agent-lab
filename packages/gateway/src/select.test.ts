@@ -14,6 +14,7 @@ import type {
   ResponseIR
 } from "@oal/contract-ir";
 import { pickMediaType, selectResponse } from "./select.ts";
+import { createTableSchemaLookup } from "./validate.ts";
 
 function contentEntry(
   mediaType: string,
@@ -61,8 +62,8 @@ describe("selectResponse without an Accept header", () => {
     ]
   });
 
-  it("serves the documented application/json preference", () => {
-    const selected = selectResponse(
+  it("serves the documented application/json preference", async () => {
+    const selected = await selectResponse(
       "path:GET /things",
       [octetAndJson],
       [],
@@ -72,8 +73,8 @@ describe("selectResponse without an Accept header", () => {
     expect(selected?.body).toEqual({ id: "thing_0001" });
   });
 
-  it("treats an explicit null Accept like a missing header", () => {
-    const selected = selectResponse(
+  it("treats an explicit null Accept like a missing header", async () => {
+    const selected = await selectResponse(
       "path:GET /things",
       [octetAndJson],
       [],
@@ -83,8 +84,8 @@ describe("selectResponse without an Accept header", () => {
     expect(selected?.mediaType).toBe("application/json");
   });
 
-  it("still honors an Accept header that picks the binary type", () => {
-    const selected = selectResponse(
+  it("still honors an Accept header that picks the binary type", async () => {
+    const selected = await selectResponse(
       "path:GET /things",
       [octetAndJson],
       [],
@@ -97,8 +98,8 @@ describe("selectResponse without an Accept header", () => {
 });
 
 describe("selectResponse with a fixture", () => {
-  it("serves the fixture under its declared media type", () => {
-    const selected = selectResponse(
+  it("serves the fixture under its declared media type", async () => {
+    const selected = await selectResponse(
       "path:GET /things",
       [response({})],
       [
@@ -130,10 +131,10 @@ describe("selectResponse skips invalid examples (section 15.5)", () => {
       }
     }
   };
-  const lookup = (ref: string): Json | undefined => schemas[ref];
+  const lookup = createTableSchemaLookup(schemas);
 
-  it("skips an invalid singular example for a valid named example", () => {
-    const selected = selectResponse(
+  it("skips an invalid singular example for a valid named example", async () => {
+    const selected = await selectResponse(
       "path:GET /things",
       [
         response({
@@ -160,8 +161,8 @@ describe("selectResponse skips invalid examples (section 15.5)", () => {
     expect(selected?.approximation).toBe("example_invalid_skipped:1");
   });
 
-  it("demotes an invalid example to schema generation", () => {
-    const selected = selectResponse(
+  it("demotes an invalid example to schema generation", async () => {
+    const selected = await selectResponse(
       "path:GET /things",
       [
         response({
@@ -186,8 +187,8 @@ describe("selectResponse skips invalid examples (section 15.5)", () => {
     expect(selected?.approximation).toBe("example_invalid_skipped:1");
   });
 
-  it("serves the highest-precedence example without a schema", () => {
-    const selected = selectResponse(
+  it("serves the highest-precedence example without a schema", async () => {
+    const selected = await selectResponse(
       "path:GET /things",
       [
         response({

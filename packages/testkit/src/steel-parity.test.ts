@@ -279,7 +279,7 @@ describe("Steel parity: API key behavior", () => {
       headers: { [STEEL_API_KEY_HEADER]: apiKey },
       body: new Uint8Array(0)
     };
-    const response = handleGatewayRequest(options, 1, withKey);
+    const response = await handleGatewayRequest(options, 1, withKey);
     expect(response.status).toBe(200);
     expect(response.frameworkCode).toBeNull();
     expect(response.provenance).toBe("fixture:sessions-list-empty");
@@ -371,16 +371,16 @@ describe("Steel parity: Steel signals stay observable", () => {
     options = parityGatewayOptions(migrated.contract, fixtures);
   });
 
-  function problem(
+  async function problem(
     method: string,
     target: string,
     sequence: number
-  ): {
+  ): Promise<{
     status: number;
     document: Record<string, unknown>;
     headers: Record<string, string>;
-  } {
-    const response = handleGatewayRequest(options, sequence, {
+  }> {
+    const response = await handleGatewayRequest(options, sequence, {
       method,
       target,
       headers: { [STEEL_API_KEY_HEADER]: parityApiKey(options.contract) },
@@ -393,8 +393,8 @@ describe("Steel parity: Steel signals stay observable", () => {
     return { status: response.status, document, headers: response.headers };
   }
 
-  it("answers an unknown endpoint with the neutral route_not_found problem", () => {
-    const { status, document, headers } = problem(
+  it("answers an unknown endpoint with the neutral route_not_found problem", async () => {
+    const { status, document, headers } = await problem(
       "GET",
       "/v1/not-a-steel-route",
       1
@@ -411,8 +411,12 @@ describe("Steel parity: Steel signals stay observable", () => {
     });
   });
 
-  it("answers a wrong method with method_not_allowed and the allow header", () => {
-    const { status, document, headers } = problem("DELETE", "/v1/sessions", 2);
+  it("answers a wrong method with method_not_allowed and the allow header", async () => {
+    const { status, document, headers } = await problem(
+      "DELETE",
+      "/v1/sessions",
+      2
+    );
     expect(status).toBe(405);
     expect(document.code).toBe("method_not_allowed");
     expect(headers.allow).toBe("GET, POST");
@@ -441,7 +445,7 @@ describe("Steel parity: Steel signals stay observable", () => {
     const sourceProperties = (sourceBody?.["properties"] ?? {}) as JsonObject;
     expect(Object.keys(sourceProperties)).not.toContain("checkpoint_id");
 
-    const response = handleGatewayRequest(options, 3, {
+    const response = await handleGatewayRequest(options, 3, {
       method: "POST",
       target: "/v1/sessions",
       headers: {
@@ -460,7 +464,7 @@ describe("Steel parity: Steel signals stay observable", () => {
     expect(textOf(checkpoint?.["code"])).toBe("additionalProperties");
   });
 
-  it("answers invented routes with the same neutral problem", () => {
+  it("answers invented routes with the same neutral problem", async () => {
     const sessionId = "00000000-0000-0000-0000-000000000000";
     const invented: readonly (readonly [string, string])[] = [
       ["POST", `/v1/sessions/${sessionId}/fork`],
@@ -470,8 +474,9 @@ describe("Steel parity: Steel signals stay observable", () => {
       ["POST", "/v1/computers"],
       ["GET", "/v1/checkpoints"]
     ];
-    invented.forEach(([method, target], index) => {
-      const { status, document } = problem(method, target, index + 10);
+    for (const [index, entry] of invented.entries()) {
+      const [method, target] = entry;
+      const { status, document } = await problem(method, target, index + 10);
       expect(status, target).toBe(404);
       expect(document.code, target).toBe("route_not_found");
       expect(Object.keys(document).sort(), target).toEqual([
@@ -481,10 +486,10 @@ describe("Steel parity: Steel signals stay observable", () => {
         "title",
         "type"
       ]);
-    });
+    }
   });
 
-  it("answers a manual resume attempt with the documented v1 result", () => {
+  it("answers a manual resume attempt with the documented v1 result", async () => {
     const sessionId = "00000000-0000-0000-0000-000000000000";
     // Steel v1 publishes no pause or resume route (migration note drift
     // item 2), so the documented v1 result of a manual resume attempt
@@ -493,8 +498,9 @@ describe("Steel parity: Steel signals stay observable", () => {
       ["POST", `/v1/sessions/${sessionId}/resume`],
       ["POST", `/v1/sessions/${sessionId}/pause`]
     ];
-    attempts.forEach(([method, target], index) => {
-      const { status, document } = problem(method, target, index + 20);
+    for (const [index, entry] of attempts.entries()) {
+      const [method, target] = entry;
+      const { status, document } = await problem(method, target, index + 20);
       expect(status, target).toBe(404);
       expect(document.code, target).toBe("route_not_found");
       expect(Object.keys(document).sort(), target).toEqual([
@@ -504,10 +510,10 @@ describe("Steel parity: Steel signals stay observable", () => {
         "title",
         "type"
       ]);
-    });
+    }
   });
 
-  it("answers a malformed file path with the neutral route problem", () => {
+  it("answers a malformed file path with the neutral route problem", async () => {
     const sessionId = "00000000-0000-0000-0000-000000000000";
     // The `path` parameter of the file routes is free-form (migration
     // note drift item 14) and contract mode resolves no host path, so a
@@ -518,11 +524,11 @@ describe("Steel parity: Steel signals stay observable", () => {
       `/v1/files/../../etc/passwd`,
       `/v1/sessions/${sessionId}/files/`
     ];
-    malformed.forEach((target, index) => {
-      const { status, document } = problem("GET", target, index + 30);
+    for (const [index, target] of malformed.entries()) {
+      const { status, document } = await problem("GET", target, index + 30);
       expect(status, target).toBe(404);
       expect(document.code, target).toBe("route_not_found");
-    });
+    }
   });
 
   it("handles an idempotency key as an unmanaged header", async () => {
@@ -561,10 +567,10 @@ describe("Steel parity: Steel signals stay observable", () => {
       },
       body: new Uint8Array(0)
     };
-    expect(gatewayRecord(handleGatewayRequest(options, 40, withKey))).toBe(
-      gatewayRecord(handleGatewayRequest(options, 40, withoutKey))
-    );
-    const repeat = handleGatewayRequest(options, 41, withKey);
+    expect(
+      gatewayRecord(await handleGatewayRequest(options, 40, withKey))
+    ).toBe(gatewayRecord(await handleGatewayRequest(options, 40, withoutKey)));
+    const repeat = await handleGatewayRequest(options, 41, withKey);
     expect(repeat.status).toBe(200);
     expect(repeat.frameworkCode).toBeNull();
     expect(repeat.provenance).toBe("fixture:sessions-list-empty");
@@ -661,7 +667,7 @@ describe("Steel parity: paused-stop drift stays surfaced", () => {
     // At the wire, a release request in the declared nullable form
     // reaches the declared success response: the pipeline puts no
     // state check in front of the route.
-    const response = handleGatewayRequest(options, 50, {
+    const response = await handleGatewayRequest(options, 50, {
       method: "POST",
       target: "/v1/sessions/00000000-0000-0000-0000-000000000000/release",
       headers: {

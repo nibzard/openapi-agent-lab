@@ -6,8 +6,7 @@
  */
 
 import type { Json } from "@oal/core";
-import { isJsonObject } from "@oal/core";
-import { SchemaValidator } from "@oal/core";
+import { isJsonObject, validateSchemaInstance } from "@oal/core";
 import type {
   MediaContentIR,
   OperationIR,
@@ -60,7 +59,7 @@ export function createContractSchemaLookup(
   const bind = (schema: Json, documentUri: string): Json =>
     bindRefs(schema, documentUri, new Map());
 
-  return (ref: string): Json | undefined => {
+  const lookup: SchemaLookup = (ref: string): Json | undefined => {
     const cached = bound.get(ref);
     if (cached !== undefined) {
       return cached;
@@ -79,6 +78,80 @@ export function createContractSchemaLookup(
     bound.set(ref, value);
     return value;
   };
+  // Every reference key the closure can resolve, so the worker
+  // boundary materializes the same table this closure serves:
+  // registry UIDs, declared `$ref` values as written, exact
+  // document-keyed forms with their bound sentinels, and a pointer
+  // exactly one document declares (resolvable under any document
+  // name through the unique-pointer fallback).
+  const declaredRefs = new Set<string>();
+  const collectRefs = (schema: Json): void => {
+    if (Array.isArray(schema)) {
+      schema.forEach(collectRefs);
+      return;
+    }
+    if (!isJsonObject(schema)) {
+      return;
+    }
+    for (const [key, value] of Object.entries(schema)) {
+      if (key === "$ref" && typeof value === "string") {
+        declaredRefs.add(value);
+      } else {
+        collectRefs(value);
+      }
+    }
+  };
+  for (const entry of Object.values(schemas)) {
+    collectRefs(entry.schema);
+  }
+  const pointerCounts = new Map<string, number>();
+  for (const key of byPointer.keys()) {
+    const pointer = key.slice(key.indexOf("#"));
+    pointerCounts.set(pointer, (pointerCounts.get(pointer) ?? 0) + 1);
+  }
+  const universe = [
+    ...Object.keys(schemas),
+    ...declaredRefs,
+    ...[...byPointer.keys()].flatMap((key) => [
+      key,
+      `${BOUND_REF_PREFIX}${key}`
+    ]),
+    ...[...pointerCounts.entries()]
+      .filter(([, count]) => count === 1)
+      .map(([pointer]) => pointer)
+  ];
+  refUniverses.set(lookup, universe);
+  return lookup;
+}
+
+/** Reference keys one lookup can ever resolve, by lookup identity. */
+const refUniverses = new WeakMap<SchemaLookup, readonly string[]>();
+
+/** Materialized reference tables, by lookup identity. */
+const materializedRefTables = new WeakMap<SchemaLookup, Record<string, Json>>();
+
+/**
+ * Materialize the reference table of one lookup for the schema worker
+ * boundary. The table is built once per lookup (base or stripped
+ * variant) and shared by every later call, so normal requests do not
+ * resend the contract registry.
+ */
+export function materializeSchemaRefs(
+  lookup: SchemaLookup
+): Record<string, Json> {
+  const cached = materializedRefTables.get(lookup);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const refs: Record<string, Json> = {};
+  for (const ref of refUniverses.get(lookup) ?? []) {
+    const target = lookup(ref);
+    if (target !== undefined) {
+      refs[ref] = target;
+    }
+  }
+  materializedRefTables.set(lookup, refs);
+  return refs;
 }
 
 /** Replace `#`-relative references with document-bound sentinels. */
@@ -200,14 +273,16 @@ export interface ValidationResult {
 /**
  * Validate every declared parameter of an operation. Parameters that
  * fail deserialization or schema checks produce stable violations.
+ * Schema evaluation runs inside the bounded worker boundary.
  */
-export function validateParameters(
+export async function validateParameters(
   operation: OperationIR,
   request: ParsedRequest,
   schemaLookup: (ref: string) => Json | undefined
-): ValidationResult {
+): Promise<ValidationResult> {
   const parameters: Record<string, Json> = {};
   const violations: RequestViolation[] = [];
+  const refs = materializeSchemaRefs(schemaLookup);
   for (const parameter of operation.parameters) {
     const outcome = collectWire(parameter, request);
     if (outcome === undefined) {
@@ -237,10 +312,9 @@ export function validateParameters(
     }
     const schema = resolveParameterSchema(parameter, schemaLookup);
     if (schema !== undefined) {
-      const validator = new SchemaValidator(schema, {
-        resolveRef: schemaLookup
+      const found = await validateSchemaInstance(schema, parsed.value, {
+        refs
       });
-      const found = validator.errors(parsed.value);
       for (const violation of found) {
         violations.push({
           location: parameter.location,
@@ -337,12 +411,13 @@ export interface BodyValidationResult {
 /**
  * Validate the request body: required presence, declared media types,
  * and JSON Schema with readOnly properties stripped from validation.
+ * Schema evaluation runs inside the bounded worker boundary.
  */
-export function validateBody(
+export async function validateBody(
   operation: OperationIR,
   request: ParsedRequest,
   schemaLookup: (ref: string) => Json | undefined
-): BodyValidationResult {
+): Promise<BodyValidationResult> {
   const violations: RequestViolation[] = [];
   const body = operation.request_body;
   if (body === null) {
@@ -394,11 +469,13 @@ export function validateBody(
       schema !== undefined &&
       validatesBodyValue(contentType, schema, request.body)
     ) {
-      const requestSchema = stripProperties(schema, "readOnly");
-      const validator = new SchemaValidator(requestSchema, {
-        resolveRef: strippingSchemaLookup(schemaLookup, "readOnly")
-      });
-      for (const violation of validator.errors(request.body)) {
+      const resolver = strippingSchemaLookup(schemaLookup, "readOnly");
+      const found = await validateSchemaInstance(
+        strippedSchema(schema, "readOnly"),
+        request.body,
+        { refs: materializeSchemaRefs(resolver) }
+      );
+      for (const violation of found) {
         violations.push({
           location: "body",
           pointer: violation.pointer,
@@ -526,6 +603,43 @@ export function stripProperties(
 }
 
 /**
+ * Stripped schema variants by source schema identity. `stripProperties`
+ * clones the whole schema, so without this cache every request would
+ * hand the worker boundary a fresh bundle and defeat its compiled-
+ * validator cache.
+ */
+const strippedVariants = new WeakMap<
+  object,
+  { readOnly?: Json; writeOnly?: Json }
+>();
+
+/**
+ * One memoized stripped variant of a schema. The variant is reused by
+ * every request that resolves the same schema object, so the worker
+ * bundle identity stays stable.
+ */
+export function strippedSchema(
+  schema: Json,
+  flag: "readOnly" | "writeOnly"
+): Json {
+  if (!isJsonObject(schema)) {
+    return schema;
+  }
+  let variants = strippedVariants.get(schema);
+  if (variants === undefined) {
+    variants = {};
+    strippedVariants.set(schema, variants);
+  }
+  const cached = variants[flag];
+  if (cached !== undefined) {
+    return cached;
+  }
+  const stripped = stripProperties(schema, flag);
+  variants[flag] = stripped;
+  return stripped;
+}
+
+/**
  * Stripped-variant wrappers per base lookup. `stripProperties` clones
  * whole referenced subtrees, so one wrapper per flag over one base
  * lookup is built once and reused by every caller that shares the base
@@ -545,7 +659,9 @@ const strippingWrappers = new WeakMap<
  * property one reference away would still reject a conforming value.
  * The wrapper memoizes per reference: a recursive schema strips once,
  * shares one stripped subtree, and never follows a reference while
- * stripping, so cyclic references terminate.
+ * stripping, so cyclic references terminate. The wrapper inherits the
+ * base lookup's reference universe, so the worker boundary resolves
+ * the same references the wrapper does.
  */
 export function strippingSchemaLookup(
   schemaLookup: SchemaLookup,
@@ -570,10 +686,24 @@ export function strippingSchemaLookup(
     if (target === undefined) {
       return undefined;
     }
-    const value = stripProperties(target, flag);
+    const value = strippedSchema(target, flag);
     stripped.set(ref, value);
     return value;
   };
+  refUniverses.set(built, refUniverses.get(schemaLookup) ?? []);
   wrappers[flag] = built;
   return built;
+}
+
+/**
+ * Build a schema lookup over one plain reference table. The table is
+ * also declared as the lookup's reference universe, so the worker
+ * boundary resolves the same references the closure does.
+ */
+export function createTableSchemaLookup(
+  refs: Record<string, Json>
+): SchemaLookup {
+  const lookup: SchemaLookup = (ref: string): Json | undefined => refs[ref];
+  refUniverses.set(lookup, Object.keys(refs));
+  return lookup;
 }

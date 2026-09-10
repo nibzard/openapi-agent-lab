@@ -31,7 +31,7 @@ export class BuiltinMockAdapter implements MockAdapter {
     };
   }
 
-  respond(input: MockRespondInput): MockResponse | null {
+  async respond(input: MockRespondInput): Promise<MockResponse | null> {
     const operation = input.contract.operations.find(
       (entry) => entry.key === input.request.operationKey
     );
@@ -42,7 +42,7 @@ export class BuiltinMockAdapter implements MockAdapter {
     // media type that is served, exactly as the gateway pipeline does.
     // A fixture keeps the media type it declared: it is part of the
     // fixture's identity, and the bytes are never relabeled.
-    const selected = selectResponse(
+    const selected = await selectResponse(
       operation.key,
       operation.responses,
       this.fixtures.filter((fixture) => fixture.operation === operation.key),

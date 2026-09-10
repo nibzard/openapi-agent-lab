@@ -76,6 +76,16 @@ export const FRAMEWORK_ERRORS = {
     code: "behavior_timeout",
     title: "The backend timed out."
   },
+  schemaWorkerTimeout: {
+    status: 504,
+    code: "OAL-SCHEMA-WORKER-TIMEOUT",
+    title: "Schema evaluation exceeded its deadline."
+  },
+  schemaWorkerFailed: {
+    status: 500,
+    code: "OAL-SCHEMA-WORKER-FAILED",
+    title: "Schema evaluation failed inside its execution boundary."
+  },
   mockResponseInvalid: {
     status: 500,
     code: "mock_response_invalid",

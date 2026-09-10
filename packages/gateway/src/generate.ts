@@ -12,7 +12,7 @@ import {
   type Json
 } from "@oal/core";
 import { patternAccepts, synthesizePattern } from "./pattern.ts";
-import { stripProperties } from "./validate.ts";
+import { strippedSchema } from "./validate.ts";
 
 export interface GenerationOptions {
   /**
@@ -49,20 +49,24 @@ export class GenerationUnsupportedError extends Error {
 
 /**
  * Generate a value for a schema. Response side by default: writeOnly
- * properties are removed before generation.
+ * properties are removed before generation. Pattern evaluation runs
+ * inside the bounded worker boundary, so this is asynchronous.
  */
-export function generateValue(schema: Json, options: GenerationOptions): Json {
-  const effective = stripProperties(schema, "writeOnly");
+export async function generateValue(
+  schema: Json,
+  options: GenerationOptions
+): Promise<Json> {
+  const effective = strippedSchema(schema, "writeOnly");
   return generateNode(effective, options, options.seed, 0, null);
 }
 
-function generateNode(
+async function generateNode(
   schema: Json,
   options: GenerationOptions,
   path: string,
   depth: number,
   propertyName: string | null
-): Json {
+): Promise<Json> {
   const maxDepth = options.maxDepth ?? 24;
   if (depth > maxDepth) {
     throw new GenerationUnsupportedError(
@@ -88,7 +92,7 @@ function generateNode(
       // The property name survives the hop so a pattern hint still
       // applies to the referenced schema.
       return generateNode(
-        stripProperties(resolved, "writeOnly"),
+        strippedSchema(resolved, "writeOnly"),
         options,
         path,
         depth + 1,
@@ -125,7 +129,7 @@ function generateNode(
     return sorted[0] as Json;
   }
 
-  const variant = pickVariant(merged, options, path, depth, propertyName);
+  const variant = await pickVariant(merged, options, path, depth, propertyName);
   if (variant !== null) {
     return variant;
   }
@@ -169,13 +173,13 @@ function variantSchema(schema: Json, type: string): Json {
 }
 
 /** Resolve allOf/oneOf/anyOf/discriminator into a single variant. */
-function pickVariant(
+async function pickVariant(
   schema: Record<string, Json>,
   options: GenerationOptions,
   path: string,
   depth: number,
   propertyName: string | null
-): Json | null {
+): Promise<Json | null> {
   if (Array.isArray(schema.oneOf) || Array.isArray(schema.anyOf)) {
     const branches = [...asArray(schema.oneOf), ...asArray(schema.anyOf)];
     if (branches.length === 0) {
@@ -334,12 +338,12 @@ function mergeAllOf(
   return merged;
 }
 
-function generateObject(
+async function generateObject(
   schema: Json,
   options: GenerationOptions,
   path: string,
   depth: number
-): Json {
+): Promise<Json> {
   if (!isJsonObject(schema)) {
     return {};
   }
@@ -371,7 +375,7 @@ function generateObject(
       // the same resource handle (list responses embed ids in items),
       // and the schema declares no pattern of its own, so response
       // validation is unchanged (section 15.6).
-      result[name] = generateNode(
+      result[name] = await generateNode(
         properties[name] as Json,
         options,
         `${path}/${name}`,
@@ -389,7 +393,7 @@ function generateObject(
         result[key] =
           template === null
             ? seededToken(options.seed, path, "string", index)
-            : generateNode(
+            : await generateNode(
                 template,
                 options,
                 `${path}/${key}`,
@@ -412,7 +416,7 @@ function generateObject(
     // entry exercises the value schema; an empty object would also
     // validate but shows the participant nothing.
     const key = seededToken(options.seed, path, "map-key", 0);
-    result[key] = generateNode(
+    result[key] = await generateNode(
       schema.additionalProperties,
       options,
       `${path}/${key}`,
@@ -438,12 +442,12 @@ function additionalTemplate(schema: Record<string, Json>): Json | null {
   return null;
 }
 
-function generateArray(
+async function generateArray(
   schema: Json,
   options: GenerationOptions,
   path: string,
   depth: number
-): Json {
+): Promise<Json> {
   if (!isJsonObject(schema)) {
     return [];
   }
@@ -490,7 +494,13 @@ function generateArray(
     const template =
       (i < prefixItems.length ? prefixItems[i] : undefined) ?? items ?? true;
     values.push(
-      generateNode(template as Json, options, `${path}/${i}`, depth + 1, null)
+      await generateNode(
+        template as Json,
+        options,
+        `${path}/${i}`,
+        depth + 1,
+        null
+      )
     );
   }
   if (schema.uniqueItems === true) {
@@ -512,12 +522,12 @@ function dedupeByCanonical(values: readonly Json[]): Json[] {
   return result;
 }
 
-function generateString(
+async function generateString(
   schema: Record<string, Json>,
   options: GenerationOptions,
   path: string,
   propertyName: string | null
-): Json {
+): Promise<Json> {
   const format = typeof schema.format === "string" ? schema.format : null;
   // A schema-declared pattern outranks the path parameter hint: the
   // response schema governs its own values, and the hint only narrows
@@ -539,7 +549,7 @@ function generateString(
     // candidate is accepted when it satisfies the pattern, using the
     // same compilation the validator performs on the same schema.
     const candidate = formatValue(format, options.seed, path);
-    if (candidate !== null && patternAccepts(pattern, candidate)) {
+    if (candidate !== null && (await patternAccepts(pattern, candidate))) {
       if (declaredMin !== null && candidate.length < declaredMin) {
         throw new GenerationUnsupportedError(
           `minLength ${declaredMin} conflicts with pattern ${pattern}`
@@ -552,7 +562,7 @@ function generateString(
       }
       return candidate;
     }
-    const produced = producePattern(pattern, {
+    const produced = await producePattern(pattern, {
       minLength: declaredMin,
       maxLength: declaredMax
     });
@@ -646,10 +656,10 @@ function formatValue(
  * bounds, or which the raw pattern refuses, falls through to the
  * synthesizer instead of padding the literal into an invalid value.
  */
-function producePattern(
+async function producePattern(
   pattern: string,
   bounds: { minLength: number | null; maxLength: number | null }
-): string | null {
+): Promise<string | null> {
   const anchored = pattern.startsWith("^") ? pattern : `^${pattern}`;
   const closed = anchored.endsWith("$") ? anchored : `${anchored}$`;
   const literal =
@@ -670,7 +680,7 @@ function producePattern(
     literal !== null &&
     (bounds.minLength === null || literal.length >= bounds.minLength) &&
     (bounds.maxLength === null || literal.length <= bounds.maxLength) &&
-    patternAccepts(pattern, literal)
+    (await patternAccepts(pattern, literal))
   ) {
     return literal;
   }

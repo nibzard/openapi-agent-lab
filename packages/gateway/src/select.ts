@@ -39,13 +39,13 @@ export interface SelectedResponse {
  * requires. When an Accept header is supplied, the value is taken from
  * the negotiated media type, not the declared preference order.
  */
-export function selectResponse(
+export async function selectResponse(
   operationKey: string,
   responses: readonly ResponseIR[],
   fixtures: readonly ContractFixture[],
   generationOptions: GenerationOptions,
   acceptHeader?: string | null
-): SelectedResponse | null {
+): Promise<SelectedResponse | null> {
   const fixture = fixtures.find(
     (entry) =>
       entry.operation === operationKey &&
@@ -139,11 +139,11 @@ export function findResponseForStatus(
   return null;
 }
 
-function synthesizeResponse(
+async function synthesizeResponse(
   response: ResponseIR,
   generationOptions: GenerationOptions,
   acceptHeader?: string | null
-): SelectedResponse | null {
+): Promise<SelectedResponse | null> {
   const declared = response.content.map((entry) => entry.media_type);
   // The body must come from the media type that is actually served.
   // A missing Accept header reaches this function as null, never
@@ -175,7 +175,7 @@ function synthesizeResponse(
       } else {
         let skipped = 0;
         for (const candidate of orderedExampleValues(content.examples)) {
-          const violations = responseBodyViolations(
+          const violations = await responseBodyViolations(
             content,
             candidate.value,
             lookup
@@ -189,7 +189,7 @@ function synthesizeResponse(
         }
         if (body === undefined) {
           try {
-            body = generateValue(
+            body = await generateValue(
               { $ref: content.schema_ref },
               generationOptions
             );

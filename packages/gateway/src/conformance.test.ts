@@ -80,8 +80,12 @@ class Gateway {
       runSeed: "conformance_seed_1"
     };
     const server = createServer((req, res) => {
-      void toRawRequest(req).then((raw) => {
-        const response = handleGatewayRequest(options, ++instanceSequence, raw);
+      void toRawRequest(req).then(async (raw) => {
+        const response = await handleGatewayRequest(
+          options,
+          ++instanceSequence,
+          raw
+        );
         res.writeHead(response.status, response.headers);
         res.end(response.body);
       });

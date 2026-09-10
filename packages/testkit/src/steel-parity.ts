@@ -245,13 +245,15 @@ export function gatewayRecord(response: GatewayResponse): string {
 }
 
 /** Replay one scripted set through the gateway pipeline. */
-export function runScriptedSet(
+export async function runScriptedSet(
   options: GatewayOptions,
   requests: readonly { raw: RawRequest }[]
-): GatewayResponse[] {
-  return requests.map((entry, index) =>
-    handleGatewayRequest(options, index + 1, entry.raw)
-  );
+): Promise<GatewayResponse[]> {
+  const responses: GatewayResponse[] = [];
+  for (const [index, entry] of requests.entries()) {
+    responses.push(await handleGatewayRequest(options, index + 1, entry.raw));
+  }
+  return responses;
 }
 
 /** Reference roles whose files a participant can receive. */

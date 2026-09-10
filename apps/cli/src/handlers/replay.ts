@@ -407,7 +407,7 @@ export const replayCommand: CommandHandler = async (args, io) => {
     );
   }
 
-  const result = replayRun({
+  const result = await replayRun({
     runId,
     events: tree.events,
     contract: tree.contract,

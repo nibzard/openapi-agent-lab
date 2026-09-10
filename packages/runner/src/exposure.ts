@@ -786,7 +786,7 @@ async function startRawHttpExposure(
         headers[name] = value ?? [];
       }
       stage = "gateway";
-      const response = handleGatewayRequest(
+      const response = await handleGatewayRequest(
         {
           contract: request.contract,
           limits: request.limits,

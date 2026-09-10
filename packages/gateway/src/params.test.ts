@@ -382,11 +382,11 @@ describe("request validation", () => {
   };
   const lookup = (ref: string): Json | undefined => schemas[ref];
 
-  it("reports missing required parameters and schema violations", () => {
+  it("reports missing required parameters and schema violations", async () => {
     const op = operation({
       parameters: [parameter({ name: "id", schema_ref: "sch_id" })]
     });
-    const result = validateParameters(
+    const result = await validateParameters(
       op,
       {
         pathParameters: {},
@@ -400,7 +400,7 @@ describe("request validation", () => {
     );
     expect(result.violations.map((v) => v.code)).toContain("required");
 
-    const invalid = validateParameters(
+    const invalid = await validateParameters(
       op,
       {
         pathParameters: { id: "0" },
@@ -414,7 +414,7 @@ describe("request validation", () => {
     );
     expect(invalid.violations[0]?.code).toBe("minimum");
 
-    const valid = validateParameters(
+    const valid = await validateParameters(
       op,
       {
         pathParameters: { id: "7" },
@@ -430,7 +430,7 @@ describe("request validation", () => {
     expect(valid.parameters["id"]).toBe(7);
   });
 
-  it("validates bodies with request-side readOnly handling", () => {
+  it("validates bodies with request-side readOnly handling", async () => {
     const op = operation({
       request_body: {
         required: true,
@@ -447,7 +447,7 @@ describe("request validation", () => {
         source_pointer: ""
       }
     });
-    const good = validateBody(
+    const good = await validateBody(
       op,
       {
         pathParameters: {},
@@ -461,7 +461,7 @@ describe("request validation", () => {
     );
     expect(good.violations).toHaveLength(0);
 
-    const withOwner = validateBody(
+    const withOwner = await validateBody(
       op,
       {
         pathParameters: {},
@@ -477,7 +477,7 @@ describe("request validation", () => {
       "additionalProperties"
     );
 
-    const missing = validateBody(
+    const missing = await validateBody(
       op,
       {
         pathParameters: {},
@@ -491,7 +491,7 @@ describe("request validation", () => {
     );
     expect(missing.violations.map((v) => v.code)).toContain("required");
 
-    const wrongType = validateBody(
+    const wrongType = await validateBody(
       op,
       {
         pathParameters: {},

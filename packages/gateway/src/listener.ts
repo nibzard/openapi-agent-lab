@@ -306,7 +306,7 @@ export async function startGatewayListener(
 
       let computed: GatewayResponse;
       try {
-        computed = handleGatewayRequest(options.gateway, sequence, {
+        computed = await handleGatewayRequest(options.gateway, sequence, {
           method,
           target,
           headers: incoming.headers as Record<

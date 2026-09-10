@@ -358,7 +358,7 @@ describe("authentication emulation", () => {
     expect(outcome.ok).toBe(true);
   });
 
-  it("rejects a wrong api key even when anonymous access is declared", () => {
+  it("rejects a wrong api key even when anonymous access is declared", async () => {
     const c = contract({
       operations: [
         operation({
@@ -373,7 +373,7 @@ describe("authentication emulation", () => {
       ],
       securitySchemes: { apiKeyAuth: scheme({}) }
     });
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({ contract: c }),
       7,
       request({ headers: { "x-api-key": "oal_not_this_run" } })
@@ -381,7 +381,11 @@ describe("authentication emulation", () => {
     expect(result.status).toBe(401);
     expect(result.frameworkCode).toBe("authentication_failed");
 
-    const bare = handleGatewayRequest(options({ contract: c }), 8, request({}));
+    const bare = await handleGatewayRequest(
+      options({ contract: c }),
+      8,
+      request({})
+    );
     expect(bare.status).toBe(200);
   });
 
@@ -552,8 +556,8 @@ describe("authentication emulation", () => {
 });
 
 describe("gateway pipeline", () => {
-  it("serves a generated response with provenance", () => {
-    const result = handleGatewayRequest(options({}), 1, request({}));
+  it("serves a generated response with provenance", async () => {
+    const result = await handleGatewayRequest(options({}), 1, request({}));
     expect(result.status).toBe(200);
     expect(result.provenance).toBe("schema_generation");
     expect(result.headers["content-type"]).toBe(
@@ -564,8 +568,8 @@ describe("gateway pipeline", () => {
     expect(body).not.toHaveProperty("secret");
   });
 
-  it("serves problem documents with stable codes and ids", () => {
-    const result = handleGatewayRequest(
+  it("serves problem documents with stable codes and ids", async () => {
+    const result = await handleGatewayRequest(
       options({}),
       42,
       request({ target: "/nope" })
@@ -581,8 +585,8 @@ describe("gateway pipeline", () => {
     expect(result.headers["content-type"]).toBe("application/problem+json");
   });
 
-  it("answers 405 with sorted Allow methods", () => {
-    const result = handleGatewayRequest(
+  it("answers 405 with sorted Allow methods", async () => {
+    const result = await handleGatewayRequest(
       options({ contract: contract({ operations: [operation({})] }) }),
       2,
       request({ method: "DELETE", target: "/things" })
@@ -591,8 +595,8 @@ describe("gateway pipeline", () => {
     expect(result.headers.allow).toBe("GET");
   });
 
-  it("enforces the request target limit with 414", () => {
-    const result = handleGatewayRequest(
+  it("enforces the request target limit with 414", async () => {
+    const result = await handleGatewayRequest(
       options({
         limits: { ...LIMIT_DEFAULTS, maxRequestTargetBytes: 8 }
       }),
@@ -603,7 +607,7 @@ describe("gateway pipeline", () => {
     expect(result.frameworkCode).toBe("request_target_too_large");
   });
 
-  it("rejects malformed JSON bodies with 400", () => {
+  it("rejects malformed JSON bodies with 400", async () => {
     const op = operation({
       method: "POST",
       key: "path:POST /things",
@@ -622,7 +626,7 @@ describe("gateway pipeline", () => {
         source_pointer: ""
       }
     });
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({ contract: contract({ operations: [op] }) }),
       4,
       request({
@@ -635,7 +639,7 @@ describe("gateway pipeline", () => {
     expect(result.frameworkCode).toBe("request_malformed");
   });
 
-  it("requires declared authentication with 401", () => {
+  it("requires declared authentication with 401", async () => {
     const c = contract({
       operations: [
         operation({
@@ -647,7 +651,7 @@ describe("gateway pipeline", () => {
       ],
       securitySchemes: { apiKeyAuth: scheme({}) }
     });
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({ contract: c }),
       5,
       request({})
@@ -656,7 +660,7 @@ describe("gateway pipeline", () => {
     expect(result.frameworkCode).toBe("authentication_failed");
 
     const credentials = mintRunCredentials(c, "run_seed_1");
-    const authorized = handleGatewayRequest(
+    const authorized = await handleGatewayRequest(
       options({ contract: c }),
       6,
       request({
@@ -666,7 +670,7 @@ describe("gateway pipeline", () => {
     expect(authorized.status).toBe(200);
   });
 
-  it("reports schema violations with pointers", () => {
+  it("reports schema violations with pointers", async () => {
     const op = operation({
       method: "POST",
       key: "path:POST /things",
@@ -686,7 +690,7 @@ describe("gateway pipeline", () => {
         source_pointer: ""
       }
     });
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({ contract: contract({ operations: [op] }) }),
       7,
       request({
@@ -707,7 +711,7 @@ describe("gateway pipeline", () => {
     expect(codes).toContain("body:required");
   });
 
-  it("rejects undeclared request media types with 415", () => {
+  it("rejects undeclared request media types with 415", async () => {
     const op = operation({
       method: "POST",
       key: "path:POST /things",
@@ -726,7 +730,7 @@ describe("gateway pipeline", () => {
         source_pointer: ""
       }
     });
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({ contract: contract({ operations: [op] }) }),
       8,
       request({
@@ -738,8 +742,8 @@ describe("gateway pipeline", () => {
     expect(result.status).toBe(415);
   });
 
-  it("answers 406 when Accept cannot be satisfied", () => {
-    const result = handleGatewayRequest(
+  it("answers 406 when Accept cannot be satisfied", async () => {
+    const result = await handleGatewayRequest(
       options({}),
       9,
       request({ headers: { accept: "image/png" } })
@@ -748,11 +752,11 @@ describe("gateway pipeline", () => {
     expect(result.frameworkCode).toBe("response_media_type_unacceptable");
   });
 
-  it("omits body bytes for 204 and decodes query parameters", () => {
+  it("omits body bytes for 204 and decodes query parameters", async () => {
     const noContent = operation({
       responses: [response({ selector: "204", status: 204 })]
     });
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({ contract: contract({ operations: [noContent] }) }),
       10,
       request({ target: "/things" })
@@ -763,7 +767,7 @@ describe("gateway pipeline", () => {
     const limited = operation({
       parameters: [parameter({ name: "q" })]
     });
-    const echoed = handleGatewayRequest(
+    const echoed = await handleGatewayRequest(
       options({ contract: contract({ operations: [limited] }) }),
       11,
       request({ target: "/things?q=%20space" })
@@ -812,8 +816,8 @@ describe("recursive contract schemas", () => {
     });
   };
 
-  it("accepts a valid recursive body and serves a generated one", () => {
-    const result = handleGatewayRequest(
+  it("accepts a valid recursive body and serves a generated one", async () => {
+    const result = await handleGatewayRequest(
       options({
         contract: contract({
           operations: [postNode()],
@@ -837,8 +841,8 @@ describe("recursive contract schemas", () => {
     expect(Array.isArray(body.children)).toBe(true);
   });
 
-  it("reports violations inside the referenced schema", () => {
-    const result = handleGatewayRequest(
+  it("reports violations inside the referenced schema", async () => {
+    const result = await handleGatewayRequest(
       options({
         contract: contract({
           operations: [postNode()],
@@ -861,19 +865,19 @@ describe("recursive contract schemas", () => {
     });
   });
 
-  it("repeats the generated recursive response byte for byte", () => {
+  it("repeats the generated recursive response byte for byte", async () => {
     const init = options({
       contract: contract({
         operations: [postNode()],
         schemas: recursiveSchemas()
       })
     });
-    const first = handleGatewayRequest(
+    const first = await handleGatewayRequest(
       init,
       23,
       postBody({ name: "a", children: [] })
     );
-    const second = handleGatewayRequest(
+    const second = await handleGatewayRequest(
       init,
       24,
       postBody({ name: "a", children: [] })
@@ -897,8 +901,8 @@ describe("array and scalar request bodies", () => {
     });
   };
 
-  it("validates an array body against the declared array schema", () => {
-    const result = handleGatewayRequest(
+  it("validates an array body against the declared array schema", async () => {
+    const result = await handleGatewayRequest(
       options({
         contract: contract({
           operations: [postTags()],
@@ -933,8 +937,8 @@ describe("array and scalar request bodies", () => {
     expect(found.some((entry) => entry.code === "maxItems")).toBe(true);
   });
 
-  it("accepts a valid array body through the pipeline (V2E)", () => {
-    const result = handleGatewayRequest(
+  it("accepts a valid array body through the pipeline (V2E)", async () => {
+    const result = await handleGatewayRequest(
       options({
         contract: contract({
           operations: [postTags()],
@@ -1016,8 +1020,8 @@ describe("multipart form request bodies", () => {
     );
   }
 
-  it("validates the parts as an object keyed by field name", () => {
-    const result = handleGatewayRequest(
+  it("validates the parts as an object keyed by field name", async () => {
+    const result = await handleGatewayRequest(
       options({ contract: uploadContract() }),
       31,
       request({
@@ -1032,7 +1036,7 @@ describe("multipart form request bodies", () => {
     expect(result.frameworkCode).toBeNull();
   });
 
-  it("rejects a multipart body that misses a required field", () => {
+  it("rejects a multipart body that misses a required field", async () => {
     const body = new TextEncoder().encode(
       [
         "--oal_upload",
@@ -1043,7 +1047,7 @@ describe("multipart form request bodies", () => {
         ""
       ].join("\r\n")
     );
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({ contract: uploadContract() }),
       32,
       request({
@@ -1084,10 +1088,10 @@ describe("URL-encoded form request bodies (V2A)", () => {
     });
   };
 
-  it("rejects a parsed form body that violates the schema with 422", () => {
+  it("rejects a parsed form body that violates the schema with 422", async () => {
     // The gateway coerces `id=5` to the number 5, which the declared
     // string schema must reject.
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({ contract: contract({ operations: [postForm()] }) }),
       27,
       request({
@@ -1109,8 +1113,8 @@ describe("URL-encoded form request bodies (V2A)", () => {
     });
   });
 
-  it("accepts a conforming parsed form body", () => {
-    const result = handleGatewayRequest(
+  it("accepts a conforming parsed form body", async () => {
+    const result = await handleGatewayRequest(
       options({ contract: contract({ operations: [postForm()] }) }),
       28,
       request({
@@ -1125,11 +1129,11 @@ describe("URL-encoded form request bodies (V2A)", () => {
 });
 
 describe("response validation before commit", () => {
-  it("rejects a produced body that violates the declared schema", () => {
+  it("rejects a produced body that violates the declared schema", async () => {
     const op = operation({
       responses: [response({ content: [jsonContent("sch_thing")] })]
     });
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({
         contract: contract({ operations: [op] }),
         fixtures: [
@@ -1156,7 +1160,7 @@ describe("response validation before commit", () => {
     expect(document.request_id).toBe("req_00000012");
   });
 
-  it("demotes an invalid example to schema generation", () => {
+  it("demotes an invalid example to schema generation", async () => {
     const op = operation({
       responses: [
         response({
@@ -1168,7 +1172,7 @@ describe("response validation before commit", () => {
         })
       ]
     });
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({ contract: contract({ operations: [op] }) }),
       31,
       request({})
@@ -1179,7 +1183,7 @@ describe("response validation before commit", () => {
     expect(typeof body.id).toBe("string");
   });
 
-  it("serves a slack-shaped team.info example through generation", () => {
+  it("serves a slack-shaped team.info example through generation", async () => {
     // The vendor example carries team.id "T12345" against the vendor
     // pattern ^[TE][A-Z0-9]{8,}$: the example is skipped and the
     // pattern synthesizer produces a conforming id.
@@ -1197,7 +1201,7 @@ describe("response validation before commit", () => {
         })
       ]
     });
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({
         contract: contract({
           operations: [op],
@@ -1226,8 +1230,8 @@ describe("response validation before commit", () => {
     expect(body.team?.id).toBe("TAAAAAAAA");
   });
 
-  it("rejects a fixture status that matches no declared response", () => {
-    const result = handleGatewayRequest(
+  it("rejects a fixture status that matches no declared response", async () => {
+    const result = await handleGatewayRequest(
       options({
         fixtures: [
           {
@@ -1245,11 +1249,11 @@ describe("response validation before commit", () => {
     expect(result.frameworkCode).toBe("mock_response_invalid");
   });
 
-  it("rejects a produced response missing a required header", () => {
+  it("rejects a produced response missing a required header", async () => {
     const op = operation({
       responses: [response({ headers: [requiredHeader("x-request-id")] })]
     });
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({ contract: contract({ operations: [op] }) }),
       14,
       request({})
@@ -1258,11 +1262,11 @@ describe("response validation before commit", () => {
     expect(result.frameworkCode).toBe("mock_response_invalid");
   });
 
-  it("serves a generated response that omits writeOnly behind a ref (V2B)", () => {
+  it("serves a generated response that omits writeOnly behind a ref (V2B)", async () => {
     const op = operation({
       responses: [response({ content: [jsonContent("sch_report")] })]
     });
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({
         contract: contract({
           operations: [op],
@@ -1295,7 +1299,7 @@ describe("response validation before commit", () => {
     expect(body.item).not.toHaveProperty("secret");
   });
 
-  it("accepts a request that omits readOnly behind a ref (V2B)", () => {
+  it("accepts a request that omits readOnly behind a ref (V2B)", async () => {
     const op = operation({
       method: "POST",
       key: "path:POST /things",
@@ -1307,7 +1311,7 @@ describe("response validation before commit", () => {
       },
       responses: [response({ content: [jsonContent("sch_thing")] })]
     });
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({
         contract: contract({
           operations: [op],
@@ -1344,7 +1348,7 @@ describe("response validation before commit", () => {
     expect(result.frameworkCode).toBeNull();
   });
 
-  it("serves a fixture that satisfies every declared check", () => {
+  it("serves a fixture that satisfies every declared check", async () => {
     const op = operation({
       responses: [
         response({
@@ -1353,7 +1357,7 @@ describe("response validation before commit", () => {
         })
       ]
     });
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({
         contract: contract({ operations: [op] }),
         fixtures: [
@@ -1374,7 +1378,7 @@ describe("response validation before commit", () => {
     expect(result.frameworkCode).toBeNull();
   });
 
-  it("serves a fixture body that satisfies the declared schema (V2D)", () => {
+  it("serves a fixture body that satisfies the declared schema (V2D)", async () => {
     // A fixture body is frozen pack data, and it must also satisfy the
     // declared response schema like every value the gateway serves.
     const op = operation({
@@ -1384,7 +1388,7 @@ describe("response validation before commit", () => {
         })
       ]
     });
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({
         contract: contract({
           operations: [op],
@@ -1422,7 +1426,7 @@ describe("response validation before commit", () => {
     expect(JSON.parse(result.body ?? "{}")).toEqual([{ id: "thing_1" }]);
   });
 
-  it("serves a text_file fixture body verbatim under its media type", () => {
+  it("serves a text_file fixture body verbatim under its media type", async () => {
     // A non-JSON media type with no declared schema carries the file
     // bytes unchanged; canonical JSON never touches a text asset.
     const op = operation({
@@ -1433,7 +1437,7 @@ describe("response validation before commit", () => {
       ]
     });
     const svg = '<svg xmlns="urn:x"></svg>';
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({
         contract: contract({ operations: [op] }),
         fixtures: [
@@ -1456,7 +1460,7 @@ describe("response validation before commit", () => {
     expect(result.body).toBe(svg);
   });
 
-  it("never serves a fixture body that violates the declared schema", () => {
+  it("never serves a fixture body that violates the declared schema", async () => {
     const op = operation({
       responses: [
         response({
@@ -1464,7 +1468,7 @@ describe("response validation before commit", () => {
         })
       ]
     });
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({
         contract: contract({
           operations: [op],
@@ -1504,9 +1508,9 @@ describe("response validation before commit", () => {
 });
 
 describe("state transactions", () => {
-  it("rolls back the pending mutation when validation fails", () => {
+  it("rolls back the pending mutation when validation fails", async () => {
     const state = createGatewayState();
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({
         fixtures: [
           {
@@ -1529,9 +1533,13 @@ describe("state transactions", () => {
     expect(state.rollbacks).toBe(1);
   });
 
-  it("commits the pending mutation when validation passes", () => {
+  it("commits the pending mutation when validation passes", async () => {
     const state = createGatewayState();
-    const result = handleGatewayRequest(options({ state }), 17, request({}));
+    const result = await handleGatewayRequest(
+      options({ state }),
+      17,
+      request({})
+    );
     expect(result.status).toBe(200);
     expect(state.revision).toBe(1);
     expect(state.appliedEffects).toEqual(["path:GET /things"]);
@@ -1564,8 +1572,8 @@ describe("multipart limits", () => {
     });
   };
 
-  it("answers 413 when the parts limit is exceeded", () => {
-    const result = handleGatewayRequest(
+  it("answers 413 when the parts limit is exceeded", async () => {
+    const result = await handleGatewayRequest(
       options({
         contract: contract({ operations: [uploadOperation()] }),
         limits: { ...LIMIT_DEFAULTS, maxMultipartParts: 2 }
@@ -1587,8 +1595,8 @@ describe("multipart limits", () => {
     expect(result.frameworkCode).toBe("multipart_parts_too_many");
   });
 
-  it("accepts a multipart body within the parts limit", () => {
-    const result = handleGatewayRequest(
+  it("accepts a multipart body within the parts limit", async () => {
+    const result = await handleGatewayRequest(
       options({
         contract: contract({ operations: [uploadOperation()] })
       }),
@@ -1608,8 +1616,8 @@ describe("multipart limits", () => {
     expect(result.frameworkCode).toBeNull();
   });
 
-  it("answers 400 when the boundary parameter is missing", () => {
-    const result = handleGatewayRequest(
+  it("answers 400 when the boundary parameter is missing", async () => {
+    const result = await handleGatewayRequest(
       options({
         contract: contract({ operations: [uploadOperation()] })
       }),
@@ -1693,8 +1701,10 @@ describe("path parameter patterns shape generated ids", () => {
       responses: [response({ selector: "204", status: 204 })]
     });
 
-  const createId = (operations: OperationIR[]): string | undefined => {
-    const result = handleGatewayRequest(
+  const createId = async (
+    operations: OperationIR[]
+  ): Promise<string | undefined> => {
+    const result = await handleGatewayRequest(
       options({
         contract: contract({
           operations,
@@ -1710,26 +1720,26 @@ describe("path parameter patterns shape generated ids", () => {
     return (JSON.parse(result.body ?? "{}") as { id?: string }).id;
   };
 
-  it("serves generated ids that the sibling exec path accepts", () => {
+  it("serves generated ids that the sibling exec path accepts", async () => {
     // The response schema leaves the id unpatterned while the path
     // parameter of the same resource declares the pattern.
-    const id = createId([createComputer(), getComputer()]);
+    const id = await createId([createComputer(), getComputer()]);
     expect(id).toMatch(new RegExp(COMPUTER_ID_PATTERN));
   });
 
-  it("keeps the generated id deterministic under the run seed", () => {
-    const first = createId([createComputer(), getComputer()]);
-    const second = createId([createComputer(), getComputer()]);
+  it("keeps the generated id deterministic under the run seed", async () => {
+    const first = await createId([createComputer(), getComputer()]);
+    const second = await createId([createComputer(), getComputer()]);
     expect(first).toEqual(second);
   });
 
-  it("applies the strictest pattern whatever the operation order", () => {
-    const forward = createId([
+  it("applies the strictest pattern whatever the operation order", async () => {
+    const forward = await createId([
       createComputer(),
       getComputer(),
       deleteComputer()
     ]);
-    const reversed = createId([
+    const reversed = await createId([
       deleteComputer(),
       getComputer(),
       createComputer()
@@ -1738,7 +1748,7 @@ describe("path parameter patterns shape generated ids", () => {
     expect(forward).toEqual(reversed);
   });
 
-  it("keeps a neighboring resource family on its own pattern", () => {
+  it("keeps a neighboring resource family on its own pattern", async () => {
     const printerFamily: OperationIR = operation({
       method: "GET",
       key: "path:GET /printers/{id}",
@@ -1759,12 +1769,12 @@ describe("path parameter patterns shape generated ids", () => {
     });
     // The printers family declares the shorter pattern; the computers
     // response stays on its own strict pattern.
-    const id = createId([createComputer(), getComputer(), printerFamily]);
+    const id = await createId([createComputer(), getComputer(), printerFamily]);
     expect(id).toMatch(new RegExp(COMPUTER_ID_PATTERN));
     expect(id).not.toMatch(new RegExp(SHORT_ID_PATTERN));
   });
 
-  it("refuses the id when the family pattern is not producible", () => {
+  it("refuses the id when the family pattern is not producible", async () => {
     // The lookahead keeps the pattern outside the synthesizer's
     // supported set. Failing closed with 501 is the design: serving a
     // pattern-violating id is the raw-cohort incident shape.
@@ -1773,7 +1783,7 @@ describe("path parameter patterns shape generated ids", () => {
       type: "string",
       pattern: "^(?!gen_)cmp_[a-z]+$"
     });
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({
         contract: contract({
           operations: [
@@ -1807,10 +1817,10 @@ describe("path parameter patterns shape generated ids", () => {
 });
 
 describe("contract schema version gate", () => {
-  it("refuses an unsupported contract schema version per request", () => {
+  it("refuses an unsupported contract schema version per request", async () => {
     const future = contract({ operations: [operation({})] });
     (future as { schema_version: number }).schema_version = 99;
-    const result = handleGatewayRequest(
+    const result = await handleGatewayRequest(
       options({ contract: future }),
       1,
       request({})
