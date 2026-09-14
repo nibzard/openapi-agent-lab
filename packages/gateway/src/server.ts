@@ -19,6 +19,10 @@ import { FRAMEWORK_ERRORS, problemDocument } from "./problem.ts";
 import { validateResponse } from "./response.ts";
 import { matchRoute } from "./router.ts";
 import { matchRequestMedia } from "./negotiate.ts";
+import {
+  compilePathParameterPatterns,
+  pathFamilyKey
+} from "./path-patterns.ts";
 import { selectResponse, type ContractFixture } from "./select.ts";
 import type { GatewayState } from "./state.ts";
 import {
@@ -94,6 +98,29 @@ function contractSchemaLookup(contract: ContractIR): SchemaLookup {
   const lookup = createContractSchemaLookup(contract.schemas);
   schemaLookups.set(contract, lookup);
   return lookup;
+}
+
+/**
+ * Path parameter pattern tables keyed by contract identity. The table
+ * is a pure function of the compiled operations, so one pass over the
+ * contract serves every request instead of being rebuilt per request.
+ * The entries are shared read-only.
+ */
+const pathPatternTables = new WeakMap<
+  ContractIR,
+  Map<string, Record<string, string>>
+>();
+
+function pathPatternsFor(
+  contract: ContractIR
+): Map<string, Record<string, string>> {
+  const cached = pathPatternTables.get(contract);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const table = compilePathParameterPatterns(contract);
+  pathPatternTables.set(contract, table);
+  return table;
 }
 
 /**
@@ -282,13 +309,20 @@ export function handleGatewayRequest(
   // The backend runs inside a state transaction: the staged mutation
   // stays invisible until response validation commits it.
   options.state?.stage(operation.key);
+  // A generated id must satisfy the strictest pattern any path
+  // parameter of the served operation's family declares, so the table
+  // of those patterns joins the generation options (section 15.6).
+  const parameterPatterns = pathPatternsFor(contract).get(
+    pathFamilyKey(operation)
+  );
   const selected = selectResponse(
     operation.key,
     operation.responses,
     options.fixtures ?? [],
     {
       seed: `${options.runSeed}:${operation.uid}`,
-      lookup: schemaLookup
+      lookup: schemaLookup,
+      ...(parameterPatterns === undefined ? {} : { parameterPatterns })
     },
     headerValue(raw.headers, "accept")
   );

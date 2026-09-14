@@ -1477,6 +1477,146 @@ describe("multipart limits", () => {
   });
 });
 
+describe("path parameter patterns shape generated ids", () => {
+  const COMPUTER_ID_PATTERN = "^cmp_[a-z0-9]{29}$";
+  const SHORT_ID_PATTERN = "^c_[0-9]{2}$";
+
+  const computersSchemas = (): Record<string, SchemaIR> => ({
+    sch_computer: schema("sch_computer", {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string" } }
+    }),
+    sch_computer_id: schema("sch_computer_id", {
+      type: "string",
+      pattern: COMPUTER_ID_PATTERN
+    }),
+    sch_short_id: schema("sch_short_id", {
+      type: "string",
+      pattern: SHORT_ID_PATTERN
+    })
+  });
+
+  const computerSegments = (): OperationIR["route_segments"] => [
+    { kind: "literal", value: "computers" },
+    { kind: "parameter", value: "id" }
+  ];
+
+  const createComputer = (): OperationIR =>
+    operation({
+      method: "POST",
+      key: "path:POST /computers",
+      path_template: "/computers",
+      route_segments: [{ kind: "literal", value: "computers" }],
+      responses: [response({ content: [jsonContent("sch_computer")] })]
+    });
+
+  const getComputer = (): OperationIR =>
+    operation({
+      method: "GET",
+      key: "path:GET /computers/{id}",
+      path_template: "/computers/{id}",
+      route_segments: computerSegments(),
+      parameters: [
+        parameter({
+          name: "id",
+          location: "path",
+          required: true,
+          schema_ref: "sch_computer_id"
+        })
+      ],
+      responses: [response({ content: [jsonContent("sch_computer")] })]
+    });
+
+  const deleteComputer = (): OperationIR =>
+    operation({
+      method: "DELETE",
+      key: "path:DELETE /computers/{id}",
+      path_template: "/computers/{id}",
+      route_segments: computerSegments(),
+      parameters: [
+        parameter({
+          name: "id",
+          location: "path",
+          required: true,
+          schema_ref: "sch_short_id"
+        })
+      ],
+      responses: [response({ selector: "204", status: 204 })]
+    });
+
+  const createId = (operations: OperationIR[]): string | undefined => {
+    const result = handleGatewayRequest(
+      options({
+        contract: contract({
+          operations,
+          schemas: computersSchemas()
+        })
+      }),
+      61,
+      request({ method: "POST", target: "/computers" })
+    );
+    expect(result.status).toBe(200);
+    expect(result.frameworkCode).toBeNull();
+    expect(result.provenance).toBe("schema_generation");
+    return (JSON.parse(result.body ?? "{}") as { id?: string }).id;
+  };
+
+  it("serves generated ids that the sibling exec path accepts", () => {
+    // The response schema leaves the id unpatterned while the path
+    // parameter of the same resource declares the pattern.
+    const id = createId([createComputer(), getComputer()]);
+    expect(id).toMatch(new RegExp(COMPUTER_ID_PATTERN));
+  });
+
+  it("keeps the generated id deterministic under the run seed", () => {
+    const first = createId([createComputer(), getComputer()]);
+    const second = createId([createComputer(), getComputer()]);
+    expect(first).toEqual(second);
+  });
+
+  it("applies the strictest pattern whatever the operation order", () => {
+    const forward = createId([
+      createComputer(),
+      getComputer(),
+      deleteComputer()
+    ]);
+    const reversed = createId([
+      deleteComputer(),
+      getComputer(),
+      createComputer()
+    ]);
+    expect(forward).toMatch(new RegExp(COMPUTER_ID_PATTERN));
+    expect(forward).toEqual(reversed);
+  });
+
+  it("keeps a neighboring resource family on its own pattern", () => {
+    const printerFamily: OperationIR = operation({
+      method: "GET",
+      key: "path:GET /printers/{id}",
+      path_template: "/printers/{id}",
+      route_segments: [
+        { kind: "literal", value: "printers" },
+        { kind: "parameter", value: "id" }
+      ],
+      parameters: [
+        parameter({
+          name: "id",
+          location: "path",
+          required: true,
+          schema_ref: "sch_short_id"
+        })
+      ],
+      responses: [response({ selector: "204", status: 204 })]
+    });
+    // The printers family declares the shorter pattern; the computers
+    // response stays on its own strict pattern.
+    const id = createId([createComputer(), getComputer(), printerFamily]);
+    expect(id).toMatch(new RegExp(COMPUTER_ID_PATTERN));
+    expect(id).not.toMatch(new RegExp(SHORT_ID_PATTERN));
+  });
+});
+
 describe("contract schema version gate", () => {
   it("refuses an unsupported contract schema version per request", () => {
     const future = contract({ operations: [operation({})] });

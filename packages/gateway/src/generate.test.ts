@@ -428,6 +428,138 @@ describe("deterministic generation", () => {
     expect(new SchemaValidator(schema).errors(value)).toHaveLength(0);
   });
 
+  it("prefers small values when only safe-integer bounds apply", () => {
+    // A bound at the safe-integer extreme is a representability guard,
+    // not a real constraint. The [0, safe-max] midpoint is huge, so the
+    // selection takes the small end instead.
+    const safeMaximum = 9007199254740991;
+    const safeMinimum = -9007199254740991;
+    expect(
+      generateValue(
+        { type: "integer", minimum: 0, maximum: safeMaximum },
+        options
+      )
+    ).toBe(0);
+    expect(
+      generateValue(
+        { type: "integer", minimum: 1, maximum: safeMaximum },
+        options
+      )
+    ).toBe(1);
+    expect(
+      generateValue(
+        { type: "integer", minimum: 0, maximum: safeMaximum, multipleOf: 3 },
+        options
+      )
+    ).toBe(0);
+    expect(
+      generateValue(
+        { type: "number", minimum: 0, maximum: safeMaximum },
+        options
+      )
+    ).toBe(0);
+    expect(
+      generateValue({ type: "integer", minimum: safeMinimum }, options)
+    ).toBe(1);
+    expect(
+      generateValue({ type: "integer", maximum: safeMaximum }, options)
+    ).toBe(1);
+    expect(
+      generateValue(
+        { type: "integer", minimum: safeMinimum, maximum: safeMaximum },
+        options
+      )
+    ).toBe(1);
+    expect(
+      generateValue({ type: "integer", exclusiveMaximum: safeMaximum }, options)
+    ).toBe(1);
+    // Small declared bounds keep the midpoint selection.
+    expect(
+      generateValue({ type: "integer", minimum: 5, maximum: 9 }, options)
+    ).toBe(7);
+  });
+
+  it("generates safe-integer-bounded values that still validate", () => {
+    const safeMaximum = 9007199254740991;
+    const cases: Json[] = [
+      { type: "integer", minimum: 0, maximum: safeMaximum },
+      { type: "integer", minimum: 1, maximum: safeMaximum },
+      { type: "integer", minimum: -safeMaximum },
+      { type: "integer", minimum: -safeMaximum, maximum: safeMaximum },
+      { type: "integer", maximum: safeMaximum },
+      { type: "number", minimum: 0, maximum: safeMaximum }
+    ];
+    for (const schema of cases) {
+      expect(
+        new SchemaValidator(schema).errors(generateValue(schema, options)),
+        JSON.stringify(schema)
+      ).toEqual([]);
+    }
+  });
+
+  it("applies a path parameter pattern to an unpatterned id property", () => {
+    const responseSchema = {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string" } }
+    };
+    const value = generateValue(responseSchema, {
+      seed: "op_path",
+      parameterPatterns: { id: "^cmp_[a-z0-9]{29}$" }
+    }) as { id: string };
+    expect(value.id).toMatch(/^cmp_[a-z0-9]{29}$/);
+    // Response validation is unchanged: the generated value still
+    // satisfies the unpatterned response schema.
+    expect(new SchemaValidator(responseSchema).errors(value)).toHaveLength(0);
+  });
+
+  it("lets a schema-declared pattern outrank the path pattern hint", () => {
+    const value = generateValue(
+      {
+        type: "object",
+        required: ["id"],
+        properties: {
+          id: { type: "string", pattern: "^[A-Z]{2}-[0-9]{3}$" }
+        }
+      },
+      { seed: "op_path", parameterPatterns: { id: "^cmp_[a-z0-9]{29}$" } }
+    ) as { id: string };
+    expect(value.id).toBe("XX-000");
+  });
+
+  it("leaves properties without a matching path parameter alone", () => {
+    const value = generateValue(
+      {
+        type: "object",
+        required: ["id", "token"],
+        properties: {
+          id: { type: "string" },
+          token: { type: "string" }
+        }
+      },
+      { seed: "op_path", parameterPatterns: { handle: "^cmp_[a-z0-9]{29}$" } }
+    ) as { id: string; token: string };
+    expect(value.id).toMatch(/^gen_/);
+    expect(value.token).toMatch(/^gen_/);
+  });
+
+  it("keeps path pattern generation deterministic under the seed", () => {
+    const schema = {
+      type: "object",
+      required: ["id"],
+      properties: { id: { type: "string" } }
+    };
+    const first = generateValue(schema, {
+      seed: "op_path",
+      parameterPatterns: { id: "^cmp_[a-z0-9]{29}$" }
+    });
+    const second = generateValue(schema, {
+      seed: "op_path",
+      parameterPatterns: { id: "^cmp_[a-z0-9]{29}$" }
+    });
+    expect(first).toEqual(second);
+  });
+
   it("namespaces seeds so unrelated paths differ", () => {
     const schema = { type: "string" };
     const left = generateValue(schema, { seed: "op_a" });

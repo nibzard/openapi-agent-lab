@@ -28,6 +28,14 @@ export interface GenerationOptions {
   stringBound?: number;
   /** Schema registry resolver for referenced schemas. */
   lookup?: (ref: string) => Json | undefined;
+  /**
+   * Strictest declared pattern per path parameter name of the served
+   * operation's template family (section 15.6). A response property
+   * with the same name and no schema-declared pattern generates a value
+   * that satisfies the pattern, so the id a client reads back also
+   * works in a path of the same resource.
+   */
+  parameterPatterns?: Record<string, string>;
 }
 
 export class GenerationUnsupportedError extends Error {
@@ -45,14 +53,15 @@ export class GenerationUnsupportedError extends Error {
  */
 export function generateValue(schema: Json, options: GenerationOptions): Json {
   const effective = stripProperties(schema, "writeOnly");
-  return generateNode(effective, options, options.seed, 0);
+  return generateNode(effective, options, options.seed, 0, null);
 }
 
 function generateNode(
   schema: Json,
   options: GenerationOptions,
   path: string,
-  depth: number
+  depth: number,
+  propertyName: string | null
 ): Json {
   const maxDepth = options.maxDepth ?? 24;
   if (depth > maxDepth) {
@@ -76,11 +85,14 @@ function generateNode(
     if (resolved !== undefined) {
       // Response-side generation strips writeOnly at every level,
       // including referenced schemas the top-level pass cannot see.
+      // The property name survives the hop so a pattern hint still
+      // applies to the referenced schema.
       return generateNode(
         stripProperties(resolved, "writeOnly"),
         options,
         path,
-        depth + 1
+        depth + 1,
+        propertyName
       );
     }
   }
@@ -113,7 +125,7 @@ function generateNode(
     return sorted[0] as Json;
   }
 
-  const variant = pickVariant(merged, options, path, depth);
+  const variant = pickVariant(merged, options, path, depth, propertyName);
   if (variant !== null) {
     return variant;
   }
@@ -135,7 +147,7 @@ function generateNode(
         depth
       );
     case "string":
-      return generateString(merged, options, path);
+      return generateString(merged, options, path, propertyName);
     case "integer":
       return generateNumber(variantSchema(merged, "integer"));
     case "number":
@@ -161,7 +173,8 @@ function pickVariant(
   schema: Record<string, Json>,
   options: GenerationOptions,
   path: string,
-  depth: number
+  depth: number,
+  propertyName: string | null
 ): Json | null {
   if (Array.isArray(schema.oneOf) || Array.isArray(schema.anyOf)) {
     const branches = [...asArray(schema.oneOf), ...asArray(schema.anyOf)];
@@ -174,7 +187,8 @@ function pickVariant(
         mergeSiblingKeywords(schema, discriminated),
         options,
         path,
-        depth + 1
+        depth + 1,
+        propertyName
       );
     }
     // Choose among otherwise valid branches by ascending canonical
@@ -190,7 +204,8 @@ function pickVariant(
       mergeSiblingKeywords(schema, winner),
       options,
       path,
-      depth + 1
+      depth + 1,
+      propertyName
     );
   }
   return null;
@@ -355,7 +370,8 @@ function generateObject(
         properties[name] as Json,
         options,
         `${path}/${name}`,
-        depth + 1
+        depth + 1,
+        name
       );
     }
   }
@@ -368,7 +384,13 @@ function generateObject(
         result[key] =
           template === null
             ? seededToken(options.seed, path, "string", index)
-            : generateNode(template, options, `${path}/${key}`, depth + 1);
+            : generateNode(
+                template,
+                options,
+                `${path}/${key}`,
+                depth + 1,
+                null
+              );
       }
       index += 1;
       if (index > 100) {
@@ -389,7 +411,8 @@ function generateObject(
       schema.additionalProperties,
       options,
       `${path}/${key}`,
-      depth + 1
+      depth + 1,
+      null
     );
   }
   if (schema.propertyNames !== undefined && Object.keys(result).length > 0) {
@@ -462,7 +485,7 @@ function generateArray(
     const template =
       (i < prefixItems.length ? prefixItems[i] : undefined) ?? items ?? true;
     values.push(
-      generateNode(template as Json, options, `${path}/${i}`, depth + 1)
+      generateNode(template as Json, options, `${path}/${i}`, depth + 1, null)
     );
   }
   if (schema.uniqueItems === true) {
@@ -487,10 +510,20 @@ function dedupeByCanonical(values: readonly Json[]): Json[] {
 function generateString(
   schema: Record<string, Json>,
   options: GenerationOptions,
-  path: string
+  path: string,
+  propertyName: string | null
 ): Json {
   const format = typeof schema.format === "string" ? schema.format : null;
-  const pattern = typeof schema.pattern === "string" ? schema.pattern : null;
+  // A schema-declared pattern outranks the path parameter hint: the
+  // response schema governs its own values, and the hint only narrows
+  // a property the schema leaves unpatterned (section 15.6).
+  const declared = typeof schema.pattern === "string" ? schema.pattern : null;
+  const hint =
+    declared === null && propertyName !== null
+      ? options.parameterPatterns?.[propertyName]
+      : undefined;
+  const pattern =
+    declared ?? (typeof hint === "string" && hint.length > 0 ? hint : null);
   const declaredMin =
     typeof schema.minLength === "number" ? schema.minLength : null;
   const declaredMax =
@@ -639,6 +672,19 @@ function producePattern(
   return synthesizePattern(pattern, bounds);
 }
 
+/**
+ * Safe-integer extremes, the range the validator gives the int64
+ * format (section 15.4). A schema bound at an extreme is a
+ * representability guard, not a real constraint: selecting the
+ * midpoint of [0, 2^53-1] would emit a huge value, so value selection
+ * ignores the guards while the declared bounds still gate the final
+ * candidate below.
+ */
+const SAFE_INTEGER_BOUNDS: ReadonlySet<number> = new Set([
+  Number.MAX_SAFE_INTEGER,
+  -Number.MAX_SAFE_INTEGER
+]);
+
 function generateNumber(schema: Json): Json {
   if (!isJsonObject(schema)) {
     return 0;
@@ -663,8 +709,14 @@ function generateNumber(schema: Json): Json {
         : null;
   const multipleOf =
     typeof schema.multipleOf === "number" ? schema.multipleOf : null;
-  const lower = minimum ?? exclusiveMinimum;
-  const upper = maximum ?? exclusiveMaximum;
+  const guard = (bound: number | null): boolean =>
+    bound !== null && SAFE_INTEGER_BOUNDS.has(bound);
+  const lower = guard(minimum ?? exclusiveMinimum)
+    ? null
+    : (minimum ?? exclusiveMinimum);
+  const upper = guard(maximum ?? exclusiveMaximum)
+    ? null
+    : (maximum ?? exclusiveMaximum);
   const belowLower = (candidate: number): boolean =>
     (minimum !== null && candidate < minimum) ||
     (exclusiveMinimum !== null && candidate <= exclusiveMinimum);
