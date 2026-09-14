@@ -1,0 +1,31 @@
+# Review Notes
+
+## Summary
+T064: `oal report` no longer warns OAL-REPORT-TERMINAL-FROM-LEDGER on
+healthy batches. The diagnostic now fires only when the ledger terminal
+and run.completed.json disagree, or the ledger record is missing.
+
+## Observations
+- Agreement rule: disposition, censor_class, and evidence_integrity are
+  compared where both records carry a string. At least one compared
+  field and no differences yields verified; any difference yields
+  conflict; a missing ledger record or a missing completion record
+  stays unverified and warns.
+- Verified projections keep the stable diagnostic code at severity info
+  in JSON output, suppressed under --quiet; terminal and markdown stay
+  quiet outside --verbose.
+- The dead fromLedger counter left assignmentsOf with no other
+  consumer; removal swept clean across packages and apps.
+
+## Accepted findings (recorded, not blocking)
+- One-sided agreement: a field present on only one side is skipped, so
+  a ledger censor_class against a deleted completion censor_class
+  classifies as verified. Within the "where present" rule; both runner
+  writer paths always emit all three fields, and tampering hits the
+  artifact drift gate. No test pins the shape.
+- Under --verbose --quiet the info diagnostic is suppressed while other
+  info diagnostics treat --verbose as authoritative. Contradictory-flag
+  edge with no pinned semantics.
+
+## Verdict
+Approved — landed unchanged (review verdicts land/land, zero blockers).
