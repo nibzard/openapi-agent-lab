@@ -1,0 +1,43 @@
+# Review Notes
+
+## Summary
+T062: externally recorded traces are now analyzable. `oal friction`
+accepts serve-session directories (trace.jsonl plus
+capability-report.json, gated on `sessions: "allow"`), and `oal trace
+import <har> --contract <spec>` normalizes a HAR 1.2 into trace-event.v1
+with gateway routing and validation. Friction gained origin "external".
+
+## Review round
+First implementation verdicts were fix_first/land with two blockers and
+a security gap. All were fixed in three follow-up commits (cf2e563,
+f85e3a6, 0e0058d) before landing:
+
+- Blocker: gateway validators emit pointer "" for root-level body
+  violations; the import now maps empty pointers to "/" so written
+  events satisfy trace-event.v1.
+- Blocker: HAR status 0 (Chrome failed requests) wrote an invalid
+  status; the import now records response null, validation reads
+  not_evaluated, and a truthful OAL-TRACE-IMPORT-RESPONSE-ABSENT fires.
+- Security: the Redactor had an empty secret registry, so credential
+  values repeated in text bodies, malformed-JSON bodies, query strings,
+  and paths survived verbatim. The import now collects sensitive-named
+  header values as run secrets before writing anything; docs state the
+  exact registry behavior.
+- Stdin import ("-") now works as the help text promises.
+- Undeclared Content-Type reports media_type_unsupported (and the
+  media_type_rejected friction incident) instead of a false missing-body
+  violation; base64 HAR content digests as the decoded bytes;
+  credential_present accepts every sensitive header name, mirroring the
+  runner recorder.
+- detectGeneratedHandleReuse skips external trials: the recorded
+  service issued the handle, so reuse is the protocol working, not mock
+  fidelity.
+
+## Accepted findings (recorded, not blocking)
+- The runner recorder still writes pointer "" at
+  packages/runner/src/exposure.ts:1187, violating trace-event.v1
+  minLength 1. Pre-existing on main; out of this task's scope.
+
+## Verdict
+Approved after fix round — landed as 8ec8150 + cf2e563 + f85e3a6 +
+0e0058d.
