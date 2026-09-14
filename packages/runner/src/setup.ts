@@ -230,6 +230,14 @@ export interface SetupTrialOptions {
   readonly retryOf?: string | null | undefined;
   /** Initialize a fresh Git repository in the workspace. Default false. */
   readonly gitInit?: boolean | undefined;
+  /**
+   * Host environment the runner reads PATH and the adapter's declared
+   * launcher names from. Defaults to the process environment. Tests inject
+   * a fake one.
+   */
+  readonly hostEnvironment?:
+    | Readonly<Record<string, string | undefined>>
+    | undefined;
 }
 
 async function safeMkdir(target: string): Promise<void> {
@@ -588,8 +596,20 @@ function buildToolEnvironment(input: {
   baseUrlEnvironment: string | null;
   declaredNames: readonly string[];
   credentialEnvironments: ReadonlyMap<string, string>;
+  hostPath: string | undefined;
+  homeDir: string;
+  temporaryDir: string;
 }): Record<string, string> {
-  const environment: Record<string, string> = {};
+  // PATH is the one host value the participant may see, so the agent
+  // driver and its tools can be found. HOME and TMPDIR point at the
+  // private control tree, never at the operator's own directories.
+  const environment: Record<string, string> = {
+    HOME: input.homeDir,
+    TMPDIR: input.temporaryDir
+  };
+  if (input.hostPath !== undefined) {
+    environment.PATH = input.hostPath;
+  }
   for (const alias of credentialAliases(input.contract)) {
     const scheme: SecuritySchemeIR | undefined =
       input.contract.security_schemes[alias];
@@ -935,18 +955,31 @@ export async function setupTrial(
       `${canonicalJson(liveExposure.serverRecord)}\n`
     );
 
+    const hostEnvironment = options.hostEnvironment ?? process.env;
     const toolEnvironment = buildToolEnvironment({
       contract: plan.contract.ir,
       credentials,
       baseUrl: liveExposure.baseUrl,
       baseUrlEnvironment: declaredBaseUrlEnvironment(pack),
       declaredNames: declaredEnvironmentNames(pack),
-      credentialEnvironments: declaredCredentialEnvironments(pack)
+      credentialEnvironments: declaredCredentialEnvironments(pack),
+      hostPath: hostEnvironment.PATH,
+      homeDir: control.homeDir,
+      temporaryDir: control.temporaryDir
     });
+    // The adapter declares the launcher names it needs to start, for
+    // example a provider credential. Only those names cross from the host.
+    // Their values reach the driver process and are never recorded.
     const launcherEnvironment: Record<string, string> = {
       OAL_RUN_ID: runId,
       OAL_BATCH_ID: plan.batchId
     };
+    for (const name of plan.adapter.probe.launcherEnvironmentNames) {
+      const value = hostEnvironment[name];
+      if (value !== undefined) {
+        launcherEnvironment[name] = value;
+      }
+    }
 
     // Step 14: the write-once start record. The canonical instructions
     // and task digests cover the same placeholder-rendered preview

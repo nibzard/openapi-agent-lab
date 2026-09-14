@@ -420,14 +420,23 @@ describe("runner integration: isolation of parallel trials", () => {
             expect(attempts["metadata"]?.startsWith("connected:")).toBe(false);
           }
 
-          // The spawn environment carries no host path: no sentinel, no
-          // sibling evidence tree, no metadata address.
+          // The spawn environment holds only the names the pack admits.
+          // PATH is the one host value; HOME and TMPDIR are private
+          // control directories. No value names the sentinel, a sibling
+          // evidence tree, or the metadata address.
           const environment = adapter.environments.get(runId);
           expect(environment).toBeDefined();
           if (environment === undefined) {
             continue;
           }
-          expect(Object.keys(environment).sort()).toEqual(["OAL_BASE_URL"]);
+          expect(Object.keys(environment).sort()).toEqual([
+            "HOME",
+            "OAL_BASE_URL",
+            "PATH",
+            "TMPDIR"
+          ]);
+          expect(environment["HOME"]).not.toBe(process.env["HOME"]);
+          expect(environment["TMPDIR"]).not.toBe(process.env["TMPDIR"]);
           for (const value of Object.values(environment)) {
             expect(value.includes(marker)).toBe(false);
             expect(value.includes("host-sentinel")).toBe(false);

@@ -174,6 +174,74 @@ describe("setupTrial", () => {
     }
   });
 
+  it("hands the participant PATH, a synthetic HOME, and a private TMPDIR", async () => {
+    const { plan, pack, store, clean } = await fixture("oal-setup-host-");
+    const exposure = new FakeExposure();
+    try {
+      const setup = await setupTrial({
+        store,
+        plan,
+        pack: pack.loaded,
+        index: 0,
+        exposure: exposure.factory,
+        now: CLOCK,
+        hostEnvironment: {
+          PATH: "/opt/fake/bin:/usr/bin",
+          FAKE_PROVIDER_KEY: "provider-secret"
+        }
+      });
+      // The pack admits PATH, HOME, and TMPDIR. PATH comes from the host so
+      // the agent driver can be found. HOME and TMPDIR point at the private
+      // control tree, never at the operator's own directories. Nothing else
+      // crosses from the host.
+      expect(setup.toolEnvironment.PATH).toBe("/opt/fake/bin:/usr/bin");
+      expect(setup.toolEnvironment.HOME).toBe(setup.control.homeDir);
+      expect(setup.toolEnvironment.TMPDIR).toBe(setup.control.temporaryDir);
+      expect(setup.toolEnvironment.FAKE_PROVIDER_KEY).toBeUndefined();
+    } finally {
+      await clean();
+    }
+  });
+
+  it("copies only the adapter's declared launcher names from the host", async () => {
+    const { plan, pack, store, clean } = await fixture("oal-setup-launcher-");
+    const exposure = new FakeExposure();
+    const declaring = {
+      ...plan,
+      adapter: {
+        ...plan.adapter,
+        probe: {
+          ...plan.adapter.probe,
+          launcherEnvironmentNames: ["FAKE_PROVIDER_KEY"]
+        }
+      }
+    };
+    try {
+      const setup = await setupTrial({
+        store,
+        plan: declaring,
+        pack: pack.loaded,
+        index: 0,
+        exposure: exposure.factory,
+        now: CLOCK,
+        hostEnvironment: {
+          PATH: "/usr/bin",
+          FAKE_PROVIDER_KEY: "provider-secret",
+          OTHER_SECRET: "never"
+        }
+      });
+      // The launcher environment starts the agent driver and may carry a
+      // provider credential. The tool environment never sees it.
+      expect(setup.launcherEnvironment.FAKE_PROVIDER_KEY).toBe(
+        "provider-secret"
+      );
+      expect(setup.launcherEnvironment.OTHER_SECRET).toBeUndefined();
+      expect(setup.toolEnvironment.FAKE_PROVIDER_KEY).toBeUndefined();
+    } finally {
+      await clean();
+    }
+  });
+
   it("derives byte-identical start records for identical inputs", async () => {
     const { plan, pack, store, clean } = await fixture("oal-setup-2-");
     try {
