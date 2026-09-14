@@ -269,10 +269,11 @@ export class GenericCommandAdapter implements AgentAdapter {
       parse: final.parseStatus
     });
     // The exit record stays last so a consumer can treat it as terminal.
-    recorder.exited({
+    const spawnError = recorder.exited({
       exitCode: process.exitCode,
       signal: process.signal,
-      graceful: process.graceful
+      graceful: process.graceful,
+      spawnError: process.spawnError
     });
 
     const classification = classify(process, config);
@@ -286,7 +287,8 @@ export class GenericCommandAdapter implements AgentAdapter {
       ...(Object.keys(usage).length === 0 ? {} : { usage }),
       ...(classification.errorCode === undefined
         ? {}
-        : { errorCode: classification.errorCode })
+        : { errorCode: classification.errorCode }),
+      ...(spawnError === null ? {} : { spawnError })
     };
   }
 

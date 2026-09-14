@@ -214,6 +214,27 @@ function optionalEnumeration<T extends string>(
   throw invalidOptionValue(`--${name}`, value, `one of: ${allowed.join(", ")}`);
 }
 
+/** Fields of one `trial.finished` event the terminal progress line prints. */
+export interface TrialFinishedLine {
+  readonly runId: string;
+  readonly disposition: string;
+  readonly reasonCode: string;
+  readonly spawnError?: string | null | undefined;
+}
+
+/**
+ * One terminal progress line for a finished trial. The spawn error rides
+ * along when the driver never started, so the operator can tell ENOENT
+ * from EACCES without opening the artifacts.
+ */
+export function trialFinishedLine(event: TrialFinishedLine): string {
+  const spawnError = event.spawnError ?? null;
+  return (
+    `trial ${event.runId}: ${event.disposition} (${event.reasonCode})` +
+    (spawnError === null ? "" : ` spawn_error=${spawnError}`)
+  );
+}
+
 /** `oal run <pack> --eval <id>` (specification section 23.8). */
 export const runCommand: CommandHandler = async (args, io) => {
   const packArgument = requireSinglePositional(args, "pack");
@@ -409,9 +430,7 @@ export const runCommand: CommandHandler = async (args, io) => {
         return;
       }
       if (event.type === "trial.finished") {
-        io.stderr(
-          `trial ${event.runId}: ${event.disposition} (${event.reasonCode})`
-        );
+        io.stderr(trialFinishedLine(event));
       }
       if (event.type === "trial.not_started") {
         io.stderr(`trial ${event.runId}: not started (${event.reasonCode})`);

@@ -104,6 +104,10 @@
             },
             "graceful": {
               "type": "boolean"
+            },
+            "spawn_error": {
+              "type": ["string", "null"],
+              "description": "Redacted reason the driver process could not be spawned, for example an ENOENT report."
             }
           }
         }

@@ -289,10 +289,11 @@ export class CodexCliAdapter implements AgentAdapter {
       read: final.readStatus,
       parse: final.parseStatus
     });
-    recorder.exited({
+    const spawnError = recorder.exited({
       exitCode: process.exitCode,
       signal: process.signal,
-      graceful: process.graceful
+      graceful: process.graceful,
+      spawnError: process.spawnError
     });
 
     const classification = classify(process, sessionEvents, stderrText, final);
@@ -306,7 +307,8 @@ export class CodexCliAdapter implements AgentAdapter {
       ...(Object.keys(usage).length === 0 ? {} : { usage }),
       ...(classification.errorCode === undefined
         ? {}
-        : { errorCode: classification.errorCode })
+        : { errorCode: classification.errorCode }),
+      ...(spawnError === null ? {} : { spawnError })
     };
   }
 

@@ -21,6 +21,7 @@ import {
   exitCodeOfFindings,
   parseDurationMs,
   selectAdapter,
+  trialFinishedLine,
   RunCliCode
 } from "./handlers/run.ts";
 import { loadSteelPack } from "../../../packages/testkit/src/index.ts";
@@ -251,6 +252,41 @@ describe("exitCodeOfBatch", () => {
       }
     });
     expect(exitCodeOfBatch(batch([errored]), false)).toBe(EXIT_OK);
+  });
+});
+
+describe("trialFinishedLine", () => {
+  it("appends the spawn error the operator needs", () => {
+    expect(
+      trialFinishedLine({
+        runId: "run_1",
+        disposition: "infrastructure_failed_pre_control",
+        reasonCode: "OAL-RUN-INFRASTRUCTURE-FAILED",
+        spawnError: "spawn /nonexistent/codex ENOENT"
+      })
+    ).toBe(
+      "trial run_1: infrastructure_failed_pre_control " +
+        "(OAL-RUN-INFRASTRUCTURE-FAILED) " +
+        "spawn_error=spawn /nonexistent/codex ENOENT"
+    );
+  });
+
+  it("keeps the line unchanged when no spawn error exists", () => {
+    expect(
+      trialFinishedLine({
+        runId: "run_1",
+        disposition: "completed",
+        reasonCode: "OAL-RUN-DISPOSITION-COMPLETED",
+        spawnError: null
+      })
+    ).toBe("trial run_1: completed (OAL-RUN-DISPOSITION-COMPLETED)");
+    expect(
+      trialFinishedLine({
+        runId: "run_2",
+        disposition: "completed",
+        reasonCode: "OAL-RUN-DISPOSITION-COMPLETED"
+      })
+    ).toBe("trial run_2: completed (OAL-RUN-DISPOSITION-COMPLETED)");
   });
 });
 

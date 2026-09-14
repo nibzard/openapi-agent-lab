@@ -168,6 +168,15 @@ function previews(
   return out;
 }
 
+/** The spawn error an exited payload carries, when one exists. */
+function spawnErrorOf(
+  payload: AgentSessionEvent["payload"] | undefined
+): string | null {
+  return payload !== undefined && "spawn_error" in payload
+    ? (payload.spawn_error ?? null)
+    : null;
+}
+
 /** Adapter-declared kinds recorded on one stream channel. */
 function kindsOn(
   events: readonly AgentSessionEvent[],
@@ -397,6 +406,33 @@ describe("CodexCliAdapter.run", () => {
       expect(result.status).toBe("provider_failed");
       expect(result.errorCode).toBe("AGENT_STARTUP_FAILED");
       expect(kindsOn(events, "jsonrpc")).toEqual([]);
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("records the spawn error on the exited event when the executable is missing", async () => {
+    const state = await harness();
+    try {
+      const prepared = await state.adapter.prepare(state.context);
+      const missing = join(state.root, "removed", "codex-binary");
+      const collector = collectingSink();
+      const result = await state.adapter.run(
+        { ...prepared, executable: missing },
+        collector.sink,
+        NO_SIGNAL()
+      );
+      expect(result.status).toBe("failed");
+      expect(result.errorCode).toBe("AGENT_SPAWN_FAILED");
+      expect(result.spawnError ?? "").toContain(missing);
+      expect(result.spawnError ?? "").toContain("ENOENT");
+      const exited = collector.events
+        .filter((event) => event.type === "agent.exited")
+        .at(-1);
+      const spawnError = spawnErrorOf(exited?.payload);
+      expect(spawnError ?? "").toContain(missing);
+      expect(spawnError ?? "").toContain("ENOENT");
+      expect(validateAgentSessionEvent(exited, await loadSchema())).toEqual([]);
     } finally {
       await rm(state.root, { recursive: true, force: true });
     }

@@ -161,6 +161,11 @@ export interface TrialOutcome {
     readonly code: number | null;
     readonly signal: string | null;
   } | null;
+  /**
+   * Spawn error text the adapter already scrubbed for the exited event,
+   * or absent when the driver process started.
+   */
+  readonly spawnError?: string | null | undefined;
   readonly startedAtMs: number;
   readonly finishedAtMs: number;
 }
@@ -664,6 +669,7 @@ export async function runTrial(
       ...(result.errorCode === undefined
         ? {}
         : { adapter_error_code: result.errorCode }),
+      ...(result.spawnError == null ? {} : { spawn_error: result.spawnError }),
       ...(evaluationSkipCode === null
         ? {}
         : { evaluation_skip_code: evaluationSkipCode }),
@@ -714,6 +720,7 @@ export async function runTrial(
     agentToolCalls:
       typeof usage["tool_calls"] === "number" ? usage["tool_calls"] : null,
     exit: { code: result.exitCode, signal: result.signal },
+    ...(result.spawnError == null ? {} : { spawnError: result.spawnError }),
     startedAtMs,
     finishedAtMs
   };

@@ -14,6 +14,7 @@ import {
   SessionEventRecorder,
   type AgentAdapter,
   type AgentEventSink,
+  type AgentRunResult,
   type PreparedAgent
 } from "@oal/agent-adapter";
 import { MockAgentAdapter } from "@oal/mock-adapter";
@@ -79,6 +80,41 @@ function explodingRunAdapter(): AgentAdapter {
     probe: () => base.probe(),
     prepare: (context) => base.prepare(context),
     run: () => Promise.reject(new Error("adapter exploded during run"))
+  };
+}
+
+/** Spawn error text a missing executable produces on this platform. */
+const SPAWN_ERROR_TEXT = "spawn /nonexistent/codex ENOENT";
+
+/** An adapter whose driver never starts, for the AGENT_SPAWN_FAILED route. */
+function spawnFailedAdapter(): AgentAdapter {
+  const base = batchAdapter();
+  return {
+    id: base.id,
+    probe: () => base.probe(),
+    prepare: (context) => base.prepare(context),
+    run: (prepared, sink): Promise<AgentRunResult> => {
+      const recorder = new SessionEventRecorder({
+        runId: prepared.runId,
+        adapter: prepared.adapter,
+        sink
+      });
+      recorder.started({ model: null });
+      const spawnError = recorder.exited({
+        exitCode: null,
+        signal: null,
+        graceful: false,
+        spawnError: SPAWN_ERROR_TEXT
+      });
+      return Promise.resolve({
+        status: "failed",
+        exitCode: null,
+        signal: null,
+        durationMs: 3,
+        errorCode: "AGENT_SPAWN_FAILED",
+        ...(spawnError === null ? {} : { spawnError })
+      });
+    }
   };
 }
 
@@ -300,6 +336,40 @@ describe("runBatch", () => {
       expect(events[0]?.type).toBe("batch.started");
       expect(events[events.length - 1]?.type).toBe("batch.finished");
       expect(events.filter((e) => e.type === "trial.finished").length).toBe(3);
+    } finally {
+      await clean();
+    }
+  });
+
+  it("relays the spawn error on the trial.finished event", async () => {
+    const { plan, pack, store, clean } = await fixture(
+      "oal-run-spawn-",
+      "b-spawn-failed",
+      1,
+      1
+    );
+    try {
+      const events: BatchEvent[] = [];
+      const outcome = await runBatch({
+        store,
+        plan,
+        pack,
+        adapter: spawnFailedAdapter(),
+        now: CLOCK,
+        exposure: FAKE_EXPOSURE,
+        onEvent: (event) => events.push(event)
+      });
+      const finished = events.find(
+        (
+          event
+        ): event is Extract<BatchEvent, { readonly type: "trial.finished" }> =>
+          event.type === "trial.finished"
+      );
+      expect(finished?.spawnError).toBe(SPAWN_ERROR_TEXT);
+      expect(outcome.outcomes[0]?.disposition).toBe(
+        "infrastructure_failed_pre_control"
+      );
+      expect(outcome.outcomes[0]?.spawnError).toBe(SPAWN_ERROR_TEXT);
     } finally {
       await clean();
     }

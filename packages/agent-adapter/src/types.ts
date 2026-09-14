@@ -86,6 +86,11 @@ export interface AgentRunResult {
   finalJson?: unknown;
   usage?: Record<string, number>;
   errorCode?: string;
+  /**
+   * Spawn error text exactly as the recorder scrubbed it for the
+   * `agent.exited` payload, or absent when the process spawned.
+   */
+  spawnError?: string | null;
 }
 
 /** Adapter configuration. Concrete adapters extend this base. */
@@ -194,6 +199,11 @@ export interface AgentExitedPayload {
   readonly exit_code: number | null;
   readonly signal: string | null;
   readonly graceful?: boolean | undefined;
+  /**
+   * Redacted reason the driver process could not be spawned, for example
+   * an ENOENT report. Absent when the process spawned.
+   */
+  readonly spawn_error?: string | null | undefined;
 }
 
 /** Function that removes credential material from text. */

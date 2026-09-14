@@ -85,6 +85,8 @@ export type BatchEvent =
       readonly runId: string;
       readonly disposition: TrialOutcome["disposition"];
       readonly reasonCode: string;
+      /** Scrubbed spawn error when the driver process never started. */
+      readonly spawnError?: string | null | undefined;
     }
   | {
       readonly type: "trial.not_started";
@@ -524,7 +526,10 @@ export async function runBatch(
         type: "trial.finished",
         runId,
         disposition: outcome.disposition,
-        reasonCode: outcome.reasonCode
+        reasonCode: outcome.reasonCode,
+        ...(outcome.spawnError == null
+          ? {}
+          : { spawnError: outcome.spawnError })
       });
     } catch (cause) {
       // A confirmed batch-wide defect: stop launching, mark the rest

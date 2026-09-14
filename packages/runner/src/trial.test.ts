@@ -5,7 +5,11 @@ import path from "node:path";
 
 import { ArtifactStore } from "@oal/evidence";
 import { sha256Hex } from "@oal/core";
-import type { AgentAdapter } from "@oal/agent-adapter";
+import {
+  SessionEventRecorder,
+  type AgentAdapter,
+  type AgentRunResult
+} from "@oal/agent-adapter";
 import { MockAgentAdapter } from "@oal/mock-adapter";
 import { findRepoRoot, loadSteelPack } from "@oal/testkit";
 import type { LoadedPack } from "@oal/pack";
@@ -100,6 +104,44 @@ function explodingRunAdapter(base: MockAgentAdapter): AgentAdapter {
     probe: () => base.probe(),
     prepare: (context) => base.prepare(context),
     run: () => Promise.reject(new Error("adapter exploded during run"))
+  };
+}
+
+/** Spawn error text a missing executable produces on this platform. */
+const SPAWN_ERROR_TEXT = "spawn /nonexistent/codex ENOENT";
+
+/**
+ * An adapter whose driver never starts, for the AGENT_SPAWN_FAILED route.
+ * It records the same exited event a real adapter records and returns the
+ * scrubbed spawn error the recorder produced.
+ */
+function spawnFailedAdapter(base: MockAgentAdapter): AgentAdapter {
+  return {
+    id: base.id,
+    probe: () => base.probe(),
+    prepare: (context) => base.prepare(context),
+    run: (prepared, sink): Promise<AgentRunResult> => {
+      const recorder = new SessionEventRecorder({
+        runId: prepared.runId,
+        adapter: prepared.adapter,
+        sink
+      });
+      recorder.started({ model: null });
+      const spawnError = recorder.exited({
+        exitCode: null,
+        signal: null,
+        graceful: false,
+        spawnError: SPAWN_ERROR_TEXT
+      });
+      return Promise.resolve({
+        status: "failed",
+        exitCode: null,
+        signal: null,
+        durationMs: 3,
+        errorCode: "AGENT_SPAWN_FAILED",
+        ...(spawnError === null ? {} : { spawnError })
+      });
+    }
   };
 }
 
@@ -501,6 +543,49 @@ describe("runTrial", () => {
       expect(outcome.disposition).toBe("infrastructure_failed_post_control");
       expect(outcome.evidenceIntegrity).toBe("corrupt");
       expect(outcome.censorClass).toBe("instrumentation_censor");
+    } finally {
+      await clean();
+    }
+  });
+
+  it("carries the spawn error into the terminal record", async () => {
+    const base = scriptedAdapter();
+    const adapter = spawnFailedAdapter(base);
+    const { plan, pack, store, clean } = await fixture(
+      "oal-trial-spawn-",
+      base,
+      "b-spawn-failed"
+    );
+    try {
+      const outcome = await runTrial({
+        store,
+        plan,
+        pack,
+        adapter,
+        index: 0,
+        exposure: fakeExposureLog().factory,
+        now: CLOCK
+      });
+      expect(outcome.disposition).toBe("infrastructure_failed_pre_control");
+      expect(outcome.spawnError).toBe(SPAWN_ERROR_TEXT);
+      const root = `runs/${plan.batchId}/trials/${outcome.runId}`;
+      const completed = JSON.parse(
+        await store.read(`${root}/run.completed.json`)
+      ) as Record<string, unknown>;
+      const extensions = completed.extensions as Record<string, unknown>;
+      expect(extensions.adapter_error_code).toBe("AGENT_SPAWN_FAILED");
+      expect(extensions.spawn_error).toBe(SPAWN_ERROR_TEXT);
+      const sessionText = await store.read(
+        `${root}/session/events.redacted.jsonl`
+      );
+      const exited = sessionText
+        .split("\n")
+        .filter((line) => line.length > 0)
+        .map((line) => JSON.parse(line) as Record<string, unknown>)
+        .find((event) => event.type === "agent.exited");
+      expect((exited?.payload as Record<string, unknown>).spawn_error).toBe(
+        SPAWN_ERROR_TEXT
+      );
     } finally {
       await clean();
     }

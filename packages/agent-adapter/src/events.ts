@@ -246,21 +246,32 @@ export class SessionEventRecorder {
     this.emit("agent.session_event", payload, scrubbed.value);
   }
 
-  /** Emit the `agent.exited` record. */
+  /**
+   * Emit the `agent.exited` record. The spawn error, when one exists, is
+   * redacted first and bounded second, exactly like a preview, so a
+   * truncated marker cannot expose a partial secret. The scrubbed text is
+   * returned, so the adapter can report it without a second redaction pass.
+   */
   exited(init: {
     exitCode: number | null;
     signal: string | null;
     graceful: boolean;
-  }): void {
+    spawnError?: string | null | undefined;
+  }): string | null {
+    const raw = init.spawnError ?? null;
+    const clean =
+      raw === null ? null : this.redact(raw).slice(0, this.maxPreviewChars);
     this.emit(
       "agent.exited",
       {
         exit_code: init.exitCode,
         signal: init.signal,
-        graceful: init.graceful
+        graceful: init.graceful,
+        ...(clean === null ? {} : { spawn_error: clean })
       },
       {}
     );
+    return clean;
   }
 
   private emit(

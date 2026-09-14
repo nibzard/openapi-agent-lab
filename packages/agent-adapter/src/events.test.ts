@@ -67,6 +67,92 @@ describe("SessionEventRecorder", () => {
     expect(first?.event_id).not.toBe(second?.event_id);
   });
 
+  it("records a redacted spawn error on the exited event", async () => {
+    const schema = await loadSchema();
+    const collector = collectingSink();
+    const recorder = new SessionEventRecorder({
+      runId: "run_000001",
+      adapter: "generic",
+      sink: collector.sink,
+      redact: createSecretRedactor(["sk-live-secret-value"]),
+      now: () => "2026-08-27T10:00:00.000Z"
+    });
+    const recorded = recorder.exited({
+      exitCode: null,
+      signal: null,
+      graceful: false,
+      spawnError: "spawn /opt/agents/driver-with-sk-live-secret-value ENOENT"
+    });
+    expect(recorded).toBe(
+      `spawn /opt/agents/driver-with-${REDACTED_MARKER} ENOENT`
+    );
+    expect(collector.events[0]?.payload).toEqual({
+      exit_code: null,
+      signal: null,
+      graceful: false,
+      spawn_error: `spawn /opt/agents/driver-with-${REDACTED_MARKER} ENOENT`
+    });
+    expect(validateAgentSessionEvent(collector.events[0], schema)).toEqual([]);
+    expect(
+      JSON.stringify(collector.events).includes("sk-live-secret-value")
+    ).toBe(false);
+  });
+
+  it("bounds the spawn error to the preview limit", () => {
+    const collector = collectingSink();
+    const recorder = new SessionEventRecorder({
+      runId: "run_000001",
+      adapter: "generic",
+      sink: collector.sink,
+      now: () => "2026-08-27T10:00:00.000Z",
+      maxPreviewChars: 10
+    });
+    const recorded = recorder.exited({
+      exitCode: null,
+      signal: null,
+      graceful: false,
+      spawnError: "spawn /nonexistent/driver ENOENT"
+    });
+    expect(recorded).toBe("spawn /non");
+    expect(collector.events[0]?.payload).toMatchObject({
+      spawn_error: "spawn /non"
+    });
+  });
+
+  it("omits spawn_error when the process spawned", async () => {
+    const schema = await loadSchema();
+    const collector = collectingSink();
+    const recorder = new SessionEventRecorder({
+      runId: "run_000001",
+      adapter: "generic",
+      sink: collector.sink,
+      now: () => "2026-08-27T10:00:00.000Z"
+    });
+    expect(recorder.exited({ exitCode: 0, signal: null, graceful: true })).toBe(
+      null
+    );
+    expect(
+      recorder.exited({
+        exitCode: 0,
+        signal: null,
+        graceful: true,
+        spawnError: null
+      })
+    ).toBe(null);
+    expect(collector.events[0]?.payload).toStrictEqual({
+      exit_code: 0,
+      signal: null,
+      graceful: true
+    });
+    expect(collector.events[1]?.payload).toStrictEqual({
+      exit_code: 0,
+      signal: null,
+      graceful: true
+    });
+    expect(validateAgentSessionEvent(collector.events[0], schema)).toEqual([]);
+    expect(validateAgentSessionEvent(collector.events[1], schema)).toEqual([]);
+  });
+
   it("bounds the preview and keeps the byte count of the bound", () => {
     const collector = collectingSink();
     const recorder = new SessionEventRecorder({
