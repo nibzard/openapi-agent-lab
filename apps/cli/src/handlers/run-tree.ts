@@ -365,6 +365,18 @@ export function assignmentViewOf(
 }
 
 /**
+ * The raw terminal ledger record of one run, when the ledger holds
+ * one. `assignmentFinishedOf` projects this record; readers that need
+ * its original fields, such as the censor class, read it here.
+ */
+export function assignmentTerminalRecordOf(
+  events: readonly JsonObject[],
+  runId: string
+): JsonObject | null {
+  return ledgerEventOf(events, runId, "terminal");
+}
+
+/**
  * Project the terminal ledger record of one run into its section 33.1
  * lifecycle form. Every field copies the recorded record; nothing is
  * inferred. Null when the ledger holds no terminal record for the run.
@@ -373,7 +385,7 @@ export function assignmentFinishedOf(
   events: readonly JsonObject[],
   runId: string
 ): LifecycleEvent | null {
-  const terminal = ledgerEventOf(events, runId, "terminal");
+  const terminal = assignmentTerminalRecordOf(events, runId);
   if (terminal === null) {
     return null;
   }

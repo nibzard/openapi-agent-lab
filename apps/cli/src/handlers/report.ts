@@ -39,7 +39,7 @@ import {
 } from "@oal/report";
 
 import type { CommandHandler } from "../commands.ts";
-import { emitDiagnostics } from "../diagnostics.ts";
+import { diagnosticJsonLine, emitDiagnostics } from "../diagnostics.ts";
 import {
   missingArgument,
   tooManyArguments,
@@ -55,6 +55,7 @@ import {
 import {
   assignmentEventsOf,
   assignmentFinishedOf,
+  assignmentTerminalRecordOf,
   assignmentViewOf,
   batchRootOf,
   loadRunOrBatch,
@@ -163,28 +164,129 @@ export function assignmentsOf(
     readonly replacementOf: string | null;
     readonly terminal: LifecycleEvent | null;
   }[];
-  readonly fromLedger: number;
 } {
   const ledger = assignmentEventsOf(subject);
-  const views = trials.map((trial) => {
-    const view = assignmentViewOf(ledger, trial.runId);
-    const lifecycleTerminal = trial.lifecycle.some(
-      (event) => event.type === "run.finished"
-    );
-    const terminal = lifecycleTerminal
-      ? null
-      : assignmentFinishedOf(ledger, trial.runId);
-    return {
-      trial,
-      assignmentId: view.assignmentId,
-      replacementOf: view.replacementOf,
-      terminal
-    };
-  });
   return {
-    views,
-    fromLedger: views.filter((view) => view.terminal !== null).length
+    views: trials.map((trial) => {
+      const view = assignmentViewOf(ledger, trial.runId);
+      const lifecycleTerminal = trial.lifecycle.some(
+        (event) => event.type === "run.finished"
+      );
+      const terminal = lifecycleTerminal
+        ? null
+        : assignmentFinishedOf(ledger, trial.runId);
+      return {
+        trial,
+        assignmentId: view.assignmentId,
+        replacementOf: view.replacementOf,
+        terminal
+      };
+    })
   };
+}
+
+/** Terminal fields cross-checked between the two recorded sources. */
+const TERMINAL_AGREEMENT_FIELDS: readonly (
+  | "disposition"
+  | "censor_class"
+  | "evidence_integrity"
+)[] = ["disposition", "censor_class", "evidence_integrity"];
+
+/** How one trial's terminal fact resolved (section 23.10). */
+export type LedgerProjectionStatus =
+  | "verified"
+  | "conflict"
+  | "missing"
+  | "unverifiable";
+
+/** One trial's ledger terminal projection and its cross-check. */
+export interface LedgerProjection {
+  readonly runId: string;
+  readonly status: LedgerProjectionStatus;
+  /** Fields on which the two sources disagree; empty otherwise. */
+  readonly differences: readonly string[];
+}
+
+/**
+ * Classify every trial whose terminal lifecycle record projects from
+ * the batch assignment ledger (section 23.10). The ledger terminal is
+ * verified only when the run's own completion record exists and every
+ * field both records carry agrees. A missing ledger record, a missing
+ * completion record, and a contradiction all stay unverified.
+ */
+export function ledgerProjectionsOf(
+  subject: RunOrBatch,
+  trials: readonly LoadedTrial[]
+): readonly LedgerProjection[] {
+  const ledger = assignmentEventsOf(subject);
+  const projections: LedgerProjection[] = [];
+  for (const trial of trials) {
+    if (trial.lifecycle.some((event) => event.type === "run.finished")) {
+      continue;
+    }
+    const terminal = assignmentTerminalRecordOf(ledger, trial.runId);
+    if (terminal === null) {
+      projections.push({
+        runId: trial.runId,
+        status: "missing",
+        differences: []
+      });
+      continue;
+    }
+    if (trial.completed === null) {
+      projections.push({
+        runId: trial.runId,
+        status: "unverifiable",
+        differences: []
+      });
+      continue;
+    }
+    const differences: string[] = [];
+    let compared = 0;
+    for (const field of TERMINAL_AGREEMENT_FIELDS) {
+      const fromLedger = terminal[field];
+      const recorded = trial.completed[field];
+      if (typeof fromLedger !== "string" || typeof recorded !== "string") {
+        continue;
+      }
+      compared += 1;
+      if (fromLedger !== recorded) {
+        differences.push(field);
+      }
+    }
+    projections.push({
+      runId: trial.runId,
+      status:
+        differences.length > 0
+          ? "conflict"
+          : compared > 0
+            ? "verified"
+            : "unverifiable",
+      differences
+    });
+  }
+  return projections;
+}
+
+/** Describe one unverified projection for the warning message. */
+function describeProjection(projection: LedgerProjection): string {
+  switch (projection.status) {
+    case "conflict":
+      return (
+        `${projection.runId}: ledger terminal and completion record ` +
+        `disagree on ${projection.differences.join(", ")}`
+      );
+    case "missing":
+      return (
+        `${projection.runId}: no run.finished lifecycle event and ` +
+        "no ledger terminal record"
+      );
+    default:
+      return (
+        `${projection.runId}: no completion record to check the ` +
+        "ledger terminal against"
+      );
+  }
 }
 
 /** The recorded participant-report status of one trial. */
@@ -504,22 +606,51 @@ export const reportCommand: CommandHandler = async (args, io) => {
   const implementation = await implementationOf(
     await inputsDirOf(subject, root)
   );
-  const ledgerTerminals = assignmentsOf(
-    subject,
-    trials.map((trial) => trial)
-  ).fromLedger;
-  if (ledgerTerminals > 0) {
+  const projections = ledgerProjectionsOf(subject, trials);
+  const unverified = projections.filter(
+    (projection) => projection.status !== "verified"
+  );
+  if (unverified.length > 0) {
     emitDiagnostics(io, args.context, [
       diagnostic({
         severity: "warning",
         phase: "report",
         code: ReportCliCode.TerminalFromLedger,
         message:
-          `${ledgerTerminals} trial(s) hold no run.finished lifecycle event; ` +
-          "their terminal disposition projects from the batch assignment " +
-          "ledger, which the runner writes instead."
+          `${unverified.length} terminal fact(s) project from the batch ` +
+          "assignment ledger without agreement: " +
+          `${unverified.map(describeProjection).join("; ")}.`,
+        details: {
+          projections: unverified.map((projection) => ({
+            run_id: projection.runId,
+            status: projection.status,
+            ...(projection.differences.length === 0
+              ? {}
+              : { differences: [...projection.differences] })
+          }))
+        }
       })
     ]);
+  } else if (projections.length > 0 && !args.context.quiet) {
+    // Both sources agree, so the projection is a fact, not a risk. The
+    // JSON stream keeps it at informational severity for machines; the
+    // human projections show it only under --verbose.
+    const informational = diagnostic({
+      severity: "info",
+      phase: "report",
+      code: ReportCliCode.TerminalFromLedger,
+      message:
+        `${projections.length} trial(s) hold no run.finished lifecycle ` +
+        "event; their terminal disposition projects from the batch " +
+        "assignment ledger and agrees with each recorded completion " +
+        "record.",
+      details: { projected: projections.length }
+    });
+    if (args.context.format === "json") {
+      io.stderr(diagnosticJsonLine(informational));
+    } else {
+      emitDiagnostics(io, args.context, [informational]);
+    }
   }
   const report = reportOf(subject, entries, {
     ...(regrade ? { lineage: "derived" } : {}),

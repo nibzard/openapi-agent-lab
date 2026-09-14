@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -8,6 +8,7 @@ import {
   EXIT_INFRASTRUCTURE,
   EXIT_OK,
   EXIT_UNSUPPORTED,
+  sha256HexBytes,
   type ExitCode
 } from "@oal/core";
 
@@ -59,6 +60,39 @@ async function recordedBatch(
   return { cwd, batchDir: path.join(cwd, ".oal", "runs", batchId) };
 }
 
+/**
+ * Rewrite one file of a recorded batch, then re-hash the manifest
+ * chain so the mutation reads as intact evidence. Only test fixtures
+ * call this; the commands never mutate recorded evidence.
+ */
+async function rewriteBatchFile(
+  batchDir: string,
+  relativePath: string,
+  text: string
+): Promise<void> {
+  await writeFile(path.join(batchDir, relativePath), text);
+  const manifestPath = path.join(batchDir, "artifact-manifest.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+    entries: { path: string; bytes: number; sha256: string }[];
+  };
+  for (const entry of manifest.entries) {
+    if (entry.path === relativePath) {
+      entry.bytes = Buffer.byteLength(text);
+      entry.sha256 = sha256HexBytes(new TextEncoder().encode(text));
+    }
+  }
+  const manifestText = `${JSON.stringify(manifest)}\n`;
+  await writeFile(manifestPath, manifestText);
+  const pointerPath = path.join(batchDir, "batch.completed.json");
+  const pointer = JSON.parse(await readFile(pointerPath, "utf8")) as {
+    manifest_sha256: string;
+  };
+  pointer.manifest_sha256 = sha256HexBytes(
+    new TextEncoder().encode(manifestText)
+  );
+  await writeFile(pointerPath, `${JSON.stringify(pointer)}\n`);
+}
+
 describe("oal report", () => {
   it("renders the canonical JSON report of one batch", async () => {
     const { cwd, batchDir } = await recordedBatch("cli-report-json");
@@ -98,7 +132,11 @@ describe("oal report", () => {
     expect(text).toContain("trials: 1");
     expect(text).toContain("metric: task_pass");
     // The runner records the terminal fact in the assignment ledger.
-    expect(terminal.stderrText()).toContain(ReportCliCode.TerminalFromLedger);
+    // The projection agrees with the completion record, so the healthy
+    // batch stays quiet on the terminal.
+    expect(terminal.stderrText()).not.toContain(
+      ReportCliCode.TerminalFromLedger
+    );
 
     const markdown = new MemoryIo();
     expect(
@@ -109,6 +147,85 @@ describe("oal report", () => {
     const md = markdown.stdoutChunks.join("");
     expect(md).toContain("# Report cli-report-term");
     expect(md).toContain("| Metric | Numerator | Denominator |");
+  });
+
+  it("stays quiet on healthy batches and keeps an informational JSON diagnostic", async () => {
+    const { cwd, batchDir } = await recordedBatch("cli-report-agree");
+    const terminal = new MemoryIo();
+    expect(await main(["report", batchDir], terminal, { cwd })).toBe(EXIT_OK);
+    // Both terminal sources agree, so the terminal projection is quiet.
+    expect(terminal.stderrText()).not.toContain(
+      ReportCliCode.TerminalFromLedger
+    );
+    // --verbose surfaces the informational projection fact as text.
+    const verbose = new MemoryIo();
+    expect(
+      await main(["report", batchDir, "--verbose"], verbose, { cwd })
+    ).toBe(EXIT_OK);
+    expect(verbose.stderrText()).toContain(ReportCliCode.TerminalFromLedger);
+    // The JSON stream keeps the projection fact at informational
+    // severity for machine consumers.
+    const json = new MemoryIo();
+    expect(
+      await main(["report", batchDir, "--format", "json"], json, { cwd })
+    ).toBe(EXIT_OK);
+    const entries = json
+      .stderrText()
+      .split("\n")
+      .filter((line) => line.trim().length > 0)
+      .map((line) => JSON.parse(line) as { code: string; severity: string });
+    const projection = entries.find(
+      (entry) => entry.code === ReportCliCode.TerminalFromLedger
+    );
+    expect(projection?.severity).toBe("info");
+  });
+
+  it("warns when the ledger terminal contradicts the completion record", async () => {
+    const { cwd, batchDir } = await recordedBatch("cli-report-conflict");
+    const trialsRoot = path.join(batchDir, "trials");
+    const entries = await readdir(trialsRoot);
+    const first = entries[0];
+    if (first === undefined) {
+      throw new Error("The batch must record one trial.");
+    }
+    // Flip the recorded disposition so it contradicts the ledger
+    // terminal record of the same run.
+    const relative = `trials/${first}/run.completed.json`;
+    const completed = JSON.parse(
+      await readFile(path.join(batchDir, relative), "utf8")
+    ) as { disposition: string };
+    completed.disposition =
+      completed.disposition === "harness_aborted"
+        ? "completed"
+        : "harness_aborted";
+    await rewriteBatchFile(
+      batchDir,
+      relative,
+      `${JSON.stringify(completed)}\n`
+    );
+    const io = new MemoryIo();
+    expect(await main(["report", batchDir], io, { cwd })).toBe(EXIT_OK);
+    const stderr = io.stderrText();
+    expect(stderr).toContain(ReportCliCode.TerminalFromLedger);
+    expect(stderr).toContain("disposition");
+  });
+
+  it("warns when a trial holds no terminal record anywhere", async () => {
+    const { cwd, batchDir } = await recordedBatch("cli-report-missing");
+    const ledgerPath = path.join(batchDir, "assignment-events.jsonl");
+    const records = (await readFile(ledgerPath, "utf8"))
+      .split("\n")
+      .filter((line) => line.trim().length > 0)
+      .map((line) => JSON.parse(line) as { kind?: string });
+    const kept = records.filter((record) => record.kind !== "terminal");
+    await rewriteBatchFile(
+      batchDir,
+      "assignment-events.jsonl",
+      `${kept.map((entry) => JSON.stringify(entry)).join("\n")}\n`
+    );
+    const io = new MemoryIo();
+    expect(await main(["report", batchDir], io, { cwd })).toBe(EXIT_OK);
+    expect(io.stderrText()).toContain(ReportCliCode.TerminalFromLedger);
   });
 
   it("writes the report document to --out", async () => {
