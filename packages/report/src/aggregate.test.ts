@@ -490,6 +490,89 @@ describe("cohort batches sharing one assignment id", () => {
     expect(denominators["task_evaluation_count"]).toBe(3);
   });
 
+  it("keeps a censored sibling its own unresolved slot", () => {
+    // Section 27.2: an unresolved slot joins no denominator, so one
+    // evaluated sibling among censored ones reports task_pass 1/1,
+    // not 1/3, and no censor is invented for the clean sibling.
+    const slots = resolveSlots([
+      buildTrialFacts(cohortTrial(1, "passed")),
+      buildTrialFacts({
+        run_id: cohortRunId(2),
+        evidence_uri: "evidence",
+        assignment_id: BAT,
+        replacement_of: null,
+        events: preControlFailureEvents(cohortRunId(2)),
+        trace: []
+      }),
+      buildTrialFacts({
+        run_id: cohortRunId(3),
+        evidence_uri: "evidence",
+        assignment_id: BAT,
+        replacement_of: null,
+        events: postControlFailureEvents(cohortRunId(3)),
+        trace: []
+      })
+    ]);
+    expect(slots).toEqual([
+      {
+        slot_id: `${BAT}#${cohortRunId(1)}`,
+        attempt_run_ids: [cohortRunId(1)],
+        resolved: true,
+        source: "primary",
+        supplying_run_id: cohortRunId(1),
+        task_outcome: "passed",
+        worst_case_failure: false
+      },
+      {
+        slot_id: `${BAT}#${cohortRunId(2)}`,
+        attempt_run_ids: [cohortRunId(2)],
+        resolved: false,
+        source: null,
+        supplying_run_id: null,
+        task_outcome: null,
+        worst_case_failure: false
+      },
+      {
+        slot_id: `${BAT}#${cohortRunId(3)}`,
+        attempt_run_ids: [cohortRunId(3)],
+        resolved: false,
+        source: null,
+        supplying_run_id: null,
+        task_outcome: null,
+        worst_case_failure: true
+      }
+    ]);
+    const report = buildReport({
+      scope: { level: "batch", id: "live-steel-3x" },
+      trials: [
+        cohortTrial(1, "passed"),
+        {
+          run_id: cohortRunId(2),
+          evidence_uri: "evidence",
+          eval_id: "basic-lifecycle",
+          assignment_id: BAT,
+          replacement_of: null,
+          events: preControlFailureEvents(cohortRunId(2)),
+          trace: []
+        },
+        {
+          run_id: cohortRunId(3),
+          evidence_uri: "evidence",
+          eval_id: "basic-lifecycle",
+          assignment_id: BAT,
+          replacement_of: null,
+          events: postControlFailureEvents(cohortRunId(3)),
+          trace: []
+        }
+      ]
+    });
+    const taskPass = report.metrics.find((metric) => metric.id === "task_pass");
+    expect(taskPass?.numerator).toBe(1);
+    expect(taskPass?.denominator).toBe(1);
+    expect(taskPass?.availability.unknown).toBe(2);
+    expect(taskPass?.reasons).toEqual(["unresolved_slots=2"]);
+  });
+
   it("resolves one slot per sibling primary, keyed by run", () => {
     const slots = cohortReport().extensions["slot_resolution"] as Array<{
       slot_id: string;
