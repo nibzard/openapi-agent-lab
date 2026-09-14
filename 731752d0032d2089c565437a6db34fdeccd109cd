@@ -1,0 +1,21 @@
+# Review Notes
+
+## Summary
+T056 spawn error recording, implemented in an isolated worktree
+and reviewed by two independent agents before landing.
+
+## Observations
+- Correctness lens: land, no findings. Reviewer re-ran the
+  touched suites and repo typecheck.
+- Security/docs lens: land. spawn_error is redacted and bounded
+  inside SessionEventRecorder before it reaches any payload,
+  the schema, the extensions, or the terminal line.
+
+## Concern
+- Residual, accepted: extensions.spawn_error in run.completed
+  relies on the adapter contract that AgentRunResult.spawnError
+  carries text exactly as the recorder scrubbed it. Shipped
+  adapters honor it; a third-party adapter could bypass.
+
+## Verdict
+Approved. Cherry-picked as 731752d; full CI green (2604 tests).
