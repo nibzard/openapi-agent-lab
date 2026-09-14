@@ -1061,7 +1061,7 @@
       "id": "T062",
       "title": "Let friction and report consume an externally recorded trace",
       "priority": 3,
-      "status": "todo",
+      "status": "done",
       "details": "Today only runner batches are analyzable. A manual serve session leaves a trace.jsonl the tools refuse, and a live API session leaves nothing. Accepting the lab trace format and HAR, validated against a given contract, turns manual probing into classified incidents.",
       "steps": [
         "Accept a run directory produced by serve by treating trace.jsonl plus capability-report.json as a run with no lifecycle ledger.",
