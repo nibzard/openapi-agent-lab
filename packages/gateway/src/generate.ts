@@ -366,6 +366,11 @@ function generateObject(
       if (!required.has(name) && depth + 2 > maxDepth) {
         continue;
       }
+      // The name threads down at every object depth by design: a
+      // same-named id nested in a response of the family is typically
+      // the same resource handle (list responses embed ids in items),
+      // and the schema declares no pattern of its own, so response
+      // validation is unchanged (section 15.6).
       result[name] = generateNode(
         properties[name] as Json,
         options,
@@ -673,17 +678,16 @@ function producePattern(
 }
 
 /**
- * Safe-integer extremes, the range the validator gives the int64
- * format (section 15.4). A schema bound at an extreme is a
- * representability guard, not a real constraint: selecting the
- * midpoint of [0, 2^53-1] would emit a huge value, so value selection
- * ignores the guards while the declared bounds still gate the final
- * candidate below.
+ * The int64 range guards: the two bounds that close the range the
+ * validator gives the int64 format (section 15.4). Only a lower bound
+ * at the negative extreme and an upper bound at the positive extreme
+ * are representability guards; value selection drops them, or
+ * [0, 2^53-1] would yield its huge midpoint. Every other bound at an
+ * extreme is an operative pin, so the sign decides which side a bound
+ * guards.
  */
-const SAFE_INTEGER_BOUNDS: ReadonlySet<number> = new Set([
-  Number.MAX_SAFE_INTEGER,
-  -Number.MAX_SAFE_INTEGER
-]);
+const INT64_LOWER_GUARD = -Number.MAX_SAFE_INTEGER;
+const INT64_UPPER_GUARD = Number.MAX_SAFE_INTEGER;
 
 function generateNumber(schema: Json): Json {
   if (!isJsonObject(schema)) {
@@ -709,14 +713,10 @@ function generateNumber(schema: Json): Json {
         : null;
   const multipleOf =
     typeof schema.multipleOf === "number" ? schema.multipleOf : null;
-  const guard = (bound: number | null): boolean =>
-    bound !== null && SAFE_INTEGER_BOUNDS.has(bound);
-  const lower = guard(minimum ?? exclusiveMinimum)
-    ? null
-    : (minimum ?? exclusiveMinimum);
-  const upper = guard(maximum ?? exclusiveMaximum)
-    ? null
-    : (maximum ?? exclusiveMaximum);
+  const lowerBound = minimum ?? exclusiveMinimum;
+  const upperBound = maximum ?? exclusiveMaximum;
+  const lower = lowerBound === INT64_LOWER_GUARD ? null : lowerBound;
+  const upper = upperBound === INT64_UPPER_GUARD ? null : upperBound;
   const belowLower = (candidate: number): boolean =>
     (minimum !== null && candidate < minimum) ||
     (exclusiveMinimum !== null && candidate <= exclusiveMinimum);

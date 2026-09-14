@@ -429,9 +429,10 @@ describe("deterministic generation", () => {
   });
 
   it("prefers small values when only safe-integer bounds apply", () => {
-    // A bound at the safe-integer extreme is a representability guard,
-    // not a real constraint. The [0, safe-max] midpoint is huge, so the
-    // selection takes the small end instead.
+    // Only a closing bound at the safe-integer extreme is a guard: a
+    // maximum at the positive extreme, a minimum at the negative one.
+    // The [0, safe-max] midpoint is huge, so the selection takes the
+    // small end instead.
     const safeMaximum = 9007199254740991;
     const safeMinimum = -9007199254740991;
     expect(
@@ -477,6 +478,57 @@ describe("deterministic generation", () => {
     expect(
       generateValue({ type: "integer", minimum: 5, maximum: 9 }, options)
     ).toBe(7);
+  });
+
+  it("keeps the non-closing safe-integer bounds operative", () => {
+    // Only the two closing bounds are guards (section 15.4). Dropping
+    // every extreme bound instead erased operative pins: selection
+    // started at 1, the single-step correction missed the valid
+    // region, and the final gate refused the whole schema.
+    const safeMaximum = 9007199254740991;
+    const safeMinimum = -9007199254740991;
+    const pinned: Json[] = [
+      { type: "integer", minimum: safeMaximum },
+      { type: "integer", maximum: safeMinimum },
+      { type: "integer", minimum: safeMaximum, maximum: safeMaximum },
+      { type: "number", minimum: safeMaximum },
+      { type: "integer", exclusiveMinimum: safeMaximum },
+      { type: "integer", exclusiveMaximum: safeMinimum },
+      { type: "integer", minimum: safeMaximum, multipleOf: 3 }
+    ];
+    for (const schema of pinned) {
+      expect(
+        new SchemaValidator(schema).errors(generateValue(schema, options)),
+        JSON.stringify(schema)
+      ).toEqual([]);
+    }
+    expect(
+      generateValue({ type: "integer", minimum: safeMaximum }, options)
+    ).toBe(safeMaximum);
+    expect(
+      generateValue({ type: "integer", maximum: safeMinimum }, options)
+    ).toBe(safeMinimum);
+    expect(
+      generateValue(
+        { type: "integer", minimum: safeMaximum, maximum: safeMaximum },
+        options
+      )
+    ).toBe(safeMaximum);
+    expect(
+      generateValue({ type: "number", minimum: safeMaximum }, options)
+    ).toBe(safeMaximum);
+    expect(
+      generateValue({ type: "integer", exclusiveMinimum: safeMaximum }, options)
+    ).toBe(9007199254740992);
+    expect(
+      generateValue({ type: "integer", exclusiveMaximum: safeMinimum }, options)
+    ).toBe(-9007199254740992);
+    expect(
+      generateValue(
+        { type: "integer", minimum: safeMaximum, multipleOf: 3 },
+        options
+      )
+    ).toBe(9007199254740992);
   });
 
   it("generates safe-integer-bounded values that still validate", () => {

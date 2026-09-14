@@ -1615,6 +1615,47 @@ describe("path parameter patterns shape generated ids", () => {
     expect(id).toMatch(new RegExp(COMPUTER_ID_PATTERN));
     expect(id).not.toMatch(new RegExp(SHORT_ID_PATTERN));
   });
+
+  it("refuses the id when the family pattern is not producible", () => {
+    // The lookahead keeps the pattern outside the synthesizer's
+    // supported set. Failing closed with 501 is the design: serving a
+    // pattern-violating id is the raw-cohort incident shape.
+    const schemas = computersSchemas();
+    schemas.sch_refused_id = schema("sch_refused_id", {
+      type: "string",
+      pattern: "^(?!gen_)cmp_[a-z]+$"
+    });
+    const result = handleGatewayRequest(
+      options({
+        contract: contract({
+          operations: [
+            createComputer(),
+            operation({
+              method: "GET",
+              key: "path:GET /computers/{id}",
+              path_template: "/computers/{id}",
+              route_segments: computerSegments(),
+              parameters: [
+                parameter({
+                  name: "id",
+                  location: "path",
+                  required: true,
+                  schema_ref: "sch_refused_id"
+                })
+              ],
+              responses: [response({ selector: "204", status: 204 })]
+            })
+          ],
+          schemas
+        })
+      }),
+      62,
+      request({ method: "POST", target: "/computers" })
+    );
+    expect(result.status).toBe(501);
+    expect(result.frameworkCode).toBe("mock_behavior_unavailable");
+    expect(result.body).not.toContain("gen_");
+  });
 });
 
 describe("contract schema version gate", () => {
