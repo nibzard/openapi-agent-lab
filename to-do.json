@@ -1155,7 +1155,7 @@
       "id": "T067",
       "title": "Enforce supported analysis and one outcome per slot",
       "priority": 1,
-      "status": "doing",
+      "status": "done",
       "details": "Add a shared analysis support check in packages/study used by validation, planning, preflight, and analyzeStudyRun; reject risk_ratio, generic difference, and Wald options with stable diagnostics; enforce or reject every accepted analysis field; compute main and sensitivity outcomes from one slot resolution using report aggregate replacement-chain facts; run fixture-based analyze acceptance with frozen files and hashes.",
       "steps": [
         "Implement the support check and reject unsupported options.",
@@ -1166,7 +1166,7 @@
       ],
       "tags": ["study", "statistics"],
       "files": ["docs/review-fix-plan.md"],
-      "updated_at": "2026-09-10T16:33:34.494Z"
+      "updated_at": "2026-09-14T15:40:02Z"
     },
     {
       "id": "T068",
