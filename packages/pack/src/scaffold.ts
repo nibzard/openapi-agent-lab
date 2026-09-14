@@ -310,6 +310,7 @@ checks:
     kind: artifact
     weight: 1
     required: true
+    evidence_class: participant_observable
     path: participant-report.json
     exists: true
     media_type: application/json

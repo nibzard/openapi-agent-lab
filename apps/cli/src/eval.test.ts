@@ -10,7 +10,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { EXIT_INVALID, EXIT_OK } from "@oal/core";
+import { loadRubric } from "@oal/evaluator";
+import { parsePackDocument } from "@oal/pack";
+import { EXIT_INVALID, EXIT_OK, type Json } from "@oal/core";
 
 import { main } from "./cli.ts";
 import { scaffoldEval } from "./handlers/eval.ts";
@@ -18,6 +20,7 @@ import { MemoryIo } from "./io.ts";
 import {
   baseFiles,
   cleanupPacks,
+  REPO_ROOT,
   writePack
 } from "../../../packages/pack/src/testkit.ts";
 
@@ -72,6 +75,27 @@ describe("oal eval init", () => {
     const validated = await main(["eval", "validate", root], validate);
     expect(validated).toBe(EXIT_OK);
     expect(validate.stderrChunks).toEqual([]);
+  });
+
+  it("compiles the scaffolded rubric with zero diagnostics", async () => {
+    const { cwd } = await newWorkspace();
+    const root = await scaffoldedEval(cwd, "widget-review");
+    const rubricPath = "rubric.yaml";
+    const text = await readFile(path.join(root, rubricPath), "utf8");
+    const parsed = parsePackDocument(text, rubricPath);
+    expect(parsed.value).not.toBeNull();
+    const schema = JSON.parse(
+      await readFile(
+        path.join(REPO_ROOT, "schemas", "rubric.v1.schema.json"),
+        "utf8"
+      )
+    ) as Json;
+    const loaded = loadRubric(parsed.value, {
+      schema,
+      documentUri: rubricPath
+    });
+    expect(loaded.diagnostics).toEqual([]);
+    expect(loaded.rubric).not.toBeNull();
   });
 
   it("derives a safe eval id from the directory name", async () => {

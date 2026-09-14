@@ -4,9 +4,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { invalidInput } from "@oal/core";
+import { invalidInput, type Json } from "@oal/core";
 
+import { loadRubric } from "../../evaluator/src/rubric.ts";
 import { PackCode } from "./codes.ts";
+import { parsePackDocument } from "./manifest.ts";
 import { PACK_DIRECTORIES, safePackId, scaffoldPack } from "./scaffold.ts";
 import { validatePack } from "./validate.ts";
 import { cleanupPacks, CONTRACT_DOCUMENT, REPO_ROOT } from "./testkit.ts";
@@ -56,6 +58,30 @@ describe("scaffoldPack", () => {
     expect(validation.errors).toEqual([]);
     expect(validation.warnings).toEqual([]);
     expect(validation.packIr).not.toBeNull();
+  });
+
+  it("compiles the scaffolded rubric with zero diagnostics", async () => {
+    const cwd = await workspace();
+    const result = await scaffoldPack("widget-pack", {
+      openapi: OPENAPI_FIXTURE,
+      cwd
+    });
+    const rubricPath = "evals/smoke/rubric.yaml";
+    const text = await readFile(path.join(result.root, rubricPath), "utf8");
+    const parsed = parsePackDocument(text, rubricPath);
+    expect(parsed.value).not.toBeNull();
+    const schema = JSON.parse(
+      await readFile(
+        path.join(REPO_ROOT, "schemas", "rubric.v1.schema.json"),
+        "utf8"
+      )
+    ) as Json;
+    const loaded = loadRubric(parsed.value, {
+      schema,
+      documentUri: rubricPath
+    });
+    expect(loaded.diagnostics).toEqual([]);
+    expect(loaded.rubric).not.toBeNull();
   });
 
   it("names the contract copy after the source media type", async () => {
