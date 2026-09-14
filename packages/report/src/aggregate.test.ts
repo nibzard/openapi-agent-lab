@@ -424,6 +424,185 @@ describe("aggregation on a hand-built evidence stream", () => {
   });
 });
 
+describe("cohort batches sharing one assignment id", () => {
+  // A plain batch mints one bat_ assignment id for the whole cohort
+  // (section 24.1), so sibling primaries are separate observation
+  // units. Only a replacement chains onto the assignment it replaced.
+  const BAT = "bat_51119a3d0e317094b0c8c399";
+  const cohortRunId = (n: number): string =>
+    `live-steel-3x-run-${n.toString(10).padStart(2, "0")}`;
+
+  const cohortTrial = (
+    n: number,
+    outcome: "passed" | "partial" | "failed"
+  ): TrialInput => {
+    const runId = cohortRunId(n);
+    return {
+      run_id: runId,
+      evidence_uri: `runs/live-steel-3x/trials/${runId}/evidence`,
+      eval_id: "basic-lifecycle",
+      assignment_id: BAT,
+      replacement_of: null,
+      events: completedRunEvents(runId, true),
+      trace: [traceEvent({ runId, sequence: 1, status: 200 })],
+      evaluation: evaluation({
+        runId,
+        status: outcome === "passed" ? "passed" : "failed",
+        score: outcome === "passed" ? 1 : outcome === "partial" ? 0.5 : 0,
+        checks: [
+          checkRecord({
+            id: "recovery_flow",
+            status: outcome === "passed" ? "passed" : "failed"
+          })
+        ]
+      })
+    };
+  };
+
+  const cohortReport = () =>
+    buildReport({
+      scope: { level: "batch", id: "live-steel-3x" },
+      trials: [
+        cohortTrial(1, "passed"),
+        cohortTrial(2, "partial"),
+        cohortTrial(3, "failed")
+      ]
+    });
+
+  it("counts every evaluated sibling trial in the task_pass denominator", () => {
+    const report = cohortReport();
+    expect(report.counts.primary_assignments).toBe(3);
+    expect(report.counts.task_outcomes).toEqual({
+      passed: 1,
+      failed: 1,
+      partial: 1,
+      indeterminate: 0,
+      not_evaluated: 0
+    });
+    const taskPass = report.metrics.find((metric) => metric.id === "task_pass");
+    expect(taskPass?.numerator).toBe(1);
+    expect(taskPass?.denominator).toBe(3);
+    const denominators = report.extensions["denominators"] as Record<
+      string,
+      number
+    >;
+    expect(denominators["primary_agent_outcome_count"]).toBe(3);
+    expect(denominators["task_evaluation_count"]).toBe(3);
+  });
+
+  it("resolves one slot per sibling primary, keyed by run", () => {
+    const slots = cohortReport().extensions["slot_resolution"] as Array<{
+      slot_id: string;
+      attempt_run_ids: string[];
+      resolved: boolean;
+      source: string | null;
+      supplying_run_id: string | null;
+      task_outcome: string | null;
+    }>;
+    expect(slots).toEqual([
+      {
+        slot_id: `${BAT}#${cohortRunId(1)}`,
+        attempt_run_ids: [cohortRunId(1)],
+        resolved: true,
+        source: "primary",
+        supplying_run_id: cohortRunId(1),
+        task_outcome: "passed",
+        worst_case_failure: false
+      },
+      {
+        slot_id: `${BAT}#${cohortRunId(2)}`,
+        attempt_run_ids: [cohortRunId(2)],
+        resolved: true,
+        source: "primary",
+        supplying_run_id: cohortRunId(2),
+        task_outcome: "partial",
+        worst_case_failure: false
+      },
+      {
+        slot_id: `${BAT}#${cohortRunId(3)}`,
+        attempt_run_ids: [cohortRunId(3)],
+        resolved: true,
+        source: "primary",
+        supplying_run_id: cohortRunId(3),
+        task_outcome: "failed",
+        worst_case_failure: false
+      }
+    ]);
+  });
+
+  it("stays byte-identical when sibling trials arrive shuffled", () => {
+    const first = cohortReport();
+    const second = buildReport({
+      scope: { level: "batch", id: "live-steel-3x" },
+      trials: [
+        cohortTrial(3, "failed"),
+        cohortTrial(1, "passed"),
+        cohortTrial(2, "partial")
+      ]
+    });
+    expect(reportSha256(second)).toBe(reportSha256(first));
+  });
+
+  it("keeps one bare assignment slot for a primary plus replacement", () => {
+    const asgId = "asg_000000000000000000000007";
+    const primary = buildTrialFacts({
+      run_id: "run-7",
+      evidence_uri: "evidence",
+      assignment_id: asgId,
+      replacement_of: null,
+      events: preControlFailureEvents("run-7"),
+      trace: []
+    });
+    const replacement = buildTrialFacts({
+      run_id: "run-7b",
+      evidence_uri: "evidence",
+      assignment_id: "asg_000000000000000000000018",
+      replacement_of: asgId,
+      events: completedRunEvents("run-7b", true),
+      trace: [],
+      evaluation: evaluation({ runId: "run-7b", status: "passed", score: 1 })
+    });
+    expect(resolveSlots([primary, replacement])).toEqual([
+      {
+        slot_id: asgId,
+        attempt_run_ids: ["run-7", "run-7b"],
+        resolved: true,
+        source: "replacement",
+        supplying_run_id: "run-7b",
+        task_outcome: "passed",
+        worst_case_failure: false
+      }
+    ]);
+  });
+
+  it("chains a replacement of a shared cohort id onto the first sibling", () => {
+    const siblings = [
+      buildTrialFacts(cohortTrial(1, "passed")),
+      buildTrialFacts(cohortTrial(2, "partial")),
+      buildTrialFacts({
+        run_id: "live-steel-3x-run-01b",
+        evidence_uri: "evidence",
+        assignment_id: "asg_000000000000000000000018",
+        replacement_of: BAT,
+        events: completedRunEvents("live-steel-3x-run-01b", true),
+        trace: [],
+        evaluation: evaluation({
+          runId: "live-steel-3x-run-01b",
+          status: "passed",
+          score: 1
+        })
+      })
+    ];
+    const slots = resolveSlots(siblings);
+    // A replacement names the assignment, not the sibling. It chains
+    // onto the first sibling slot, and the other sibling stays whole.
+    expect(slots.map((slot) => [slot.slot_id, slot.attempt_run_ids])).toEqual([
+      [`${BAT}#${cohortRunId(1)}`, [cohortRunId(1), "live-steel-3x-run-01b"]],
+      [`${BAT}#${cohortRunId(2)}`, [cohortRunId(2)]]
+    ]);
+  });
+});
+
 describe("determinism", () => {
   it("produces byte-identical canonical JSON from shuffled trials", () => {
     const first = scenarioReport();

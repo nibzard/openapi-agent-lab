@@ -591,16 +591,63 @@ function trialWarnings(fact: TrialFacts): ReportWarning[] {
   return warnings;
 }
 
-/** Resolve every primary analysis slot (section 27.2). */
+/**
+ * Resolve every primary analysis slot (section 27.2).
+ *
+ * Slot identity: one slot is one observation unit. An attempt joins the
+ * chain of the assignment its `replacement_of` names, so a replacement
+ * never splits the chain it replaced. A primary attempt with no
+ * replacement link owns a slot. When one assignment id carries several
+ * sibling primaries (a cohort batch mints one shared id, section 24.1),
+ * each sibling stays a separate observation unit and the slot id adds
+ * the primary's run id after a hash. With at most one primary per
+ * assignment id the slot id stays the bare assignment id, which the
+ * study analyzer joins on.
+ */
 export function resolveSlots(facts: readonly TrialFacts[]): SlotResolution[] {
-  const bySlot = new Map<string, TrialFacts[]>();
+  const chains = new Map<string, TrialFacts[]>();
   for (const fact of facts) {
-    const key = slotKeyOf(fact);
-    const bucket = bySlot.get(key);
-    if (bucket === undefined) {
-      bySlot.set(key, [fact]);
+    const root =
+      fact.row.replacement_of ??
+      fact.row.assignment_id ??
+      `run:${fact.row.run_id}`;
+    const chain = chains.get(root);
+    if (chain === undefined) {
+      chains.set(root, [fact]);
     } else {
-      bucket.push(fact);
+      chain.push(fact);
+    }
+  }
+  const bySlot = new Map<string, TrialFacts[]>();
+  for (const root of chains.keys()) {
+    const ordered = [...(chains.get(root) ?? [])].sort(compareAttempts);
+    const primaries = ordered.filter(
+      (attempt) => attempt.row.replacement_of === null
+    );
+    if (primaries.length <= 1) {
+      bySlot.set(root, ordered);
+      continue;
+    }
+    for (const primary of primaries) {
+      const siblingId = `${root}#${primary.row.run_id}`;
+      const bucket = bySlot.get(siblingId);
+      if (bucket === undefined) {
+        bySlot.set(siblingId, [primary]);
+      } else {
+        bucket.push(primary);
+      }
+    }
+    // A replacement names the assignment, not one sibling, so it joins
+    // the first sibling slot in attempt order.
+    const firstPrimary = primaries[0];
+    const replacements = ordered.filter(
+      (attempt) => attempt.row.replacement_of !== null
+    );
+    if (firstPrimary !== undefined && replacements.length > 0) {
+      const firstSlot = bySlot.get(`${root}#${firstPrimary.row.run_id}`);
+      if (firstSlot !== undefined) {
+        firstSlot.push(...replacements);
+      }
     }
   }
   const resolutions: SlotResolution[] = [];
@@ -638,13 +685,6 @@ export function resolveSlots(facts: readonly TrialFacts[]): SlotResolution[] {
     });
   }
   return resolutions;
-}
-
-function slotKeyOf(fact: TrialFacts): string {
-  if (fact.row.replacement_of !== null) {
-    return fact.row.replacement_of;
-  }
-  return fact.row.assignment_id ?? `run:${fact.row.run_id}`;
 }
 
 /** Per-slot worst-case tally shared by report and study sensitivity. */
