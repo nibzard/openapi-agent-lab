@@ -977,7 +977,7 @@
       "id": "T057",
       "title": "Deduplicate friction incidents by detector and operation",
       "priority": 2,
-      "status": "todo",
+      "status": "done",
       "details": "The raw Steel Computers batch reported the same generated_handle_reuse incident three times with identical evidence. The counts and the worklist double count real friction.",
       "steps": [
         "Failing test first: a trace where one operation leaks handles into several later requests yields one incident.",
@@ -987,13 +987,13 @@
       "tags": ["reports", "diagnostics", "testing"],
       "files": ["packages/report/src/friction.ts"],
       "created_at": "2026-09-14T13:02:17Z",
-      "updated_at": "2026-09-14T13:02:17Z"
+      "updated_at": "2026-09-14T19:35:00Z"
     },
     {
       "id": "T058",
       "title": "Scaffold rubrics that pass the lab's own validation",
       "priority": 2,
-      "status": "todo",
+      "status": "done",
       "details": "pack init and eval init write a structured-result check with no evidence_class, and the first run warns OAL-RUBRIC-INVALID about the scaffold. The scaffold must satisfy section 26.5 as written.",
       "steps": [
         "Failing test first: validate the scaffolded pack with warnings as errors.",
@@ -1006,7 +1006,7 @@
         "apps/cli/src/handlers/eval.ts"
       ],
       "created_at": "2026-09-14T13:02:17Z",
-      "updated_at": "2026-09-14T13:02:17Z"
+      "updated_at": "2026-09-14T19:35:00Z"
     },
     {
       "id": "T059",
