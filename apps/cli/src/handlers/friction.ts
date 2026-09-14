@@ -1,9 +1,10 @@
 /**
  * `oal friction <run-or-batch>`. Deterministic analysis of recorded
  * trials: every friction incident the trace can prove, plus the sidecar
- * worklist that removes it. A measurement is not a verdict, so the
- * command exits EXIT_OK whatever it finds; only usage and unsupported
- * projections fail.
+ * worklist that removes it. A serve session directory is accepted as a
+ * third subject kind and reports its incidents as origin external. A
+ * measurement is not a verdict, so the command exits EXIT_OK whatever
+ * it finds; only usage and unsupported projections fail.
  */
 
 import { writeFile } from "node:fs/promises";
@@ -41,11 +42,15 @@ export function frictionOf(
   subject: RunOrBatch,
   trials: readonly LoadedTrial[]
 ): FrictionReport {
+  // A serve session was recorded without the runner harness, so its
+  // incidents report origin external instead of api.
+  const source = subject.kind === "session" ? "external" : "runner";
   return buildFrictionReport({
     scope: scopeOf(subject),
     trials: trials.map((trial) => ({
       runId: trial.runId,
-      events: trial.trace
+      events: trial.trace,
+      ...(source === "external" ? { source: "external" as const } : {})
     })),
     generatedAt: formatRfc3339(Date.now())
   });
@@ -121,7 +126,7 @@ export const frictionCommand: CommandHandler = async (args, io) => {
     return EXIT_UNSUPPORTED;
   }
   const root = path.resolve(args.context.cwd, target);
-  const subject = await loadRunOrBatch(root);
+  const subject = await loadRunOrBatch(root, { sessions: "allow" });
   const report = frictionOf(subject, trialsOf(subject));
   if (args.context.format === "json") {
     io.stdout(stableJsonStringify(report as unknown as Json));

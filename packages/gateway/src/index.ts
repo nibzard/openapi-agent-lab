@@ -104,11 +104,13 @@ export {
 } from "./negotiate.ts";
 
 export {
+  createContractSchemaLookup,
   pickContent,
   stripProperties,
   validateBody,
   validateParameters,
   type BodyValidationResult,
   type ParsedRequest,
+  type SchemaLookup,
   type ValidationResult
 } from "./validate.ts";

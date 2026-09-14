@@ -18,6 +18,7 @@ import { replayCommand } from "./handlers/replay.ts";
 import { reportCommand } from "./handlers/report.ts";
 import { runCommand } from "./handlers/run.ts";
 import { serveCommand } from "./handlers/serve.ts";
+import { traceImportCommand } from "./handlers/trace-import.ts";
 import { studyAnalyzeCommand } from "./handlers/study-analyze.ts";
 import { studyInitCommand } from "./handlers/study-init.ts";
 import { studyRunCommand } from "./handlers/study-run.ts";
@@ -265,10 +266,25 @@ export const COMMANDS: readonly CommandSpec[] = [
     name: "friction",
     summary: "Analyze recorded trials for deterministic API friction.",
     arguments: [
-      { name: "run-or-batch", description: "Run or batch directory." }
+      {
+        name: "run-or-batch",
+        description: "Run, batch, or serve session directory."
+      }
     ],
     options: [],
     handler: frictionCommand
+  },
+  {
+    name: "trace import",
+    summary: "Normalize a HAR recording into a serve session trace.",
+    arguments: [
+      { name: "har", description: 'HAR file; "-" reads standard input.' }
+    ],
+    options: [
+      value("contract", "OpenAPI document or pack the HAR is matched against."),
+      value("run-id", "Run ID of the imported session; defaults to a digest.")
+    ],
+    handler: traceImportCommand
   },
   {
     name: "replay",

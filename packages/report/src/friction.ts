@@ -54,7 +54,16 @@ export type FrictionClass =
   | "harness"
   | "unknown";
 
-export type FrictionOrigin = "api" | "harness";
+/**
+ * Where one incident came from. `api` names the lab data plane under a
+ * runner trial; `external` names a trace the lab recorded or imported
+ * without a runner, for example a serve session or a HAR import;
+ * `harness` names admission control.
+ */
+export type FrictionOrigin = "api" | "harness" | "external";
+
+/** Where one trial's trace was recorded. */
+export type FrictionTrialSource = "runner" | "external";
 
 export type FrictionIncidentKind =
   | "route_unmatched"
@@ -172,6 +181,13 @@ export interface FrictionReport {
 export interface FrictionTrialInput {
   runId: string;
   events: readonly TraceEvent[];
+  /**
+   * Where the trace was recorded. A runner trial is the default; an
+   * external trial, for example a serve session or an imported HAR,
+   * relabels every api-origin incident `external` because no runner
+   * harness produced it.
+   */
+  readonly source?: FrictionTrialSource;
 }
 
 export interface FrictionBuildInput {
@@ -185,6 +201,10 @@ export interface FrictionBuildInput {
 interface Attempt {
   trialIndex: number;
   runId: string;
+  /** Incident origin this exchange reports: api or external. */
+  origin: FrictionOrigin;
+  /** True when no runner harness recorded this exchange. */
+  external: boolean;
   sequence: number;
   key: string;
   operationId: string | null;
@@ -229,12 +249,15 @@ interface IncidentSeed {
 export function buildFrictionReport(input: FrictionBuildInput): FrictionReport {
   const trials = input.trials.map((trial) => ({
     runId: trial.runId,
+    external: trial.source === "external",
     events: trial.events
       .filter((event) => event.actor === "participant")
       .sort((a, b) => a.sequence - b.sequence)
   }));
   const attemptsByTrial = trials.map((trial, index) =>
-    trial.events.map((event) => attemptOf(event, index, trial.runId))
+    trial.events.map((event) =>
+      attemptOf(event, index, trial.runId, trial.external)
+    )
   );
 
   // Operation grouping keeps first-seen order for deterministic rows.
@@ -369,7 +392,8 @@ export function buildFrictionReport(input: FrictionBuildInput): FrictionReport {
 function attemptOf(
   event: TraceEvent,
   trialIndex: number,
-  runId: string
+  runId: string,
+  external: boolean
 ): Attempt {
   const request = event.request;
   const status = event.response?.status ?? null;
@@ -386,6 +410,8 @@ function attemptOf(
   return {
     trialIndex,
     runId,
+    origin: external ? "external" : "api",
+    external,
     sequence: event.sequence,
     key: operationKeyOf(event),
     operationId: event.operation.operation_id,
@@ -564,7 +590,7 @@ function collectEventIncident(
     addSeed(seeds, `route_unmatched:${attempt.key}`, {
       kind: "route_unmatched",
       frictionClass: "spec_friction",
-      origin: "api",
+      origin: attempt.origin,
       operation: attempt.key,
       operationId: null,
       nearMissOf: near,
@@ -592,7 +618,7 @@ function collectEventIncident(
     addSeed(seeds, bucket, {
       kind: "request_schema_rejected",
       frictionClass: "spec_friction",
-      origin: "api",
+      origin: attempt.origin,
       operation: attempt.key,
       operationId: attempt.operationId,
       nearMissOf: null,
@@ -620,7 +646,7 @@ function collectEventIncident(
     addSeed(seeds, `media_type_rejected:${attempt.key}`, {
       kind: "media_type_rejected",
       frictionClass: "spec_friction",
-      origin: "api",
+      origin: attempt.origin,
       operation: attempt.key,
       operationId: attempt.operationId,
       nearMissOf: null,
@@ -650,7 +676,7 @@ function collectEventIncident(
     addSeed(seeds, `framework_error:${attempt.key}:${attempt.errorCode}`, {
       kind: "framework_error",
       frictionClass: "mock_fidelity",
-      origin: "api",
+      origin: attempt.origin,
       operation: attempt.key,
       operationId: attempt.operationId,
       nearMissOf: null,
@@ -771,8 +797,13 @@ function detectEscalation(
     if (!changed || failures === 0) {
       return;
     }
+    // An external exchange answers with the real service, so its content
+    // counts as authored: the rejections stay spec friction and no
+    // fixture is asked for.
     const authored =
-      attempt.provenance === "fixture" || attempt.provenance === "example";
+      attempt.external ||
+      attempt.provenance === "fixture" ||
+      attempt.provenance === "example";
     const frictionClass = authored ? "spec_friction" : "mock_fidelity";
     // The class is part of the key: an authored ending is spec friction
     // and a generated ending is mock fidelity, and one operation can
@@ -780,7 +811,7 @@ function detectEscalation(
     addSeed(seeds, `escalation:${key}:${frictionClass}`, {
       kind: "escalation",
       frictionClass,
-      origin: "api",
+      origin: attempt.origin,
       operation: key,
       operationId: attempt.operationId,
       nearMissOf: null,
@@ -792,7 +823,9 @@ function detectEscalation(
       detail: clamp(
         `The participant retried with different values after ${failures} rejected attempt` +
           `${failures === 1 ? "" : "s"}; the satisfying response was ` +
-          (attempt.provenance ?? "generated") +
+          (attempt.external
+            ? "served by the recorded service"
+            : (attempt.provenance ?? "generated")) +
           (authored
             ? `, so the early rejections remain spec friction.`
             : `, not authored.`)
@@ -838,7 +871,7 @@ function detectIdenticalRetries(
       addSeed(seeds, `identical_retry:${key}`, {
         kind: "identical_retry",
         frictionClass: "unknown",
-        origin: "api",
+        origin: attempt.origin,
         operation: key,
         operationId: attempt.operationId,
         nearMissOf: null,
@@ -881,7 +914,7 @@ function detectAbandonment(
   addSeed(seeds, `abandonment:${key}`, {
     kind: "abandonment",
     frictionClass: "unknown",
-    origin: "api",
+    origin: last.origin,
     operation: key,
     operationId: last.operationId,
     nearMissOf: null,
@@ -941,7 +974,7 @@ function detectGeneratedHandleReuse(
       addSeed(seeds, `generated_handle_reuse:${issuer.key}`, {
         kind: "generated_handle_reuse",
         frictionClass: "mock_fidelity",
-        origin: "api",
+        origin: issuer.origin,
         operation: issuer.key,
         operationId: issuer.operationId,
         nearMissOf: null,
@@ -1097,7 +1130,9 @@ function operationRowOf(
     const statusKey =
       attempt.status === null ? "unmatched" : String(attempt.status);
     statusCounts[statusKey] = (statusCounts[statusKey] ?? 0) + 1;
-    if (attempt.is2xx) {
+    // An external exchange was served by the recorded service, not the
+    // lab mock, so it claims no provenance bucket at all.
+    if (attempt.is2xx && !attempt.external) {
       if (attempt.provenance === "fixture") {
         provenanceMix.fixture += 1;
       } else if (attempt.provenance === "example") {

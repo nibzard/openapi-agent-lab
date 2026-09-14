@@ -256,6 +256,41 @@ whatever it finds. Only `--format html` and `--format markdown` are
 unsupported projections. Run it again after editing the sidecar to prove
 the repair: the same trials minus the repaired friction.
 
+## External traces
+
+`oal friction` also reads a serve session directory: `trace.jsonl` plus
+`capability-report.json`, as `oal serve` writes them under its run
+directory. A session has no lifecycle ledger, so nothing is inferred.
+Every incident it proves is labeled origin `external`, because the real
+service answered:
+
+```sh
+oal friction .oal/runs/<run-id>
+```
+
+A session without `capability-report.json` is refused. The report names
+the contract the session was served under, so the analysis stays honest.
+
+`oal trace import` normalizes a Chrome HAR recording into the same
+session shape. The contract is compiled with the pack path, each entry is
+matched to an operation, and request and response violations are
+recorded:
+
+```sh
+oal trace import session.har --contract openapi.json
+oal friction .oal/sessions/import-<digest>
+```
+
+The import writes `trace.jsonl` and `capability-report.json` under
+`.oal/sessions/import-<digest>` by default. Use `--out` to choose another
+empty directory. The run id is a digest of the HAR, so one recording
+always imports to identical bytes.
+
+Sensitive header and credential values never survive an import. Header
+names and their presence are kept. Values of `authorization`, `cookie`,
+and any credential-shaped header become `[REDACTED]`, mirroring the
+recorder discipline.
+
 ## Adapters
 
 An adapter translates one normalized run context into one agent process. The

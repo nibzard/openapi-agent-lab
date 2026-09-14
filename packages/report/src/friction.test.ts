@@ -672,3 +672,95 @@ describe("buildFrictionReport contract", () => {
     expect(violations).toEqual([]);
   });
 });
+
+describe("buildFrictionReport over externally recorded trials", () => {
+  /** One serve session trace: a rejection, then a later success. */
+  function externalTrace(): TraceEvent[] {
+    return [
+      schemaRejected(1, "manual-20260831-085950"),
+      traceEvent({
+        sequence: 2,
+        runId: "manual-20260831-085950",
+        method: "POST",
+        path: "/v1/clips",
+        status: 201,
+        body: jsonBody({ url: "https://example.com" }),
+        operation: CREATE_OP
+      })
+    ];
+  }
+
+  it("labels every api-origin incident of an external trial external", () => {
+    const report = build([
+      {
+        runId: "manual-20260831-085950",
+        events: externalTrace(),
+        source: "external"
+      }
+    ]);
+    expect(report.incidents.length).toBeGreaterThan(0);
+    for (const incident of report.incidents) {
+      if (incident.kind === "quota_exceeded") {
+        continue;
+      }
+      expect(incident.origin).toBe("external");
+    }
+    const rejected = report.incidents.find(
+      (candidate) => candidate.kind === "request_schema_rejected"
+    );
+    expect(rejected?.origin).toBe("external");
+  });
+
+  it("classes an external escalation as spec friction, not mock fidelity", () => {
+    const report = build([
+      { runId: "manual-1", events: externalTrace(), source: "external" }
+    ]);
+    const escalation = report.incidents.find(
+      (candidate) => candidate.kind === "escalation"
+    );
+    expect(escalation).toBeDefined();
+    expect(escalation?.class).toBe("spec_friction");
+    expect(
+      report.worklist.some((item) => item.action === "author_fixture")
+    ).toBe(false);
+    const operation = report.operations.find(
+      (candidate) => candidate.operation === "path:POST /v1/clips"
+    );
+    // No lab mock served the exchange, so no provenance is claimed.
+    expect(operation?.provenance_mix).toEqual({
+      fixture: 0,
+      example: 0,
+      generated: 0
+    });
+  });
+
+  it("keeps runner trials on origin api when no source is given", () => {
+    const report = build([{ runId: "run-1", events: [schemaRejected(1)] }]);
+    expect(report.incidents[0]?.origin).toBe("api");
+  });
+
+  it("produces external reports that validate against friction.v1", async () => {
+    const validator = new SchemaValidator(await loadSchema());
+    const violations = validator.errors(
+      build([
+        {
+          runId: "manual-20260831-085950",
+          events: [
+            ...externalTrace(),
+            traceEvent({
+              sequence: 3,
+              runId: "manual-20260831-085950",
+              method: "GET",
+              path: "/v1/unknown",
+              status: 404,
+              error: traceError("routing", "route_not_found"),
+              operation: UNMATCHED_OP
+            })
+          ],
+          source: "external"
+        }
+      ]) as unknown as Json
+    );
+    expect(violations).toEqual([]);
+  });
+});

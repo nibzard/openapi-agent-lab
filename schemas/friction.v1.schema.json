@@ -317,7 +317,7 @@
           },
           "origin": {
             "type": "string",
-            "enum": ["api", "harness"]
+            "enum": ["api", "harness", "external"]
           },
           "operation": {
             "$ref": "#/$defs/stringOrNull"

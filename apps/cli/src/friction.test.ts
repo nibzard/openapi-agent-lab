@@ -1,13 +1,21 @@
-import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { EXIT_OK, EXIT_UNSUPPORTED, type Json } from "@oal/core";
+import {
+  EXIT_INVALID,
+  EXIT_OK,
+  EXIT_UNSUPPORTED,
+  stableJsonStringify,
+  type Json
+} from "@oal/core";
 import type { TraceBody } from "@oal/evidence";
 
 import { main } from "./cli.ts";
 import { FrictionCliCode } from "./handlers/friction.ts";
+import { compileServeSource } from "./handlers/serve.ts";
+import { RunTreeCode } from "./handlers/run-tree.ts";
 import { MemoryIo } from "./io.ts";
 import { loadSteelPack } from "../../../packages/testkit/src/index.ts";
 import {
@@ -189,5 +197,155 @@ describe("oal friction", () => {
       expect(code).toBe(EXIT_UNSUPPORTED);
       expect(io.stderrText()).toContain(FrictionCliCode.ProjectionUnsupported);
     }
+  });
+});
+
+describe("oal friction over a serve session", () => {
+  /** A minimal unauthenticated contract the session was served from. */
+  const SESSION_CONTRACT = {
+    openapi: "3.1.0",
+    info: { title: "clips", version: "1.0.0" },
+    paths: {
+      "/v1/clips": {
+        get: {
+          operationId: "list_clips",
+          responses: {
+            "200": {
+              description: "ok",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      items: { type: "array", items: { type: "string" } }
+                    },
+                    required: ["items"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } as const;
+
+  /**
+   * One serve session directory in the manual-session shape: trace.jsonl
+   * plus capability-report.json, with no run.started.json and no
+   * lifecycle ledger. The trace events carry the serve wire identity.
+   */
+  async function serveSession(
+    cwd: string,
+    sessionId: string,
+    options: { readonly withoutCapabilities?: boolean } = {}
+  ): Promise<string> {
+    const sessionDir = path.join(cwd, ".oal", "runs", sessionId);
+    await mkdir(sessionDir, { recursive: true });
+    if (!options.withoutCapabilities) {
+      const document = path.join(cwd, "openapi.json");
+      await writeFile(document, JSON.stringify(SESSION_CONTRACT));
+      const compiled = await compileServeSource(
+        document,
+        cwd,
+        10 * 1024 * 1024
+      );
+      await writeFile(
+        path.join(sessionDir, "capability-report.json"),
+        `${stableJsonStringify(compiled.capabilityReport)}\n`
+      );
+    }
+    const first = traceEvent({
+      sequence: 1,
+      runId: sessionId,
+      method: "GET",
+      path: "/v1/clips",
+      status: 200
+    });
+    if (first.batch_id === null) {
+      first.batch_id = "manual";
+    }
+    const rejected = traceEvent({
+      sequence: 2,
+      runId: sessionId,
+      method: "POST",
+      path: "/v1/clips",
+      status: 422,
+      error: traceError("validation", "request_schema_invalid"),
+      body: jsonBody({ url: 7 })
+    });
+    if (rejected.response !== null) {
+      rejected.response.body = jsonBody({
+        violations: [
+          {
+            location: "body",
+            pointer: "/url",
+            code: "type",
+            message: "value must be a string"
+          }
+        ]
+      });
+    }
+    await writeFile(
+      path.join(sessionDir, "trace.jsonl"),
+      [first, rejected].map((event) => JSON.stringify(event)).join("\n") + "\n"
+    );
+    return sessionDir;
+  }
+
+  it("builds a report scoped to the session with external-origin incidents", async () => {
+    const cwd = await newWorkspace();
+    const sessionId = "manual-20260831-085950";
+    const sessionDir = await serveSession(cwd, sessionId);
+    const io = new MemoryIo();
+    const code = await main(["friction", sessionDir, "--format", "json"], io, {
+      cwd
+    });
+    expect(code).toBe(EXIT_OK);
+    const report = JSON.parse(io.stdoutChunks.join("")) as {
+      scope: { level: string; id: string };
+      counts: { trials: number; exchanges: number; incidents: number };
+      incidents: Array<{ origin: string; kind: string }>;
+    };
+    expect(report.scope).toEqual({ level: "run", id: sessionId });
+    expect(report.counts.trials).toBe(1);
+    expect(report.counts.exchanges).toBe(2);
+    expect(report.counts.incidents).toBeGreaterThanOrEqual(1);
+    expect(
+      report.incidents.filter((incident) => incident.origin === "external")
+        .length
+    ).toBe(report.incidents.length);
+  });
+
+  it("projects a serve session to the terminal", async () => {
+    const cwd = await newWorkspace();
+    const sessionDir = await serveSession(cwd, "manual-20260831-085859");
+    const io = new MemoryIo();
+    expect(await main(["friction", sessionDir], io, { cwd })).toBe(EXIT_OK);
+    const text = io.stdoutChunks.join("\n");
+    expect(text).toContain("friction: run manual-20260831-085859");
+    expect(text).toContain(
+      "incident: request_schema_rejected [spec_friction/external]"
+    );
+  });
+
+  it("refuses a session directory without a capability report", async () => {
+    const cwd = await newWorkspace();
+    const sessionDir = await serveSession(cwd, "manual-nocap", {
+      withoutCapabilities: true
+    });
+    const io = new MemoryIo();
+    const code = await main(["friction", sessionDir], io, { cwd });
+    expect(code).toBe(EXIT_INVALID);
+    expect(io.stderrText()).toContain(RunTreeCode.SessionCapabilityMissing);
+  });
+
+  it("keeps evaluate refusing a serve session with a clear diagnostic", async () => {
+    const cwd = await newWorkspace();
+    const sessionDir = await serveSession(cwd, "manual-evaluate");
+    const io = new MemoryIo();
+    const code = await main(["evaluate", sessionDir], io, { cwd });
+    expect(code).toBe(EXIT_INVALID);
+    expect(io.stderrText()).toContain(RunTreeCode.NotRunOrBatch);
   });
 });

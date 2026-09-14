@@ -7,12 +7,12 @@
   },
   "generated_at": "2026-08-30T12:00:00.000Z",
   "counts": {
-    "trials": 2,
-    "exchanges": 14,
+    "trials": 3,
+    "exchanges": 15,
     "operations": 3,
-    "incidents": 3,
+    "incidents": 4,
     "incidents_by_class": {
-      "spec_friction": 1,
+      "spec_friction": 2,
       "mock_fidelity": 1,
       "harness": 1,
       "unknown": 0
@@ -20,9 +20,10 @@
     "incidents_by_kind": {
       "request_schema_rejected": 1,
       "escalation": 1,
-      "quota_exceeded": 1
+      "quota_exceeded": 1,
+      "route_unmatched": 1
     },
-    "worklist_items": 2
+    "worklist_items": 3
   },
   "trials": [
     {
@@ -34,6 +35,12 @@
     {
       "trial_id": "run-02",
       "exchanges": 7,
+      "failed_exchanges": 1,
+      "incident_count": 1
+    },
+    {
+      "trial_id": "import-9a2f",
+      "exchanges": 1,
       "failed_exchanges": 1,
       "incident_count": 1
     }
@@ -217,6 +224,27 @@
         }
       ],
       "detail": "The exposure refused the request under its own burst quota; the mock never saw it."
+    },
+    {
+      "id": "inc_route_unmatched_get_v1_render",
+      "kind": "route_unmatched",
+      "class": "spec_friction",
+      "origin": "external",
+      "operation": "unmatched:GET /v1/render",
+      "near_miss_of": null,
+      "trials": ["import-9a2f"],
+      "occurrences": 1,
+      "evidence": [
+        {
+          "trial_id": "import-9a2f",
+          "sequence": 1,
+          "status": 404,
+          "code": "route_not_found",
+          "request_shape": null,
+          "provenance": null
+        }
+      ],
+      "detail": "The route GET /v1/render was requested in an imported HAR but the contract declares no such route."
     }
   ],
   "worklist": [
@@ -239,6 +267,14 @@
         "media_type": "application/json",
         "body_kind": "json_file"
       },
+      "requires_behavior_backend": false
+    },
+    {
+      "id": "wl_unmatched_get_v1_render_normalize",
+      "incident_ids": ["inc_route_unmatched_get_v1_render"],
+      "operation": "unmatched:GET /v1/render",
+      "action": "normalize_route",
+      "summary": "Declare GET /v1/render or align it with the nearest declared route.",
       "requires_behavior_backend": false
     }
   ],

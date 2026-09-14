@@ -10,6 +10,7 @@ import path from "node:path";
 import {
   invalidInput,
   isJsonObject,
+  isSafeId,
   isSafeRelativePath,
   sha256HexBytes,
   type Json,
@@ -28,6 +29,8 @@ export const RunTreeCode = {
   NotRunOrBatch: "OAL-RUNTREE-NOT-RUN-OR-BATCH",
   NotBatch: "OAL-RUNTREE-NOT-BATCH",
   NotRun: "OAL-RUNTREE-NOT-RUN",
+  NotSession: "OAL-RUNTREE-NOT-SESSION",
+  SessionCapabilityMissing: "OAL-RUNTREE-SESSION-CAPABILITY-MISSING",
   RecordInvalid: "OAL-RUNTREE-RECORD-INVALID"
 } as const;
 
@@ -61,6 +64,23 @@ export interface LoadedBatch {
   readonly inputsDir: string;
   /** Records of the batch-level assignment ledger. */
   readonly assignmentEvents: readonly JsonObject[];
+  readonly trials: readonly LoadedTrial[];
+}
+
+/**
+ * One serve session: `trace.jsonl` plus `capability-report.json` under
+ * one directory, as `oal serve` writes it. A session has no lifecycle
+ * ledger and no assignment ledger, so its trial carries empty ledgers
+ * and no recorded evaluation; nothing is inferred to fill them.
+ */
+export interface LoadedSession {
+  /** Absolute session directory. */
+  readonly root: string;
+  /** Session identifier: the run_id the trace events carry. */
+  readonly sessionId: string;
+  /** The compiled capability report served alongside the trace. */
+  readonly capabilities: JsonObject;
+  /** The one trial the session trace describes. */
   readonly trials: readonly LoadedTrial[];
 }
 
@@ -210,6 +230,120 @@ export async function isRunDir(target: string): Promise<boolean> {
   );
 }
 
+/**
+ * True when the directory holds a serve session: a `trace.jsonl` next to
+ * a `capability-report.json`, with neither a run start record nor a
+ * batch record. Run and batch directories keep precedence.
+ */
+export async function isSessionDir(target: string): Promise<boolean> {
+  if (!(await isDirectory(target))) {
+    return false;
+  }
+  if (await isRunDir(target)) {
+    return false;
+  }
+  if (await isBatchDir(target)) {
+    return false;
+  }
+  return (
+    (await readIfPresent(path.join(target, "trace.jsonl"))) !== null &&
+    (await readIfPresent(path.join(target, "capability-report.json"))) !== null
+  );
+}
+
+/**
+ * Load one serve session directory. The session identifier is the run_id
+ * every trace event carries; events that disagree on it, or a trace
+ * that names none, are refused rather than guessed at.
+ */
+export async function loadSession(sessionDir: string): Promise<LoadedSession> {
+  if (!(await isDirectory(sessionDir))) {
+    throw invalidInput(
+      RunTreeCode.NotSession,
+      `Session directory "${sessionDir}" does not exist.`
+    );
+  }
+  if ((await readIfPresent(path.join(sessionDir, "trace.jsonl"))) === null) {
+    throw invalidInput(
+      RunTreeCode.NotSession,
+      `Directory "${sessionDir}" holds no trace.jsonl, so it is not a ` +
+        "serve session directory."
+    );
+  }
+  const capabilities = await readJsonObject(
+    path.join(sessionDir, "capability-report.json")
+  );
+  if (capabilities === null) {
+    throw invalidInput(
+      RunTreeCode.SessionCapabilityMissing,
+      `Serve session "${sessionDir}" holds no capability-report.json, so ` +
+        "the contract it was served under is unknown. A session needs " +
+        "trace.jsonl plus capability-report.json."
+    );
+  }
+  const trace = (await readJsonLines(
+    path.join(sessionDir, "trace.jsonl")
+  )) as unknown as TraceEvent[];
+  const sessionId = sessionIdOf(sessionDir, trace);
+  return {
+    root: sessionDir,
+    sessionId,
+    capabilities,
+    trials: [
+      {
+        root: sessionDir,
+        runId: sessionId,
+        batchId: null,
+        started: {},
+        completed: null,
+        lifecycle: [],
+        session: [],
+        trace,
+        documentation: [],
+        evaluation: null,
+        participantText: null,
+        usage: null,
+        stateFinal: null,
+        stateSummary: null
+      }
+    ]
+  };
+}
+
+/**
+ * The session identifier one trace names: the run_id its events agree
+ * on, or the directory name when the trace holds no events.
+ */
+function sessionIdOf(sessionDir: string, trace: readonly TraceEvent[]): string {
+  let named: string | null = null;
+  for (const event of trace) {
+    const runId = event["run_id"];
+    if (typeof runId !== "string") {
+      continue;
+    }
+    if (named === null) {
+      named = runId;
+      continue;
+    }
+    if (named !== runId) {
+      throw invalidInput(
+        RunTreeCode.RecordInvalid,
+        `Serve session "${sessionDir}" holds several run_id values ` +
+          `(${named}, ${runId}), so one session cannot name it.`
+      );
+    }
+  }
+  const id = named ?? path.basename(path.resolve(sessionDir));
+  if (!isSafeId(id)) {
+    throw invalidInput(
+      RunTreeCode.RecordInvalid,
+      `Serve session "${sessionDir}" names the identifier "${id}", which ` +
+        "is not a safe id."
+    );
+  }
+  return id;
+}
+
 /** Load one batch directory and every recorded trial below trials/. */
 export async function loadBatch(batchDir: string): Promise<LoadedBatch> {
   if (!(await isDirectory(batchDir))) {
@@ -262,20 +396,26 @@ export async function loadBatch(batchDir: string): Promise<LoadedBatch> {
   };
 }
 
-/** A resolved run-or-batch argument. */
+/** A resolved run-or-batch argument, with a serve session as a third kind. */
 export type RunOrBatch =
   | {
       readonly kind: "run";
       readonly trials: readonly LoadedTrial[];
       readonly assignmentEvents: readonly JsonObject[];
     }
-  | { readonly kind: "batch"; readonly batch: LoadedBatch };
+  | { readonly kind: "batch"; readonly batch: LoadedBatch }
+  | { readonly kind: "session"; readonly session: LoadedSession };
 
 /**
  * Resolve one run-or-batch argument. A run directory loads as one trial; a
- * batch directory loads with every recorded trial.
+ * batch directory loads with every recorded trial. A serve session loads
+ * only when the caller allows it, because reports and evaluations read
+ * ledgers a session never recorded.
  */
-export async function loadRunOrBatch(target: string): Promise<RunOrBatch> {
+export async function loadRunOrBatch(
+  target: string,
+  options: { readonly sessions?: "allow" | "refuse" } = {}
+): Promise<RunOrBatch> {
   if (await isRunDir(target)) {
     const trial = await loadTrial(target);
     const batchRoot = await batchRootOf(target);
@@ -291,6 +431,15 @@ export async function loadRunOrBatch(target: string): Promise<RunOrBatch> {
   if (await isBatchDir(target)) {
     return { kind: "batch", batch: await loadBatch(target) };
   }
+  // A directory that holds trace.jsonl but no run or batch record is a
+  // serve session candidate: loadSession refuses it with the precise
+  // diagnostic when the capability report is missing.
+  if (
+    options.sessions === "allow" &&
+    (await readIfPresent(path.join(target, "trace.jsonl"))) !== null
+  ) {
+    return { kind: "session", session: await loadSession(target) };
+  }
   throw invalidInput(
     RunTreeCode.NotRunOrBatch,
     `"${target}" is neither a run directory (run.started.json) nor a batch ` +
@@ -300,14 +449,24 @@ export async function loadRunOrBatch(target: string): Promise<RunOrBatch> {
 
 /** The assignment-ledger records of one resolved run-or-batch argument. */
 export function assignmentEventsOf(subject: RunOrBatch): readonly JsonObject[] {
-  return subject.kind === "batch"
-    ? subject.batch.assignmentEvents
-    : subject.assignmentEvents;
+  if (subject.kind === "batch") {
+    return subject.batch.assignmentEvents;
+  }
+  if (subject.kind === "session") {
+    return [];
+  }
+  return subject.assignmentEvents;
 }
 
 /** Every trial of one resolved run-or-batch argument. */
 export function trialsOf(subject: RunOrBatch): readonly LoadedTrial[] {
-  return subject.kind === "run" ? subject.trials : subject.batch.trials;
+  if (subject.kind === "run") {
+    return subject.trials;
+  }
+  if (subject.kind === "session") {
+    return subject.session.trials;
+  }
+  return subject.batch.trials;
 }
 
 /** The run identifier one ledger record points at, when it points at one. */
@@ -437,6 +596,10 @@ export function scopeOf(subject: RunOrBatch): {
   if (subject.kind === "batch") {
     return { level: "batch", id: subject.batch.batchId };
   }
+  if (subject.kind === "session") {
+    // A session names one run of the serve exposure, never a batch.
+    return { level: "run", id: subject.session.sessionId };
+  }
   const trial = subject.trials[0];
   const id = trial?.batchId ?? trial?.runId ?? "run";
   return { level: trial?.batchId === null ? "run" : "batch", id };
@@ -464,6 +627,17 @@ export async function verifyTrialArtifacts(
 export async function verifyScopeArtifacts(
   subject: RunOrBatch
 ): Promise<readonly ArtifactDrift[]> {
+  if (subject.kind === "session") {
+    // A serve session writes no manifest and no completion pointer, so
+    // scope verification reports that fact instead of guessing a root.
+    return [
+      {
+        root: subject.session.root,
+        path: "artifact-manifest.json",
+        detail: "a serve session records no artifact manifest"
+      }
+    ];
+  }
   const trial = subject.kind === "run" ? subject.trials[0] : undefined;
   if (subject.kind === "run" && trial === undefined) {
     return [
