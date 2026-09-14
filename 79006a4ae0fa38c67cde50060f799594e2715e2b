@@ -1,0 +1,20 @@
+# Review Notes
+
+## Summary
+T058 scaffold evidence_class: worktree implementer (failing test
+first), two adversarial reviewers (correctness, semantics).
+
+## Observations
+- Failing test confirmed the trap: validatePack never compiles the
+  rubric, so the existing empty-warnings assertion passed while the
+  scaffold warned OAL-RUBRIC-INVALID at rubric compile time.
+- Both scaffolds now pinned by zero-diagnostics compile tests through
+  loadRubric with the repository rubric schema.
+- testkit fixture rubric left unchanged: nothing compiles it, and it
+  is not user-facing scaffold output.
+
+## Concerns
+- None. Both lenses returned land with zero findings.
+
+## Verdict
+Approved.
