@@ -298,6 +298,49 @@ JSON bodies are redacted by key shape, not by header values. A JSON key
 that looks like a credential, for example `api_key`, is fingerprinted
 wherever it appears.
 
+## Live conformance probe
+
+`oal probe` replays recorded requests against a live service. It compares
+every answer with the frozen contract of a run or batch. The mock cannot
+show server divergence; this command can:
+
+```sh
+oal probe .oal/runs/<batch-id> \
+  --base-url https://api.example.test \
+  --operations listWidgets,getWidget \
+  --credential-env OAL_PROBE_TOKEN
+```
+
+The command writes a `conformance.v1` document under
+`.oal/probe/<scope-id>` by default. Use `--out` to choose a directory that
+does not yet exist. An existing target is refused.
+
+Only the operations you name in `--operations` replay. In the default
+read-only mode, only GET, HEAD, and OPTIONS requests replay. Recorded
+POST, PUT, PATCH, and DELETE requests stay skipped until you pass
+`--allow-writes`. Skipped requests are counted, never sent.
+
+Each replayed request is classified as `conformant`, `undeclared_status`,
+`schema_violation`, `request_error`, or `skipped`. An undeclared status
+code and a schema violation become findings with class `spec_friction`
+and origin `server`. They report server divergence, not participant
+friction, so they use their own document instead of the friction report.
+
+The credential comes from the environment variable named by
+`--credential-env`. Its value is sent in the header the contract security
+scheme expects. The value is registered as a run secret before anything
+is written. An echo in a response body, header, or path is scrubbed to
+`[REDACTED]`; names and presence survive. The value is never printed.
+
+A redirect stays manual, so a 3xx compares as a status and a write is
+never re-issued. Each request stops at its timeout; pass `--timeout`, for
+example `5s`, to change it. A failed or timed-out request classifies as
+`request_error`. The probe exits `0` whatever it finds, like
+`oal friction`.
+
+A serve session is refused, because it holds no frozen contract. A run
+directory resolves the contract of the batch above it.
+
 ## Adapters
 
 An adapter translates one normalized run context into one agent process. The

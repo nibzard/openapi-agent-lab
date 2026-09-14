@@ -913,6 +913,7 @@ openapi-agent-lab/
     friction.v1.schema.json
     resource-usage.v1.schema.json
     artifact-manifest.v1.schema.json
+    conformance.v1.schema.json
 
   packs/
     steel-computer/

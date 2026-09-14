@@ -14,6 +14,7 @@ import { evaluateCommand } from "./handlers/evaluate.ts";
 import { inspectCommand } from "./handlers/inspect.ts";
 import { helpCommand, versionCommand } from "./handlers/misc.ts";
 import { packInitCommand, packValidateCommand } from "./handlers/pack.ts";
+import { probeCommand } from "./handlers/probe.ts";
 import { replayCommand } from "./handlers/replay.ts";
 import { reportCommand } from "./handlers/report.ts";
 import { runCommand } from "./handlers/run.ts";
@@ -306,6 +307,33 @@ export const COMMANDS: readonly CommandSpec[] = [
       )
     ],
     handler: replayCommand
+  },
+  {
+    name: "probe",
+    summary: "Diff a live service against a recorded run contract.",
+    arguments: [
+      {
+        name: "run-or-batch",
+        description: "Run or batch directory with a frozen contract."
+      }
+    ],
+    options: [
+      value("base-url", "Live base url the recorded requests replay to."),
+      value(
+        "operations",
+        "Comma-separated operation ids or keys; only these replay."
+      ),
+      value(
+        "credential-env",
+        "Environment variable holding the request credential."
+      ),
+      value("timeout", "Per-request timeout, for example 5s or 500ms."),
+      flag(
+        "allow-writes",
+        "Also replay recorded POST, PUT, PATCH, and DELETE requests."
+      )
+    ],
+    handler: probeCommand
   },
   {
     name: "doctor",

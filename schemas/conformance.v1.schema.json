@@ -1,0 +1,507 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/conformance.v1.json",
+  "title": "ConformanceReport",
+  "description": "Diff between a live service and the frozen contract of a recorded run or batch. The probe replays operator-named recorded requests and validates every answer against the contract. Findings carry their own vocabulary: class spec_friction and origin server, because the server diverged from the contract, not the participant from the API.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "scope",
+    "generated_at",
+    "base_url",
+    "contract",
+    "allowlist",
+    "writes_allowed",
+    "credential",
+    "request_timeout_ms",
+    "counts",
+    "results",
+    "findings",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "ConformanceReport"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "id"],
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["run", "batch"]
+        },
+        "id": {
+          "$ref": "#/$defs/safeId"
+        }
+      }
+    },
+    "generated_at": {
+      "$ref": "#/$defs/rfc3339"
+    },
+    "base_url": {
+      "type": "string",
+      "pattern": "^https?://",
+      "maxLength": 2048
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "allowlist": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512
+      }
+    },
+    "writes_allowed": {
+      "type": "boolean"
+    },
+    "credential": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["environment", "header_names"],
+          "properties": {
+            "environment": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"
+            },
+            "header_names": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              }
+            }
+          }
+        }
+      ]
+    },
+    "request_timeout_ms": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requests",
+        "replayed",
+        "skipped",
+        "conformant",
+        "undeclared_status",
+        "schema_violation",
+        "request_error",
+        "findings"
+      ],
+      "properties": {
+        "requests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "replayed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "conformant": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "undeclared_status": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "schema_violation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "request_error": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "findings": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "results": {
+      "type": "array",
+      "maxItems": 20000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "trial_id",
+          "sequence",
+          "operation",
+          "method",
+          "path",
+          "classification",
+          "status",
+          "skip_reason",
+          "error_code",
+          "error_message",
+          "violations"
+        ],
+        "properties": {
+          "trial_id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "operation": {
+            "$ref": "#/$defs/stringOrNull"
+          },
+          "method": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "classification": {
+            "type": "string",
+            "enum": [
+              "conformant",
+              "undeclared_status",
+              "schema_violation",
+              "request_error",
+              "skipped"
+            ]
+          },
+          "status": {
+            "$ref": "#/$defs/statusOrNull"
+          },
+          "skip_reason": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "string",
+                "enum": [
+                  "not_allowlisted",
+                  "write_without_opt_in",
+                  "operation_unmatched",
+                  "body_unavailable",
+                  "run_limit"
+                ]
+              }
+            ]
+          },
+          "error_code": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "string",
+                "enum": ["timeout", "network"]
+              }
+            ]
+          },
+          "error_message": {
+            "$ref": "#/$defs/stringOrNull"
+          },
+          "violations": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "class",
+          "origin",
+          "operation",
+          "trial_id",
+          "sequence",
+          "request",
+          "response",
+          "violations",
+          "detail"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^cf_[a-z0-9][a-z0-9_.-]{0,127}$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["undeclared_status", "schema_violation"]
+          },
+          "class": {
+            "const": "spec_friction"
+          },
+          "origin": {
+            "const": "server"
+          },
+          "operation": {
+            "$ref": "#/$defs/stringOrNull"
+          },
+          "trial_id": {
+            "$ref": "#/$defs/safeId"
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "request": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["method", "path", "query_string"],
+            "properties": {
+              "method": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 16
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048
+              },
+              "query_string": {
+                "type": "string",
+                "maxLength": 2048
+              }
+            }
+          },
+          "response": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["status", "media_type", "headers", "body"],
+            "properties": {
+              "status": {
+                "type": "integer",
+                "minimum": 100,
+                "maximum": 599
+              },
+              "media_type": {
+                "$ref": "#/$defs/stringOrNull"
+              },
+              "headers": {
+                "type": "array",
+                "maxItems": 32,
+                "items": {
+                  "$ref": "#/$defs/header"
+                }
+              },
+              "body": {
+                "$ref": "#/$defs/body"
+              }
+            }
+          },
+          "violations": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["location", "pointer", "code", "message"],
+              "properties": {
+                "location": {
+                  "type": "string",
+                  "enum": ["status", "header", "media_type", "body"]
+                },
+                "pointer": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "code": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "message": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                }
+              }
+            }
+          },
+          "detail": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      }
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "rfc3339": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$"
+    },
+    "stringOrNull": {
+      "type": ["string", "null"],
+      "maxLength": 512
+    },
+    "statusOrNull": {
+      "type": ["integer", "null"],
+      "minimum": 100,
+      "maximum": 599
+    },
+    "header": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "values", "redacted"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "maxLength": 512
+          }
+        },
+        "redacted": {
+          "type": "boolean"
+        }
+      }
+    },
+    "body": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": {
+              "const": "none"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "size_bytes", "value", "truncated"],
+          "properties": {
+            "kind": {
+              "const": "json"
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "value": {
+              "description": "Parsed redacted JSON value."
+            },
+            "truncated": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "size_bytes", "sha256", "text", "truncated"],
+          "properties": {
+            "kind": {
+              "const": "text"
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256OrNull"
+            },
+            "text": {
+              "type": "string",
+              "maxLength": 8192
+            },
+            "truncated": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "size_bytes", "sha256", "blob_ref"],
+          "properties": {
+            "kind": {
+              "const": "binary"
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256OrNull"
+            },
+            "blob_ref": {
+              "type": ["string", "null"],
+              "pattern": "^blobs/sha256/[a-f0-9]{64}$"
+            }
+          }
+        }
+      ]
+    },
+    "sha256OrNull": {
+      "type": ["string", "null"],
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

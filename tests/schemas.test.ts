@@ -79,7 +79,7 @@ describe("schemas directory", () => {
   });
 
   it("contains the expected number of schemas", () => {
-    expect(schemaFiles.length).toBe(56);
+    expect(schemaFiles.length).toBe(57);
   });
 });
 

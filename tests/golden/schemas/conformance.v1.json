@@ -1,0 +1,193 @@
+{
+  "schema_version": 1,
+  "kind": "ConformanceReport",
+  "scope": {
+    "level": "batch",
+    "id": "batch-probe-golden"
+  },
+  "generated_at": "2026-09-14T12:00:00.000Z",
+  "base_url": "https://api.example.test",
+  "contract": {
+    "path": "inputs/contract.ir.json",
+    "sha256": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+  },
+  "allowlist": ["listWidgets", "getWidget", "createWidget"],
+  "writes_allowed": true,
+  "credential": {
+    "environment": "OAL_PROBE_TOKEN",
+    "header_names": ["authorization", "x-api-key"]
+  },
+  "request_timeout_ms": 30000,
+  "counts": {
+    "requests": 5,
+    "replayed": 4,
+    "skipped": 1,
+    "conformant": 1,
+    "undeclared_status": 1,
+    "schema_violation": 1,
+    "request_error": 0,
+    "findings": 2
+  },
+  "results": [
+    {
+      "trial_id": "run-0001",
+      "sequence": 1,
+      "operation": "listWidgets",
+      "method": "GET",
+      "path": "/widgets",
+      "classification": "conformant",
+      "status": 200,
+      "skip_reason": null,
+      "error_code": null,
+      "error_message": null,
+      "violations": 0
+    },
+    {
+      "trial_id": "run-0001",
+      "sequence": 2,
+      "operation": "getWidget",
+      "method": "GET",
+      "path": "/widgets/w_1",
+      "classification": "undeclared_status",
+      "status": 503,
+      "skip_reason": null,
+      "error_code": null,
+      "error_message": null,
+      "violations": 1
+    },
+    {
+      "trial_id": "run-0001",
+      "sequence": 3,
+      "operation": "createWidget",
+      "method": "POST",
+      "path": "/widgets",
+      "classification": "schema_violation",
+      "status": 201,
+      "skip_reason": null,
+      "error_code": null,
+      "error_message": null,
+      "violations": 1
+    },
+    {
+      "trial_id": "run-0001",
+      "sequence": 4,
+      "operation": "deleteWidget",
+      "method": "DELETE",
+      "path": "/widgets/w_1",
+      "classification": "skipped",
+      "status": null,
+      "skip_reason": "not_allowlisted",
+      "error_code": null,
+      "error_message": null,
+      "violations": 0
+    },
+    {
+      "trial_id": "run-0002",
+      "sequence": 1,
+      "operation": "listWidgets",
+      "method": "GET",
+      "path": "/widgets",
+      "classification": "request_error",
+      "status": null,
+      "skip_reason": null,
+      "error_code": "timeout",
+      "error_message": "The operation was aborted.",
+      "violations": 0
+    }
+  ],
+  "findings": [
+    {
+      "id": "cf_0001",
+      "kind": "undeclared_status",
+      "class": "spec_friction",
+      "origin": "server",
+      "operation": "getWidget",
+      "trial_id": "run-0001",
+      "sequence": 2,
+      "request": {
+        "method": "GET",
+        "path": "/widgets/w_1",
+        "query_string": ""
+      },
+      "response": {
+        "status": 503,
+        "media_type": "application/json",
+        "headers": [
+          {
+            "name": "content-type",
+            "values": ["application/json"],
+            "redacted": false
+          },
+          {
+            "name": "x-echo-authorization",
+            "values": ["[REDACTED]"],
+            "redacted": true
+          }
+        ],
+        "body": {
+          "kind": "json",
+          "size_bytes": 58,
+          "value": {
+            "error": "unavailable",
+            "echo": {
+              "redacted": true,
+              "kind": "registered_secret",
+              "fingerprint": "hmac-sha256:1a2b3c4d"
+            }
+          },
+          "truncated": false
+        }
+      },
+      "violations": [
+        {
+          "location": "status",
+          "pointer": "/",
+          "code": "status_undeclared",
+          "message": "Status 503 matches no declared response."
+        }
+      ],
+      "detail": "GET /widgets/w_1 answered 503, which the contract refuses; first /: Status 503 matches no declared response."
+    },
+    {
+      "id": "cf_0002",
+      "kind": "schema_violation",
+      "class": "spec_friction",
+      "origin": "server",
+      "operation": "createWidget",
+      "trial_id": "run-0001",
+      "sequence": 3,
+      "request": {
+        "method": "POST",
+        "path": "/widgets",
+        "query_string": ""
+      },
+      "response": {
+        "status": 201,
+        "media_type": "application/json",
+        "headers": [
+          {
+            "name": "content-type",
+            "values": ["application/json"],
+            "redacted": false
+          }
+        ],
+        "body": {
+          "kind": "json",
+          "size_bytes": 12,
+          "value": { "stock": 7 },
+          "truncated": false
+        }
+      },
+      "violations": [
+        {
+          "location": "body",
+          "pointer": "/",
+          "code": "required",
+          "message": "Required property \"id\" is missing."
+        }
+      ],
+      "detail": "POST /widgets answered 201, which the contract refuses; first /: Required property \"id\" is missing."
+    }
+  ],
+  "extensions": {}
+}
