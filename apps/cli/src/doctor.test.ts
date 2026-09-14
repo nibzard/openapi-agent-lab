@@ -1,4 +1,4 @@
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -11,6 +11,7 @@ import { main } from "./cli.ts";
 import {
   adapterResultOf,
   artifactProbe,
+  checkCodexCredential,
   doctorExitCode,
   doctorLines,
   featuresOfProbe,
@@ -164,6 +165,81 @@ describe("doctor helpers", () => {
   });
 });
 
+describe("codex credential check", () => {
+  const CODEX_CHECK_ID = "adapter.codex_credential";
+
+  it("passes on CODEX_API_KEY without printing its value", async () => {
+    const check = await checkCodexCredential(
+      { CODEX_API_KEY: "sk-codex-secret-0001" },
+      "/nonexistent-home"
+    );
+    expect(check.id).toBe(CODEX_CHECK_ID);
+    expect(check.status).toBe("pass");
+    expect(check.message).toContain("CODEX_API_KEY");
+    expect(JSON.stringify(check)).not.toContain("sk-codex-secret-0001");
+  });
+
+  it("passes on auth.json under CODEX_HOME without printing its bytes", async () => {
+    const root = await newWorkspace();
+    const codexHome = path.join(root, "codex-home");
+    await mkdir(codexHome, { recursive: true });
+    await writeFile(
+      path.join(codexHome, "auth.json"),
+      '{"token":"auth-json-secret-0002"}'
+    );
+    const check = await checkCodexCredential(
+      { CODEX_HOME: codexHome, OPENAI_API_KEY: "sk-openai-secret-0003" },
+      path.join(root, "fallback-home")
+    );
+    expect(check.id).toBe(CODEX_CHECK_ID);
+    expect(check.status).toBe("pass");
+    expect(check.message).toContain("auth.json");
+    expect(JSON.stringify(check)).not.toContain("auth-json-secret-0002");
+    expect(JSON.stringify(check)).not.toContain("sk-openai-secret-0003");
+  });
+
+  it("resolves the default codex home under the home directory", async () => {
+    const root = await newWorkspace();
+    await mkdir(path.join(root, "home", ".codex"), { recursive: true });
+    await writeFile(
+      path.join(root, "home", ".codex", "auth.json"),
+      '{"token":"auth-json-secret-0004"}'
+    );
+    const check = await checkCodexCredential({}, path.join(root, "home"));
+    expect(check.id).toBe(CODEX_CHECK_ID);
+    expect(check.status).toBe("pass");
+    expect(JSON.stringify(check)).not.toContain("auth-json-secret-0004");
+  });
+
+  it("warns when only OPENAI_API_KEY is present", async () => {
+    const check = await checkCodexCredential(
+      { OPENAI_API_KEY: "sk-openai-secret-0005" },
+      "/nonexistent-home"
+    );
+    expect(check.id).toBe(CODEX_CHECK_ID);
+    expect(check.status).toBe("warn");
+    expect(check.message).toContain("0.154");
+    expect(JSON.stringify(check)).not.toContain("sk-openai-secret-0005");
+  });
+
+  it("fails when no credential is present", async () => {
+    const check = await checkCodexCredential({}, "/nonexistent-home");
+    expect(check.id).toBe(CODEX_CHECK_ID);
+    expect(check.status).toBe("fail");
+    expect(check.message).toContain("CODEX_API_KEY");
+    expect(check.message).toContain("auth.json");
+  });
+
+  it("ignores an empty CODEX_API_KEY value", async () => {
+    const check = await checkCodexCredential(
+      { CODEX_API_KEY: "" },
+      "/nonexistent-home"
+    );
+    expect(check.id).toBe(CODEX_CHECK_ID);
+    expect(check.status).toBe("fail");
+  });
+});
+
 describe("oal doctor", () => {
   it("prints terminal check lines with the stable ids", async () => {
     const cwd = await newWorkspace();
@@ -204,6 +280,23 @@ describe("oal doctor", () => {
     expect(code).toBe(EXIT_OK);
     expect(lineOf(io.stdoutText(), "adapter.probe")).toContain("mock-agent");
     expect(lineOf(io.stdoutText(), "adapter.probe")).toMatch(/^pass\s{2}/);
+  });
+
+  it("reports the codex credential for --agent codex-cli", async () => {
+    const cwd = await newWorkspace();
+    const io = new MemoryIo();
+    await main(["doctor", "--agent", "codex-cli"], io, { cwd });
+    const line = lineOf(io.stdoutText(), "adapter.codex_credential");
+    expect(line).toMatch(/^(pass|warn|fail)/);
+    expect(line).not.toContain(process.env.CODEX_API_KEY ?? "no-host-key");
+  });
+
+  it("adds no codex credential check for the mock agent", async () => {
+    const cwd = await newWorkspace();
+    const io = new MemoryIo();
+    const code = await main(["doctor"], io, { cwd });
+    expect(code).toBe(EXIT_OK);
+    expect(io.stdoutText()).not.toContain("adapter.codex_credential");
   });
 
   it("refuses an unknown adapter selector", async () => {

@@ -144,6 +144,15 @@ describe("selectAdapter", () => {
     }
   });
 
+  it("declares CODEX_API_KEY as the only codex launcher name", async () => {
+    const selection = selectAdapter("codex-cli");
+    expect("error" in selection).toBe(false);
+    if (!("error" in selection)) {
+      const probe = await selection.adapter.probe({});
+      expect(probe.launcherEnvironmentNames).toEqual(["CODEX_API_KEY"]);
+    }
+  });
+
   it("refuses an unknown selector with a diagnostic", () => {
     const selection = selectAdapter("bogus-agent");
     expect("error" in selection).toBe(true);

@@ -17,6 +17,7 @@ import {
 import { tmpdir } from "node:os";
 
 import {
+  DEFAULT_CODEX_LAUNCHER_ENVIRONMENT_NAMES,
   DEFAULT_CODEX_SANDBOX,
   OPTIONAL_CODEX_FLAGS,
   REQUIRED_CODEX_FLAGS
@@ -75,6 +76,11 @@ export async function probeCodexCli(
 ): Promise<CodexProbeResult> {
   const executable = config.executablePath ?? "codex";
   const timeoutMs = config.probeTimeoutMs ?? DEFAULT_CODEX_PROBE_TIMEOUT_MS;
+  // the declared credential names; an explicit list replaces the default
+  const launcherNames = [
+    ...(config.launcherEnvironmentNames ??
+      DEFAULT_CODEX_LAUNCHER_ENVIRONMENT_NAMES)
+  ];
   const versionRun = await runProcessGroup({
     executable,
     args: ["--version"],
@@ -99,7 +105,7 @@ export async function probeCodexCli(
       status: "unavailable",
       version: null,
       capabilities: codexCapabilities([]),
-      launcherEnvironmentNames: [...(config.launcherEnvironmentNames ?? [])],
+      launcherEnvironmentNames: launcherNames,
       environmentSeparation: "advisory",
       toolNetworkPolicy: "advisory",
       errorCode: "AGENT_EXECUTABLE_MISSING",
@@ -123,7 +129,7 @@ export async function probeCodexCli(
       status: "unsupported",
       version: firstLine(versionRun.stdout) ?? firstLine(versionRun.stderr),
       capabilities: codexCapabilities(supported),
-      launcherEnvironmentNames: [...(config.launcherEnvironmentNames ?? [])],
+      launcherEnvironmentNames: launcherNames,
       environmentSeparation: "advisory",
       toolNetworkPolicy: "advisory",
       errorCode: AGENT_CAPABILITY_UNSUPPORTED,
@@ -142,7 +148,7 @@ export async function probeCodexCli(
     status: "available",
     version: firstLine(versionRun.stdout) ?? firstLine(versionRun.stderr),
     capabilities: codexCapabilities(supported),
-    launcherEnvironmentNames: [...(config.launcherEnvironmentNames ?? [])],
+    launcherEnvironmentNames: launcherNames,
     environmentSeparation: "advisory",
     toolNetworkPolicy: supported.includes("--sandbox")
       ? "enforced"
@@ -167,8 +173,12 @@ export function mergeCodexConfig(
     model: override.model ?? own.model,
     effort: override.effort ?? own.effort,
     sandbox: override.sandbox ?? own.sandbox,
+    // an explicit declaration, including the empty list, replaces the
+    // adapter default; only an absent one falls through
     launcherEnvironmentNames:
-      override.launcherEnvironmentNames ?? own.launcherEnvironmentNames,
+      override.launcherEnvironmentNames ??
+      own.launcherEnvironmentNames ??
+      DEFAULT_CODEX_LAUNCHER_ENVIRONMENT_NAMES,
     defaultSandbox: own.defaultSandbox ?? DEFAULT_CODEX_SANDBOX
   };
 }

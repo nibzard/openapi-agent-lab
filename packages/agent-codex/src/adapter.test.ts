@@ -231,6 +231,54 @@ describe("probeCodexCli", () => {
   });
 });
 
+describe("launcher environment names", () => {
+  it("defaults the declared launcher name to CODEX_API_KEY", async () => {
+    const adapter = new CodexCliAdapter({ executablePath: fullFixture });
+    const probe = await adapter.probe();
+    expect(probe.launcherEnvironmentNames).toEqual(["CODEX_API_KEY"]);
+  });
+
+  it("keeps an explicitly empty declaration", async () => {
+    const adapter = new CodexCliAdapter({
+      executablePath: fullFixture,
+      launcherEnvironmentNames: []
+    });
+    const probe = await adapter.probe();
+    expect(probe.launcherEnvironmentNames).toEqual([]);
+  });
+
+  it("keeps an explicit declaration over the default", async () => {
+    const adapter = new CodexCliAdapter({
+      executablePath: fullFixture,
+      launcherEnvironmentNames: ["OTHER_PROVIDER_KEY"]
+    });
+    const probe = await adapter.probe();
+    expect(probe.launcherEnvironmentNames).toEqual(["OTHER_PROVIDER_KEY"]);
+  });
+
+  it("keeps a probe-time override over the constructor value", async () => {
+    const adapter = new CodexCliAdapter({
+      executablePath: fullFixture,
+      launcherEnvironmentNames: ["OTHER_PROVIDER_KEY"]
+    });
+    const probe = await adapter.probe({
+      launcherEnvironmentNames: ["PROBE_PROVIDER_KEY"]
+    });
+    expect(probe.launcherEnvironmentNames).toEqual(["PROBE_PROVIDER_KEY"]);
+  });
+
+  it("applies the default launcher name during prepare", async () => {
+    const state = await harness({}, { launcherEnvironmentNames: undefined });
+    try {
+      const prepared = await state.adapter.prepare(state.context);
+      expect(prepared.launcherEnvironmentApplied).toEqual(["CODEX_API_KEY"]);
+      expect(prepared.environment.CODEX_API_KEY).toBe(PROVIDER_SECRET);
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("CodexCliAdapter.prepare", () => {
   it("builds the argv from verified flags and keeps credentials out", async () => {
     const state = await harness();
@@ -348,7 +396,7 @@ describe("CodexCliAdapter.run", () => {
 
   it("applies only the declared launcher environment names", async () => {
     const state = await harness();
-    const strict = await harness({}, { launcherEnvironmentNames: undefined });
+    const strict = await harness({}, { launcherEnvironmentNames: [] });
     try {
       const first = await runAdapter(
         state,

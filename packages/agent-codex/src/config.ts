@@ -13,6 +13,16 @@ export const REQUIRED_CODEX_FLAGS = [
   "--output-last-message"
 ] as const;
 
+/**
+ * Launcher names the adapter declares when the caller passes none. Codex
+ * 0.154 authenticates non-interactive runs from CODEX_API_KEY or an
+ * auth.json under CODEX_HOME; it ignores OPENAI_API_KEY. An explicit
+ * declaration, including an empty list, replaces this default.
+ */
+export const DEFAULT_CODEX_LAUNCHER_ENVIRONMENT_NAMES = [
+  "CODEX_API_KEY"
+] as const;
+
 /** Flags the adapter uses whenever the installed CLI reports them. */
 export const OPTIONAL_CODEX_FLAGS = [
   "--ephemeral",

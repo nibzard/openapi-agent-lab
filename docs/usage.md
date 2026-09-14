@@ -277,6 +277,13 @@ oal doctor
 oal doctor --agent codex-cli
 ```
 
+The `codex-cli` adapter authenticates non-interactive runs with
+`CODEX_API_KEY` or an `auth.json` file under `CODEX_HOME`. `CODEX_HOME`
+defaults to `~/.codex`. `OPENAI_API_KEY` does not authenticate codex 0.154
+non-interactively, so a run with only that variable set fails after a paid
+probe. `oal doctor --agent codex-cli` reports which credential the host
+provides. It prints the credential name only, never the value.
+
 Read [the adapter API](adapter-api.md) to implement your own adapter.
 
 ## Isolation guarantees

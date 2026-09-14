@@ -212,6 +212,12 @@ paid-call ceiling, before any money is spent:
 oal run packs/steel-computer --eval basic-lifecycle --agent codex-cli --dry-run
 ```
 
+A paid codex-cli run needs two more settings. Pass `--exposure raw-http`,
+because this build serves no tools exposure. A pack that recommends a tools
+mode refuses the run with exit code `4` until you pass it. Pass a
+`--sandbox` value that permits network access, because the agent must reach
+the gateway over HTTP.
+
 ## The run directory
 
 Every batch writes an immutable directory under `.oal/runs/<batch-id>/`. The

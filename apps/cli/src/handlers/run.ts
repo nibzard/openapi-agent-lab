@@ -102,15 +102,11 @@ export function selectAdapter(
     return { adapter: new MockAgentAdapter(), paid: false };
   }
   if (name === "codex-cli") {
-    // Codex authenticates non-interactive runs from a provider key in the
-    // launcher environment. The runner copies only these names from the
-    // host, and the participant tool environment never sees them.
-    return {
-      adapter: new CodexCliAdapter({
-        launcherEnvironmentNames: ["OPENAI_API_KEY", "CODEX_API_KEY"]
-      }),
-      paid: true
-    };
+    // The adapter owns the declared launcher credential: CODEX_API_KEY.
+    // Codex 0.154 ignores OPENAI_API_KEY for non-interactive auth. The
+    // runner copies only the declared names from the host, and the
+    // participant tool environment never sees them.
+    return { adapter: new CodexCliAdapter(), paid: true };
   }
   return {
     error: diagnostic({

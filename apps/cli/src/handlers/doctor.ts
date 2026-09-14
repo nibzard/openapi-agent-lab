@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { access, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,6 +16,7 @@ import {
 import type { AgentProbe } from "@oal/agent-adapter";
 import { LIMIT_CEILINGS, LIMIT_DEFAULTS } from "@oal/config";
 import {
+  aggregateDoctorReport,
   runDoctor,
   type DoctorAdapterResult,
   type DoctorCapabilityResult,
@@ -296,6 +298,82 @@ export function adapterResultOf(probe: AgentProbe): DoctorAdapterResult {
   };
 }
 
+/** Stable check id of the codex credential check (section 23.13). */
+export const CODEX_CREDENTIAL_CHECK_ID = "adapter.codex_credential";
+
+/** Resolve the codex home the way codex does: CODEX_HOME, then ~/.codex. */
+function codexHomeOf(
+  env: Readonly<Record<string, string | undefined>>,
+  homeDir: string
+): string {
+  const declared = env["CODEX_HOME"];
+  return declared !== undefined && declared !== ""
+    ? declared
+    : path.join(homeDir, ".codex");
+}
+
+/** Whether one environment name holds a non-empty value. */
+function envHas(
+  env: Readonly<Record<string, string | undefined>>,
+  name: string
+) {
+  const value = env[name];
+  return value !== undefined && value !== "";
+}
+
+/**
+ * Which credential the host provides for codex-cli, by name and presence
+ * only. Codex 0.154 authenticates non-interactive runs from CODEX_API_KEY
+ * or an auth.json under CODEX_HOME; it ignores OPENAI_API_KEY. The check
+ * never reads a value or a file content.
+ */
+export async function checkCodexCredential(
+  env: Readonly<Record<string, string | undefined>>,
+  homeDir: string
+): Promise<DoctorCheck> {
+  if (envHas(env, "CODEX_API_KEY")) {
+    return {
+      id: CODEX_CREDENTIAL_CHECK_ID,
+      status: "pass",
+      message:
+        "CODEX_API_KEY is set, so codex-cli can authenticate a " +
+        "non-interactive run.",
+      detail: { credential: "CODEX_API_KEY" }
+    };
+  }
+  const codexHome = codexHomeOf(env, homeDir);
+  const authJson = path.join(codexHome, "auth.json");
+  if ((await access(authJson).catch(() => null)) !== null) {
+    return {
+      id: CODEX_CREDENTIAL_CHECK_ID,
+      status: "pass",
+      message:
+        "An auth.json under CODEX_HOME is present, so codex-cli can " +
+        "authenticate a non-interactive run.",
+      detail: { credential: "auth.json" }
+    };
+  }
+  if (envHas(env, "OPENAI_API_KEY")) {
+    return {
+      id: CODEX_CREDENTIAL_CHECK_ID,
+      status: "warn",
+      message:
+        "Only OPENAI_API_KEY is set. Codex 0.154 ignores it for " +
+        "non-interactive runs, so set CODEX_API_KEY or place an auth.json " +
+        "under CODEX_HOME.",
+      detail: { credential: "OPENAI_API_KEY" }
+    };
+  }
+  return {
+    id: CODEX_CREDENTIAL_CHECK_ID,
+    status: "fail",
+    message:
+      "No codex credential is present. Set CODEX_API_KEY or place an " +
+      "auth.json under CODEX_HOME.",
+    detail: { credential: "none" }
+  };
+}
+
 const STATUS_COLORS: Readonly<Record<DoctorCheck["status"], string>> = {
   pass: "\x1b[32m",
   warn: "\x1b[33m",
@@ -384,12 +462,19 @@ export const doctorCommand: CommandHandler = async (args, io) => {
   };
 
   const report = await runDoctor(input);
+  // The credential check belongs to the codex-cli selection alone; a
+  // mock-agent run grows no provider-credential check.
+  const checks: DoctorCheck[] = [...report.checks];
+  if (selection.adapter.id === "codex-cli") {
+    checks.push(await checkCodexCredential(process.env, homedir()));
+  }
+  const full = aggregateDoctorReport(checks);
   if (args.context.format === "json") {
-    io.stdout(stableJsonStringify(report as unknown as Json));
+    io.stdout(stableJsonStringify(full as unknown as Json));
   } else {
-    for (const line of doctorLines(report, args.context.color)) {
+    for (const line of doctorLines(full, args.context.color)) {
       io.stdout(line);
     }
   }
-  return doctorExitCode(report);
+  return doctorExitCode(full);
 };
