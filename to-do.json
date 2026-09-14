@@ -932,7 +932,7 @@
       "id": "T055",
       "title": "Declare CODEX_API_KEY as the Codex launcher credential",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Codex 0.154 ignores OPENAI_API_KEY for non-interactive auth and honors only CODEX_API_KEY or an auth.json under CODEX_HOME. A run with only OPENAI_API_KEY set fails with 401 after a paid probe. The adapter should declare the name that works and the docs should say so.",
       "steps": [
         "Make CODEX_API_KEY the declared launcher name in the adapter default, keep the CLI override path.",
@@ -950,7 +950,7 @@
       ],
       "depends_on": ["T054"],
       "created_at": "2026-09-14T13:02:17Z",
-      "updated_at": "2026-09-14T13:02:17Z"
+      "updated_at": "2026-09-14T14:11:56Z"
     },
     {
       "id": "T056",
