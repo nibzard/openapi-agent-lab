@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { constants, readFileSync } from "node:fs";
 import { access, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { homedir } from "node:os";
@@ -298,7 +298,7 @@ export function adapterResultOf(probe: AgentProbe): DoctorAdapterResult {
   };
 }
 
-/** Stable check id of the codex credential check (section 23.13). */
+/** Stable check id of the build-defined codex credential check. */
 export const CODEX_CREDENTIAL_CHECK_ID = "adapter.codex_credential";
 
 /** Resolve the codex home the way codex does: CODEX_HOME, then ~/.codex. */
@@ -324,7 +324,9 @@ function envHas(
 /**
  * Which credential the host provides for codex-cli, by name and presence
  * only. Codex 0.154 authenticates non-interactive runs from CODEX_API_KEY
- * or an auth.json under CODEX_HOME; it ignores OPENAI_API_KEY. The check
+ * or an auth.json under CODEX_HOME; it ignores OPENAI_API_KEY. This build
+ * forwards only CODEX_API_KEY to the child, and the child HOME is
+ * synthetic, so a host auth.json cannot authenticate a run. The check
  * never reads a value or a file content.
  */
 export async function checkCodexCredential(
@@ -343,13 +345,25 @@ export async function checkCodexCredential(
   }
   const codexHome = codexHomeOf(env, homeDir);
   const authJson = path.join(codexHome, "auth.json");
+  if ((await access(authJson, constants.R_OK).catch(() => null)) !== null) {
+    return {
+      id: CODEX_CREDENTIAL_CHECK_ID,
+      status: "warn",
+      message:
+        "An auth.json under CODEX_HOME is present and readable, but this " +
+        "build forwards only CODEX_API_KEY to the child process. Set " +
+        "CODEX_API_KEY for a paid run.",
+      detail: { credential: "auth.json" }
+    };
+  }
   if ((await access(authJson).catch(() => null)) !== null) {
     return {
       id: CODEX_CREDENTIAL_CHECK_ID,
-      status: "pass",
+      status: "warn",
       message:
-        "An auth.json under CODEX_HOME is present, so codex-cli can " +
-        "authenticate a non-interactive run.",
+        "An auth.json under CODEX_HOME exists but is not readable, and " +
+        "this build forwards only CODEX_API_KEY to the child process. " +
+        "Set CODEX_API_KEY for a paid run.",
       detail: { credential: "auth.json" }
     };
   }
@@ -359,8 +373,8 @@ export async function checkCodexCredential(
       status: "warn",
       message:
         "Only OPENAI_API_KEY is set. Codex 0.154 ignores it for " +
-        "non-interactive runs, so set CODEX_API_KEY or place an auth.json " +
-        "under CODEX_HOME.",
+        "non-interactive runs, and this build forwards only CODEX_API_KEY " +
+        "to the child process. Set CODEX_API_KEY for a paid run.",
       detail: { credential: "OPENAI_API_KEY" }
     };
   }
@@ -368,8 +382,9 @@ export async function checkCodexCredential(
     id: CODEX_CREDENTIAL_CHECK_ID,
     status: "fail",
     message:
-      "No codex credential is present. Set CODEX_API_KEY or place an " +
-      "auth.json under CODEX_HOME.",
+      "No codex credential is present. This build forwards only " +
+      "CODEX_API_KEY to the child process, so set CODEX_API_KEY for a " +
+      "paid run.",
     detail: { credential: "none" }
   };
 }

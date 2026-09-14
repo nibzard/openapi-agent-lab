@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -179,7 +179,7 @@ describe("codex credential check", () => {
     expect(JSON.stringify(check)).not.toContain("sk-codex-secret-0001");
   });
 
-  it("passes on auth.json under CODEX_HOME without printing its bytes", async () => {
+  it("warns on a readable auth.json under CODEX_HOME without printing its bytes", async () => {
     const root = await newWorkspace();
     const codexHome = path.join(root, "codex-home");
     await mkdir(codexHome, { recursive: true });
@@ -192,10 +192,30 @@ describe("codex credential check", () => {
       path.join(root, "fallback-home")
     );
     expect(check.id).toBe(CODEX_CHECK_ID);
-    expect(check.status).toBe("pass");
+    expect(check.status).toBe("warn");
     expect(check.message).toContain("auth.json");
+    expect(check.message).toContain("forwards only CODEX_API_KEY");
+    expect(check.message).toContain("Set CODEX_API_KEY");
     expect(JSON.stringify(check)).not.toContain("auth-json-secret-0002");
     expect(JSON.stringify(check)).not.toContain("sk-openai-secret-0003");
+  });
+
+  it("warns on an unreadable auth.json under CODEX_HOME", async () => {
+    const root = await newWorkspace();
+    const codexHome = path.join(root, "codex-home");
+    await mkdir(codexHome, { recursive: true });
+    const target = path.join(codexHome, "auth.json");
+    await writeFile(target, '{"token":"auth-json-secret-0006"}');
+    await chmod(target, 0o000);
+    const check = await checkCodexCredential(
+      { CODEX_HOME: codexHome },
+      path.join(root, "fallback-home")
+    );
+    expect(check.id).toBe(CODEX_CHECK_ID);
+    expect(check.status).toBe("warn");
+    expect(check.message).toContain("not readable");
+    expect(check.message).toContain("CODEX_API_KEY");
+    expect(JSON.stringify(check)).not.toContain("auth-json-secret-0006");
   });
 
   it("resolves the default codex home under the home directory", async () => {
@@ -207,7 +227,8 @@ describe("codex credential check", () => {
     );
     const check = await checkCodexCredential({}, path.join(root, "home"));
     expect(check.id).toBe(CODEX_CHECK_ID);
-    expect(check.status).toBe("pass");
+    expect(check.status).toBe("warn");
+    expect(check.message).toContain("forwards only CODEX_API_KEY");
     expect(JSON.stringify(check)).not.toContain("auth-json-secret-0004");
   });
 
@@ -219,6 +240,7 @@ describe("codex credential check", () => {
     expect(check.id).toBe(CODEX_CHECK_ID);
     expect(check.status).toBe("warn");
     expect(check.message).toContain("0.154");
+    expect(check.message).toContain("Set CODEX_API_KEY");
     expect(JSON.stringify(check)).not.toContain("sk-openai-secret-0005");
   });
 
@@ -227,7 +249,7 @@ describe("codex credential check", () => {
     expect(check.id).toBe(CODEX_CHECK_ID);
     expect(check.status).toBe("fail");
     expect(check.message).toContain("CODEX_API_KEY");
-    expect(check.message).toContain("auth.json");
+    expect(check.message).not.toContain("auth.json");
   });
 
   it("ignores an empty CODEX_API_KEY value", async () => {
