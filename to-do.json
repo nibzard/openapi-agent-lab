@@ -1106,7 +1106,7 @@
       "id": "T064",
       "title": "Silence the terminal-from-ledger warning on healthy batches",
       "priority": 4,
-      "status": "todo",
+      "status": "done",
       "details": "Every completed batch prints OAL-REPORT-TERMINAL-FROM-LEDGER because the runner writes the terminal disposition to the batch ledger instead of a run.finished event. When both sources agree the warning carries no information.",
       "steps": [
         "Emit the warning only when the ledger and the lifecycle stream disagree or the ledger is missing.",
