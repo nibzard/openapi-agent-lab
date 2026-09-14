@@ -1029,7 +1029,7 @@
       "id": "T060",
       "title": "Reject a present but invalid API key even when anonymous access is declared",
       "priority": 3,
-      "status": "todo",
+      "status": "done",
       "details": "The Steel Computers contract declares an anonymous security alternative. The gateway lets a wrong steel-api-key fall through to it and answers 200. No real server does this, and the live Steel API answers 401.",
       "steps": [
         "Failing test first: a declared apiKey header with a value that matches no run credential returns the declared 401 problem.",
@@ -1039,7 +1039,7 @@
       "tags": ["gateway", "auth", "security"],
       "files": ["packages/gateway/src/auth.ts"],
       "created_at": "2026-09-14T13:02:17Z",
-      "updated_at": "2026-09-14T13:02:17Z"
+      "updated_at": "2026-09-14T20:25:00Z"
     },
     {
       "id": "T061",
