@@ -1,0 +1,24 @@
+# Review Notes
+
+## Summary
+T057 friction dedup: worktree implementer (failing test first), two
+adversarial reviewers (correctness, semantics).
+
+## Observations
+- Failing test confirmed on base: one issuer leaking three handles
+  yielded three incidents; now one incident, occurrences=3, merged rows.
+- Every bucket key audited against detector+operation+class. Kept
+  components justified: quota per run (refusal precedes routing),
+  framework_error code (selects the worklist action),
+  request_schema_rejected pointer (names the gap). Escalation was
+  keyed below identity; now splits by class, id carries the class.
+- Determinism, id bounds, evidence row shape, and schema unchanged.
+
+## Concerns
+- Minor, recorded as follow-ups: merged handle-reuse detail names only
+  the first handle (value survives in evidence rows); incident ids for
+  framework_error and request_schema_rejected can still collide across
+  remedy components (pre-existing on main, outside this task).
+
+## Verdict
+Approved — both lenses returned land, zero blockers.
