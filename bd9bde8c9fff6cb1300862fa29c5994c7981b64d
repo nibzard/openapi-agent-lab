@@ -1,0 +1,30 @@
+# Review Notes
+
+## Summary
+T059 strictest path pattern ids: worktree implementer (failing test
+first), two adversarial reviewers (correctness, semantics), one fix
+round, then landed as two commits.
+
+## Observations
+- Correspondence rule: a same-named string property of the family
+  takes the strictest collected path pattern (longest, then
+  lexicographic; total order, deterministic under the seed). The
+  table is a pure function of the compiled contract, memoized per
+  contract. packages/openapi stayed untouched; the collector reads
+  the existing IR (layering preserved).
+- Review blocker (both lenses): the safe-integer guard dropped
+  wrong-signed pins (minimum at +MAX_SAFE, maximum at -MAX_SAFE),
+  refusing seven servable schema shapes with 501s. Fixed in the
+  follow-up commit: only the closing bounds of the int64 range are
+  guards; all seven shapes restored main's values, verified against
+  the schema validator, pinned by test.
+- Accepted and pinned: a pattern the synthesizer cannot produce
+  (lookahead) refuses generation instead of serving a violating id.
+- Accepted and documented: the family pattern applies at every
+  object depth by design.
+
+## Concerns
+- None open. Both lenses returned land after the fix round.
+
+## Verdict
+Approved with the fix round applied.
