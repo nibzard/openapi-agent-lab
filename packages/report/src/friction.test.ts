@@ -739,6 +739,42 @@ describe("buildFrictionReport over externally recorded trials", () => {
     expect(report.incidents[0]?.origin).toBe("api");
   });
 
+  it("reports no handle reuse when the recorded service issued the handle", () => {
+    const events = [
+      responseBody(
+        traceEvent({
+          sequence: 1,
+          runId: "manual-2",
+          path: "/v1/clips",
+          status: 200,
+          operation: LIST_OP
+        }),
+        { items: [], next: "gen_c3" }
+      ),
+      traceEvent({
+        sequence: 2,
+        runId: "manual-2",
+        path: "/v1/clips/gen_c3",
+        status: 200,
+        operation: GET_CLIP_OP
+      })
+    ];
+    const report = build([{ runId: "manual-2", events, source: "external" }]);
+    expect(
+      report.incidents.some(
+        (candidate) => candidate.kind === "generated_handle_reuse"
+      )
+    ).toBe(false);
+    expect(report.worklist).toEqual([]);
+    // The same trace under a runner still proves the mock invented it.
+    const runner = build([{ runId: "run-1", events }]);
+    expect(
+      runner.incidents.some(
+        (candidate) => candidate.kind === "generated_handle_reuse"
+      )
+    ).toBe(true);
+  });
+
   it("produces external reports that validate against friction.v1", async () => {
     const validator = new SchemaValidator(await loadSchema());
     const violations = validator.errors(

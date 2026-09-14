@@ -942,6 +942,13 @@ function detectGeneratedHandleReuse(
   attempts: readonly Attempt[],
   seeds: Map<string, IncidentSeed>
 ): void {
+  // The detector proves the mock invented the value, and an external
+  // trial has no mock: the recorded service issued it, and a client
+  // reusing a service-issued handle is the protocol working. Skipping
+  // is more truthful than relabeling, because no spec gap is provable.
+  if (attempts.some((attempt) => attempt.external)) {
+    return;
+  }
   // Pass one: the first 2xx response that carries each handle issues it.
   const issuers = new Map<string, Attempt>();
   for (const attempt of attempts) {
