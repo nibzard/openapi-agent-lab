@@ -1012,7 +1012,7 @@
       "id": "T059",
       "title": "Generate path handles that satisfy the strictest declared pattern",
       "priority": 2,
-      "status": "todo",
+      "status": "done",
       "details": "The Steel Computers contract patterns the exec path id as cmp_ plus 29 characters but leaves the Computer response id unpatterned. The generator emitted gen_ ids that exec rejected, which produced every incident in the raw cohort. When any path parameter for a resource carries a pattern the response schema lacks, the generated id should satisfy the stricter pattern.",
       "steps": [
         "Failing test first: a contract with a patterned path id and an unpatterned response id yields response ids that match the path pattern.",
@@ -1023,7 +1023,7 @@
       "tags": ["gateway", "determinism", "contract-ir", "compiler"],
       "files": ["packages/gateway/src/generate.ts", "packages/openapi/src"],
       "created_at": "2026-09-14T13:02:17Z",
-      "updated_at": "2026-09-14T13:02:17Z"
+      "updated_at": "2026-09-14T20:05:00Z"
     },
     {
       "id": "T060",
