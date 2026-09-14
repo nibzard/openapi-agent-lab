@@ -908,6 +908,217 @@
     },
     {
       "id": "T054",
+      "title": "Commit the runner environment fix for spawned agents",
+      "priority": 1,
+      "status": "done",
+      "details": "Codex could not spawn from the CLI: the tool environment never carried PATH, HOME, or TMPDIR, and the launcher environment never carried the adapter's declared provider names. The fix and its tests are in the working tree and CI passes. Land it.",
+      "steps": [
+        "Review the diff in setup.ts, run.ts, and the two runner tests.",
+        "Commit with a conventional message that names the spawn failure.",
+        "Add a quickstart note that a paid codex-cli run needs --exposure raw-http and a network-capable sandbox."
+      ],
+      "tags": ["runner", "codex", "adapters", "sandbox"],
+      "files": [
+        "packages/runner/src/setup.ts",
+        "packages/runner/src/setup.test.ts",
+        "packages/runner/src/integration-isolation.test.ts",
+        "apps/cli/src/handlers/run.ts",
+        "docs/quickstart.md"
+      ],
+      "created_at": "2026-09-14T13:02:17Z",
+      "updated_at": "2026-09-14T13:17:30Z"
+    },
+    {
+      "id": "T055",
+      "title": "Declare CODEX_API_KEY as the Codex launcher credential",
+      "priority": 1,
+      "status": "todo",
+      "details": "Codex 0.154 ignores OPENAI_API_KEY for non-interactive auth and honors only CODEX_API_KEY or an auth.json under CODEX_HOME. A run with only OPENAI_API_KEY set fails with 401 after a paid probe. The adapter should declare the name that works and the docs should say so.",
+      "steps": [
+        "Make CODEX_API_KEY the declared launcher name in the adapter default, keep the CLI override path.",
+        "Add a doctor check that reports which Codex credential is present without printing it.",
+        "Document the requirement in adapter-api.md and usage.md."
+      ],
+      "tags": ["codex", "adapters", "auth", "docs"],
+      "files": [
+        "packages/agent-codex/src/config.ts",
+        "packages/agent-codex/src/probe.ts",
+        "apps/cli/src/handlers/run.ts",
+        "apps/cli/src/handlers/doctor.ts",
+        "docs/adapter-api.md",
+        "docs/usage.md"
+      ],
+      "depends_on": ["T054"],
+      "created_at": "2026-09-14T13:02:17Z",
+      "updated_at": "2026-09-14T13:02:17Z"
+    },
+    {
+      "id": "T056",
+      "title": "Record the spawn error text on the agent exited event",
+      "priority": 2,
+      "status": "todo",
+      "details": "Three trials ended with AGENT_SPAWN_FAILED and no reason. The process result carries spawnError but the recorder drops it, so the operator cannot tell ENOENT from EACCES.",
+      "steps": [
+        "Failing test first: a fake adapter with a missing executable must produce an exited event that names the error.",
+        "Add a secret-free spawn_error field to the exited payload and the agent-event schema.",
+        "Surface the text in the run.completed extensions and the terminal report line."
+      ],
+      "tags": ["adapters", "evidence", "diagnostics", "schemas"],
+      "files": [
+        "packages/agent-adapter/src/events.ts",
+        "packages/agent-adapter/src/process.ts",
+        "packages/agent-codex/src/adapter.ts",
+        "schemas/agent-event.v1.schema.json"
+      ],
+      "created_at": "2026-09-14T13:02:17Z",
+      "updated_at": "2026-09-14T13:02:17Z"
+    },
+    {
+      "id": "T057",
+      "title": "Deduplicate friction incidents by detector and operation",
+      "priority": 2,
+      "status": "todo",
+      "details": "The raw Steel Computers batch reported the same generated_handle_reuse incident three times with identical evidence. The counts and the worklist double count real friction.",
+      "steps": [
+        "Failing test first: a trace where one operation leaks handles into several later requests yields one incident.",
+        "Key incidents by detector, operation, and class before emitting.",
+        "Re-run the friction golden tests."
+      ],
+      "tags": ["reports", "diagnostics", "testing"],
+      "files": ["packages/report/src/friction.ts"],
+      "created_at": "2026-09-14T13:02:17Z",
+      "updated_at": "2026-09-14T13:02:17Z"
+    },
+    {
+      "id": "T058",
+      "title": "Scaffold rubrics that pass the lab's own validation",
+      "priority": 2,
+      "status": "todo",
+      "details": "pack init and eval init write a structured-result check with no evidence_class, and the first run warns OAL-RUBRIC-INVALID about the scaffold. The scaffold must satisfy section 26.5 as written.",
+      "steps": [
+        "Failing test first: validate the scaffolded pack with warnings as errors.",
+        "Add evidence_class: participant_observable to every scaffolded check.",
+        "Extend the scaffold test to assert zero rubric diagnostics."
+      ],
+      "tags": ["packs", "rubric", "cli"],
+      "files": [
+        "packages/pack/src/scaffold.ts",
+        "apps/cli/src/handlers/eval.ts"
+      ],
+      "created_at": "2026-09-14T13:02:17Z",
+      "updated_at": "2026-09-14T13:02:17Z"
+    },
+    {
+      "id": "T059",
+      "title": "Generate path handles that satisfy the strictest declared pattern",
+      "priority": 2,
+      "status": "todo",
+      "details": "The Steel Computers contract patterns the exec path id as cmp_ plus 29 characters but leaves the Computer response id unpatterned. The generator emitted gen_ ids that exec rejected, which produced every incident in the raw cohort. When any path parameter for a resource carries a pattern the response schema lacks, the generated id should satisfy the stricter pattern.",
+      "steps": [
+        "Failing test first: a contract with a patterned path id and an unpatterned response id yields response ids that match the path pattern.",
+        "Collect per-resource id patterns from path parameters at compile time and hand them to the generator.",
+        "Keep the output deterministic under the run seed.",
+        "Prefer small values for integers whose only bound is the safe-integer maximum."
+      ],
+      "tags": ["gateway", "determinism", "contract-ir", "compiler"],
+      "files": ["packages/gateway/src/generate.ts", "packages/openapi/src"],
+      "created_at": "2026-09-14T13:02:17Z",
+      "updated_at": "2026-09-14T13:02:17Z"
+    },
+    {
+      "id": "T060",
+      "title": "Reject a present but invalid API key even when anonymous access is declared",
+      "priority": 3,
+      "status": "todo",
+      "details": "The Steel Computers contract declares an anonymous security alternative. The gateway lets a wrong steel-api-key fall through to it and answers 200. No real server does this, and the live Steel API answers 401.",
+      "steps": [
+        "Failing test first: a declared apiKey header with a value that matches no run credential returns the declared 401 problem.",
+        "In alternative matching, treat a present credential as a claim to be checked, and only use the anonymous alternative when no declared credential is present.",
+        "Record the decision in the capability report."
+      ],
+      "tags": ["gateway", "auth", "security"],
+      "files": ["packages/gateway/src/auth.ts"],
+      "created_at": "2026-09-14T13:02:17Z",
+      "updated_at": "2026-09-14T13:02:17Z"
+    },
+    {
+      "id": "T061",
+      "title": "Check the cohort task outcome denominators",
+      "priority": 3,
+      "status": "todo",
+      "details": "A three-trial batch reported task_pass 0/1 and task outcomes partial=1 while every trial was completed and evaluated. Either the denominator or the outcome label is wrong, and readers will take it as a pass rate.",
+      "steps": [
+        "Reproduce with the recorded batch under .oal/runs and a synthetic three-trial fixture.",
+        "Fix the aggregation so the denominator equals the evaluated trial count.",
+        "Add a report test that pins both numbers for a mixed pass, fail, and partial batch."
+      ],
+      "tags": ["reports", "evaluator", "testing"],
+      "files": ["packages/report/src", "packages/evaluator/src"],
+      "created_at": "2026-09-14T13:02:17Z",
+      "updated_at": "2026-09-14T13:02:17Z"
+    },
+    {
+      "id": "T062",
+      "title": "Let friction and report consume an externally recorded trace",
+      "priority": 3,
+      "status": "todo",
+      "details": "Today only runner batches are analyzable. A manual serve session leaves a trace.jsonl the tools refuse, and a live API session leaves nothing. Accepting the lab trace format and HAR, validated against a given contract, turns manual probing into classified incidents.",
+      "steps": [
+        "Accept a run directory produced by serve by treating trace.jsonl plus capability-report.json as a run with no lifecycle ledger.",
+        "Add oal trace import <har> --contract <spec> that normalizes a HAR into the trace schema with operation matching and validation diagnostics.",
+        "Run friction over the imported trace and label incidents with origin external.",
+        "Document the flow in usage.md."
+      ],
+      "tags": ["trace", "reports", "cli", "evidence"],
+      "files": [
+        "apps/cli/src/handlers/run-tree.ts",
+        "packages/report/src/friction.ts",
+        "schemas/trace-event.v1.schema.json",
+        "docs/usage.md"
+      ],
+      "depends_on": ["T057"],
+      "created_at": "2026-09-14T13:02:17Z",
+      "updated_at": "2026-09-14T13:02:17Z"
+    },
+    {
+      "id": "T063",
+      "title": "Add a read-only conformance probe against a live base URL",
+      "priority": 4,
+      "status": "todo",
+      "details": "The mock said exec was broken. Production said stop, start, and restart return 503, unknown routes return 421, and malformed JSON returns 500. The contract cannot show server divergence. A probe that replays a batch's recorded safe requests against a live base URL and diffs status codes and response shapes against the contract would.",
+      "steps": [
+        "Define the request allowlist: only operations the operator names, never DELETE or writes unless passed explicitly.",
+        "Replay each recorded request with a supplied credential, validate every response against the contract, and emit a conformance diff.",
+        "Classify undeclared status codes and schema violations as spec_friction with origin server.",
+        "Redact the credential in every artifact."
+      ],
+      "tags": ["exposure", "http", "validation", "security", "reports"],
+      "files": [
+        "apps/cli/src/handlers",
+        "packages/report/src",
+        "packages/openapi/src"
+      ],
+      "depends_on": ["T062"],
+      "created_at": "2026-09-14T13:02:17Z",
+      "updated_at": "2026-09-14T13:02:17Z"
+    },
+    {
+      "id": "T064",
+      "title": "Silence the terminal-from-ledger warning on healthy batches",
+      "priority": 4,
+      "status": "todo",
+      "details": "Every completed batch prints OAL-REPORT-TERMINAL-FROM-LEDGER because the runner writes the terminal disposition to the batch ledger instead of a run.finished event. When both sources agree the warning carries no information.",
+      "steps": [
+        "Emit the warning only when the ledger and the lifecycle stream disagree or the ledger is missing.",
+        "Keep the diagnostic in JSON output as informational severity."
+      ],
+      "tags": ["reports", "lifecycle", "diagnostics"],
+      "files": ["packages/report/src"],
+      "created_at": "2026-09-14T13:02:17Z",
+      "updated_at": "2026-09-14T13:02:17Z"
+    },
+    {
+      "id": "T065",
       "title": "Align capability claims and the acceptance gate",
       "priority": 1,
       "status": "done",
@@ -924,7 +1135,7 @@
       "updated_at": "2026-09-10T05:58:16.599Z"
     },
     {
-      "id": "T055",
+      "id": "T066",
       "title": "Bound every execution path that evaluates untrusted patterns",
       "priority": 1,
       "status": "doing",
@@ -941,7 +1152,7 @@
       "updated_at": "2026-09-10T16:33:34.469Z"
     },
     {
-      "id": "T056",
+      "id": "T067",
       "title": "Enforce supported analysis and one outcome per slot",
       "priority": 1,
       "status": "doing",
@@ -958,7 +1169,7 @@
       "updated_at": "2026-09-10T16:33:34.494Z"
     },
     {
-      "id": "T057",
+      "id": "T068",
       "title": "Make webclip grading match its task",
       "priority": 1,
       "status": "done",
@@ -975,7 +1186,7 @@
       "updated_at": "2026-09-10T17:45:06.404Z"
     },
     {
-      "id": "T058",
+      "id": "T069",
       "title": "Connect scenario execution and prove a live stateful task",
       "priority": 2,
       "status": "todo",
@@ -989,11 +1200,11 @@
       ],
       "tags": ["gateway", "runner", "webclip"],
       "files": ["docs/review-fix-plan.md"],
-      "depends_on": ["T055", "T057"],
+      "depends_on": ["T066", "T068"],
       "updated_at": "2026-09-10T05:37:00Z"
     },
     {
-      "id": "T059",
+      "id": "T070",
       "title": "Connect direct and catalog tools to the same execution path",
       "priority": 2,
       "status": "todo",
@@ -1007,11 +1218,11 @@
       ],
       "tags": ["tools", "mcp", "runner"],
       "files": ["docs/review-fix-plan.md"],
-      "depends_on": ["T055", "T058"],
+      "depends_on": ["T066", "T069"],
       "updated_at": "2026-09-10T05:37:00Z"
     },
     {
-      "id": "T060",
+      "id": "T071",
       "title": "Connect scheduled assignments to durable trial execution",
       "priority": 2,
       "status": "todo",
@@ -1025,7 +1236,7 @@
       ],
       "tags": ["scheduler", "runner", "study"],
       "files": ["docs/review-fix-plan.md"],
-      "depends_on": ["T056", "T058"],
+      "depends_on": ["T067", "T069"],
       "updated_at": "2026-09-10T05:37:00Z"
     }
   ]
