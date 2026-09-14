@@ -235,6 +235,70 @@ describe("buildFrictionReport detectors", () => {
     ).toBe(true);
   });
 
+  it("keys an escalation incident by operation and class", () => {
+    const rejection = (sequence: number, runId: string): TraceEvent =>
+      traceEvent({
+        sequence,
+        runId,
+        method: "POST",
+        path: "/v1/clips",
+        status: 422,
+        body: jsonBody({ format: "png" }),
+        operation: CREATE_OP
+      });
+    const satisfied = (
+      sequence: number,
+      runId: string,
+      provenance: "fixture" | "generated"
+    ): TraceEvent =>
+      traceEvent({
+        sequence,
+        runId,
+        method: "POST",
+        path: "/v1/clips",
+        status: 201,
+        body: jsonBody({ format: "markdown" }),
+        operation: CREATE_OP,
+        backend: backendOf({ provenance })
+      });
+    const report = build([
+      {
+        runId: "run-1",
+        events: [rejection(1, "run-1"), satisfied(2, "run-1", "fixture")]
+      },
+      {
+        runId: "run-2",
+        events: [rejection(1, "run-2"), satisfied(2, "run-2", "generated")]
+      }
+    ]);
+    const escalations = report.incidents
+      .filter((candidate) => candidate.kind === "escalation")
+      .map((incident) => ({
+        id: incident.id,
+        class: incident.class,
+        trials: incident.trials
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+    expect(escalations).toHaveLength(2);
+    expect(escalations[0]).toEqual({
+      id: "inc_escalation_post_v1_clips_mock_fidelity",
+      class: "mock_fidelity",
+      trials: ["run-2"]
+    });
+    expect(escalations[1]).toEqual({
+      id: "inc_escalation_post_v1_clips_spec_friction",
+      class: "spec_friction",
+      trials: ["run-1"]
+    });
+    expect(report.counts.incidents_by_kind.escalation).toBe(2);
+    expect(
+      report.worklist.filter((item) => item.action === "author_fixture")
+    ).toHaveLength(1);
+    expect(
+      report.worklist.filter((item) => item.action === "investigate")
+    ).toHaveLength(1);
+  });
+
   it("detects an identical unchanged retry", () => {
     const events = [
       traceEvent({
@@ -450,6 +514,52 @@ describe("buildFrictionReport detectors", () => {
     expect(incident?.evidence[1]?.request_shape).toBe("gen_c3");
     expect(report.worklist[0]?.action).toBe("author_fixture");
     expect(report.worklist[0]?.fixture?.media_type).toBe("application/json");
+  });
+
+  it("merges handle reuse from one issuer into a single incident", () => {
+    const events = [
+      responseBody(
+        traceEvent({
+          sequence: 1,
+          path: "/v1/clips",
+          status: 200,
+          operation: LIST_OP,
+          backend: backendOf({ provenance: "generated" })
+        }),
+        { items: [], first: "gen_c1", second: "gen_c2", third: "gen_c3" }
+      ),
+      ...["gen_c1", "gen_c2", "gen_c3"].map((handle, index) =>
+        traceEvent({
+          sequence: index + 2,
+          path: `/v1/clips/${handle}`,
+          status: 200,
+          operation: GET_CLIP_OP,
+          backend: backendOf({ provenance: "generated" })
+        })
+      )
+    ];
+    const report = build([{ runId: "run-1", events }]);
+    const incidents = report.incidents.filter(
+      (candidate) => candidate.kind === "generated_handle_reuse"
+    );
+    expect(incidents).toHaveLength(1);
+    const incident = incidents[0];
+    expect(incident?.operation).toBe("path:GET /v1/clips");
+    expect(incident?.occurrences).toBe(3);
+    expect(incident?.trials).toEqual(["run-1"]);
+    expect(incident?.evidence.map((row) => row.sequence)).toEqual([
+      1, 2, 1, 3, 1, 4
+    ]);
+    expect(incident?.evidence.map((row) => row.request_shape)).toEqual([
+      "gen_c1",
+      "gen_c1",
+      "gen_c2",
+      "gen_c2",
+      "gen_c3",
+      "gen_c3"
+    ]);
+    expect(report.counts.incidents).toBe(1);
+    expect(report.counts.incidents_by_kind.generated_handle_reuse).toBe(1);
   });
 
   it("counts the provenance mix, approximation markers, and tolerates old traces", () => {
