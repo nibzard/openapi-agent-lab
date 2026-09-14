@@ -1,0 +1,14 @@
+# Review Notes
+
+## Summary
+Fix round for T059 review findings, applied on top of the
+implementation commit before landing.
+
+## Observations
+- Sign-scoped the int64 range guards; seven pinned-bound shapes
+  generate valid values again with the small-value preference intact.
+- Added the fail-closed pin for unproducible family patterns and the
+  at-every-depth design comment.
+
+## Verdict
+Approved.
