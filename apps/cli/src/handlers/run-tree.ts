@@ -4,12 +4,13 @@
  * commands never mutate recorded evidence.
  */
 
-import { readFile, readdir, stat } from "node:fs/promises";
+import { lstat, readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
 import {
   invalidInput,
   isJsonObject,
+  isSafeRelativePath,
   sha256HexBytes,
   type Json,
   type JsonObject
@@ -484,7 +485,13 @@ export async function verifyScopeArtifacts(
   }));
 }
 
-/** Verify the artifact manifest of one run or batch directory. */
+/**
+ * Verify the artifact manifest of one run or batch directory. Every
+ * entry must hold a safe relative path and a sha256, exist as a regular
+ * file below the directory, and hash to its recorded digest. Malformed
+ * or unsafe entries are reported as drift, never skipped: a manifest
+ * that verifies nothing is itself drift.
+ */
 export async function verifyArtifactsOf(
   root: string
 ): Promise<readonly ArtifactDrift[]> {
@@ -535,11 +542,50 @@ export async function verifyArtifactsOf(
   }
   for (const entry of entries) {
     if (!isJsonObject(entry)) {
+      findings.push({
+        root,
+        path: "artifact-manifest.json",
+        detail: "manifest entry is malformed: not an object"
+      });
       continue;
     }
     const relative = stringOf(entry, "path");
     const recorded = stringOf(entry, "sha256");
     if (relative === null || recorded === null) {
+      findings.push({
+        root,
+        path: "artifact-manifest.json",
+        detail: "manifest entry is malformed: missing path or sha256"
+      });
+      continue;
+    }
+    // A manifest path is untrusted input. Reject any path that could
+    // name a file outside the directory before anything is read.
+    if (!isSafeRelativePath(relative)) {
+      findings.push({
+        root,
+        path: relative,
+        detail: "the manifest path is not a safe relative path"
+      });
+      continue;
+    }
+    // lstat never follows the final path, so a symlink is refused
+    // instead of read.
+    const stats = await lstat(path.join(root, relative)).catch(() => null);
+    if (stats === null) {
+      findings.push({
+        root,
+        path: relative,
+        detail: "recorded artifact is missing"
+      });
+      continue;
+    }
+    if (!stats.isFile()) {
+      findings.push({
+        root,
+        path: relative,
+        detail: "recorded artifact is not a regular file"
+      });
       continue;
     }
     const bytes = await readFile(path.join(root, relative)).catch(() => null);

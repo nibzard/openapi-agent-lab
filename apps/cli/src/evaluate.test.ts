@@ -1,9 +1,17 @@
-import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  symlink,
+  writeFile
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { EXIT_INVALID, EXIT_OK, type ExitCode } from "@oal/core";
+import { EXIT_INVALID, EXIT_OK, sha256Hex, type ExitCode } from "@oal/core";
 
 import { main } from "./cli.ts";
 import {
@@ -13,7 +21,12 @@ import {
   participantReportOf,
   runMetadataOf
 } from "./handlers/evaluate.ts";
-import { RunTreeCode, loadRunOrBatch, trialsOf } from "./handlers/run-tree.ts";
+import {
+  RunTreeCode,
+  loadRunOrBatch,
+  trialsOf,
+  verifyArtifactsOf
+} from "./handlers/run-tree.ts";
 import { MemoryIo } from "./io.ts";
 import { loadSteelPack } from "../../../packages/testkit/src/index.ts";
 
@@ -134,6 +147,87 @@ describe("evaluation fact helpers", () => {
     expect(metadata["batch_id"]).toBe("cli-eval-meta");
     expect(metadata["adapter"]).toBe("mock-agent");
     expect(metadata["exposure_mode"]).toBe("raw-http");
+  });
+});
+
+describe("verifyArtifactsOf", () => {
+  /**
+   * One scratch batch directory below `cwd/nest/batch` that holds a
+   * crafted manifest, so `../..` resolves outside the batch root.
+   */
+  async function craftedManifest(
+    cwd: string,
+    entries: unknown[]
+  ): Promise<string> {
+    const root = path.join(cwd, "nest", "batch");
+    await mkdir(root, { recursive: true });
+    await writeFile(
+      path.join(root, "artifact-manifest.json"),
+      `${JSON.stringify({ schema_version: 1, kind: "ArtifactManifest", entries })}\n`
+    );
+    return root;
+  }
+
+  it("refuses a manifest entry that escapes the batch root", async () => {
+    const cwd = await newWorkspace();
+    const secret = "operator-secret-token";
+    const outside = path.join(cwd, "secret", "token.txt");
+    await mkdir(path.dirname(outside), { recursive: true });
+    await writeFile(outside, secret);
+    const digest = sha256Hex(secret);
+    const root = await craftedManifest(cwd, [
+      { path: "../../secret/token.txt", sha256: "0".repeat(64) }
+    ]);
+
+    const findings = await verifyArtifactsOf(root);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.detail).toContain("not a safe relative path");
+    // The outside file was never hashed, so its digest appears nowhere.
+    expect(JSON.stringify(findings)).not.toContain(digest);
+  });
+
+  it("refuses an in-tree symlink without reading its target", async () => {
+    const cwd = await newWorkspace();
+    const secret = "operator-secret-token";
+    const outside = path.join(cwd, "outside.txt");
+    await writeFile(outside, secret);
+    const digest = sha256Hex(secret);
+    const root = await craftedManifest(cwd, [
+      { path: "link.txt", sha256: "0".repeat(64) }
+    ]);
+    await symlink(outside, path.join(root, "link.txt"));
+
+    const findings = await verifyArtifactsOf(root);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.detail).toContain("not a regular file");
+    // The link target was never read, so its digest appears nowhere.
+    expect(JSON.stringify(findings)).not.toContain(digest);
+  });
+
+  it("refuses an absolute manifest path", async () => {
+    const cwd = await newWorkspace();
+    const root = await craftedManifest(cwd, [
+      { path: "/etc/passwd", sha256: "0".repeat(64) }
+    ]);
+
+    const findings = await verifyArtifactsOf(root);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.detail).toContain("not a safe relative path");
+  });
+
+  it("reports one finding per malformed manifest entry", async () => {
+    const cwd = await newWorkspace();
+    const root = await craftedManifest(cwd, [
+      42,
+      { sha256: "0".repeat(64) },
+      { path: "evaluation.json" }
+    ]);
+
+    const findings = await verifyArtifactsOf(root);
+    expect(findings).toHaveLength(3);
+    for (const finding of findings) {
+      expect(finding.detail).toContain("malformed");
+    }
   });
 });
 

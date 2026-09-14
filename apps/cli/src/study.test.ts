@@ -1089,4 +1089,122 @@ describe("oal study analyze", () => {
       )
     ).toBe("missing");
   });
+
+  it("anchors each child-batch manifest to its completion pointer", async () => {
+    const steel = await loadSteelPack();
+    const cwd = await newWorkspace();
+    const { root } = await scaffoldedStudy(cwd, steel.root);
+    await writeLock(cwd, root, steel.root);
+    const { runRoot, schedule } = await assembleStudyRun(cwd, root, steel.root);
+    const firstBatch = path.join(
+      runRoot,
+      "batches",
+      schedule.assignments[0]?.child_batch_id ?? ""
+    );
+    const secondBatch = path.join(
+      runRoot,
+      "batches",
+      schedule.assignments[1]?.child_batch_id ?? ""
+    );
+
+    // Launder tampered evidence: rewrite one file, then regenerate the
+    // manifest so every entry digest matches the new bytes again.
+    const manifest = JSON.parse(
+      await readFile(path.join(firstBatch, "artifact-manifest.json"), "utf8")
+    ) as { entries: { path: string; entry_type?: string; sha256: string }[] };
+    const entry = manifest.entries.find(
+      (candidate) => candidate.entry_type === "file"
+    );
+    if (entry === undefined) {
+      throw new Error("Fixture batch manifest holds no file entry.");
+    }
+    const evidencePath = path.join(firstBatch, entry.path);
+    const tampered = `${await readFile(evidencePath, "utf8")}laundered\n`;
+    await writeFile(evidencePath, tampered);
+    entry.sha256 = sha256Hex(tampered);
+    await writeFile(
+      path.join(firstBatch, "artifact-manifest.json"),
+      `${JSON.stringify(manifest)}\n`
+    );
+
+    // Drop the write-once pointer of the second batch: the manifest then
+    // has nothing to anchor against.
+    await rm(path.join(secondBatch, "batch.completed.json"));
+
+    const io = new MemoryIo();
+    const code = await main(["study", "analyze", runRoot], io, { cwd });
+    expect(code).toBe(EXIT_INFRASTRUCTURE);
+    const stderr = io.stderrText();
+    expect(stderr).toContain(AnalyzeCode.EvidenceDrift);
+    expect(stderr).toContain(
+      "manifest digest does not match the completion pointer"
+    );
+    expect(stderr).toContain("holds no completion pointer");
+    expect(
+      await readFile(path.join(runRoot, "study-analysis.json"), "utf8").catch(
+        () => "missing"
+      )
+    ).toBe("missing");
+  });
+
+  it("refuses a parent analysis of another study run", async () => {
+    const steel = await loadSteelPack();
+    const cwd = await newWorkspace();
+    const { root } = await scaffoldedStudy(cwd, steel.root);
+    await writeLock(cwd, root, steel.root);
+    const { runRoot } = await assembleStudyRun(cwd, root, steel.root);
+    const first = new MemoryIo();
+    expect(await main(["study", "analyze", runRoot], first, { cwd })).toBe(
+      EXIT_OK
+    );
+    const parent = JSON.parse(
+      await readFile(path.join(runRoot, "study-analysis.json"), "utf8")
+    ) as { study_run_id: string };
+    parent.study_run_id = "sr-other";
+    const parentPath = path.join(runRoot, "parent-other.json");
+    await writeFile(parentPath, `${JSON.stringify(parent)}\n`);
+
+    const io = new MemoryIo();
+    const code = await main(
+      ["study", "analyze", runRoot, "--derived-from", parentPath],
+      io,
+      { cwd }
+    );
+    expect(code).toBe(EXIT_INVALID);
+    expect(io.stderrText()).toContain(AnalyzeCode.ParentInvalid);
+    // The refused parent never produced a derived document.
+    expect(
+      await readdir(path.join(runRoot, "derived")).catch(() => [])
+    ).toEqual([]);
+  });
+
+  it("refuses a parent analysis that fails study-analysis.v1", async () => {
+    const steel = await loadSteelPack();
+    const cwd = await newWorkspace();
+    const { root } = await scaffoldedStudy(cwd, steel.root);
+    await writeLock(cwd, root, steel.root);
+    const { runRoot } = await assembleStudyRun(cwd, root, steel.root);
+    const first = new MemoryIo();
+    expect(await main(["study", "analyze", runRoot], first, { cwd })).toBe(
+      EXIT_OK
+    );
+    const parent = JSON.parse(
+      await readFile(path.join(runRoot, "study-analysis.json"), "utf8")
+    ) as { inputs: Record<string, string> };
+    delete parent.inputs["analyzer_sha256"];
+    const parentPath = path.join(runRoot, "parent-invalid.json");
+    await writeFile(parentPath, `${JSON.stringify(parent)}\n`);
+
+    const io = new MemoryIo();
+    const code = await main(
+      ["study", "analyze", runRoot, "--derived-from", parentPath],
+      io,
+      { cwd }
+    );
+    expect(code).toBe(EXIT_INVALID);
+    expect(io.stderrText()).toContain(AnalyzeCode.ParentInvalid);
+    expect(
+      await readdir(path.join(runRoot, "derived")).catch(() => [])
+    ).toEqual([]);
+  });
 });

@@ -2,8 +2,9 @@
  * `oal study analyze` (specification section 23.17). The command loads a
  * StudyRun directory, verifies the recorded digests of the protocol
  * lock, the phase plan, and the assignment schedule, verifies the
- * child-batch artifact manifests, then executes exactly the frozen
- * plan through the registered analyzer. `--analysis-plan` is refused:
+ * child-batch artifact manifests and anchors each manifest to the
+ * digest its completion pointer recorded, then executes exactly the
+ * frozen plan through the registered analyzer. `--analysis-plan` is refused:
  * this build reads no analysis-plan file. A corrected built-in
  * analysis runs through the derived-result path and never overwrites
  * the original result. Aggregating a second StudyRun is refused: no
@@ -24,6 +25,7 @@ import {
   invalidInput,
   isJsonObject,
   isSafeId,
+  isSha256Hex,
   sha256Hex,
   stableJsonStringify,
   type Diagnostic,
@@ -464,6 +466,79 @@ export async function loadStudyRun(root: string): Promise<{
   };
 }
 
+/**
+ * Anchor one child-batch manifest to its write-once completion pointer.
+ * The pointer contributes only its recorded manifest digest: the
+ * manifest beside it is hashed, so a relocated batch tree still
+ * anchors. A manifest that was regenerated after completion no longer
+ * matches the pointer, so tampered evidence cannot be laundered by
+ * rewriting the manifest.
+ */
+async function anchorBatchManifest(
+  batchDir: string
+): Promise<readonly ArtifactDrift[]> {
+  const pointerPath = path.join(batchDir, "batch.completed.json");
+  const pointerText = await readFile(pointerPath, "utf8").catch(() => null);
+  if (pointerText === null) {
+    return [
+      {
+        root: batchDir,
+        path: "batch.completed.json",
+        detail: "the batch holds no completion pointer for its manifest"
+      }
+    ];
+  }
+  let pointer: {
+    manifest_sha256?: unknown;
+    artifact_manifest_sha256?: unknown;
+  };
+  try {
+    pointer = JSON.parse(pointerText) as typeof pointer;
+  } catch {
+    return [
+      {
+        root: batchDir,
+        path: "batch.completed.json",
+        detail: "the completion pointer is not valid JSON"
+      }
+    ];
+  }
+  const manifestText = await readFile(
+    path.join(batchDir, "artifact-manifest.json"),
+    "utf8"
+  ).catch(() => null);
+  if (manifestText === null) {
+    // The manifest verifier already reported the missing manifest.
+    return [];
+  }
+  const recorded =
+    typeof pointer.manifest_sha256 === "string"
+      ? pointer.manifest_sha256
+      : pointer.artifact_manifest_sha256;
+  if (typeof recorded !== "string" || !isSha256Hex(recorded)) {
+    return [
+      {
+        root: batchDir,
+        path: "batch.completed.json",
+        detail: "the completion pointer records no manifest digest"
+      }
+    ];
+  }
+  const observed = sha256Hex(manifestText);
+  if (observed !== recorded) {
+    return [
+      {
+        root: batchDir,
+        path: "artifact-manifest.json",
+        detail:
+          `manifest digest does not match the completion pointer: ` +
+          `recorded ${recorded}, found ${observed}`
+      }
+    ];
+  }
+  return [];
+}
+
 /** Collect the trial evidence of every child batch of a StudyRun. */
 async function cellEvidenceOf(
   root: string,
@@ -472,15 +547,23 @@ async function cellEvidenceOf(
   readonly cells: readonly CellEvidence[];
   readonly drift: readonly ArtifactDrift[];
 }> {
-  const cells: CellEvidence[] = [];
   const drift: ArtifactDrift[] = [];
+  // Verify every child-batch manifest before any evidence is read: all
+  // drift is refused before a single trial loads. The entry paths are
+  // manifest-relative, so a relocated batch tree still verifies, and
+  // each manifest is anchored to the digest its completion pointer
+  // recorded.
   for (const batch of header.child_batches) {
     const batchDir = path.resolve(root, batch.relative_path);
-    // Verify the child-batch artifact manifest before any evidence is
-    // read: every recorded file below the batch must hash to its
-    // recorded digest. The paths are manifest-relative, so a relocated
-    // batch tree still verifies.
     drift.push(...(await verifyArtifactsOf(batchDir)));
+    drift.push(...(await anchorBatchManifest(batchDir)));
+  }
+  if (drift.length > 0) {
+    return { cells: [], drift };
+  }
+  const cells: CellEvidence[] = [];
+  for (const batch of header.child_batches) {
+    const batchDir = path.resolve(root, batch.relative_path);
     const loaded = await loadRunOrBatch(batchDir).catch(() => null);
     if (loaded === null) {
       continue;
