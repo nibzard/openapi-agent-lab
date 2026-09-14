@@ -282,9 +282,9 @@ oal friction .oal/sessions/import-<digest>
 ```
 
 The import writes `trace.jsonl` and `capability-report.json` under
-`.oal/sessions/import-<digest>` by default. Use `--out` to choose another
-empty directory. The run id is a digest of the HAR, so one recording
-always imports to identical bytes.
+`.oal/sessions/import-<digest>` by default. Use `--out` to choose a
+directory that does not yet exist. The run id is a digest of the HAR, so
+one recording always imports to identical bytes.
 
 A header credential never survives an import. The import reads the
 values of `authorization`, `cookie`, every API key header the contract

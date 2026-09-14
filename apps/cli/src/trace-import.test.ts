@@ -8,6 +8,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { Readable } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { EXIT_INVALID, EXIT_OK, SchemaValidator, type Json } from "@oal/core";
@@ -151,6 +152,7 @@ function harEntry(input: {
   requestText?: string;
   responseMime?: string;
   responseText?: string;
+  responseEncoding?: string;
   requestHeaders?: Array<{ name: string; value: string }>;
   queryString?: Array<{ name: string; value: string }>;
   omitCredentialHeaders?: boolean;
@@ -204,7 +206,10 @@ function harEntry(input: {
           input.responseText ??
           (input.responseJson === undefined
             ? ""
-            : JSON.stringify(input.responseJson))
+            : JSON.stringify(input.responseJson)),
+        ...(input.responseEncoding === undefined
+          ? {}
+          : { encoding: input.responseEncoding })
       },
       redirectURL: "",
       headersSize: -1,
@@ -260,6 +265,16 @@ interface ImportSummary {
   diagnostics: Array<{ code: string; message: string }>;
 }
 
+/** The trace schema every written event must satisfy. */
+async function loadTraceSchema(): Promise<Json> {
+  return JSON.parse(
+    await readFile(
+      path.join(process.cwd(), "schemas", "trace-event.v1.schema.json"),
+      "utf8"
+    )
+  ) as Json;
+}
+
 /** The parsed events of one written session trace. */
 async function readEvents(sessionDir: string): Promise<Json[]> {
   const lines = (await readFile(path.join(sessionDir, "trace.jsonl"), "utf8"))
@@ -274,7 +289,9 @@ async function importDocument(
   options: {
     /** A contract value; the readonly test literals stringify the same. */
     contract?: unknown;
+    source?: string;
     flags?: readonly string[];
+    io?: MemoryIo;
   } = {}
 ): Promise<{
   io: MemoryIo;
@@ -285,12 +302,12 @@ async function importDocument(
   const contract = path.join(cwd, "openapi.json");
   await writeFile(har, JSON.stringify(document));
   await writeFile(contract, JSON.stringify(options.contract ?? CONTRACT));
-  const io = new MemoryIo();
+  const io = options.io ?? new MemoryIo();
   const code = await main(
     [
       "trace",
       "import",
-      har,
+      options.source ?? har,
       "--contract",
       contract,
       ...(options.flags ?? []),
@@ -479,6 +496,87 @@ describe("oal trace import", () => {
     ).toBe(true);
   });
 
+  it("writes the root pointer / for a whole-body violation", async () => {
+    const cwd = await newWorkspace();
+    const out = path.join(cwd, "imported-session");
+    const { code } = await importDocument(
+      cwd,
+      {
+        log: {
+          version: "1.2",
+          creator: { name: "test", version: "1" },
+          entries: [
+            harEntry({
+              method: "POST",
+              url: "https://api.example.test/v1/clips",
+              status: 201,
+              requestJson: { title: "x" },
+              responseJson: { id: "clip_1" }
+            })
+          ]
+        }
+      },
+      { flags: ["--out", out] }
+    );
+    expect(code).toBe(EXIT_OK);
+    const events = await readEvents(out);
+    expect(events).toHaveLength(1);
+    const validator = new SchemaValidator(await loadTraceSchema());
+    expect(validator.errors(events[0] as Json)).toEqual([]);
+    const request = (
+      events[0] as {
+        validation: {
+          request: {
+            status: string;
+            violations: Array<{ pointer: string; code: string }>;
+          };
+        };
+      }
+    ).validation.request;
+    expect(request.status).toBe("invalid");
+    expect(request.violations[0]?.pointer).toBe("/");
+    expect(request.violations[0]?.code).toBe("required");
+  });
+
+  it("records a failed status-0 exchange with no response", async () => {
+    const cwd = await newWorkspace();
+    const out = path.join(cwd, "imported-session");
+    const { io, code } = await importDocument(
+      cwd,
+      {
+        log: {
+          version: "1.2",
+          creator: { name: "test", version: "1" },
+          entries: [
+            harEntry({
+              method: "GET",
+              url: "https://api.example.test/v1/clips",
+              status: 0
+            })
+          ]
+        }
+      },
+      { flags: ["--out", out] }
+    );
+    expect(code).toBe(EXIT_OK);
+    expect(io.stderrText()).not.toContain(TraceImportCliCode.ResponseInvalid);
+    expect(io.stderrText()).toContain(TraceImportCliCode.ResponseAbsent);
+    const events = await readEvents(out);
+    const validator = new SchemaValidator(await loadTraceSchema());
+    expect(validator.errors(events[0] as Json)).toEqual([]);
+    expect((events[0] as { response: unknown }).response).toBeNull();
+    const frictionIo = new MemoryIo();
+    await main(["friction", out, "--format", "json"], frictionIo, { cwd });
+    const report = JSON.parse(frictionIo.stdoutChunks.join("")) as {
+      operations: Array<{ status_counts: Record<string, number> }>;
+    };
+    const buckets = report.operations.flatMap((operation) =>
+      Object.keys(operation.status_counts)
+    );
+    expect(buckets).not.toContain("0");
+    expect(buckets).toContain("unmatched");
+  });
+
   it("scrubs a credential echoed in a text body and a query string", async () => {
     const cwd = await newWorkspace();
     const out = path.join(cwd, "imported-session");
@@ -537,6 +635,141 @@ describe("oal trace import", () => {
     };
     expect(malformed.request.body.kind).toBe("text");
     expect(malformed.request.body.text).toContain("[REDACTED]");
+  });
+
+  it("imports a HAR piped on standard input", async () => {
+    const cwd = await newWorkspace();
+    const out = path.join(cwd, "imported-session");
+    const document = syntheticHar();
+    const { code, summary } = await importDocument(cwd, document, {
+      source: "-",
+      flags: ["--out", out],
+      io: new MemoryIo(Readable.from([Buffer.from(JSON.stringify(document))]))
+    });
+    expect(code).toBe(EXIT_OK);
+    expect(summary?.entries).toBe(4);
+    expect(await readEvents(out)).toHaveLength(4);
+  });
+
+  it("rejects an undeclared media type instead of a missing body", async () => {
+    const cwd = await newWorkspace();
+    const out = path.join(cwd, "imported-session");
+    const { code } = await importDocument(
+      cwd,
+      {
+        log: {
+          version: "1.2",
+          creator: { name: "test", version: "1" },
+          entries: [
+            harEntry({
+              method: "POST",
+              url: "https://api.example.test/v1/clips",
+              status: 415,
+              requestMime: "text/plain",
+              requestText: "url=https://example.com/page"
+            })
+          ]
+        }
+      },
+      { flags: ["--out", out] }
+    );
+    expect(code).toBe(EXIT_OK);
+    const event = (await readEvents(out))[0] as {
+      validation: {
+        request: {
+          status: string;
+          violations: Array<{ pointer: string; code: string }>;
+        };
+      };
+      error: { code: string } | null;
+    };
+    expect(
+      event.validation.request.violations.map((item) => item.code)
+    ).toEqual(["media_type_unsupported"]);
+    expect(event.error?.code).toBe("media_type_unsupported");
+    const frictionIo = new MemoryIo();
+    await main(["friction", out, "--format", "json"], frictionIo, { cwd });
+    const report = JSON.parse(frictionIo.stdoutChunks.join("")) as {
+      incidents: Array<{ kind: string }>;
+    };
+    expect(
+      report.incidents.some(
+        (incident) => incident.kind === "media_type_rejected"
+      )
+    ).toBe(true);
+  });
+
+  it("reports a missing body only when the entry sends none", async () => {
+    const cwd = await newWorkspace();
+    const out = path.join(cwd, "imported-session");
+    const { code } = await importDocument(
+      cwd,
+      {
+        log: {
+          version: "1.2",
+          creator: { name: "test", version: "1" },
+          entries: [
+            harEntry({
+              method: "POST",
+              url: "https://api.example.test/v1/clips",
+              status: 400
+            })
+          ]
+        }
+      },
+      { flags: ["--out", out] }
+    );
+    expect(code).toBe(EXIT_OK);
+    const event = (await readEvents(out))[0] as {
+      validation: {
+        request: {
+          status: string;
+          violations: Array<{ pointer: string; code: string }>;
+        };
+      };
+    };
+    expect(event.validation.request.violations).toEqual([
+      { pointer: "/", code: "required", message: "A request body is required." }
+    ]);
+  });
+
+  it("digests base64 response content as the decoded bytes", async () => {
+    const cwd = await newWorkspace();
+    const out = path.join(cwd, "imported-session");
+    const { code } = await importDocument(
+      cwd,
+      {
+        log: {
+          version: "1.2",
+          creator: { name: "test", version: "1" },
+          entries: [
+            harEntry({
+              method: "GET",
+              url: "https://api.example.test/v1/clips/clip_1",
+              status: 200,
+              responseMime: "image/png",
+              responseText: "iVBORw0KGgoA",
+              responseEncoding: "base64"
+            })
+          ]
+        }
+      },
+      { flags: ["--out", out] }
+    );
+    expect(code).toBe(EXIT_OK);
+    const event = (await readEvents(out))[0] as {
+      response: {
+        body: { kind: string; size_bytes: number; sha256: string | null };
+      } | null;
+    };
+    // "iVBORw0KGgoA" decodes to the nine bytes 89 50 4e 47 0d 0a 1a 0a 00.
+    expect(event.response?.body).toEqual({
+      kind: "binary",
+      size_bytes: 9,
+      sha256:
+        "843ac23b1736b4487ec81cf7c07ddd9bb46ae5b7818c2c3843d99d62fa75f3c9",
+      blob_ref: null
+    });
   });
 
   it("counts a contract api key header as the credential", async () => {

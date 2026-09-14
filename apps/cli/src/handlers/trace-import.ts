@@ -68,6 +68,7 @@ export const TraceImportCliCode = {
   MethodNotAllowed: "OAL-TRACE-IMPORT-METHOD-NOT-ALLOWED",
   RequestInvalid: "OAL-TRACE-IMPORT-REQUEST-INVALID",
   ResponseInvalid: "OAL-TRACE-IMPORT-RESPONSE-INVALID",
+  ResponseAbsent: "OAL-TRACE-IMPORT-RESPONSE-ABSENT",
   EntriesTruncated: "OAL-TRACE-IMPORT-ENTRIES-TRUNCATED"
 } as const;
 
@@ -158,17 +159,23 @@ interface ImportState {
 /**
  * Capture one HAR body under the recorder discipline (section 25.3).
  * A body the JSON parser refuses still records as text, because the
- * recording, not the contract, is the source here.
+ * recording, not the contract, is the source here. An encoding of
+ * "base64" is decoded first, so digests and sizes describe the payload
+ * bytes, never the encoding text.
  */
 async function captureHarBody(
   redactor: Redactor,
   text: string | null,
-  contentType: string | null
+  contentType: string | null,
+  encoding: string | null
 ): Promise<TraceBody> {
   if (text === null || text.length === 0) {
     return { kind: "none" };
   }
-  const bytes = new TextEncoder().encode(text);
+  const bytes =
+    encoding === "base64"
+      ? Buffer.from(text, "base64")
+      : new TextEncoder().encode(text);
   try {
     return await captureBody({
       bytes,
@@ -188,7 +195,12 @@ async function captureHarBody(
   }
 }
 
-/** Parse one JSON body for validation; null when it is not JSON. */
+/** The media type of a Content-Type, lowercased and without parameters. */
+function baseMediaTypeOf(contentType: string | null): string {
+  return (contentType ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
+}
+
+/** Parse one JSON body for response validation; undefined when not JSON. */
 function parseJsonBody(
   text: string | null,
   contentType: string | null
@@ -196,7 +208,7 @@ function parseJsonBody(
   if (text === null || text.length === 0) {
     return undefined;
   }
-  const base = (contentType ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
+  const base = baseMediaTypeOf(contentType);
   if (base !== "application/json" && !base.endsWith("+json")) {
     return undefined;
   }
@@ -205,6 +217,22 @@ function parseJsonBody(
   } catch {
     return undefined;
   }
+}
+
+/**
+ * The body value request validation sees. A JSON media type parses, and
+ * text the parser refuses still counts as a present body. Every other
+ * body passes as text, so validation names an undeclared media type and
+ * never reports a present body as missing.
+ */
+function requestBodyValueOf(
+  text: string | null,
+  contentType: string | null
+): Json | undefined {
+  if (text === null || text.length === 0) {
+    return undefined;
+  }
+  return parseJsonBody(text, contentType) ?? text;
 }
 
 /**
@@ -259,25 +287,32 @@ async function importHarEntry(
   const requestContentType =
     postData === null ? null : asString(postData["mimeType"]);
   const requestText = postData === null ? null : asString(postData["text"]);
+  const requestEncoding =
+    postData === null ? null : asString(postData["encoding"]);
   const headerNames = new Set(headerPairs.map(([name]) => name));
-  // Section 30.3: any sensitive header name proves a credential, the
-  // way the runner recorder treats contract api keys.
   const credentialPresent =
     headerNames.has("authorization") ||
     state.sensitiveHeaderNames.some((name) => headerNames.has(name));
-  const requestJson = parseJsonBody(requestText, requestContentType);
-  const status =
-    response === null
+  const requestJson = requestBodyValueOf(requestText, requestContentType);
+  const rawStatus =
+    response === null || typeof response["status"] !== "number"
       ? null
-      : typeof response["status"] === "number"
-        ? response["status"]
-        : null;
+      : response["status"];
+  // Chrome writes status 0 for failed requests (net::ERR_*). The trace
+  // schema accepts 100 through 599 only, so such an exchange keeps a
+  // null response instead of a status no consumer can read.
+  const status =
+    rawStatus !== null && rawStatus >= 100 && rawStatus <= 599
+      ? rawStatus
+      : null;
   const responseContent =
     response === null ? null : asRecord(response["content"]);
   const responseText =
     responseContent === null ? null : (asString(responseContent["text"]) ?? "");
   const responseContentType =
     responseContent === null ? null : asString(responseContent["mimeType"]);
+  const responseEncoding =
+    responseContent === null ? null : asString(responseContent["encoding"]);
   const responseJson = parseJsonBody(responseText, responseContentType);
 
   const requestViolations =
@@ -375,7 +410,8 @@ async function importHarEntry(
       body: await captureHarBody(
         state.redactor,
         requestText,
-        requestContentType
+        requestContentType,
+        requestEncoding
       )
     },
     authentication: {
@@ -427,13 +463,20 @@ async function importHarEntry(
             body: await captureHarBody(
               state.redactor,
               responseText,
-              responseContentType
+              responseContentType,
+              responseEncoding
             )
           },
     state: null,
     idempotency: { status: "not_requested", record_ref: null },
     replay: { classification: "full", reason_code: null },
-    error: errorOf(route.pathExists, operation, status, requestViolations),
+    error: errorOf(
+      route.pathExists,
+      operation,
+      status,
+      requestViolations,
+      requestContentType
+    ),
     duration_ms: durationMs,
     resource_usage: {
       request_bytes:
@@ -447,7 +490,7 @@ async function importHarEntry(
 }
 
 /**
- * Collect the values of every sensitive header name across both sides of
+ * Collect the values of sensitive-named headers from both sides of
  * every imported entry (section 30.3). A name counts when the contract
  * flags it or when the canonical credential-key pattern does. The
  * values feed the Redactor secret registry and nothing else: they are
@@ -517,8 +560,15 @@ function cookieRecordOf(value: unknown): Record<string, string> {
   return record;
 }
 
-/** Prefix a validation pointer with its location, body pointers as-is. */
+/**
+ * Prefix a validation pointer with its location, body pointers as-is.
+ * The validators name a whole-body violation with the empty pointer,
+ * which the trace schema refuses, so it becomes the root pointer "/".
+ */
 function violationPointerOf(location: string, pointer: string): string {
+  if (pointer.length === 0) {
+    return "/";
+  }
   return location === "body" || pointer.startsWith("/")
     ? pointer
     : `/${pointer}`;
@@ -528,13 +578,17 @@ function violationPointerOf(location: string, pointer: string): string {
  * The error record of one imported exchange. An unmatched route keeps
  * the gateway routing codes so friction reads it; a request the
  * declared schema rejects, which the recorded service also refused,
- * keeps request_schema_invalid for the same reason.
+ * keeps request_schema_invalid for the same reason. A body whose media
+ * type the operation does not declare keeps media_type_unsupported,
+ * the code the media-type friction detector keys on, whatever the
+ * recorded service answered: the gap is in the spec, not the recording.
  */
 function errorOf(
   pathExists: boolean,
   operation: OperationIR | null,
   status: number | null,
-  requestViolations: ReadonlyArray<{ pointer: string; code: string }>
+  requestViolations: ReadonlyArray<{ pointer: string; code: string }>,
+  contentType: string | null
 ): TraceEvent["error"] {
   if (operation === null) {
     return pathExists
@@ -552,6 +606,21 @@ function errorOf(
           retryable: false,
           details: {}
         };
+  }
+  if (
+    requestViolations.some(
+      (violation) => violation.code === "media_type_unsupported"
+    )
+  ) {
+    return {
+      layer: "validation",
+      code: "media_type_unsupported",
+      message:
+        "The recorded request body carried a media type the operation " +
+        "does not declare.",
+      retryable: false,
+      details: contentType === null ? {} : { content_type: contentType }
+    };
   }
   if (requestViolations.length > 0 && status !== null && status >= 400) {
     return {
@@ -594,7 +663,8 @@ export const traceImportCommand: CommandHandler = async (args, io) => {
 
   const resolvedHar = await resolveSourceArgument(harArg, {
     cwd: args.context.cwd,
-    maxBytes: args.context.maxSourceBytes
+    maxBytes: args.context.maxSourceBytes,
+    ...(io.stdin === undefined ? {} : { stdin: io.stdin })
   });
   const harText = await readFile(resolvedHar.entrypoint, "utf8");
   let parsed: unknown;
@@ -720,6 +790,20 @@ export const traceImportCommand: CommandHandler = async (args, io) => {
           phase: "ingest",
           code: TraceImportCliCode.MethodNotAllowed,
           message: `${where} exists with other methods only.`
+        })
+      );
+    }
+    if (exchange.event.response === null) {
+      // Chrome writes status 0 for a failed request, and a response
+      // object can be absent or hold no usable status at all.
+      findings.push(
+        diagnostic({
+          severity: "warning",
+          phase: "ingest",
+          code: TraceImportCliCode.ResponseAbsent,
+          message:
+            `${where} recorded no usable response status; the import ` +
+            "wrote the exchange without a response."
         })
       );
     }
