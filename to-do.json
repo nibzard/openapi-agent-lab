@@ -1045,7 +1045,7 @@
       "id": "T061",
       "title": "Check the cohort task outcome denominators",
       "priority": 3,
-      "status": "todo",
+      "status": "done",
       "details": "A three-trial batch reported task_pass 0/1 and task outcomes partial=1 while every trial was completed and evaluated. Either the denominator or the outcome label is wrong, and readers will take it as a pass rate.",
       "steps": [
         "Reproduce with the recorded batch under .oal/runs and a synthetic three-trial fixture.",
@@ -1055,7 +1055,7 @@
       "tags": ["reports", "evaluator", "testing"],
       "files": ["packages/report/src", "packages/evaluator/src"],
       "created_at": "2026-09-14T13:02:17Z",
-      "updated_at": "2026-09-14T13:02:17Z"
+      "updated_at": "2026-09-14T19:50:00Z"
     },
     {
       "id": "T062",
