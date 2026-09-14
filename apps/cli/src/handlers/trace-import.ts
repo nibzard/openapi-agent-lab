@@ -4,7 +4,9 @@
  * api.exchange event per entry, matched against the compiled contract,
  * with request and response validation recorded. Sensitive header and
  * credential values are redacted before anything is written; header
- * names and presence survive, values never do (section 30).
+ * names and presence survive, values never do (section 30). Every
+ * sensitive header value joins the run secret registry, so a value
+ * repeated in a body, a query string, or a path is scrubbed there too.
  */
 
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
@@ -17,6 +19,7 @@ import {
   diagnostic,
   formatRfc3339,
   invalidInput,
+  isCredentialKey,
   isSafeId,
   sequenceId,
   sha256Hex,
@@ -148,6 +151,8 @@ interface ImportState {
   readonly operations: readonly OperationIR[];
   readonly schemaLookup: (ref: string) => Json | undefined;
   readonly redactor: Redactor;
+  /** Lowercase header names the contract and section 30.3 flag. */
+  readonly sensitiveHeaderNames: readonly string[];
 }
 
 /**
@@ -255,7 +260,11 @@ async function importHarEntry(
     postData === null ? null : asString(postData["mimeType"]);
   const requestText = postData === null ? null : asString(postData["text"]);
   const headerNames = new Set(headerPairs.map(([name]) => name));
-  const credentialPresent = headerNames.has("authorization");
+  // Section 30.3: any sensitive header name proves a credential, the
+  // way the runner recorder treats contract api keys.
+  const credentialPresent =
+    headerNames.has("authorization") ||
+    state.sensitiveHeaderNames.some((name) => headerNames.has(name));
   const requestJson = parseJsonBody(requestText, requestContentType);
   const status =
     response === null
@@ -437,6 +446,41 @@ async function importHarEntry(
   return { event, matched: operation !== null };
 }
 
+/**
+ * Collect the values of every sensitive header name across both sides of
+ * every imported entry (section 30.3). A name counts when the contract
+ * flags it or when the canonical credential-key pattern does. The
+ * values feed the Redactor secret registry and nothing else: they are
+ * never returned, printed, or written by the caller.
+ */
+function collectHarSecrets(
+  entries: readonly unknown[],
+  sensitiveNames: ReadonlySet<string>
+): string[] {
+  const secrets = new Set<string>();
+  for (const raw of entries) {
+    const entry = asRecord(raw);
+    const request = entry === null ? null : asRecord(entry["request"]);
+    const response = entry === null ? null : asRecord(entry["response"]);
+    for (const side of [request, response]) {
+      if (side === null) {
+        continue;
+      }
+      for (const [name, values] of groupHarHeaders(side["headers"])) {
+        if (!sensitiveNames.has(name) && !isCredentialKey(name)) {
+          continue;
+        }
+        for (const value of values) {
+          if (value.length > 0) {
+            secrets.add(value);
+          }
+        }
+      }
+    }
+  }
+  return [...secrets];
+}
+
 /** Join grouped pairs into the single-value record validation reads. */
 function queryRecordOf(
   pairs: ReadonlyArray<readonly [string, string[]]>
@@ -604,6 +648,7 @@ export const traceImportCommand: CommandHandler = async (args, io) => {
   // The redaction discipline of the recorder (section 30): the HMAC key
   // comes from the HAR digest, so one recording always redacts to the
   // same fingerprints, and apiKey wire names join the sensitive set.
+  // Every name is stored lowercase, the way HAR headers are grouped.
   const sensitiveHeaderNames = new Set(["authorization"]);
   for (const scheme of Object.values(compiled.contract.security_schemes)) {
     if (
@@ -611,22 +656,28 @@ export const traceImportCommand: CommandHandler = async (args, io) => {
       scheme.location === "header" &&
       scheme.wire_name !== null
     ) {
-      sensitiveHeaderNames.add(scheme.wire_name);
+      sensitiveHeaderNames.add(scheme.wire_name.toLowerCase());
     }
   }
+  const bounded = entryList.slice(0, LIMIT_DEFAULTS.maxRequestsPerRun);
+  // Section 30.3: every value a sensitive header name carries, on both
+  // sides of every imported entry, joins the run secret registry. The
+  // registry exists only as Redactor input; the import never prints,
+  // logs, or writes a collected value anywhere else.
+  const harSecrets = collectHarSecrets(bounded, sensitiveHeaderNames);
   const state: ImportState = {
     runId,
     operations: compiled.contract.operations,
     schemaLookup: createContractSchemaLookup(compiled.contract.schemas),
     redactor: new Redactor({
       hmacKey: Buffer.from(`trace-import:${harDigest}`, "utf8"),
-      secrets: [],
+      secrets: harSecrets,
       config: { sensitiveHeaderNames: [...sensitiveHeaderNames] }
-    })
+    }),
+    sensitiveHeaderNames: [...sensitiveHeaderNames]
   };
 
   const findings: Diagnostic[] = [];
-  const bounded = entryList.slice(0, LIMIT_DEFAULTS.maxRequestsPerRun);
   if (bounded.length < entryList.length) {
     findings.push(
       diagnostic({

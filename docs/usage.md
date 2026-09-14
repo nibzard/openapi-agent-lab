@@ -286,10 +286,17 @@ The import writes `trace.jsonl` and `capability-report.json` under
 empty directory. The run id is a digest of the HAR, so one recording
 always imports to identical bytes.
 
-Sensitive header and credential values never survive an import. Header
-names and their presence are kept. Values of `authorization`, `cookie`,
-and any credential-shaped header become `[REDACTED]`, mirroring the
-recorder discipline.
+A header credential never survives an import. The import reads the
+values of `authorization`, `cookie`, every API key header the contract
+declares, and every credential-shaped header name. It registers those
+values as run secrets before it writes anything. Each value then becomes
+`[REDACTED]` in its header, and the same value is scrubbed from any
+body text, query string, or path that repeats it. Header names and their
+presence are kept.
+
+JSON bodies are redacted by key shape, not by header values. A JSON key
+that looks like a credential, for example `api_key`, is fingerprinted
+wherever it appears.
 
 ## Adapters
 
