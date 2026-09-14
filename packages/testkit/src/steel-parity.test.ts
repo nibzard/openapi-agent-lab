@@ -285,20 +285,18 @@ describe("Steel parity: API key behavior", () => {
     expect(response.provenance).toBe("fixture:sessions-list-empty");
   });
 
-  it("keeps the published anonymous alternative until the runner enforces the pack credential", async () => {
+  it("checks a presented steel key even though anonymous access is declared", async () => {
     const migrated = await compilePackContract(pack.loaded);
     const contract = migrated.contract;
     const operation = operationOf(contract, "path:GET /v1/sessions");
 
     // The source contract declares `security: [{"apiKey": []}, {}]`.
     // Specification section 13.7 keeps the empty requirement as an
-    // anonymous alternative, so the contract-level gateway always
-    // resolves the anonymous principal, with or without a presented
-    // key. Migration note drift item 4 records this: the pack
-    // compensates with `security.enforce: true` and one generated
-    // credential, and the enforced 401 problem document lands with the
-    // runner wiring (tasks T042 and T053). The previous test proves
-    // the minted credential is accepted through the full pipeline.
+    // anonymous alternative. Specification section 15.9 makes a
+    // presented credential a claim: only an unclaimed request may use
+    // the anonymous alternative. The live API answers 401 for a wrong
+    // key, and so does the gateway. The previous test proves the
+    // minted credential is accepted through the full pipeline.
     expect(operation.security?.anonymous).toBe(true);
     expect(operation.security?.alternatives).toEqual([
       { schemes: [{ name: "apiKey", scopes: [] }] },
@@ -329,7 +327,22 @@ describe("Steel parity: API key behavior", () => {
     );
     expect(withKey).toEqual({
       ok: true,
-      principal: { scheme: "anonymous", scopes: [], anonymous: true }
+      principal: { scheme: "apiKey", scopes: [], anonymous: false }
+    });
+    const wrongKey = evaluateSecurity(
+      operation,
+      contract,
+      {
+        headers: { [STEEL_API_KEY_HEADER]: "oal_not_this_run" },
+        query: {},
+        cookies: {}
+      },
+      credentials
+    );
+    expect(wrongKey).toEqual({
+      ok: false,
+      code: "authentication_failed",
+      scheme: null
     });
 
     const security = objectOf(pack.loaded.manifest["security"]);

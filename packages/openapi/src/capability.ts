@@ -360,6 +360,25 @@ export function buildCapabilityReport(
           }
         }
       }
+      // An anonymous alternative beside credential alternatives states
+      // the claim rule of specification section 15.9: a presented
+      // credential for a declared scheme is checked, and anonymous
+      // access applies only when no declared credential is presented.
+      const hasCredentialAlternative = security.alternatives.some(
+        (alternative) => alternative.schemes.length > 0
+      );
+      if (security.anonymous && hasCredentialAlternative) {
+        surfaces.push({ kind: "security_alternative", name: "anonymous" });
+        const code = "security:anonymous-claim-checked";
+        record(
+          "security_flow",
+          "anonymous",
+          "supported",
+          [code],
+          operation.key
+        );
+        reasonCodes.add(code);
+      }
     }
     if (webhook !== null) {
       surfaces.push({ kind: "webhook", name: webhook });

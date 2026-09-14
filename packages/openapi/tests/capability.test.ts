@@ -87,6 +87,27 @@ describe("capability reporting", () => {
     expect(callback?.level).toBe("approximated");
   });
 
+  it("records the claim rule for an anonymous alternative", () => {
+    const { report } = compile("openapi/security-alternatives.json");
+    const feature = report.features.find(
+      (candidate) =>
+        candidate.kind === "security_flow" && candidate.name === "anonymous"
+    );
+    expect(feature?.level).toBe("supported");
+    expect(feature?.reason_codes).toEqual(["security:anonymous-claim-checked"]);
+    // Only an operation that declares an anonymous alternative beside
+    // a credential alternative carries the rule.
+    expect(feature?.operation_keys).toEqual(["path:GET /key/optional"]);
+    const mixed = report.operations.find(
+      (operation) => operation.key === "path:GET /key/optional"
+    );
+    expect(mixed?.surfaces).toContainEqual({
+      kind: "security_alternative",
+      name: "anonymous"
+    });
+    expect(mixed?.reason_codes).toContain("security:anonymous-claim-checked");
+  });
+
   it("reports identity findings for tool generation", () => {
     const report = petstore.report;
     expect(report.missing_operation_ids).toBe(1);

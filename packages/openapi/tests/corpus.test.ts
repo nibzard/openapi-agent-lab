@@ -147,9 +147,9 @@ describe("conformance corpus", () => {
       },
       {
         path: "openapi/security-alternatives.json",
-        operations: 9,
+        operations: 10,
         levels: {
-          supported: 8,
+          supported: 9,
           approximated: 1,
           requires_scenario: 0,
           unsupported: 0

@@ -358,6 +358,154 @@ describe("authentication emulation", () => {
     expect(outcome.ok).toBe(true);
   });
 
+  it("rejects a wrong api key even when anonymous access is declared", () => {
+    const c = contract({
+      operations: [
+        operation({
+          security: {
+            anonymous: true,
+            alternatives: [
+              { schemes: [{ name: "apiKeyAuth", scopes: [] }] },
+              { schemes: [] }
+            ]
+          }
+        })
+      ],
+      securitySchemes: { apiKeyAuth: scheme({}) }
+    });
+    const result = handleGatewayRequest(
+      options({ contract: c }),
+      7,
+      request({ headers: { "x-api-key": "oal_not_this_run" } })
+    );
+    expect(result.status).toBe(401);
+    expect(result.frameworkCode).toBe("authentication_failed");
+
+    const bare = handleGatewayRequest(options({ contract: c }), 8, request({}));
+    expect(bare.status).toBe(200);
+  });
+
+  it("keeps anonymous access when no declared credential is presented", () => {
+    const c = contract({
+      operations: [
+        operation({
+          security: {
+            anonymous: true,
+            alternatives: [
+              { schemes: [{ name: "apiKeyAuth", scopes: [] }] },
+              { schemes: [] }
+            ]
+          }
+        })
+      ],
+      securitySchemes: { apiKeyAuth: scheme({}) }
+    });
+    const outcome = evaluateSecurity(
+      c.operations[0] as OperationIR,
+      c,
+      { headers: {}, query: {}, cookies: {} },
+      mintRunCredentials(c, "seed_a")
+    );
+    expect(outcome).toEqual({
+      ok: true,
+      principal: { scheme: "anonymous", scopes: [], anonymous: true }
+    });
+  });
+
+  it("verifies a presented key instead of the anonymous alternative", () => {
+    const c = contract({
+      operations: [
+        operation({
+          security: {
+            anonymous: true,
+            alternatives: [
+              { schemes: [{ name: "apiKeyAuth", scopes: [] }] },
+              { schemes: [] }
+            ]
+          }
+        })
+      ],
+      securitySchemes: { apiKeyAuth: scheme({}) }
+    });
+    const credentials = mintRunCredentials(c, "seed_a");
+    const outcome = evaluateSecurity(
+      c.operations[0] as OperationIR,
+      c,
+      {
+        headers: { "x-api-key": credentials.apiKeys.apiKeyAuth as string },
+        query: {},
+        cookies: {}
+      },
+      credentials
+    );
+    expect(outcome).toEqual({
+      ok: true,
+      principal: { scheme: "apiKeyAuth", scopes: [], anonymous: false }
+    });
+  });
+
+  it("ignores a credential for a scheme the operation does not declare", () => {
+    const c = contract({
+      operations: [
+        operation({
+          security: {
+            anonymous: true,
+            alternatives: [
+              { schemes: [{ name: "apiKeyAuth", scopes: [] }] },
+              { schemes: [] }
+            ]
+          }
+        })
+      ],
+      securitySchemes: {
+        apiKeyAuth: scheme({}),
+        otherKey: scheme({ name: "otherKey", wire_name: "x-other-key" })
+      }
+    });
+    const credentials = mintRunCredentials(c, "seed_a");
+    const outcome = evaluateSecurity(
+      c.operations[0] as OperationIR,
+      c,
+      {
+        headers: { "x-other-key": credentials.apiKeys.otherKey as string },
+        query: {},
+        cookies: {}
+      },
+      credentials
+    );
+    expect(outcome).toEqual({
+      ok: true,
+      principal: { scheme: "anonymous", scopes: [], anonymous: true }
+    });
+  });
+
+  it("treats an empty credential value as absent for anonymous access", () => {
+    const c = contract({
+      operations: [
+        operation({
+          security: {
+            anonymous: true,
+            alternatives: [
+              { schemes: [{ name: "apiKeyAuth", scopes: [] }] },
+              { schemes: [] }
+            ]
+          }
+        })
+      ],
+      securitySchemes: { apiKeyAuth: scheme({}) }
+    });
+    const outcome = evaluateSecurity(
+      c.operations[0] as OperationIR,
+      c,
+      { headers: { "x-api-key": "" }, query: {}, cookies: {} },
+      mintRunCredentials(c, "seed_a")
+    );
+    expect(outcome).toEqual({
+      ok: true,
+      principal: { scheme: "anonymous", scopes: [], anonymous: true }
+    });
+  });
+
   it("answers 403 semantics for a scope deficit", () => {
     const oauth = scheme({
       name: "oauth",

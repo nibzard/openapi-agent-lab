@@ -29,6 +29,21 @@
         }
       }
     },
+    "/key/optional": {
+      "get": {
+        "operationId": "getKeyOptional",
+        "summary": "An api key or an anonymous request; a presented key must verify",
+        "security": [
+          {
+            "header_key": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Ack" }
+        }
+      }
+    },
     "/key/query": {
       "get": {
         "operationId": "getKeyQuery",

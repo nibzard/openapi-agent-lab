@@ -199,11 +199,42 @@ function verifyScheme(
 }
 
 /**
+ * Whether the request presents a credential for the scheme. Present
+ * means a non-empty value in the scheme's wire location (specification
+ * section 15.9); an empty value counts as absent. A credential for a
+ * scheme the operation does not declare is not a claim under that
+ * operation.
+ */
+function presentsCredential(
+  scheme: SecuritySchemeIR,
+  request: PresentedCredentials
+): boolean {
+  switch (scheme.type) {
+    case "apiKey": {
+      const presented = presentedApiKey(scheme, request);
+      return presented !== null && presented.length > 0;
+    }
+    case "http":
+    case "oauth2":
+    case "openIdConnect":
+      return (
+        request.headers["authorization"] !== undefined &&
+        request.headers["authorization"].length > 0
+      );
+    case "mutualTLS":
+      return false;
+  }
+}
+
+/**
  * Evaluate the operation's security expression. An operation with no
  * security declaration, or one that explicitly allows anonymous
- * access, receives an anonymous principal. Otherwise every scheme of
- * one alternative must verify; a scope deficit reports 403 rather
- * than 401.
+ * access, receives an anonymous principal. A presented credential for
+ * a declared scheme is a claim: the anonymous alternative applies only
+ * when no declared credential is presented, so a wrong value fails
+ * with 401 instead of falling through to anonymous. Otherwise every
+ * scheme of one alternative must verify; a scope deficit reports 403
+ * rather than 401.
  */
 export function evaluateSecurity(
   operation: OperationIR,
@@ -212,11 +243,21 @@ export function evaluateSecurity(
   credentials: RunCredentials
 ): AuthOutcome {
   const security = operation.security;
-  if (
-    security === null ||
-    security.anonymous ||
-    security.alternatives.length === 0
-  ) {
+  if (security === null || security.alternatives.length === 0) {
+    return {
+      ok: true,
+      principal: { scheme: "anonymous", scopes: [], anonymous: true }
+    };
+  }
+  const claimsDeclaredCredential = security.alternatives.some(
+    (alternative) =>
+      alternative.schemes.length > 0 &&
+      alternative.schemes.some(({ name }) => {
+        const scheme = contract.security_schemes[name];
+        return scheme !== undefined && presentsCredential(scheme, request);
+      })
+  );
+  if (security.anonymous && !claimsDeclaredCredential) {
     return {
       ok: true,
       principal: { scheme: "anonymous", scopes: [], anonymous: true }

@@ -698,6 +698,21 @@ describe("authentication emulation", () => {
     expect(exchange.status).toBe(403);
     expect(problemOf(exchange).code).toBe("authorization_failed");
   });
+
+  it("rejects a wrong key but keeps anonymous access when optional", async () => {
+    const credentials = secure.credentials;
+    const anonymous = await secure.exchange("GET", "/key/optional");
+    expect(anonymous.status).toBe(200);
+    const verified = await secure.exchange("GET", "/key/optional", {
+      "x-api-key": credentials.apiKeys.header_key as string
+    });
+    expect(verified.status).toBe(200);
+    const wrong = await secure.exchange("GET", "/key/optional", {
+      "x-api-key": "oal_wrong"
+    });
+    expect(wrong.status).toBe(401);
+    expect(problemOf(wrong).code).toBe("authentication_failed");
+  });
 });
 
 describe("determinism and mock bounds", () => {
