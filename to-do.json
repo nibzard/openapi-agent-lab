@@ -1084,7 +1084,7 @@
       "id": "T063",
       "title": "Add a read-only conformance probe against a live base URL",
       "priority": 4,
-      "status": "todo",
+      "status": "done",
       "details": "The mock said exec was broken. Production said stop, start, and restart return 503, unknown routes return 421, and malformed JSON returns 500. The contract cannot show server divergence. A probe that replays a batch's recorded safe requests against a live base URL and diffs status codes and response shapes against the contract would.",
       "steps": [
         "Define the request allowlist: only operations the operator names, never DELETE or writes unless passed explicitly.",
