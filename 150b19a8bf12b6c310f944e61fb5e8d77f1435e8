@@ -1,0 +1,31 @@
+# Review Notes
+
+## Summary
+T055 CODEX_API_KEY launcher credential, implemented in an
+isolated worktree, blocked by two reviewers, fixed, landed.
+
+## Observations
+- Both lenses first returned fix_first: the doctor auth.json
+  branch reported pass although no launched run can read the
+  file. The runner copies only probe-declared launcher names
+  (now ["CODEX_API_KEY"]), forwards no CODEX_HOME, and gives the
+  child a synthetic HOME, so a host auth.json never crosses.
+  Reviewers verified the 401-after-paid-probe scenario live on
+  this host against codex 0154.0... corrected: codex 0.154.0.
+- Fix 99e0589: auth.json branches report warn and advise only
+  CODEX_API_KEY; R_OK distinguishes unreadable files; docs
+  separate what codex accepts from what this build forwards;
+  probe-override rule and section 23.13 citation corrected.
+- Live re-check after the fix: adapter.codex_credential warns
+  on this host (auth.json present, CODEX_API_KEY unset);
+  mock-agent selection carries no such check.
+
+## Concern
+- Deliberate design limit recorded in the docs: CODEX_HOME is
+  not forwarded, because that would hand the child the
+  operator's whole codex config directory and pierce the
+  synthetic-HOME isolation.
+
+## Verdict
+Approved after fix. Cherry-picked as 0fd7445' + 99e0589'
+(150b19a); full CI green.
