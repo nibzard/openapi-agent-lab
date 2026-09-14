@@ -1,0 +1,31 @@
+# Review Notes
+
+## Summary
+T060 wrong key under anonymous: worktree implementer (failing test
+first at both the pipeline and conformance level), two adversarial
+reviewers (correctness, security/semantics).
+
+## Observations
+- Defect confirmed: the anonymous short-circuit ran before any
+  alternative, so a wrong steel-api-key answered 200 under the Steel
+  contract's declared anonymous alternative.
+- Rule: a presented non-empty credential for a scheme the operation
+  declares is a claim that must verify. Empty values count as absent;
+  credentials for undeclared schemes are not claims. Honest anonymous
+  requests keep the anonymous principal.
+- Judgment call accepted: a VALID key under a declared anonymous
+  alternative now yields the named scheme principal instead of the
+  anonymous one, mirroring the same contract without the anonymous
+  alternative.
+- The steel-parity test that asserted the buggy fall-through was
+  rewritten to pin the corrected behavior; the capability report
+  records the rule for mixed-security operations.
+
+## Concerns
+- Minor, recorded: the capability feature also fires vacuously for
+  mutualTLS-only credential alternatives (presentsCredential is always
+  false there). The operation is already marked unsupported, so the
+  aggregate report stays truthful.
+
+## Verdict
+Approved — both lenses returned land, zero blockers.
