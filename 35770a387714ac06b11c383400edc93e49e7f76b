@@ -1,0 +1,28 @@
+# Review Notes
+
+## Summary
+T061 cohort denominators: worktree implementer (reproduced first),
+two adversarial reviewers (correctness, semantics), plus one test
+added during landing.
+
+## Observations
+- Reproduction anchored to recorded data: live-steel-3x shares one
+  bat_ assignment id across three trials, so resolveSlots collapsed
+  the cohort to one slot (task_pass 0/1, partial=1).
+- New rule: sibling primaries under one assignment id each own a slot
+  (assignment#run); replacement chains still join by root. Study
+  shapes with one primary keep the bare assignment id, so the study
+  analyzer join is unchanged.
+- Recorded batch now reports primary_assignments 3, task_outcomes
+  partial=3, task_pass 0/3, matching its cohort-evaluation truth.
+
+## Concerns
+- Minor, accepted: a replacement under a shared cohort id joins the
+  first sibling slot; no producer records that shape today. Documented
+  and pinned by test.
+- Reviewer coverage gap closed during landing: censored siblings in a
+  shared-id cohort stay unresolved slots (task_pass 1/1, two unknown),
+  pinned in 28f74c7 after the reviewer verified the numbers by probe.
+
+## Verdict
+Approved — both lenses returned land, zero blockers.
