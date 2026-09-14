@@ -1,0 +1,29 @@
+# Review Notes
+
+## Summary
+T067 analysis support, evaluated hands-on by two agents,
+fixed, and landed as four commits (221adde..e892f79).
+
+## Observations
+- Both evaluators confirmed the task closes: the slot rule
+  was hand-derived on the fixtures (the old formula
+  double-counted a slot, scoring 2/3 where the shared rule
+  gives 1/2), write-once protects recorded bytes, and the
+  support check rejects from all four entry points.
+- One security blocker existed: verifyArtifactsOf joined
+  manifest paths without validation and followed symlinks,
+  turning study analyze into a file-existence and sha256
+  oracle. The exposure pre-existed on main through the
+  evaluate and compare handlers.
+- Fix 21baecf: isSafeRelativePath gates every entry before
+  any read, lstat refuses non-regular files, malformed
+  entries are drift findings, and each batch manifest digest
+  is anchored to its completion document before any evidence
+  is read. Failing-first tests cover traversal, symlink,
+  absolute-path, malformed-entry, and laundered-manifest
+  probes.
+
+## Verdict
+Approved after fix. Full CI green on main. The same fix
+heals the pre-existing oracle reachable through evaluate and
+compare.
