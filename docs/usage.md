@@ -318,7 +318,11 @@ does not yet exist. An existing target is refused.
 Only the operations you name in `--operations` replay. In the default
 read-only mode, only GET, HEAD, and OPTIONS requests replay. Recorded
 POST, PUT, PATCH, and DELETE requests stay skipped until you pass
-`--allow-writes`. Skipped requests are counted, never sent.
+`--allow-writes`. Skipped requests are counted, never sent. A write
+replay sends the recorded redacted body, not the original bytes: a
+secret value has already become a `{redacted, kind, fingerprint}`
+object. A live server may reject that shape, and the finding then
+reflects the redacted replay, not a server defect.
 
 Each replayed request is classified as `conformant`, `undeclared_status`,
 `schema_violation`, `request_error`, or `skipped`. An undeclared status
@@ -326,11 +330,25 @@ code and a schema violation become findings with class `spec_friction`
 and origin `server`. They report server divergence, not participant
 friction, so they use their own document instead of the friction report.
 
+The document bounds of `conformance.v1` cap what the file carries: 20000
+result rows, 512 findings, and 32 headers plus 32 violations per finding.
+A probe that outruns a bound keeps the first rows in order and clips the
+rest. The `counts` fields keep the true totals, so a clipped document
+never understates the divergence. The `extensions.truncation` object
+lists every clip, and a warning diagnostic reports it. The probe also
+validates the assembled document against the schema before it writes. An
+invalid document is refused and nothing is written.
+
 The credential comes from the environment variable named by
-`--credential-env`. Its value is sent in the header the contract security
-scheme expects. The value is registered as a run secret before anything
-is written. An echo in a response body, header, or path is scrubbed to
-`[REDACTED]`; names and presence survive. The value is never printed.
+`--credential-env`. Its value is sent in a request header: the
+`authorization` header for `http`, `oauth2`, and `openIdConnect`
+schemes, and the wire name for an `apiKey` placed in a header. A contract
+whose `apiKey` lives in a query parameter or a cookie is refused, because
+the probe sends a credential in headers only. The value is registered as
+a run secret before anything is written. A header or text echo is
+scrubbed to `[REDACTED]`; a JSON echo becomes the redacted value object
+`{redacted, kind, fingerprint}`. Names and presence survive. The value
+is never printed.
 
 A redirect stays manual, so a 3xx compares as a status and a write is
 never re-issued. Each request stops at its timeout; pass `--timeout`, for

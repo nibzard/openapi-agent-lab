@@ -12,15 +12,17 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  EXIT_INFRASTRUCTURE,
   EXIT_INVALID,
   EXIT_OK,
+  EXIT_UNSUPPORTED,
   SchemaValidator,
   canonicalJson,
   type Json
 } from "@oal/core";
 
 import { main } from "./cli.ts";
-import { ProbeCliCode } from "./handlers/probe.ts";
+import { ProbeCliCode, conformanceSchemaErrors } from "./handlers/probe.ts";
 import { MemoryIo } from "./io.ts";
 
 const RUN_ID = "run-0001";
@@ -30,6 +32,32 @@ const T0 = "2026-09-14T12:00:00.000Z";
 /** One live credential the probe must never persist. */
 const LIVE_TOKEN = "probe-live-canary-91d4e7";
 const CREDENTIAL_ENV = "OAL_PROBE_TEST_TOKEN";
+
+/** One declared JSON media content entry of the frozen contract. */
+function jsonContent(ref: string): Json[] {
+  return [
+    {
+      media_type: "application/json",
+      schema_ref: ref,
+      examples: [],
+      support: "supported",
+      support_reason_codes: []
+    }
+  ];
+}
+
+/** One declared response of the frozen contract, JSON or empty. */
+function jsonResponse(status: number, ref: string | null): Json {
+  return {
+    selector: status.toString(10),
+    selector_kind: "exact",
+    status,
+    description: null,
+    headers: [],
+    content: ref === null ? [] : jsonContent(ref),
+    source_pointer: ""
+  };
+}
 
 /**
  * A four-operation contract the frozen batch input holds: list, read,
@@ -57,24 +85,7 @@ function probeContract(): Json {
     source_pointer: "",
     document_uri: ""
   };
-  const content = (ref: string): Json => [
-    {
-      media_type: "application/json",
-      schema_ref: ref,
-      examples: [],
-      support: "supported",
-      support_reason_codes: []
-    }
-  ];
-  const response = (status: number, ref: string | null): Json => ({
-    selector: status.toString(10),
-    selector_kind: "exact",
-    status,
-    description: null,
-    headers: [],
-    content: ref === null ? [] : content(ref),
-    source_pointer: ""
-  });
+  const response = jsonResponse;
   const widgetIdParameter = {
     name: "widgetId",
     location: "path",
@@ -176,7 +187,7 @@ function probeContract(): Json {
         request_body: {
           required: true,
           description: null,
-          content: content("sch_widget_input"),
+          content: jsonContent("sch_widget_input"),
           source_pointer: ""
         },
         responses: [response(201, "sch_widget")],
@@ -201,6 +212,78 @@ function probeContract(): Json {
     diagnostics: [],
     extensions: {}
   };
+}
+
+/** A required property name long enough to outrun the document bounds. */
+const LONG_PROPERTY_NAME = "missing".repeat(90);
+
+/** The contract parts one variant overrides, as plain records. */
+interface ContractShape {
+  readonly schemas: Record<string, Json>;
+  readonly operations: ReadonlyArray<Record<string, unknown>>;
+  readonly security_schemes: Record<string, Record<string, unknown>>;
+  readonly [key: string]: unknown;
+}
+
+/** One contract with one part replaced. */
+function contractWith(
+  replace: (base: ContractShape) => Partial<ContractShape>
+): Json {
+  const base = probeContract() as unknown as ContractShape;
+  return { ...base, ...replace(base) } as unknown as Json;
+}
+
+/**
+ * The same contract with a list response of 50-element arrays whose
+ * items carry one long property name. Items that miss it produce long
+ * violation messages; items that carry a number produce long pointers.
+ */
+function probeContractWithLongListResponse(): Json {
+  return contractWith((base) => ({
+    schemas: {
+      ...base.schemas,
+      sch_widget_list: {
+        uid: "sch_widget_list",
+        schema: {
+          type: "array",
+          items: {
+            type: "object",
+            required: [LONG_PROPERTY_NAME],
+            properties: { [LONG_PROPERTY_NAME]: { type: "string" } }
+          }
+        },
+        source_pointer: "",
+        document_uri: ""
+      }
+    },
+    operations: base.operations.map((operation) =>
+      operation["operation_id"] === "listWidgets"
+        ? { ...operation, responses: [jsonResponse(200, "sch_widget_list")] }
+        : operation
+    )
+  }));
+}
+
+/** The same contract with an apiKey that expects a query parameter. */
+function probeContractWithQueryApiKey(): Json {
+  return contractWith(() => ({
+    security_schemes: {
+      queryKey: {
+        name: "queryKey",
+        type: "apiKey",
+        description: null,
+        location: "query",
+        wire_name: "api_key",
+        scheme: null,
+        bearer_format: null,
+        flows: null,
+        open_id_connect_url: null,
+        support: { level: "supported", diagnostic_codes: [] },
+        support_reason_codes: [],
+        source_pointer: ""
+      }
+    }
+  }));
 }
 
 interface RecordedRequest {
@@ -333,15 +416,25 @@ async function newWorkspace(): Promise<string> {
   return cwd;
 }
 
+/** Overrides the default batch fixtures of one probe workspace. */
+interface BatchOptions {
+  readonly contract?: Json;
+  readonly events?: readonly Json[];
+  readonly runId?: string;
+}
+
 /** Write the section 24.1 tree of one batch with one recorded trial. */
-async function writeBatch(cwd: string): Promise<string> {
+async function writeBatch(
+  cwd: string,
+  options: BatchOptions = {}
+): Promise<string> {
   const batchDir = path.join(cwd, ".oal", "runs", BATCH_ID);
   const runDir = path.join(batchDir, "trials", RUN_ID);
   await mkdir(path.join(batchDir, "inputs"), { recursive: true });
   await mkdir(runDir, { recursive: true });
   await writeFile(
     path.join(batchDir, "inputs", "contract.ir.json"),
-    `${canonicalJson(probeContract())}\n`
+    `${canonicalJson(options.contract ?? probeContract())}\n`
   );
   await writeFile(
     path.join(batchDir, "batch.json"),
@@ -352,7 +445,7 @@ async function writeBatch(cwd: string): Promise<string> {
     `${canonicalJson({
       schema_version: 1,
       kind: "RunStarted",
-      run_id: RUN_ID,
+      run_id: options.runId ?? RUN_ID,
       batch_id: BATCH_ID,
       started_at: T0,
       repetition_index: 0,
@@ -365,7 +458,7 @@ async function writeBatch(cwd: string): Promise<string> {
   );
   await writeFile(
     path.join(runDir, "trace.jsonl"),
-    recordedExchanges()
+    (options.events ?? recordedExchanges())
       .map((event) => canonicalJson(event))
       .join("\n") + "\n"
   );
@@ -468,12 +561,14 @@ interface ConformanceDocument {
     operation: string | null;
     trial_id: string;
     sequence: number;
+    detail: string;
     response: {
       status: number;
       headers: Array<{ name: string; values: string[]; redacted: boolean }>;
     };
-    violations: Array<{ code: string }>;
+    violations: Array<{ code: string; message: string; pointer: string }>;
   }>;
+  extensions: { truncation?: Record<string, number> };
 }
 
 /** The parsed conformance document the probe wrote. */
@@ -497,6 +592,10 @@ async function loadConformanceSchema(): Promise<Json> {
 async function expectSchemaValid(document: ConformanceDocument): Promise<void> {
   const validator = new SchemaValidator(await loadConformanceSchema());
   expect(validator.errors(document as unknown as Json)).toEqual([]);
+  // The writer runs this same gate immediately before it writes.
+  expect(await conformanceSchemaErrors(document as unknown as Json)).toEqual(
+    []
+  );
 }
 
 /** Drive the probe command the way the binary would. */
@@ -545,7 +644,7 @@ describe("oal probe", () => {
     await expectSchemaValid(document);
     expect(document.kind).toBe("ConformanceReport");
     expect(document.scope).toEqual({ level: "batch", id: BATCH_ID });
-    expect(document.base_url).toBe(service.baseUrl);
+    expect(document.base_url).toBe(`${service.baseUrl}/`);
     expect(document.allowlist).toEqual(["listWidgets", "getWidget"]);
     expect(document.writes_allowed).toBe(false);
     expect(document.credential).toBeNull();
@@ -1070,5 +1169,292 @@ describe("oal probe", () => {
     ]);
     expect(unparseable.code).toBe(EXIT_INVALID);
     expect(unparseable.io.stderrText()).toContain(ProbeCliCode.BaseUrlInvalid);
+  });
+
+  it("stores the normalized base url, not the raw flag", async () => {
+    const cwd = await newWorkspace();
+    const batchDir = await writeBatch(cwd);
+    const service = await LiveService.start();
+    service.route("GET", "/widgets", {
+      status: 200,
+      body: JSON.stringify({ id: "w_1", stock: 4 })
+    });
+    const out = path.join(cwd, "probe-out");
+    const { code } = await runProbe(cwd, [
+      batchDir,
+      "--base-url",
+      `  HTTP://${service.baseUrl.slice("http://".length)}  `,
+      "--operations",
+      "listWidgets",
+      "--out",
+      out
+    ]);
+    expect(code).toBe(EXIT_OK);
+    expect(service.hits).toEqual(["GET /widgets"]);
+    const document = await readDocument(out);
+    await expectSchemaValid(document);
+    // The padded, uppercase flag reaches the document normalized, so it
+    // satisfies the base url pattern of the schema.
+    expect(document.base_url).toBe(`${service.baseUrl}/`);
+  });
+
+  it("reports a JSON body that does not parse as a violation", async () => {
+    const cwd = await newWorkspace();
+    const batchDir = await writeBatch(cwd);
+    const service = await LiveService.start();
+    service.route("GET", "/widgets", {
+      status: 200,
+      contentType: "application/json",
+      body: "not-json{"
+    });
+    const out = path.join(cwd, "probe-out");
+    const { code } = await runProbe(cwd, [
+      batchDir,
+      "--base-url",
+      service.baseUrl,
+      "--operations",
+      "listWidgets",
+      "--out",
+      out
+    ]);
+    expect(code).toBe(EXIT_OK);
+    const document = await readDocument(out);
+    await expectSchemaValid(document);
+    expect(document.results[0]).toMatchObject({
+      classification: "schema_violation",
+      status: 200,
+      violations: 1
+    });
+    expect(document.findings[0]?.violations[0]).toMatchObject({
+      location: "body",
+      pointer: "/",
+      code: "body_malformed"
+    });
+  });
+
+  it("refuses an apiKey credential the contract expects in the query", async () => {
+    const cwd = await newWorkspace();
+    const batchDir = await writeBatch(cwd, {
+      contract: probeContractWithQueryApiKey()
+    });
+    const service = await LiveService.start();
+    service.route("GET", "/widgets", {
+      status: 200,
+      body: JSON.stringify({ id: "w_1", stock: 4 })
+    });
+    const out = path.join(cwd, "probe-out");
+    vi.stubEnv(CREDENTIAL_ENV, LIVE_TOKEN);
+    const io = new MemoryIo();
+    try {
+      const { code } = await runProbe(
+        cwd,
+        [
+          batchDir,
+          "--base-url",
+          service.baseUrl,
+          "--operations",
+          "listWidgets",
+          "--credential-env",
+          CREDENTIAL_ENV,
+          "--out",
+          out
+        ],
+        io
+      );
+      expect(code).toBe(EXIT_UNSUPPORTED);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect(io.stderrText()).toContain(
+      ProbeCliCode.CredentialLocationUnsupported
+    );
+    // Nothing was sent and nothing was written.
+    expect(service.hits).toEqual([]);
+    expect(await readdir(out).catch(() => null)).toBeNull();
+  });
+
+  it("keeps the true finding count when the document bound clips rows", async () => {
+    const cwd = await newWorkspace();
+    const events = Array.from({ length: 600 }, (_, index) =>
+      recordedExchange({
+        sequence: index + 1,
+        method: "GET",
+        path: "/widgets",
+        operationId: "listWidgets",
+        operationKey: "path:GET /widgets"
+      })
+    );
+    const batchDir = await writeBatch(cwd, { events });
+    const service = await LiveService.start();
+    service.route("GET", "/widgets", {
+      status: 503,
+      body: JSON.stringify({ error: "unavailable" })
+    });
+    const out = path.join(cwd, "probe-out");
+    const { io, code } = await runProbe(cwd, [
+      batchDir,
+      "--base-url",
+      service.baseUrl,
+      "--operations",
+      "listWidgets",
+      "--out",
+      out
+    ]);
+    expect(code).toBe(EXIT_OK);
+    expect(service.hits).toHaveLength(600);
+    const document = await readDocument(out);
+    await expectSchemaValid(document);
+    // The schema bound is 512 findings; the counts keep the true total
+    // so the clipped document never understates the divergence.
+    expect(document.findings).toHaveLength(512);
+    expect(document.counts.findings).toBe(600);
+    expect(document.counts.undeclared_status).toBe(600);
+    expect(document.findings.at(-1)?.id).toBe("cf_0512");
+    expect(document.extensions.truncation).toEqual({ findings: 88 });
+    expect(io.stderrText()).toContain(ProbeCliCode.DocumentTruncated);
+    expect(io.stderrText()).toContain("88 findings");
+  });
+
+  it("clips response headers, violations, and over-long strings", async () => {
+    const cwd = await newWorkspace();
+    const batchDir = await writeBatch(cwd, {
+      contract: probeContractWithLongListResponse()
+    });
+    const service = await LiveService.start();
+    const padding: Record<string, string> = {};
+    for (let index = 0; index < 40; index += 1) {
+      padding[`x-pad-${index.toString(10)}`] = "padding";
+    }
+    const items = Array.from({ length: 50 }, (_, index) =>
+      index < 25 ? {} : { [LONG_PROPERTY_NAME]: 4 }
+    );
+    service.route("GET", "/widgets", {
+      status: 200,
+      body: JSON.stringify(items),
+      headers: padding
+    });
+    const out = path.join(cwd, "probe-out");
+    const { io, code } = await runProbe(cwd, [
+      batchDir,
+      "--base-url",
+      service.baseUrl,
+      "--operations",
+      "listWidgets",
+      "--out",
+      out
+    ]);
+    expect(code).toBe(EXIT_OK);
+    const document = await readDocument(out);
+    await expectSchemaValid(document);
+    const finding = document.findings[0];
+    expect(finding).toBeDefined();
+    // Header and violation rows stop at their schema bounds.
+    expect(finding?.response.headers).toHaveLength(32);
+    expect(finding?.violations).toHaveLength(32);
+    // The row keeps the true violation count of the live answer.
+    expect(document.results[0]?.violations).toBe(50);
+    expect(document.counts.schema_violation).toBe(1);
+    // Over-long pointers, messages, and details carry the marker.
+    expect(finding?.violations[0]?.pointer.length).toBeLessThanOrEqual(256);
+    expect(finding?.violations[0]?.message.length).toBeLessThanOrEqual(500);
+    expect(finding?.violations[0]?.message.endsWith("[truncated]")).toBe(true);
+    const typed = finding?.violations.slice(25);
+    expect(typed?.every((violation) => violation.pointer.length <= 256)).toBe(
+      true
+    );
+    expect(
+      typed?.every((violation) => violation.pointer.endsWith("[truncated]"))
+    ).toBe(true);
+    expect(finding?.detail.length).toBeLessThanOrEqual(500);
+    expect(finding?.detail.endsWith("[truncated]")).toBe(true);
+    expect(document.extensions.truncation).toMatchObject({
+      finding_violations: 18,
+      violation_messages: 25,
+      violation_pointers: 7,
+      finding_details: 1
+    });
+    // Node's own response headers join the 40 padded ones.
+    expect(
+      document.extensions.truncation?.finding_response_headers
+    ).toBeGreaterThanOrEqual(9);
+    expect(io.stderrText()).toContain(ProbeCliCode.DocumentTruncated);
+  });
+
+  it("keeps the true request count when the results bound clips rows", async () => {
+    const cwd = await newWorkspace();
+    const events = Array.from({ length: 20001 }, (_, index) =>
+      recordedExchange({
+        sequence: index + 1,
+        method: "POST",
+        path: "/widgets",
+        operationId: "createWidget",
+        operationKey: "path:POST /widgets",
+        contentType: "application/json",
+        body: { name: "beta" }
+      })
+    );
+    const batchDir = await writeBatch(cwd, { events });
+    const out = path.join(cwd, "probe-out");
+    const { io, code } = await runProbe(cwd, [
+      batchDir,
+      "--base-url",
+      "http://127.0.0.1:1",
+      "--operations",
+      "createWidget",
+      "--out",
+      out
+    ]);
+    expect(code).toBe(EXIT_OK);
+    const document = await readDocument(out);
+    await expectSchemaValid(document);
+    // Nothing replayed: every recorded write stayed skipped, and the
+    // clipped results rows still count in `counts.requests`.
+    expect(document.results).toHaveLength(20000);
+    expect(document.counts.requests).toBe(20001);
+    expect(document.counts.skipped).toBe(20001);
+    expect(document.extensions.truncation).toEqual({ results: 1 });
+    expect(io.stderrText()).toContain(ProbeCliCode.DocumentTruncated);
+  });
+
+  it("writes nothing when the assembled document fails the schema", async () => {
+    const cwd = await newWorkspace();
+    // A run id that is no safe id cannot be recorded in any results row,
+    // so the assembled document fails the schema and the probe refuses.
+    const batchDir = await writeBatch(cwd, { runId: "run one" });
+    const out = path.join(cwd, "probe-out");
+    const { io, code } = await runProbe(cwd, [
+      batchDir,
+      "--base-url",
+      "http://127.0.0.1:1",
+      "--operations",
+      "listWidgets",
+      "--out",
+      out
+    ]);
+    expect(code).toBe(EXIT_INFRASTRUCTURE);
+    expect(io.stderrText()).toContain(ProbeCliCode.DocumentInvalid);
+    expect(await readdir(out).catch(() => null)).toBeNull();
+    // The gate itself names the offending row.
+    const invalid = { kind: "ConformanceReport", schema_version: 2 };
+    expect(
+      await conformanceSchemaErrors(invalid as unknown as Json)
+    ).not.toEqual([]);
+  });
+
+  it("refuses an allowlist longer than the document records", async () => {
+    const cwd = await newWorkspace();
+    const batchDir = await writeBatch(cwd);
+    const names = Array.from({ length: 65 }, (_, index) =>
+      index === 0 ? "listWidgets" : `op${index.toString(10)}`
+    ).join(",");
+    const { io, code } = await runProbe(cwd, [
+      batchDir,
+      "--base-url",
+      "http://127.0.0.1:1",
+      "--operations",
+      names
+    ]);
+    expect(code).toBe(EXIT_INVALID);
+    expect(io.stderrText()).toContain("OAL-CLI-INVALID-OPTION-VALUE");
   });
 });

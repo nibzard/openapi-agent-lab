@@ -371,6 +371,7 @@
       }
     },
     "extensions": {
+      "description": "Free-form extensions. The probe writes `truncation` here: how many rows and strings each document bound clipped. The counts fields always keep the true totals.",
       "type": "object"
     }
   },
