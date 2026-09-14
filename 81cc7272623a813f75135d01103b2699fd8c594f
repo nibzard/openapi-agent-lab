@@ -1,0 +1,44 @@
+# Review Notes
+
+## Summary
+T063: `oal probe` replays a batch's recorded safe requests against a
+live base URL and diffs status codes and response shapes against the
+contract. Findings carry class spec_friction and origin server in a new
+conformance.v1 document; friction.v1 stays participant-oriented.
+
+## Design decisions
+- Allowlist: an exchange replays only when the operator named its
+  operation AND its method is GET, HEAD, or OPTIONS (writes require
+  --allow-writes). Skips are recorded with reasons; redirects are
+  manual so a 3xx compares as a status and never re-issues a write.
+- Vocabulary: conformance.v1 is a new schema. friction.v1's origin enum
+  (api/harness/external) describes participant incidents; server
+  divergence is not one. The task text said "origin server"; the
+  document records exactly that.
+- Credential: read from the env var named by --credential-env. The
+  value feeds the outgoing header and the Redactor secrets registry,
+  nothing else. Header-location schemes only: an apiKey in a query or
+  cookie is refused with exit 4 before any request, because the
+  document records header names only and an unauthenticated replay
+  would blame the server for the probe's own 401.
+- Write replay sends the recorded redacted body; documented as such.
+
+## Review round
+First implementation drew fix_first from both reviewers over one
+blocker class: the writer could emit documents violating conformance.v1
+caps on ordinary traffic (600 findings vs 512; 40-header responses;
+50-violation bodies; 20001 result rows; over-long detail strings).
+Fixed in 049008b before landing:
+- Every schema bound is honored at the writer (DOCUMENT_BOUNDS); true
+  totals stay in counts; extensions.truncation lists every clip; a
+  warning diagnostic reports it. A clipped document never understates
+  the divergence.
+- The assembled document is validated against conformance.v1 before
+  the write-once directory is created; invalid documents are refused
+  (exit 3) and nothing is written.
+- base_url stores the normalized URL; unparseable JSON with a JSON
+  media type is a body_malformed violation, never a conformant string;
+  an allowlist longer than the document records is refused up front.
+
+## Verdict
+Approved after fix round — landed as 81cc727 + 049008b.
