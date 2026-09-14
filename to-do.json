@@ -956,7 +956,7 @@
       "id": "T056",
       "title": "Record the spawn error text on the agent exited event",
       "priority": 2,
-      "status": "todo",
+      "status": "done",
       "details": "Three trials ended with AGENT_SPAWN_FAILED and no reason. The process result carries spawnError but the recorder drops it, so the operator cannot tell ENOENT from EACCES.",
       "steps": [
         "Failing test first: a fake adapter with a missing executable must produce an exited event that names the error.",
@@ -971,7 +971,7 @@
         "schemas/agent-event.v1.schema.json"
       ],
       "created_at": "2026-09-14T13:02:17Z",
-      "updated_at": "2026-09-14T13:02:17Z"
+      "updated_at": "2026-09-14T14:03:17Z"
     },
     {
       "id": "T057",
