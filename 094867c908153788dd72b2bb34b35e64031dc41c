@@ -1,0 +1,25 @@
+# Context
+
+## Background
+main and origin/main diverged for a week with no shared commits.
+Both sides appended new tasks to to-do.json minting ids from T054:
+the pushed side recorded the codex spawn and cohort plan
+(T054-T064), the local side recorded the review-remediation and
+webclip tasks (old T054-T060). A plain merge would have produced
+duplicate ids with different meanings.
+
+## Why This Way
+The pushed plan keeps T054-T064 because commit 9ba475a and the
+session handoff already use that numbering. The local block was
+renumbered to T065-T071, statuses preserved.
+
+## Gotchas
+- History commits like "Mark T057 done" (a947c1a^..189ee24 era)
+  use the OLD local numbering. Old T054->T065, T055->T066,
+  T056->T067, T057->T068, T058->T069, T059->T070, T060->T071.
+- Two agent worktrees exist under .claude/worktrees from earlier
+  sessions; lint ignores them by design (41a7d40).
+
+## Related
+- b303fef: runner environment fix (T054)
+- 9ba475a: original plan commit on origin/main
