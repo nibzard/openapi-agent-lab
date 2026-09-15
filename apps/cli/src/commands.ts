@@ -212,6 +212,10 @@ export const COMMANDS: readonly CommandSpec[] = [
       ),
       value("scenario", "Scenario ID overriding the eval default."),
       value("agent", "Adapter selector: mock-agent or codex-cli."),
+      value(
+        "agent-script",
+        "JSON participant script for the mock agent, by path."
+      ),
       value("model", "Model identifier."),
       value("effort", "Model effort level."),
       value("exposure", "raw-http, direct-tools, or catalog-tools."),

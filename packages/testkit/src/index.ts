@@ -98,6 +98,14 @@ export function loadSteelPack(root = findRepoRoot()): Promise<PackForTest> {
   return loadPackFromRepo(STEEL_PACK_ID, root);
 }
 
+/** The scenario-behavior pack of specification section 16. */
+export const WEBCLIP_PACK_ID = "webclip";
+
+/** Load and validate the webclip pack. */
+export function loadWebclipPack(root = findRepoRoot()): Promise<PackForTest> {
+  return loadPackFromRepo(WEBCLIP_PACK_ID, root);
+}
+
 /**
  * Compile the contract entrypoint of one loaded pack.
  *

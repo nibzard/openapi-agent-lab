@@ -1,0 +1,24 @@
+{
+  "requests": [
+    {
+      "path": "/v1/clips/clip_ghost",
+      "method": "GET",
+      "expectStatus": 200,
+      "credentialName": "OAL_AUTH_BEARER"
+    }
+  ],
+  "finalReport": {
+    "clips_created": true,
+    "markdown_clipped": true,
+    "image_clipped": true,
+    "both_rendered": true,
+    "markdown_content_fetched": true,
+    "image_content_fetched": true,
+    "text_extracted": true,
+    "clip_deleted": true,
+    "quota_checked": true,
+    "api_model": "webclip stores clips of web pages. A clip is created with a URL and a fixed format, then rendered, and its content is fetched as markdown or as a picture. Extracted text and deletion close the clip lifecycle, and the account endpoint reports the quota.",
+    "authentication_model": "Every request carries an Authorization header with a Bearer token taken from the OAL_AUTH_BEARER environment variable.",
+    "uncertainties": []
+  }
+}

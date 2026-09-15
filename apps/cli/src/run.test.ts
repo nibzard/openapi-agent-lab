@@ -1,4 +1,4 @@
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -24,7 +24,10 @@ import {
   trialFinishedLine,
   RunCliCode
 } from "./handlers/run.ts";
-import { loadSteelPack } from "../../../packages/testkit/src/index.ts";
+import {
+  loadSteelPack,
+  loadWebclipPack
+} from "../../../packages/testkit/src/index.ts";
 
 const scratchDirectories: string[] = [];
 
@@ -158,6 +161,27 @@ describe("selectAdapter", () => {
     expect("error" in selection).toBe(true);
     if ("error" in selection) {
       expect(selection.error.code).toBe(RunCliCode.AgentUnsupported);
+    }
+  });
+
+  it("configures the mock adapter with a script", async () => {
+    const selection = selectAdapter(undefined, {
+      requests: [{ path: "/v1/clips", method: "POST" }],
+      finalReport: { done: true }
+    });
+    expect("error" in selection).toBe(false);
+    if (!("error" in selection)) {
+      const probe = await selection.adapter.probe({});
+      expect(probe.details?.requests).toBe("1");
+      expect(probe.status).toBe("available");
+    }
+  });
+
+  it("refuses a script for every non-mock selector", () => {
+    const selection = selectAdapter("codex-cli", { finalText: "x" });
+    expect("error" in selection).toBe(true);
+    if ("error" in selection) {
+      expect(selection.error.code).toBe(RunCliCode.AgentScriptUnsupported);
     }
   });
 });
@@ -498,4 +522,192 @@ describe("oal run", () => {
     expect(text).toContain("agent_incomplete");
     expect(text).toContain(path.join(cwd, ".oal", "runs", "cli-term"));
   });
+
+  it("refuses an agent script that cannot be read", async () => {
+    const pack = await loadSteelPack();
+    const cwd = await newWorkspace();
+    const io = new MemoryIo();
+    const code = await main(
+      [
+        "run",
+        pack.root,
+        "--eval",
+        "basic-lifecycle",
+        "--agent-script",
+        path.join(cwd, "absent.json")
+      ],
+      io,
+      { cwd }
+    );
+    expect(code).toBe(EXIT_INVALID);
+    expect(io.stderrChunks.join("\n")).toContain(RunCliCode.AgentScriptInvalid);
+  });
+
+  it("refuses an agent script for a non-mock agent", async () => {
+    const pack = await loadWebclipPack();
+    const cwd = await newWorkspace();
+    const io = new MemoryIo();
+    const code = await main(
+      [
+        "run",
+        pack.root,
+        "--eval",
+        "site-errand",
+        "--agent",
+        "codex-cli",
+        "--agent-script",
+        path.join(pack.root, "evals", "site-errand", "mock-participant.json")
+      ],
+      io,
+      { cwd }
+    );
+    expect(code).toBe(EXIT_UNSUPPORTED);
+    expect(io.stderrChunks.join("\n")).toContain(
+      RunCliCode.AgentScriptUnsupported
+    );
+  });
+
+  it("completes the webclip scenario errand through the public command", async () => {
+    const pack = await loadWebclipPack();
+    const cwd = await newWorkspace();
+    const io = new MemoryIo();
+    const code = await main(
+      [
+        "run",
+        pack.root,
+        "--eval",
+        "site-errand",
+        "--agent",
+        "mock-agent",
+        "--agent-script",
+        path.join(pack.root, "evals", "site-errand", "mock-participant.json"),
+        "--batch",
+        "cli-scenario",
+        "--format",
+        "json"
+      ],
+      io,
+      { cwd }
+    );
+    expect(code).toBe(EXIT_OK);
+    const summary = JSON.parse(io.stdoutChunks.join("\n")) as Record<
+      string,
+      unknown
+    >;
+    expect(summary.dispositions).toMatchObject({ completed: 1 });
+    const runs = summary.runs as readonly Record<string, unknown>[];
+    expect(runs[0]?.disposition).toBe("completed");
+    expect(runs[0]?.evaluation_status).toBe("passed");
+    expect(runs[0]?.score).toBe(1);
+    // The state the backend committed: one live image clip remains,
+    // six lifecycle events rode the six state transitions.
+    const trialDir = path.join(
+      cwd,
+      ".oal",
+      "runs",
+      "cli-scenario",
+      "trials",
+      "cli-scenario-run-01"
+    );
+    const state = JSON.parse(
+      await readFile(path.join(trialDir, "state.final.json"), "utf8")
+    ) as Record<string, never>;
+    expect(state["revision"]).toBe(6);
+    const committed = state["state"] as unknown as {
+      clips: Record<string, unknown>;
+      order: string[];
+    };
+    expect(Object.keys(committed.clips)).toEqual(["clip_00000002"]);
+    expect(committed.order).toEqual(["clip_00000002"]);
+    const lines = (
+      await readFile(
+        path.join(trialDir, "semantic-events.redacted.jsonl"),
+        "utf8"
+      )
+    )
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(lines.map((line) => line["name"])).toEqual([
+      "clip.created",
+      "clip.created",
+      "clip.rendered",
+      "clip.rendered",
+      "clip.extracted",
+      "clip.deleted"
+    ]);
+    expect(lines.map((line) => line["state_revision_after"])).toEqual([
+      1, 2, 3, 4, 5, 6
+    ]);
+    expect(
+      lines.every(
+        (line) =>
+          line["type"] === "semantic.event" && line["pack_id"] === "webclip"
+      )
+    ).toBe(true);
+  }, 60_000);
+
+  it("commits no state when the scripted participant fails", async () => {
+    const pack = await loadWebclipPack();
+    const cwd = await newWorkspace();
+    const io = new MemoryIo();
+    const code = await main(
+      [
+        "run",
+        pack.root,
+        "--eval",
+        "site-errand",
+        "--agent",
+        "mock-agent",
+        "--agent-script",
+        path.join(
+          pack.root,
+          "evals",
+          "site-errand",
+          "mock-participant-failing.json"
+        ),
+        "--batch",
+        "cli-scenario-fail",
+        "--format",
+        "json"
+      ],
+      io,
+      { cwd }
+    );
+    // The harness worked; the evaluation threshold failed because the
+    // participant never reported (section 23.18).
+    expect(code).toBe(EXIT_EVAL_THRESHOLD);
+    const summary = JSON.parse(io.stdoutChunks.join("\n")) as Record<
+      string,
+      unknown
+    >;
+    expect(summary.dispositions).toMatchObject({ agent_failed: 1 });
+    const trialDir = path.join(
+      cwd,
+      ".oal",
+      "runs",
+      "cli-scenario-fail",
+      "trials",
+      "cli-scenario-fail-run-01"
+    );
+    const state = JSON.parse(
+      await readFile(path.join(trialDir, "state.final.json"), "utf8")
+    ) as Record<string, unknown>;
+    expect(state["revision"]).toBe(0);
+    const committed = state["state"] as { clips: Record<string, unknown> };
+    expect(committed.clips).toEqual({});
+    const summaryDoc = JSON.parse(
+      await readFile(path.join(trialDir, "state.summary.json"), "utf8")
+    ) as Record<string, unknown>;
+    expect(summaryDoc["counts"]).toEqual({
+      api_requests: 1,
+      semantic_events: 0
+    });
+    expect(
+      await readFile(
+        path.join(trialDir, "semantic-events.redacted.jsonl"),
+        "utf8"
+      )
+    ).toBe("");
+  }, 60_000);
 });

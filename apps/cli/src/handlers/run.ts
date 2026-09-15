@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -9,6 +10,7 @@ import {
   diagnostic,
   invalidInput,
   isSafeId,
+  parseJsonStrict,
   stableJsonStringify,
   type Diagnostic,
   type ExitCode,
@@ -18,7 +20,12 @@ import {
 import { CodexCliAdapter } from "@oal/agent-codex";
 import type { AgentAdapter } from "@oal/agent-adapter";
 import { ArtifactStore } from "@oal/evidence";
-import { MockAgentAdapter } from "@oal/mock-adapter";
+import {
+  MockAgentAdapter,
+  validateMockScript,
+  validateScriptTemplates,
+  type MockAgentConfig
+} from "@oal/mock-adapter";
 import { defaultSchemaDir, loadPack } from "@oal/pack";
 import {
   CONTRACT_VISIBILITIES,
@@ -45,6 +52,8 @@ import {
 export const RunCliCode = {
   EvalMissing: "OAL-RUN-EVAL-MISSING",
   AgentUnsupported: "OAL-RUN-AGENT-UNSUPPORTED",
+  AgentScriptUnsupported: "OAL-RUN-AGENT-SCRIPT-UNSUPPORTED",
+  AgentScriptInvalid: "OAL-RUN-AGENT-SCRIPT-INVALID",
   ProfileUnsupported: "OAL-RUN-PROFILE-UNSUPPORTED",
   BatchIdUnsafe: "OAL-RUN-BATCH-ID-UNSAFE",
   PaidUnconfirmed: "OAL-RUN-PAID-UNCONFIRMED"
@@ -93,32 +102,98 @@ export function defaultBatchId(at: Date): string {
   ].join("-");
 }
 
-/** The adapter one `--agent` selector maps to, and whether it costs money. */
+/**
+ * The adapter one `--agent` selector maps to, and whether it costs money.
+ * A script configures the mock agent; every other selector refuses one.
+ */
 export function selectAdapter(
-  selector: string | undefined
+  selector: string | undefined,
+  script?: MockAgentConfig
 ): { adapter: AgentAdapter; paid: boolean } | { error: Diagnostic } {
   const name = selector ?? "mock-agent";
   if (name === "mock-agent") {
-    return { adapter: new MockAgentAdapter(), paid: false };
+    return { adapter: new MockAgentAdapter(script ?? {}), paid: false };
   }
-  if (name === "codex-cli") {
+  if (name === "codex-cli" && script === undefined) {
     // The adapter owns the declared launcher credential: CODEX_API_KEY.
     // Codex 0.154 ignores OPENAI_API_KEY for non-interactive auth. The
     // runner copies only the declared names from the host, and the
     // participant tool environment never sees them.
     return { adapter: new CodexCliAdapter(), paid: true };
   }
+  const code =
+    script !== undefined && name === "codex-cli"
+      ? RunCliCode.AgentScriptUnsupported
+      : RunCliCode.AgentUnsupported;
+  const message =
+    code === RunCliCode.AgentScriptUnsupported
+      ? `Agent selector "${name}" accepts no participant script. ` +
+        "Only mock-agent reads --agent-script."
+      : `Agent selector "${name}" is not supported in this build. ` +
+        `Supported selectors: ${AGENT_SELECTORS.join(", ")}.`;
   return {
     error: diagnostic({
       severity: "error",
       phase: "preflight",
-      code: RunCliCode.AgentUnsupported,
-      message:
-        `Agent selector "${name}" is not supported in this build. ` +
-        `Supported selectors: ${AGENT_SELECTORS.join(", ")}.`,
+      code,
+      message,
       details: { requested: name, supported: [...AGENT_SELECTORS] }
     })
   };
+}
+
+/**
+ * Load one `--agent-script` file into a mock agent configuration. The
+ * file must be strict JSON and must pass both script validators, so a
+ * broken participant fails at parse time instead of mid-trial.
+ */
+export async function loadAgentScript(
+  rawPath: string,
+  cwd: string
+): Promise<MockAgentConfig | { error: Diagnostic }> {
+  const resolved = path.resolve(cwd, rawPath);
+  let text: string;
+  try {
+    text = await readFile(resolved, "utf8");
+  } catch (error) {
+    return {
+      error: scriptDiagnostic(rawPath, [
+        error instanceof Error ? error.message : "the file cannot be read"
+      ])
+    };
+  }
+  let parsed: Json;
+  try {
+    parsed = parseJsonStrict(text);
+  } catch (error) {
+    return {
+      error: scriptDiagnostic(rawPath, [
+        error instanceof Error ? error.message : "the file is not valid JSON"
+      ])
+    };
+  }
+  const script = parsed as MockAgentConfig;
+  const problems = [
+    ...validateMockScript(script),
+    ...validateScriptTemplates(script)
+  ];
+  if (problems.length > 0) {
+    return { error: scriptDiagnostic(rawPath, problems) };
+  }
+  return script;
+}
+
+function scriptDiagnostic(
+  rawPath: string,
+  problems: readonly string[]
+): Diagnostic {
+  return diagnostic({
+    severity: "error",
+    phase: "preflight",
+    code: RunCliCode.AgentScriptInvalid,
+    message: `Participant script ${rawPath} is not usable: ${problems.join("; ")}`,
+    details: { path: rawPath, problems: [...problems] }
+  });
 }
 
 /** Preflight findings that describe an unsupported request, not bad input. */
@@ -262,7 +337,16 @@ export const runCommand: CommandHandler = async (args, io) => {
     ]);
     return EXIT_UNSUPPORTED;
   }
-  const selection = selectAdapter(args.flags.string("agent"));
+  const scriptFlag = args.flags.string("agent-script");
+  const agentScript =
+    scriptFlag === undefined
+      ? undefined
+      : await loadAgentScript(scriptFlag, args.context.cwd);
+  if (agentScript !== undefined && "error" in agentScript) {
+    emitDiagnostics(io, args.context, [agentScript.error]);
+    return EXIT_INVALID;
+  }
+  const selection = selectAdapter(args.flags.string("agent"), agentScript);
   if ("error" in selection) {
     emitDiagnostics(io, args.context, [selection.error]);
     return EXIT_UNSUPPORTED;
