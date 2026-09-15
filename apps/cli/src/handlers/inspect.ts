@@ -12,6 +12,7 @@ import {
 } from "@oal/core";
 import { hostilePatternDiagnostics } from "@oal/openapi";
 
+import { diagnosticToJson } from "../diagnostics.ts";
 import type { CommandArgs } from "../commands.ts";
 import type { Io } from "../io.ts";
 import { resolveSourceArgument } from "../source.ts";
@@ -113,7 +114,10 @@ export async function inspectCommand(
     operations: capabilityOperations,
     features: report["features"] ?? [],
     recommendations: report["recommendations"] ?? {},
-    diagnostics: [...reportedDiagnostics, ...patternFindings],
+    diagnostics: [
+      ...reportedDiagnostics,
+      ...patternFindings.map(diagnosticToJson)
+    ],
     pack_eval_compatibility:
       compiled.pack === null
         ? null

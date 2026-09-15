@@ -29,7 +29,7 @@ export function errorToDiagnostic(
   });
 }
 
-function diagnosticToJson(value: Diagnostic): JsonObject {
+export function diagnosticToJson(value: Diagnostic): JsonObject {
   return {
     severity: value.severity,
     phase: value.phase,
