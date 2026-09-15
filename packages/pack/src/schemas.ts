@@ -2,12 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  invalidInput,
-  parseJsonStrict,
-  SchemaValidator,
-  type JsonObject
-} from "@oal/core";
+import { invalidInput, parseJsonStrict, type JsonObject } from "@oal/core";
 
 /** Schema documents the pack loader validates against, by short name. */
 export const PACK_SCHEMA_FILES = {
@@ -34,7 +29,6 @@ export function defaultSchemaDir(): string {
 /** Loaded, immutable set of JSON schemas used during pack validation. */
 export class PackSchemaSet {
   private readonly documents: ReadonlyMap<PackSchemaName, JsonObject>;
-  private readonly cache = new Map<PackSchemaName, SchemaValidator>();
 
   private constructor(documents: ReadonlyMap<PackSchemaName, JsonObject>) {
     this.documents = documents;
@@ -66,17 +60,6 @@ export class PackSchemaSet {
       throw new Error(`Schema ${name} was not loaded.`);
     }
     return found;
-  }
-
-  /** Cached validator bound to one schema document. */
-  validator(name: PackSchemaName): SchemaValidator {
-    const cached = this.cache.get(name);
-    if (cached !== undefined) {
-      return cached;
-    }
-    const created = new SchemaValidator(this.document(name));
-    this.cache.set(name, created);
-    return created;
   }
 }
 

@@ -3,6 +3,7 @@ import {
   canonicalJson,
   DiagnosticCode,
   diagnostic,
+  validateSchemaInstance,
   type Diagnostic,
   type JsonObject
 } from "@oal/core";
@@ -90,9 +91,13 @@ export async function validatePack(
   diagnostics.push(...invariantDiagnostics);
 
   if (built.ir !== null) {
-    for (const violation of loaded.schemaSet
-      .validator("pack-ir")
-      .errors(built.ir)) {
+    // PackIR is untrusted pack output: its evaluation runs inside the
+    // bounded schema-worker boundary, so a hostile document cannot
+    // wedge the process with pathological backtracking.
+    for (const violation of await validateSchemaInstance(
+      loaded.schemaSet.document("pack-ir"),
+      built.ir
+    )) {
       diagnostics.push(
         diagnostic({
           severity: "error",

@@ -9,6 +9,7 @@ import {
   isJsonObject,
   OalError,
   parseJsonStrict,
+  validateSchemaInstance,
   resolveWithinRoot,
   sha256HexBytes,
   type Diagnostic,
@@ -248,7 +249,12 @@ export async function loadPack(
     };
   }
 
-  for (const violation of schemaSet.validator("pack").errors(manifest)) {
+  // Pack documents are untrusted: their schema evaluation runs inside
+  // the bounded schema-worker boundary.
+  for (const violation of await validateSchemaInstance(
+    schemaSet.document("pack"),
+    manifest
+  )) {
     diagnostics.push(
       error(DiagnosticCode.PackSchemaInvalid, violation.message, {
         pointer: violation.pointer,
@@ -257,7 +263,10 @@ export async function loadPack(
     );
   }
   for (const item of arr(manifest["prompt_sets"])) {
-    for (const violation of schemaSet.validator("prompt-set").errors(item)) {
+    for (const violation of await validateSchemaInstance(
+      schemaSet.document("prompt-set"),
+      item
+    )) {
       diagnostics.push(
         error(DiagnosticCode.PackSchemaInvalid, violation.message, {
           pointer: violation.pointer,
@@ -267,7 +276,10 @@ export async function loadPack(
     }
   }
   for (const item of arr(manifest["evals"])) {
-    for (const violation of schemaSet.validator("eval").errors(item)) {
+    for (const violation of await validateSchemaInstance(
+      schemaSet.document("eval"),
+      item
+    )) {
       diagnostics.push(
         error(DiagnosticCode.PackSchemaInvalid, violation.message, {
           pointer: violation.pointer,
@@ -744,9 +756,10 @@ async function loadSemanticRegistry(
     );
     return null;
   }
-  for (const violation of schemaSet
-    .validator("semantic-event-registry")
-    .errors(registry)) {
+  for (const violation of await validateSchemaInstance(
+    schemaSet.document("semantic-event-registry"),
+    registry
+  )) {
     diagnostics.push(
       error(DiagnosticCode.PackSchemaInvalid, violation.message, {
         pointer: violation.pointer,
