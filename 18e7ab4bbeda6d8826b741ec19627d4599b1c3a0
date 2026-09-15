@@ -1,0 +1,25 @@
+# Context
+
+## Background
+Task T066 asked for every execution path that evaluates untrusted
+patterns or schemas to run behind the bounded schema worker. The
+study pipeline was the last unconverted surface: loadProtocol,
+loadPhasePlan, compileStudy, the protocol lock trio, both review
+loaders, and two CLI helpers constructed SchemaValidator directly.
+
+## Why This Way
+Same model as eb271d9 (pack) and 413242b (contract variants): swap
+new SchemaValidator(schema).errors(document) for
+await validateSchemaInstance(schema, document) from @oal/core. The
+loaders were already async-safe by contract ("never throws on
+content"), so widening them to promises carried through cleanly.
+
+## Gotchas
+- The async cascade reaches exported test fixtures (twoCellStudy in
+  @oal/study, fixtureStudy in @oal/scheduler); every downstream test
+  helper that touches them became async.
+- Test files that validate documents our own code produced keep the
+  synchronous validator: run.test.ts, analyze.test.ts, events,
+  studyrun, schedule fixtures.
+- docs/security.md already lists study loading as a routed surface;
+  no doc change needed here.
