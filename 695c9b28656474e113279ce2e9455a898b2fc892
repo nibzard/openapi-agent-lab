@@ -1,0 +1,21 @@
+# Context
+
+## Background
+This commit captures routing work that sat uncommitted in the worktree
+since 2026-09-10, verified 2026-09-15 before committing: tsc --noEmit
+clean, eslint clean on production files, targeted vitest runs green on
+every touched file, and the full suite at 2546 passing.
+
+## Why This Way
+The handoff in to-do.json T066 named seven routing areas. This commit
+covers six: cue scanText, participant-report, evaluator rubric and
+eval-doc, evaluator json_schema checks, behavior-api, and the
+LimitTable wiring from serving paths. Pack schemas, contract-variant,
+and study-ir stay synchronous here; they route in a follow-up commit
+so this one lands reviewable.
+
+## Gotchas
+- scripts/tmp-worker-overhead.mjs was deleted uncommitted: scratch
+  benchmark whose own header said "Not committed".
+- regex-bomb.test.ts needed prettier --write before committing; it
+  failed the format gate as written.
