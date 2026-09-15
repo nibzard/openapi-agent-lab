@@ -14,8 +14,7 @@ import type {
   BehaviorHttpError,
   BehaviorRequest,
   BehaviorResult,
-  HandleContext,
-  InitializeContext
+  HandleContext
 } from "@oal/behavior-api";
 import { createNamespacePrng, VirtualClock } from "@oal/state-store";
 import {
@@ -103,16 +102,26 @@ export async function runBehaviorChild(
           requireBackend(target);
           reply({ id: message.id, ok: true, result: await target.describe() });
           break;
-        case "initialize":
+        case "initialize": {
           requireBackend(target);
+          const wire = message.context;
+          const clock = new VirtualClock({ initialMs: wire.nowMs });
           reply({
             id: message.id,
             ok: true,
-            result: await target.initialize(
-              message.context as InitializeContext
-            )
+            result: await target.initialize({
+              runId: wire.runId,
+              fixtures: wire.fixtures,
+              clock: clockAdapter(clock),
+              ids: idsAdapter(),
+              random: randomAdapter(
+                createNamespacePrng(wire.runSeed, `initialize:${wire.runId}`)
+              ),
+              blobs: fileBlobStore(join(wire.packRoot, ".oal", "blobs"))
+            })
           });
           break;
+        }
         case "handle": {
           requireBackend(target);
           const wire = message.request as WireBehaviorRequest;

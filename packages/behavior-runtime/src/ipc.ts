@@ -45,10 +45,23 @@ export interface WireHandleContext {
   packRoot: string;
 }
 
+/**
+ * Serializable initialize context. The same rule as the handle context
+ * applies: live services cannot cross a process boundary, so the child
+ * rebuilds them from this snapshot before the backend initializes.
+ */
+export interface WireInitializeContext {
+  runId: string;
+  fixtures: Json[];
+  nowMs: number;
+  runSeed: string;
+  packRoot: string;
+}
+
 export type HostMessage =
   | { id: number; kind: "create"; context: unknown }
   | { id: number; kind: "describe" }
-  | { id: number; kind: "initialize"; context: unknown }
+  | { id: number; kind: "initialize"; context: WireInitializeContext }
   | {
       id: number;
       kind: "handle";

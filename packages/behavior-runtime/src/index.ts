@@ -18,6 +18,7 @@ export {
   type WireBehaviorResult,
   type WireBody,
   type WireHandleContext,
+  type WireInitializeContext,
   type WireMultipartPart
 } from "./ipc.ts";
 export { runBehaviorChild, type ChildOptions } from "./child.ts";

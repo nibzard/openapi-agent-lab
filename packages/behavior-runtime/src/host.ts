@@ -131,10 +131,19 @@ export class BehaviorModuleHost implements BehaviorBackend {
   }
 
   async initialize(context: InitializeContext): Promise<InitializeResult> {
+    // Live services cannot cross the process boundary, so only the
+    // clock snapshot travels; the child rebuilds clock, ids, random,
+    // and blobs from the run seed and pack root (section 16.5).
     const result = await this.call({
       id: this.takeId(),
       kind: "initialize",
-      context
+      context: {
+        runId: context.runId,
+        fixtures: [...context.fixtures],
+        nowMs: context.clock.nowMs(),
+        runSeed: this.options.runSeed,
+        packRoot: this.options.context.packRoot
+      }
     });
     return result as InitializeResult;
   }
