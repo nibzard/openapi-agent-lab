@@ -1,0 +1,25 @@
+# Context
+
+## Why This Way
+The runtime opens before setupTrial, not inside it: setup
+failure must reuse finalizeSetupFailure, and the runtime's close
+belongs to runTrial so every exit route (setup catch, session
+catch, adapter throw, finalization) closes the child exactly
+once after the final reads.
+
+## Key Trade-offs
+- Contract-mode artifacts stay byte-identical; scenario branches
+  are additive (state.final/summary gain real values only when
+  a runtime exists).
+- Scenario reads happen between the adapter run and finalization,
+  then the child closes; finalization works from captured facts,
+  so a late artifact write cannot leak a live store.
+- pack_id in the §25.7 record is the pack metadata name, per the
+  SPEC example ("workspace-service"); backend.name reuses it.
+
+## Gotchas
+- semantic-events.redacted.jsonl is written only in scenario
+  mode, empty file when a run commits no events.
+
+## Related
+- Bootstrap: eeb4ee6; gateway seam: 5c0ff5d
