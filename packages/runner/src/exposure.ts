@@ -410,12 +410,15 @@ function pathOf(target: string): string {
  */
 function provenanceClassOf(
   provenance: string | null | undefined
-): "fixture" | "example" | "generated" {
+): "fixture" | "behavior" | "example" | "generated" {
   if (provenance === null || provenance === undefined) {
     return "generated";
   }
   if (provenance.startsWith("fixture:")) {
     return "fixture";
+  }
+  if (provenance.startsWith("behavior:")) {
+    return "behavior";
   }
   if (provenance.startsWith("example:")) {
     return "example";
@@ -799,17 +802,28 @@ async function startRawHttpExposure(
         headers[name] = value ?? [];
       }
       stage = "gateway";
+      // Effects this exchange commits land in the scenario state after
+      // the gateway call, so snapshot the length and diff after it.
+      const effectsBefore =
+        request.scenarioState === undefined
+          ? 0
+          : request.scenarioState.appliedEffects.length;
       const response = await handleGatewayRequest(
         {
           contract: request.contract,
           limits: request.limits,
           fixtures,
           runSeed: request.trialSeed,
-          state: gatewayState
+          state: request.scenarioState ?? gatewayState,
+          ...(request.backend === undefined ? {} : { backend: request.backend })
         },
         reserved.sequence,
         { method, target, headers, body: bytes }
       );
+      const committedEffects =
+        request.scenarioState === undefined
+          ? []
+          : request.scenarioState.appliedEffects.slice(effectsBefore);
       stage = "persist";
       await completeApiExchange(request, trace, redactor, {
         method,
@@ -820,7 +834,8 @@ async function startRawHttpExposure(
         reserved,
         ingressSequence,
         startedAt,
-        routed: true
+        routed: true,
+        committedEffects
       });
       settle(outgoing, response);
       admission.release();
@@ -856,7 +871,8 @@ async function startRawHttpExposure(
             observedAt,
             requestBytes: collector.totalBytes,
             stage,
-            ingressSequence
+            ingressSequence,
+            backendMode: request.backend === undefined ? "contract" : "scenario"
           });
         } catch {
           // The sink already refused the original append; the sequence
@@ -886,7 +902,8 @@ async function startRawHttpExposure(
         observedAt,
         requestBytes: collector.totalBytes,
         stage: "ingress",
-        ingressSequence
+        ingressSequence,
+        backendMode: request.backend === undefined ? "contract" : "scenario"
       });
     } catch {
       recordExchangeFailure(
@@ -1022,7 +1039,7 @@ async function startRawHttpExposure(
     schema_version: 1,
     kind: "Server",
     run_id: request.runId,
-    mode: "contract",
+    mode: request.backend === undefined ? "contract" : "scenario",
     base_url: baseUrl,
     host: request.host,
     port,
@@ -1088,6 +1105,8 @@ interface ApiExchangeInput {
   readonly ingressSequence: number;
   readonly startedAt: number;
   readonly routed: boolean;
+  /** Effects this exchange committed; scenario mode only. */
+  readonly committedEffects?: readonly string[];
 }
 
 /** Record one product or limit exchange as an api.exchange event. */
@@ -1207,12 +1226,12 @@ async function completeApiExchange(
       response: { status: "valid", violations: [] }
     },
     backend: {
-      mode: "contract",
-      name: null,
+      mode: request.backend === undefined ? "contract" : "scenario",
+      name: request.backend === undefined ? null : request.backend.name,
       outcome: response.frameworkCode === null ? "handled" : "skipped",
       duration_ms: Math.max(0, request.now() - input.startedAt),
       response_provenance: provenanceClassOf(response.provenance),
-      effects: [],
+      effects: [...(input.committedEffects ?? [])],
       observations: {
         approximation: response.approximation,
         provenance_detail: response.provenance
@@ -1263,6 +1282,8 @@ interface FailedExchangeInput {
   readonly requestBytes: number;
   readonly stage: ExchangeFailureStage;
   readonly ingressSequence: number;
+  /** Backend mode of the run; scenario exchanges never record contract. */
+  readonly backendMode: "contract" | "scenario";
 }
 
 /**
@@ -1316,7 +1337,7 @@ async function completeFailedExchange(
       response: { status: "not_evaluated", violations: [] }
     },
     backend: {
-      mode: "contract",
+      mode: input.backendMode,
       name: null,
       outcome: "skipped",
       duration_ms: 0,

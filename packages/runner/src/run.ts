@@ -394,10 +394,12 @@ class AssignmentLedger {
  * the loaded pack declares reach the gateway on every branch, and
  * `discoverable` visibility serves the sanitized contract through the
  * conventional documentation candidates, so the facade hands out the
- * same bytes the `file` treatment would copy into the workspace.
+ * same bytes the `file` treatment would copy into the workspace. Both
+ * behavior modes share this factory: scenario trials receive their
+ * backend and store state through the per-trial exposure request.
  */
 function defaultExposure(plan: FrozenPlan, pack: LoadedPack): ExposureFactory {
-  if (plan.behaviorMode !== "contract" || plan.exposureMode !== "raw-http") {
+  if (plan.exposureMode !== "raw-http") {
     throw new Error(
       `The default runner exposure cannot execute ${plan.behaviorMode}/${plan.exposureMode}.`
     );

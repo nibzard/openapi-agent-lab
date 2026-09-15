@@ -32,11 +32,17 @@ import {
   type TraceEvent,
   type TrialLayout
 } from "@oal/evidence";
-import { mintRunCredentials, type RunCredentials } from "@oal/gateway";
+import {
+  mintRunCredentials,
+  type GatewayState,
+  type RunCredentials,
+  type ScenarioBackend
+} from "@oal/gateway";
 import type { LoadedPack } from "@oal/pack";
 
 import { TrialLifecycle, type Clock } from "./lifecycle.ts";
 import { materializePrompts, type MaterializedPrompts } from "./prompts.ts";
+import type { ScenarioRuntime } from "./scenario-runtime.ts";
 import { resolveContext } from "./template.ts";
 import {
   compileSurfaceManifest,
@@ -62,6 +68,7 @@ export const SetupCode = {
   ContractBytesMissing: "OAL-RUN-SETUP-CONTRACT-BYTES-MISSING",
   ExposureFailed: "OAL-RUN-SETUP-EXPOSURE-FAILED",
   ControlUnsafe: "OAL-RUN-SETUP-CONTROL-UNSAFE",
+  ScenarioBootstrap: "OAL-RUN-SETUP-SCENARIO-BOOTSTRAP-FAILED",
   SetupFailed: "OAL-RUN-SETUP-FAILED"
 } as const;
 
@@ -168,6 +175,17 @@ export interface ExposureRequest {
    * alias. Names only: values never appear here.
    */
   readonly credentialEnvironments?: ReadonlyMap<string, string>;
+  /**
+   * Scenario backend the runner spawned; present only in scenario
+   * mode. The pipeline routes every validated request through it
+   * instead of contract selection.
+   */
+  readonly backend?: ScenarioBackend;
+  /**
+   * Store-backed scenario state; present only with a backend. The
+   * pipeline commits each served exchange through it.
+   */
+  readonly scenarioState?: GatewayState;
 }
 
 /** Builds one exposure treatment per trial. Injected; never a socket. */
@@ -194,6 +212,8 @@ export interface TrialSetup {
   readonly control: ControlLayout;
   readonly lifecycle: TrialLifecycle;
   readonly exposure: ExposureHandle;
+  /** Live scenario runtime; absent in contract mode. */
+  readonly scenario?: ScenarioRuntime;
   readonly prompts: MaterializedPrompts;
   readonly workspace: MaterializedWorkspace;
   readonly surface: CompiledSurface;
@@ -221,6 +241,12 @@ export interface SetupTrialOptions {
   readonly index: number;
   /** Exposure factory; the loopback gateway is the default. */
   readonly exposure: ExposureFactory;
+  /**
+   * Scenario runtime the caller opened before setup; the exposure
+   * factory receives its backend and state. Present only in scenario
+   * mode.
+   */
+  readonly scenario?: ScenarioRuntime;
   readonly now: Clock;
   /** Bind host override; defaults to loopback. */
   readonly host?: string | undefined;
@@ -799,7 +825,13 @@ export async function setupTrial(
       ),
       sensitiveKeyPatterns: keyPatterns.filter(
         (name): name is string => typeof name === "string"
-      )
+      ),
+      ...(options.scenario === undefined
+        ? {}
+        : {
+            backend: options.scenario.backend,
+            scenarioState: options.scenario.state
+          })
     });
   } catch (cause) {
     await finalizeFailedSetup(lifecycle, now);
@@ -1053,6 +1085,7 @@ export async function setupTrial(
       control,
       lifecycle,
       exposure: liveExposure,
+      ...(options.scenario === undefined ? {} : { scenario: options.scenario }),
       prompts,
       workspace,
       surface,

@@ -813,15 +813,6 @@ export async function runPreflight(
       )
     );
   }
-  if (behaviorMode === "scenario" && scenarioIds.includes(scenarioId)) {
-    findings.push(
-      error(
-        PreflightCode.ScenarioIncomplete,
-        "This runner has no scenario backend bridge. It refuses the run before it starts an exposure.",
-        { scenario_id: scenarioId, behavior_mode: behaviorMode }
-      )
-    );
-  }
   if (behaviorMode === "contract" && options.scenarioId !== undefined) {
     findings.push(
       warn(
@@ -1065,6 +1056,18 @@ export async function runPreflight(
     files: promptPreview.files
   });
   const firstCase = compiledEval.cases[0] ?? null;
+  // The seed must track content, not labels: a rewritten behavior
+  // entrypoint changes the seed even when the mode string is the same
+  // (section 12). The loader already hashed the entrypoint bytes.
+  const behaviorEntrypoint = pack.references.find(
+    (reference) =>
+      reference.role === "behavior_entrypoint" &&
+      reference.pointer === "/behavior/backend/entrypoint"
+  );
+  const behaviorSha256 =
+    behaviorMode === "scenario" && behaviorEntrypoint !== undefined
+      ? behaviorEntrypoint.sha256
+      : sha256Hex(behaviorMode);
   const runSeed = deriveRunSeed({
     contractExecutionSha256: executionSha256,
     participantSurfaceTemplateSha256: surface.manifestSha256,
@@ -1073,7 +1076,7 @@ export async function runPreflight(
       behaviorMode === "scenario" && scenarioIds.includes(scenarioId)
         ? { id: scenarioId, sha256: sha256Hex(scenarioId) }
         : null,
-    behaviorSha256: sha256Hex(behaviorMode),
+    behaviorSha256,
     eval: { id: options.evalId, sha256: sha256Hex(options.evalId) },
     case:
       firstCase === null

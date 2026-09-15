@@ -27,6 +27,7 @@ import type {
   JsonlSink,
   LifecycleEvidenceSource,
   LifecycleStage,
+  SemanticEvent,
   TerminalDisposition,
   TraceEvent
 } from "@oal/evidence";
@@ -67,6 +68,13 @@ import {
   type ExposureFactory,
   type TrialSetup
 } from "./setup.ts";
+import {
+  ensureStateDirectory,
+  openScenarioRuntime,
+  ScenarioRuntimeError,
+  type CommittedSemanticEvent,
+  type ScenarioRuntime
+} from "./scenario-runtime.ts";
 import { verifyWorkspaceFiles } from "./workspace.ts";
 
 /** Stable reason codes of the trial runner. */
@@ -327,6 +335,48 @@ function secretsOf(setup: TrialSetup): readonly string[] {
   );
 }
 
+/** Scenario facts captured before the runtime closes (section 22.4). */
+interface ScenarioFacts {
+  readonly state: JsonObject;
+  readonly revision: number;
+  readonly stateSchemaVersion: number;
+  /** Pack name of the run; the §25.7 record names it as pack_id. */
+  readonly packId: string;
+  readonly projection: JsonObject | null;
+  readonly semanticEvents: readonly CommittedSemanticEvent[];
+}
+
+/**
+ * Map the committed events onto the section 25.7 export records. The
+ * values come from the sealed store, so the export only renames fields;
+ * determinism holds because the store wrote them in commit order.
+ */
+function semanticRecordsOf(
+  runId: string,
+  facts: ScenarioFacts | null
+): SemanticEvent[] {
+  if (facts === null) {
+    return [];
+  }
+  return facts.semanticEvents.map((event) => ({
+    schema_version: 1 as const,
+    type: "semantic.event" as const,
+    event_id: event.eventId,
+    semantic_sequence: event.semanticSequence,
+    run_id: runId,
+    pack_id: facts.packId,
+    name: event.name,
+    event_version: event.eventVersion,
+    logical_time: event.logicalTime,
+    caused_by_api_event_id: event.parentEventId,
+    actor: "participant" as const,
+    state_revision_before: event.revisionBefore,
+    state_revision_after: event.revisionAfter,
+    payload_schema: `${event.name}@${String(event.eventVersion)}`,
+    payload: event.payload
+  }));
+}
+
 /**
  * Run one trial from setup to the terminal record. The function resolves
  * with a terminal outcome for every trial-local condition, including setup
@@ -345,6 +395,50 @@ export async function runTrial(
   const startedAtMs = now();
   options.onEvent?.({ type: "trial.started", runId });
 
+  // Scenario mode boots the behavior child before setup: the exposure
+  // factory receives its backend and store-backed state (section 16.5),
+  // so no participant material exists while the child is unproven.
+  let scenario: ScenarioRuntime | null = null;
+  if (plan.behaviorMode === "scenario") {
+    const trialSeed = plan.trialSeeds[index];
+    if (trialSeed === undefined) {
+      throw new Error(`Trial ${runId} has no frozen seed.`);
+    }
+    const databasePath = store.resolve(`${relativeRoot}/state.sqlite`);
+    await ensureStateDirectory(databasePath);
+    try {
+      scenario = await openScenarioRuntime({
+        pack,
+        plan,
+        runId,
+        trialSeed,
+        databasePath,
+        now
+      });
+    } catch (cause) {
+      const message =
+        cause instanceof ScenarioRuntimeError
+          ? cause.message
+          : `Scenario bootstrap for trial ${runId} failed: ${
+              cause instanceof Error ? cause.message : String(cause)
+            }`;
+      const error = new TrialSetupError(
+        SetupCode.ScenarioBootstrap,
+        message,
+        runId,
+        { cause }
+      );
+      const outcome = await finalizeSetupFailure(store, plan, index, error);
+      options.onEvent?.({
+        type: "trial.finished",
+        runId,
+        disposition: outcome.disposition,
+        reasonCode: outcome.reasonCode
+      });
+      return outcome;
+    }
+  }
+
   let setup: TrialSetup;
   try {
     setup = await setupTrial({
@@ -354,10 +448,14 @@ export async function runTrial(
       index,
       exposure: options.exposure,
       now,
+      ...(scenario === null ? {} : { scenario }),
       ...(options.retryOf === undefined ? {} : { retryOf: options.retryOf }),
       ...(options.gitInit === undefined ? {} : { gitInit: options.gitInit })
     });
   } catch (cause) {
+    if (scenario !== null) {
+      await scenario.close().catch(() => undefined);
+    }
     if (cause instanceof TrialSetupError) {
       const outcome = await finalizeSetupFailure(store, plan, index, cause);
       options.onEvent?.({
@@ -381,6 +479,9 @@ export async function runTrial(
     );
   } catch (cause) {
     await setup.exposure.close().catch(() => undefined);
+    if (scenario !== null) {
+      await scenario.close().catch(() => undefined);
+    }
     throw cause;
   }
   const facts: SessionFacts = {
@@ -421,6 +522,13 @@ export async function runTrial(
       controller.signal
     );
     await adapter.cleanup?.(prepared).catch(() => undefined);
+  } catch (cause) {
+    // The scenario child terminates with the trial (section 16.5); on a
+    // rethrown adapter failure no final state read follows, so close here.
+    if (scenario !== null) {
+      await scenario.close().catch(() => undefined);
+    }
+    throw cause;
   } finally {
     clearTimeout(guard);
     options.signal?.removeEventListener("abort", onOperatorAbort);
@@ -432,6 +540,23 @@ export async function runTrial(
 
   if (result.status === "timed_out" && signals.timeoutFiredAtMs === null) {
     signals.timeoutFiredAtMs = now();
+  }
+
+  // The scenario reads precede the close: the state store and the child
+  // die with the trial, so the final artifacts capture their last state
+  // (section 22.4). Contract mode keeps the placeholder artifacts.
+  let scenarioFacts: ScenarioFacts | null = null;
+  if (scenario !== null) {
+    const snapshot = scenario.finalState();
+    scenarioFacts = {
+      state: snapshot?.state ?? {},
+      revision: snapshot?.revision ?? 0,
+      stateSchemaVersion: scenario.description.stateSchemaVersion,
+      packId: scenario.backend.name,
+      projection: await scenario.projection(),
+      semanticEvents: scenario.semanticEvents()
+    };
+    await scenario.close().catch(() => undefined);
   }
 
   await stages.flush();
@@ -507,15 +632,18 @@ export async function runTrial(
   const usage = usageNumbersOf(result);
   const apiRequests = trace.events.length;
 
-  // Final state and usage payloads precede the evaluation.
-  const finalState: JsonObject = {};
+  // Final state and usage payloads precede the evaluation. Scenario
+  // mode exports the committed state, the projection, and the §25.7
+  // semantic event stream; contract mode keeps the placeholder records.
+  const finalState: JsonObject = scenarioFacts?.state ?? {};
+  const semanticRecords = semanticRecordsOf(runId, scenarioFacts);
   await store.atomicWrite(
     `${relativeRoot}/state.final.json`,
     `${canonicalJson({
       schema_version: 1,
       kind: "StateFinal",
       run_id: runId,
-      revision: 0,
+      revision: scenarioFacts?.revision ?? 0,
       state: finalState
     } as Json)}\n`
   );
@@ -525,15 +653,32 @@ export async function runTrial(
       schema_version: 1,
       kind: "StateSummary",
       run_id: runId,
-      state_schema_version: 1,
-      revision: 0,
+      state_schema_version: scenarioFacts?.stateSchemaVersion ?? 1,
+      revision: scenarioFacts?.revision ?? 0,
       state_sha256: canonicalJsonSha256(finalState as Json),
-      projections: { empty_state: true },
-      counts: { api_requests: apiRequests },
+      projections:
+        scenarioFacts === null
+          ? { empty_state: true }
+          : { default: scenarioFacts.projection ?? finalState },
+      counts: {
+        api_requests: apiRequests,
+        ...(scenarioFacts === null
+          ? {}
+          : { semantic_events: semanticRecords.length })
+      },
       redacted: true,
       extensions: {}
     } as Json)}\n`
   );
+  if (scenarioFacts !== null) {
+    const lines = semanticRecords.map((record) =>
+      canonicalJson(record as unknown as Json)
+    );
+    await store.atomicWrite(
+      `${relativeRoot}/semantic-events.redacted.jsonl`,
+      lines.length === 0 ? "" : `${lines.join("\n")}\n`
+    );
+  }
   if (reportText.length > 0) {
     await store.atomicWrite(
       `${relativeRoot}/participant-final.txt`,
@@ -557,6 +702,7 @@ export async function runTrial(
         runId,
         run: runMetadataOf(options.plan, setup, adapter.id),
         events: trace.events,
+        ...(scenarioFacts === null ? {} : { semanticEvents: semanticRecords }),
         state: finalState as Json,
         report: report.status === "ok" ? report.value : null,
         resolveSchema: (reference: string): Json | undefined =>
@@ -644,7 +790,7 @@ export async function runTrial(
     counts: {
       api_requests: apiRequests,
       documentation_requests: documentationEvents.length,
-      semantic_events: 0,
+      semantic_events: semanticRecords.length,
       agent_tool_calls:
         typeof usage["tool_calls"] === "number" ? usage["tool_calls"] : null
     },
