@@ -1,0 +1,20 @@
+# Context
+
+## Why This Way
+The runtime sits in @oal/runner, not @oal/gateway: it owns the
+trial database, the wall clock, and the batch plan, which the
+gateway must never see. The gateway keeps only the two handles
+(ScenarioBackend, GatewayState) landed in 5c0ff5d.
+
+## Gotchas
+- packReference filters by role AND pointer; the same path can
+  carry two references (text copy vs parsed schema).
+- The wire-trust check on backendApiVersion needs a widened
+  local: the declared type pins the literal 1, so a direct
+  comparison is flagged dead by lint.
+- VirtualClock.now() returns an RFC 3339 string, not a number;
+  CommittedSemanticEvent.logicalTime is already formatted.
+
+## Related
+- Gateway scenario seam: 5c0ff5d
+- Runner wiring follows in the next commit
