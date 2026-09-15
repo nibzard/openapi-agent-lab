@@ -63,33 +63,33 @@ function setPatch(
 }
 
 describe("loadProtocol schema conformance", () => {
-  it("loads a schema-valid document without diagnostics", () => {
-    const result = loadProtocol(baseProtocolDoc(), { schema });
+  it("loads a schema-valid document without diagnostics", async () => {
+    const result = await loadProtocol(baseProtocolDoc(), { schema });
     expect(result.diagnostics).toEqual([]);
     expect(result.protocol?.metadata.id).toBe("prepared-workspace-api-v1");
     expect(result.protocol?.factors.length).toBe(2);
   });
 
-  it("rejects a document that misses a required member", () => {
+  it("rejects a document that misses a required member", async () => {
     const doc = baseProtocolDoc();
     delete doc["objective"];
-    const result = loadProtocol(doc, { schema });
+    const result = await loadProtocol(doc, { schema });
     expect(result.protocol).toBeNull();
     expect(codesOf(result.diagnostics)).toContain("OAL-STUDY-SCHEMA-INVALID");
   });
 
-  it("rejects an unknown top-level key", () => {
+  it("rejects an unknown top-level key", async () => {
     const doc = { ...baseProtocolDoc(), secret_plan: true };
-    const result = loadProtocol(doc, { schema });
+    const result = await loadProtocol(doc, { schema });
     expect(result.protocol).toBeNull();
     expect(codesOf(result.diagnostics)).toContain("OAL-STUDY-SCHEMA-INVALID");
   });
 
-  it("rejects a malformed pack digest at the semantic layer", () => {
+  it("rejects a malformed pack digest at the semantic layer", async () => {
     const doc = baseProtocolDoc();
     const evaluation = doc["evaluation"] as { pack: { sha256: string } };
     evaluation.pack.sha256 = "not-a-digest";
-    const result = loadProtocol(doc, { schema });
+    const result = await loadProtocol(doc, { schema });
     expect(result.protocol).toBeNull();
     expect(codesOf(result.diagnostics)).toContain(
       "OAL-STUDY-STRUCTURE-INVALID"
@@ -98,15 +98,15 @@ describe("loadProtocol schema conformance", () => {
 });
 
 describe("loadProtocol semantic rejections", () => {
-  it("rejects a duplicate factor ID", () => {
+  it("rejects a duplicate factor ID", async () => {
     const doc = baseProtocolDoc();
     factorAt(doc, 1)["id"] = factorAt(doc, 0)["id"];
-    const result = loadProtocol(doc, { schema });
+    const result = await loadProtocol(doc, { schema });
     expect(result.protocol).toBeNull();
     expect(codesOf(result.diagnostics)).toContain("OAL-STUDY-DUPLICATE-ID");
   });
 
-  it("rejects a duplicate level ID inside one factor", () => {
+  it("rejects a duplicate level ID inside one factor", async () => {
     const doc = baseProtocolDoc();
     const levels = factorAt(doc, 0)["levels"] as { id: string }[];
     const first = levels[0];
@@ -115,12 +115,12 @@ describe("loadProtocol semantic rejections", () => {
       throw new Error("Fixture factor has fewer than two levels.");
     }
     second.id = first.id;
-    const result = loadProtocol(doc, { schema });
+    const result = await loadProtocol(doc, { schema });
     expect(result.protocol).toBeNull();
     expect(codesOf(result.diagnostics)).toContain("OAL-STUDY-DUPLICATE-ID");
   });
 
-  it("rejects a metric ID declared twice", () => {
+  it("rejects a metric ID declared twice", async () => {
     const doc = baseProtocolDoc();
     const metrics = doc["metrics"] as {
       secondary: { id: string }[];
@@ -130,44 +130,44 @@ describe("loadProtocol semantic rejections", () => {
       throw new Error("Fixture has no secondary metric.");
     }
     secondary.id = "clean_completion";
-    const result = loadProtocol(doc, { schema });
+    const result = await loadProtocol(doc, { schema });
     expect(result.protocol).toBeNull();
     expect(codesOf(result.diagnostics)).toContain("OAL-STUDY-DUPLICATE-ID");
   });
 
-  it("rejects a patch field outside the allowlist", () => {
+  it("rejects a patch field outside the allowlist", async () => {
     const doc = baseProtocolDoc();
     setPatch(doc, 1, 0, { "evaluation.model_judge": "enabled" });
-    const result = loadProtocol(doc, { schema });
+    const result = await loadProtocol(doc, { schema });
     expect(result.protocol).toBeNull();
     expect(codesOf(result.diagnostics)).toContain(
       "OAL-STUDY-PATCH-FIELD-UNKNOWN"
     );
   });
 
-  it("rejects a patch value the field does not accept", () => {
+  it("rejects a patch value the field does not accept", async () => {
     const doc = baseProtocolDoc();
     setPatch(doc, 1, 0, { "exposure.contract_visibility": "telepathy" });
-    const result = loadProtocol(doc, { schema });
+    const result = await loadProtocol(doc, { schema });
     expect(result.protocol).toBeNull();
     expect(codesOf(result.diagnostics)).toContain(
       "OAL-STUDY-PATCH-VALUE-INVALID"
     );
   });
 
-  it("rejects two factors binding the same treatment field", () => {
+  it("rejects two factors binding the same treatment field", async () => {
     const doc = baseProtocolDoc();
     setPatch(doc, 0, 0, { "exposure.contract_visibility": "file" });
-    const result = loadProtocol(doc, { schema });
+    const result = await loadProtocol(doc, { schema });
     expect(result.protocol).toBeNull();
     expect(codesOf(result.diagnostics)).toContain(
       "OAL-STUDY-PATCH-FIELD-BOUND-TWICE"
     );
   });
 
-  it("rejects a contract variant the variant set does not declare", () => {
+  it("rejects a contract variant the variant set does not declare", async () => {
     const doc = baseProtocolDoc();
-    const result = loadProtocol(doc, {
+    const result = await loadProtocol(doc, {
       schema,
       references: { contractVariants: new Set(["shape-a"]) }
     });
@@ -177,12 +177,12 @@ describe("loadProtocol semantic rejections", () => {
     );
   });
 
-  it("rejects a referenced contract operation missing from the contract", () => {
+  it("rejects a referenced contract operation missing from the contract", async () => {
     const doc = baseProtocolDoc();
     setPatch(doc, 1, 1, {
       "exposure.documentation_profile": "path:DELETE /v1/gone"
     });
-    const result = loadProtocol(doc, {
+    const result = await loadProtocol(doc, {
       schema,
       references: {
         contractOperations: new Set(["path:GET /v1/widgets"])
@@ -194,12 +194,12 @@ describe("loadProtocol semantic rejections", () => {
     );
   });
 
-  it("accepts a referenced contract operation the contract declares", () => {
+  it("accepts a referenced contract operation the contract declares", async () => {
     const doc = baseProtocolDoc();
     setPatch(doc, 1, 1, {
       "exposure.documentation_profile": "path:GET /v1/widgets"
     });
-    const result = loadProtocol(doc, {
+    const result = await loadProtocol(doc, {
       schema,
       references: {
         contractOperations: new Set(["path:GET /v1/widgets"])
@@ -209,41 +209,41 @@ describe("loadProtocol semantic rejections", () => {
     expect(result.protocol).not.toBeNull();
   });
 
-  it("rejects a level ID that makes the derived cell ID ambiguous", () => {
+  it("rejects a level ID that makes the derived cell ID ambiguous", async () => {
     const doc = baseProtocolDoc();
     levelAt(doc, 0, 0)["id"] = "shape__a";
-    const result = loadProtocol(doc, { schema });
+    const result = await loadProtocol(doc, { schema });
     expect(result.protocol).toBeNull();
     expect(codesOf(result.diagnostics)).toContain("OAL-STUDY-CELL-ID-UNSAFE");
   });
 
-  it("rejects a protocol member path that escapes the study root", () => {
+  it("rejects a protocol member path that escapes the study root", async () => {
     const doc = baseProtocolDoc();
     (doc["phases"] as { pilot: string }).pilot = "../outside/pilot.yaml";
-    const result = loadProtocol(doc, { schema });
+    const result = await loadProtocol(doc, { schema });
     expect(result.protocol).toBeNull();
     expect(codesOf(result.diagnostics)).toContain(
       "OAL-STUDY-PHASE-PATH-UNSAFE"
     );
   });
 
-  it("rejects a variant selection without a variant set declaration", () => {
+  it("rejects a variant selection without a variant set declaration", async () => {
     const doc = baseProtocolDoc();
     const evaluation = doc["evaluation"] as {
       contract_variant_set?: string;
     };
     delete evaluation.contract_variant_set;
-    const result = loadProtocol(doc, { schema });
+    const result = await loadProtocol(doc, { schema });
     expect(result.protocol).toBeNull();
     expect(codesOf(result.diagnostics)).toContain(
       "OAL-STUDY-CONTRACT-VARIANT-UNKNOWN"
     );
   });
 
-  it("reports a missing and an orphan phase plan", () => {
+  it("reports a missing and an orphan phase plan", async () => {
     const plan = { metadata: { id: "smoke" } };
     const doc = baseProtocolDoc();
-    const result = loadProtocol(doc, {
+    const result = await loadProtocol(doc, {
       schema,
       references: {
         phasePlans: new Map([
@@ -257,9 +257,9 @@ describe("loadProtocol semantic rejections", () => {
     expect(codes).toContain("OAL-STUDY-PHASE-PLAN-ORPHAN");
   });
 
-  it("rejects a phase plan whose ID differs from the phase key", () => {
+  it("rejects a phase plan whose ID differs from the phase key", async () => {
     const doc = baseProtocolDoc();
-    const result = loadProtocol(doc, {
+    const result = await loadProtocol(doc, {
       schema,
       references: {
         phasePlans: new Map([
@@ -312,8 +312,8 @@ describe("patch helpers", () => {
   });
 });
 
-describe("cell inventory", () => {
-  const loaded = loadProtocol(baseProtocolDoc(), { schema });
+describe("cell inventory", async () => {
+  const loaded = await loadProtocol(baseProtocolDoc(), { schema });
   const protocolOfCellInventory = loaded.protocol;
   if (protocolOfCellInventory === null) {
     throw new Error("Fixture protocol must load.");
@@ -430,8 +430,8 @@ describe("cell inventory", () => {
 });
 
 describe("protocol document rebuild", () => {
-  it("rebuilds an equal typed model from a reordered document", () => {
-    const first = loadProtocol(baseProtocolDoc(), { schema }).protocol;
+  it("rebuilds an equal typed model from a reordered document", async () => {
+    const first = (await loadProtocol(baseProtocolDoc(), { schema })).protocol;
     const reordered = baseProtocolDoc();
     const evaluation = reordered["evaluation"] as Record<string, Json>;
     reordered["evaluation"] = {
@@ -440,14 +440,15 @@ describe("protocol document rebuild", () => {
       eval: fieldOf(evaluation, "eval"),
       pack: fieldOf(evaluation, "pack")
     };
-    const second = loadProtocol(reordered, { schema }).protocol;
+    const second = (await loadProtocol(reordered, { schema })).protocol;
     expect(first).not.toBeNull();
     expect(second).not.toBeNull();
     expect(JSON.stringify(first)).toBe(JSON.stringify(second));
   });
 
-  it("keeps the authored factor order in the typed model", () => {
-    const protocol = loadProtocol(baseProtocolDoc(), { schema }).protocol;
+  it("keeps the authored factor order in the typed model", async () => {
+    const protocol = (await loadProtocol(baseProtocolDoc(), { schema }))
+      .protocol;
     expect(protocol?.factors.map((factor) => factor.id)).toEqual([
       "api_shape",
       "documentation"

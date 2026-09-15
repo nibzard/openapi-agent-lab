@@ -30,8 +30,8 @@ const BASE = {
   caseRef: { id: "default", sha256: sha256Hex("case") }
 };
 
-function fixtureSchedule(): AssignmentSchedule {
-  const study = fixtureStudy();
+async function fixtureSchedule(): Promise<AssignmentSchedule> {
+  const study = await fixtureStudy();
   const result = buildAssignmentSchedule({
     study_run_id: STUDY_RUN_ID,
     ir: study.ir,
@@ -93,8 +93,8 @@ describe("assignment run seeds", () => {
 });
 
 describe("assignmentRunBindings", () => {
-  it("binds every assignment to one run ID, run seed, and child batch", () => {
-    const schedule = fixtureSchedule();
+  it("binds every assignment to one run ID, run seed, and child batch", async () => {
+    const schedule = await fixtureSchedule();
     const bindings = assignmentRunBindings(schedule, BASE);
     expect(bindings).toHaveLength(18);
     expect(new Set(bindings.map((binding) => binding.assignment_id)).size).toBe(
@@ -111,8 +111,8 @@ describe("assignmentRunBindings", () => {
     }
   });
 
-  it("derives every held seed from the reserve index", () => {
-    const schedule = fixtureSchedule();
+  it("derives every held seed from the reserve index", async () => {
+    const schedule = await fixtureSchedule();
     const bindings = assignmentRunBindings(schedule, BASE);
     const heldBinding = bindings.find((binding) => {
       const assignment = schedule.assignments.find(
@@ -125,8 +125,8 @@ describe("assignmentRunBindings", () => {
     );
   });
 
-  it("never reuses a run seed across a primary and a held slot of one cell", () => {
-    const schedule = fixtureSchedule();
+  it("never reuses a run seed across a primary and a held slot of one cell", async () => {
+    const schedule = await fixtureSchedule();
     const bindings = assignmentRunBindings(schedule, BASE);
     const cellId = FIXTURE_CELLS[0] as string;
     const ofCell = bindings.filter((binding) => {
@@ -139,8 +139,8 @@ describe("assignmentRunBindings", () => {
     expect(new Set(ofCell.map((binding) => binding.run_seed)).size).toBe(3);
   });
 
-  it("is deterministic", () => {
-    const schedule = fixtureSchedule();
+  it("is deterministic", async () => {
+    const schedule = await fixtureSchedule();
     expect(assignmentRunBindings(schedule, BASE)).toEqual(
       assignmentRunBindings(schedule, BASE)
     );

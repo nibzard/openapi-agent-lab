@@ -113,7 +113,7 @@ async function executedStudy(
     readonly cleanCompletion?: (launch: TrialLaunch) => boolean;
   } = {}
 ): Promise<ExecutedStudy> {
-  const study = twoCellStudy({
+  const study = await twoCellStudy({
     ...(options.activation_timing === undefined
       ? {}
       : { activation_timing: options.activation_timing }),
@@ -483,11 +483,13 @@ describe("study analysis", () => {
       "primary_estimand"
     ] as JsonObject;
     estimand["measure"] = "risk_ratio";
-    const loaded = loadPhasePlan(document, {
-      schema: loadSchema("phase-plan.v1.schema.json"),
-      protocol: executed.study.protocol,
-      cellCount: TWO_CELL_CELLS.length
-    }).phasePlan;
+    const loaded = (
+      await loadPhasePlan(document, {
+        schema: loadSchema("phase-plan.v1.schema.json"),
+        protocol: executed.study.protocol,
+        cellCount: TWO_CELL_CELLS.length
+      })
+    ).phasePlan;
     if (loaded === null) {
       throw new Error("Risk ratio fixture plan must load.");
     }

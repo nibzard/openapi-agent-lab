@@ -15,8 +15,8 @@ import {
   digestEquals,
   isJsonObject,
   isSha256Hex,
-  SchemaValidator,
   sha256Hex,
+  validateSchemaInstance,
   type Diagnostic,
   type Json,
   type JsonObject
@@ -123,12 +123,12 @@ export function referencedVariants(protocol: StudyProtocol): Set<string> {
 }
 
 /** Create a protocol lock. Never throws on content. */
-export function createProtocolLock(
+export async function createProtocolLock(
   protocol: StudyProtocol,
   members: readonly LockMember[],
   effectiveContracts: readonly EffectiveContractDigest[],
   options: ProtocolLockOptions = {}
-): ProtocolLockResult {
+): Promise<ProtocolLockResult> {
   const diagnostics: Diagnostic[] = [];
   const report = (entry: Diagnostic): void => {
     diagnostics.push(entry);
@@ -239,7 +239,10 @@ export function createProtocolLock(
   };
 
   if (options.schema !== undefined) {
-    const violations = new SchemaValidator(options.schema).errors(
+    // Study documents are untrusted: their schema evaluation runs inside
+    // the bounded schema-worker boundary.
+    const violations = await validateSchemaInstance(
+      options.schema,
       protocolLockJson(lock)
     );
     for (const violation of violations) {
@@ -312,17 +315,18 @@ export function protocolLockSha256(lock: ProtocolLock): string {
  * Verify a lock against current member bytes. Reports exactly which member
  * drifted; an empty drift list with no errors means the lock still holds.
  */
-export function verifyProtocolLock(
+export async function verifyProtocolLock(
   lock: ProtocolLock,
   current: ProtocolLockVerifyInput,
   options: ProtocolLockOptions = {}
-): ProtocolLockVerifyResult {
+): Promise<ProtocolLockVerifyResult> {
   const diagnostics: Diagnostic[] = [];
   const drift: LockDrift[] = [];
   const uri = options.documentUri ?? null;
 
   if (options.schema !== undefined) {
-    const violations = new SchemaValidator(options.schema).errors(
+    const violations = await validateSchemaInstance(
+      options.schema,
       protocolLockJson(lock)
     );
     for (const violation of violations) {
@@ -484,13 +488,13 @@ export function verifyProtocolLock(
 }
 
 /** Parse a persisted lock document. Never throws on content. */
-export function protocolLockFromJson(
+export async function protocolLockFromJson(
   document: Json,
   options: ProtocolLockOptions = {}
-): ProtocolLockResult {
+): Promise<ProtocolLockResult> {
   const diagnostics: Diagnostic[] = [];
   if (options.schema !== undefined) {
-    const violations = new SchemaValidator(options.schema).errors(document);
+    const violations = await validateSchemaInstance(options.schema, document);
     for (const violation of violations) {
       diagnostics.push(
         diagnostic({

@@ -83,8 +83,8 @@ const BLOCK_1_ORDER = [
   ]
 ] as const;
 
-function build(phasePlanOverride?: (plan: PhasePlan) => PhasePlan) {
-  const study = fixtureStudy();
+async function build(phasePlanOverride?: (plan: PhasePlan) => PhasePlan) {
+  const study = await fixtureStudy();
   return buildAssignmentSchedule({
     study_run_id: STUDY_RUN_ID,
     ir: study.ir,
@@ -97,8 +97,8 @@ function build(phasePlanOverride?: (plan: PhasePlan) => PhasePlan) {
   });
 }
 
-function scheduleOf(): AssignmentSchedule {
-  const result = build();
+async function scheduleOf(): Promise<AssignmentSchedule> {
+  const result = await build();
   if (result.schedule === null) {
     throw new Error(
       `Fixture schedule must build: ${JSON.stringify(result.diagnostics)}`
@@ -108,8 +108,8 @@ function scheduleOf(): AssignmentSchedule {
 }
 
 describe("buildAssignmentSchedule", () => {
-  it("builds twelve primary and six held assignments", () => {
-    const schedule = scheduleOf();
+  it("builds twelve primary and six held assignments", async () => {
+    const schedule = await scheduleOf();
     expect(schedule.assignments).toHaveLength(18);
     expect(schedule.study_run_id).toBe(STUDY_RUN_ID);
     expect(schedule.phase_id).toBe("pilot");
@@ -125,8 +125,8 @@ describe("buildAssignmentSchedule", () => {
     ).toHaveLength(6);
   });
 
-  it("orders every block by the lexicographic SHA-256 of its sort key", () => {
-    const schedule = scheduleOf();
+  it("orders every block by the lexicographic SHA-256 of its sort key", async () => {
+    const schedule = await scheduleOf();
     const primaries = schedule.assignments.filter(
       (assignment) => assignment.kind === "primary"
     );
@@ -140,8 +140,8 @@ describe("buildAssignmentSchedule", () => {
     );
   });
 
-  it("sorts each block independently, so a new block cannot repeat an order", () => {
-    const schedule = scheduleOf();
+  it("sorts each block independently, so a new block cannot repeat an order", async () => {
+    const schedule = await scheduleOf();
     const first = schedule.assignments
       .filter((a) => a.block_id === 0)
       .map((a) => a.cell_id);
@@ -151,8 +151,8 @@ describe("buildAssignmentSchedule", () => {
     expect(first).not.toEqual(second);
   });
 
-  it("stores held entries after the primaries in canonical cell and reserve order", () => {
-    const schedule = scheduleOf();
+  it("stores held entries after the primaries in canonical cell and reserve order", async () => {
+    const schedule = await scheduleOf();
     const held = schedule.assignments.slice(12);
     expect(held.every((a) => a.kind === "held_replacement")).toBe(true);
     expect(held.map((a) => a.cell_id)).toEqual(FIXTURE_CELLS);
@@ -164,8 +164,8 @@ describe("buildAssignmentSchedule", () => {
     ).toBe(true);
   });
 
-  it("keeps every block complete: every cell exactly once per block", () => {
-    const schedule = scheduleOf();
+  it("keeps every block complete: every cell exactly once per block", async () => {
+    const schedule = await scheduleOf();
     expect(blocksAreComplete(schedule, FIXTURE_CELLS.length)).toBe(true);
     for (const block of [0, 1]) {
       const cells = schedule.assignments
@@ -176,8 +176,8 @@ describe("buildAssignmentSchedule", () => {
     }
   });
 
-  it("numbers slots, blocks, and repetition indices from zero", () => {
-    const schedule = scheduleOf();
+  it("numbers slots, blocks, and repetition indices from zero", async () => {
+    const schedule = await scheduleOf();
     expect(schedule.assignments.map((a) => a.slot)).toEqual([
       ...Array(18).keys()
     ]);
@@ -187,8 +187,8 @@ describe("buildAssignmentSchedule", () => {
     );
   });
 
-  it("rejects a primary count that is not divisible by the cell count", () => {
-    const result = build((plan) => ({
+  it("rejects a primary count that is not divisible by the cell count", async () => {
+    const result = await build((plan) => ({
       ...plan,
       design: { ...plan.design, primary_assignments: 7, block: undefined },
       paid_calls: { primary: 7, maximum_with_replacements: 13 }
@@ -199,8 +199,8 @@ describe("buildAssignmentSchedule", () => {
     ]);
   });
 
-  it("rejects a declared block structure that contradicts the counts", () => {
-    const result = build((plan) => ({
+  it("rejects a declared block structure that contradicts the counts", async () => {
+    const result = await build((plan) => ({
       ...plan,
       design: { ...plan.design, block: { cells: "all", repetitions: 3 } }
     }));
@@ -210,8 +210,8 @@ describe("buildAssignmentSchedule", () => {
     );
   });
 
-  it("rejects a schedule above the frozen paid ceiling", () => {
-    const result = build((plan) => ({
+  it("rejects a schedule above the frozen paid ceiling", async () => {
+    const result = await build((plan) => ({
       ...plan,
       paid_calls: { primary: 12, maximum_with_replacements: 12 }
     }));
@@ -221,8 +221,8 @@ describe("buildAssignmentSchedule", () => {
     );
   });
 
-  it("rejects an activation ceiling above the held capacity", () => {
-    const result = build((plan) => {
+  it("rejects an activation ceiling above the held capacity", async () => {
+    const result = await build((plan) => {
       const replacements = plan.replacements;
       if (replacements === undefined) {
         throw new Error("Fixture plan must declare replacements.");
@@ -238,9 +238,9 @@ describe("buildAssignmentSchedule", () => {
     );
   });
 
-  it("drops held capacity when the plan freezes replacement kind none", () => {
-    const study = fixtureStudy();
-    const result = build((plan) => ({
+  it("drops held capacity when the plan freezes replacement kind none", async () => {
+    const study = await fixtureStudy();
+    const result = await build((plan) => ({
       ...plan,
       replacements: undefined
     }));
@@ -255,23 +255,23 @@ describe("buildAssignmentSchedule", () => {
     expect(summary.maximum_agent_launches).toBe(12);
   });
 
-  it("produces byte-identical schedules for identical inputs", () => {
-    const left = serializeAssignmentSchedule(scheduleOf());
-    const right = serializeAssignmentSchedule(scheduleOf());
+  it("produces byte-identical schedules for identical inputs", async () => {
+    const left = serializeAssignmentSchedule(await scheduleOf());
+    const right = serializeAssignmentSchedule(await scheduleOf());
     expect(left).toBe(right);
-    expect(assignmentScheduleSha256(scheduleOf())).toBe(
-      assignmentScheduleSha256(scheduleOf())
+    expect(assignmentScheduleSha256(await scheduleOf())).toBe(
+      assignmentScheduleSha256(await scheduleOf())
     );
   });
 
-  it("pins the canonical schedule bytes to a fixed digest", () => {
-    expect(assignmentScheduleSha256(scheduleOf())).toBe(
+  it("pins the canonical schedule bytes to a fixed digest", async () => {
+    expect(assignmentScheduleSha256(await scheduleOf())).toBe(
       "ee0c4853c7a9656205511cbe71abc5c8d2878f40b0ad142316409b42aa2fa256"
     );
   });
 
-  it("moves the order when the cohort seed changes", () => {
-    const study = fixtureStudy();
+  it("moves the order when the cohort seed changes", async () => {
+    const study = await fixtureStudy();
     const other = buildAssignmentSchedule({
       study_run_id: STUDY_RUN_ID,
       ir: study.ir,
@@ -283,7 +283,7 @@ describe("buildAssignmentSchedule", () => {
       cell_digests: study.cellDigests
     }).schedule;
     expect(other).not.toBeNull();
-    const base = scheduleOf();
+    const base = await scheduleOf();
     const otherSchedule = other as AssignmentSchedule;
     expect(otherSchedule.assignments.map((a) => a.cell_id)).not.toEqual(
       base.assignments.map((a) => a.cell_id)
@@ -296,8 +296,8 @@ describe("buildAssignmentSchedule", () => {
     ).toEqual([...FIXTURE_CELLS].sort());
   });
 
-  it("moves the order when the protocol lock digest changes", () => {
-    const study = fixtureStudy();
+  it("moves the order when the protocol lock digest changes", async () => {
+    const study = await fixtureStudy();
     const other = buildAssignmentSchedule({
       study_run_id: STUDY_RUN_ID,
       ir: study.ir,
@@ -309,12 +309,12 @@ describe("buildAssignmentSchedule", () => {
       cell_digests: study.cellDigests
     }).schedule;
     expect(other?.assignments.map((a) => a.sort_key)).not.toEqual(
-      scheduleOf().assignments.map((a) => a.sort_key)
+      (await scheduleOf()).assignments.map((a) => a.sort_key)
     );
   });
 
-  it("records ordered factor levels, their digests, and the cell digests", () => {
-    const schedule = scheduleOf();
+  it("records ordered factor levels, their digests, and the cell digests", async () => {
+    const schedule = await scheduleOf();
     const shapeABlind = schedule.assignments.find(
       (a) => a.cell_id === "shape_a__blind" && a.kind === "primary"
     );
@@ -339,8 +339,8 @@ describe("buildAssignmentSchedule", () => {
     expect(shapeABlind?.assignment_id).toMatch(/^asg_[a-f0-9]{24}$/);
   });
 
-  it("binds every assignment of one cell to one child batch", () => {
-    const schedule = scheduleOf();
+  it("binds every assignment of one cell to one child batch", async () => {
+    const schedule = await scheduleOf();
     for (const cellId of FIXTURE_CELLS) {
       const batches = new Set(
         schedule.assignments
@@ -354,15 +354,15 @@ describe("buildAssignmentSchedule", () => {
     );
   });
 
-  it("validates against assignment-schedule.v1.schema.json", () => {
-    expect(scheduleSchema.errors(assignmentScheduleJson(scheduleOf()))).toEqual(
-      []
-    );
+  it("validates against assignment-schedule.v1.schema.json", async () => {
+    expect(
+      scheduleSchema.errors(assignmentScheduleJson(await scheduleOf()))
+    ).toEqual([]);
   });
 
-  it("reports the counts a schedule preview prints", () => {
-    const study = fixtureStudy();
-    const summary = describeSchedule(scheduleOf(), study.phasePlan);
+  it("reports the counts a schedule preview prints", async () => {
+    const study = await fixtureStudy();
+    const summary = describeSchedule(await scheduleOf(), study.phasePlan);
     expect(summary).toEqual({
       primary_count: 12,
       held_replacement_count: 6,
@@ -374,8 +374,8 @@ describe("buildAssignmentSchedule", () => {
     });
   });
 
-  it("recomputes the sort keys from the documented rule", () => {
-    const schedule = scheduleOf();
+  it("recomputes the sort keys from the documented rule", async () => {
+    const schedule = await scheduleOf();
     const shapeASupplied = schedule.assignments.find(
       (a) => a.cell_id === "shape_a__supplied" && a.block_id === 0
     );

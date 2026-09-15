@@ -215,7 +215,7 @@ export const studyScheduleCommand: CommandHandler = async (args, io) => {
     emitDiagnostics(io, args.context, diagnostics);
     return EXIT_INVALID;
   }
-  const verified = verifyProtocolLock(lockState.lock, {
+  const verified = await verifyProtocolLock(lockState.lock, {
     members: lockMembersOf(study),
     protocol: study.protocol
   });

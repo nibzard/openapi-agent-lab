@@ -256,7 +256,7 @@ export const studyValidateCommand: CommandHandler = async (args, io) => {
               args.context.maxSourceBytes
             )
           ).contract;
-    const compiled = compileStudy(study.protocol, {
+    const compiled = await compileStudy(study.protocol, {
       schema: await readSchema("study-ir.v1.schema.json"),
       members: study.members,
       ...(contract === undefined ? {} : { contract }),
@@ -320,7 +320,7 @@ export const studyValidateCommand: CommandHandler = async (args, io) => {
         })
       );
     } else {
-      const verified = verifyProtocolLock(lock, {
+      const verified = await verifyProtocolLock(lock, {
         members: lockMembersOf(study),
         protocol: study.protocol
       });
@@ -363,7 +363,7 @@ export const studyValidateCommand: CommandHandler = async (args, io) => {
     } else {
       const effective =
         pack === null ? [] : await effectiveContractsOf(study, pack);
-      const created = createProtocolLock(
+      const created = await createProtocolLock(
         study.protocol,
         lockMembersOf(study),
         effective,

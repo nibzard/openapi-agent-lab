@@ -17,8 +17,8 @@ function codesOf(diagnostics: readonly { code: string }[]): string[] {
 }
 
 describe("loadBlindingReview", () => {
-  it("loads a schema-valid review without diagnostics", () => {
-    const result = loadBlindingReview(baseBlindingReviewDoc(), {
+  it("loads a schema-valid review without diagnostics", async () => {
+    const result = await loadBlindingReview(baseBlindingReviewDoc(), {
       schema: blindingSchema
     });
     expect(result.diagnostics).toEqual([]);
@@ -26,15 +26,15 @@ describe("loadBlindingReview", () => {
     expect(result.review?.reviewed_surfaces.length).toBe(6);
   });
 
-  it("rejects a document that misses the cue audit digest", () => {
+  it("rejects a document that misses the cue audit digest", async () => {
     const doc = baseBlindingReviewDoc();
     delete doc["cue_audit_sha256"];
-    const result = loadBlindingReview(doc, { schema: blindingSchema });
+    const result = await loadBlindingReview(doc, { schema: blindingSchema });
     expect(result.review).toBeNull();
     expect(codesOf(result.diagnostics)).toContain("OAL-STUDY-SCHEMA-INVALID");
   });
 
-  it("rejects an approval that contradicts a blocking finding", () => {
+  it("rejects an approval that contradicts a blocking finding", async () => {
     const doc = baseBlindingReviewDoc();
     doc["findings"] = [
       {
@@ -42,19 +42,19 @@ describe("loadBlindingReview", () => {
         description: "A cell filename reveals its treatment arm."
       }
     ];
-    const result = loadBlindingReview(doc, { schema: blindingSchema });
+    const result = await loadBlindingReview(doc, { schema: blindingSchema });
     expect(result.review).toBeNull();
     expect(codesOf(result.diagnostics)).toContain(
       "OAL-STUDY-STRUCTURE-INVALID"
     );
   });
 
-  it("rejects a review that covers no cell", () => {
+  it("rejects a review that covers no cell", async () => {
     const doc: JsonObject = {
       ...baseBlindingReviewDoc(),
       reviewed_surfaces: []
     };
-    const result = loadBlindingReview(doc, { schema: blindingSchema });
+    const result = await loadBlindingReview(doc, { schema: blindingSchema });
     expect(result.review).toBeNull();
     expect(codesOf(result.diagnostics)).toContain(
       "OAL-STUDY-STRUCTURE-INVALID"
@@ -63,8 +63,8 @@ describe("loadBlindingReview", () => {
 });
 
 describe("loadEquivalenceReview", () => {
-  it("loads a schema-valid review without diagnostics", () => {
-    const result = loadEquivalenceReview(baseEquivalenceReviewDoc(), {
+  it("loads a schema-valid review without diagnostics", async () => {
+    const result = await loadEquivalenceReview(baseEquivalenceReviewDoc(), {
       schema: equivalenceSchema
     });
     expect(result.diagnostics).toEqual([]);
@@ -75,25 +75,29 @@ describe("loadEquivalenceReview", () => {
     ]);
   });
 
-  it("rejects a single reviewer", () => {
+  it("rejects a single reviewer", async () => {
     const doc = baseEquivalenceReviewDoc();
     (doc as { reviewers: unknown[] }).reviewers = [
       { name: "Ada Reviewer", role: "contract" }
     ];
-    const result = loadEquivalenceReview(doc, { schema: equivalenceSchema });
+    const result = await loadEquivalenceReview(doc, {
+      schema: equivalenceSchema
+    });
     expect(result.review).toBeNull();
     expect(codesOf(result.diagnostics)).toContain("OAL-STUDY-SCHEMA-INVALID");
   });
 
-  it("rejects a review that names no reviewed digest", () => {
+  it("rejects a review that names no reviewed digest", async () => {
     const doc = baseEquivalenceReviewDoc();
     (doc as { reviewed: unknown[] }).reviewed = [];
-    const result = loadEquivalenceReview(doc, { schema: equivalenceSchema });
+    const result = await loadEquivalenceReview(doc, {
+      schema: equivalenceSchema
+    });
     expect(result.review).toBeNull();
     expect(codesOf(result.diagnostics)).toContain("OAL-STUDY-SCHEMA-INVALID");
   });
 
-  it("rejects an approval that contradicts a blocking finding", () => {
+  it("rejects an approval that contradicts a blocking finding", async () => {
     const doc = baseEquivalenceReviewDoc();
     doc["findings"] = [
       {
@@ -101,7 +105,9 @@ describe("loadEquivalenceReview", () => {
         description: "The variants differ in validation strictness."
       }
     ];
-    const result = loadEquivalenceReview(doc, { schema: equivalenceSchema });
+    const result = await loadEquivalenceReview(doc, {
+      schema: equivalenceSchema
+    });
     expect(result.review).toBeNull();
     expect(codesOf(result.diagnostics)).toContain(
       "OAL-STUDY-STRUCTURE-INVALID"

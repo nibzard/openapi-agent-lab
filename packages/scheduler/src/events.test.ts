@@ -44,8 +44,8 @@ function runIdOf(launchOrder: number): string {
   return `run_${String(launchOrder).padStart(24, "0")}`;
 }
 
-function scheduleOf(planOverride?: (plan: PhasePlan) => PhasePlan) {
-  const study = fixtureStudy();
+async function scheduleOf(planOverride?: (plan: PhasePlan) => PhasePlan) {
+  const study = await fixtureStudy();
   const phasePlan = planOverride?.(study.phasePlan) ?? study.phasePlan;
   const result = buildAssignmentSchedule({
     study_run_id: STUDY_RUN_ID,
@@ -145,8 +145,8 @@ function lastEvent(ledger: AssignmentLedger): AssignmentEvent {
 }
 
 describe("appendAssignmentEvent", () => {
-  it("records a planned, launched, and terminal fact in order", () => {
-    const { schedule } = scheduleOf();
+  it("records a planned, launched, and terminal fact in order", async () => {
+    const { schedule } = await scheduleOf();
     const primary = primaryIn(schedule, FIXTURE_CELLS[0] as string);
     let ledger = createAssignmentLedger(STUDY_RUN_ID);
     ledger = append(ledger, schedule, {
@@ -187,8 +187,8 @@ describe("appendAssignmentEvent", () => {
     }
   });
 
-  it("rejects an event of a different StudyRun", () => {
-    const { schedule } = scheduleOf();
+  it("rejects an event of a different StudyRun", async () => {
+    const { schedule } = await scheduleOf();
     const primary = primaryIn(schedule, FIXTURE_CELLS[0] as string);
     const result = appendAssignmentEvent(
       createAssignmentLedger(STUDY_RUN_ID),
@@ -207,8 +207,8 @@ describe("appendAssignmentEvent", () => {
     );
   });
 
-  it("rejects a second event of the same kind for one assignment", () => {
-    const { schedule } = scheduleOf();
+  it("rejects a second event of the same kind for one assignment", async () => {
+    const { schedule } = await scheduleOf();
     const primary = primaryIn(schedule, FIXTURE_CELLS[0] as string);
     const ledger = append(createAssignmentLedger(STUDY_RUN_ID), schedule, {
       assignment_id: primary.assignment_id,
@@ -227,8 +227,8 @@ describe("appendAssignmentEvent", () => {
     );
   });
 
-  it("rejects a terminal fact without a launch and a launch after not-started", () => {
-    const { schedule } = scheduleOf();
+  it("rejects a terminal fact without a launch and a launch after not-started", async () => {
+    const { schedule } = await scheduleOf();
     const primary = primaryIn(schedule, FIXTURE_CELLS[0] as string);
     const planned = append(createAssignmentLedger(STUDY_RUN_ID), schedule, {
       assignment_id: primary.assignment_id,
@@ -266,8 +266,8 @@ describe("appendAssignmentEvent", () => {
     );
   });
 
-  it("rejects a planned fact for a held slot and an activation for a primary", () => {
-    const { schedule } = scheduleOf();
+  it("rejects a planned fact for a held slot and an activation for a primary", async () => {
+    const { schedule } = await scheduleOf();
     const held = schedule.assignments.find(
       (assignment) => assignment.kind === "held_replacement"
     );
@@ -306,8 +306,8 @@ describe("appendAssignmentEvent", () => {
     );
   });
 
-  it("rejects a bad timestamp, an unknown assignment, and a foreign batch", () => {
-    const { schedule } = scheduleOf();
+  it("rejects a bad timestamp, an unknown assignment, and a foreign batch", async () => {
+    const { schedule } = await scheduleOf();
     const primary = primaryIn(schedule, FIXTURE_CELLS[0] as string);
     const badTime = appendAssignmentEvent(
       createAssignmentLedger(STUDY_RUN_ID),
@@ -351,8 +351,8 @@ describe("appendAssignmentEvent", () => {
     );
   });
 
-  it("assigns launch orders that follow the recorded order", () => {
-    const { schedule } = scheduleOf();
+  it("assigns launch orders that follow the recorded order", async () => {
+    const { schedule } = await scheduleOf();
     const first = primaryIn(schedule, FIXTURE_CELLS[0] as string);
     const second = primaryIn(schedule, FIXTURE_CELLS[1] as string);
     let ledger = createAssignmentLedger(STUDY_RUN_ID);
@@ -389,8 +389,8 @@ describe("appendAssignmentEvent", () => {
     expect(lastEvent(launched).launch_order).toBe(1);
   });
 
-  it("serializes every record as one schema-valid canonical JSON line", () => {
-    const { schedule } = scheduleOf();
+  it("serializes every record as one schema-valid canonical JSON line", async () => {
+    const { schedule } = await scheduleOf();
     const ledger = settlePrimaries(schedule);
     expect(ledger.events).toHaveLength(36);
     for (const event of ledger.events) {
@@ -403,8 +403,8 @@ describe("appendAssignmentEvent", () => {
 });
 
 describe("activateHeldSlot", () => {
-  it("maps one held slot of the failed cell to exactly one primary", () => {
-    const { schedule, plan } = scheduleOf();
+  it("maps one held slot of the failed cell to exactly one primary", async () => {
+    const { schedule, plan } = await scheduleOf();
     const target = primaryIn(schedule, FIXTURE_CELLS[0] as string);
     const settled = settlePrimaries(
       schedule,
@@ -443,8 +443,8 @@ describe("activateHeldSlot", () => {
     expect(eventSchema.errors(assignmentEventJson(event))).toEqual([]);
   });
 
-  it("keeps the actual later launch position of the replacement", () => {
-    const { schedule, plan } = scheduleOf();
+  it("keeps the actual later launch position of the replacement", async () => {
+    const { schedule, plan } = await scheduleOf();
     const target = primaryIn(schedule, FIXTURE_CELLS[0] as string);
     const settled = settlePrimaries(
       schedule,
@@ -485,8 +485,8 @@ describe("activateHeldSlot", () => {
     expect(lastEvent(finished).launch_order).toBeNull();
   });
 
-  it("refuses a second replacement for the same primary", () => {
-    const { schedule, plan } = scheduleOf();
+  it("refuses a second replacement for the same primary", async () => {
+    const { schedule, plan } = await scheduleOf();
     const target = primaryIn(schedule, FIXTURE_CELLS[0] as string);
     const settled = settlePrimaries(
       schedule,
@@ -519,8 +519,8 @@ describe("activateHeldSlot", () => {
     );
   });
 
-  it("respects the frozen per-cell activation ceiling", () => {
-    const { schedule, plan } = scheduleOf();
+  it("respects the frozen per-cell activation ceiling", async () => {
+    const { schedule, plan } = await scheduleOf();
     const cell = FIXTURE_CELLS[0] as string;
     const first = primaryIn(schedule, cell);
     const second = schedule.assignments.find(
@@ -565,8 +565,8 @@ describe("activateHeldSlot", () => {
     );
   });
 
-  it("refuses activation while the primary schedule is unsettled", () => {
-    const { schedule, plan } = scheduleOf();
+  it("refuses activation while the primary schedule is unsettled", async () => {
+    const { schedule, plan } = await scheduleOf();
     const target = primaryIn(schedule, FIXTURE_CELLS[0] as string);
     let ledger = createAssignmentLedger(STUDY_RUN_ID);
     ledger = append(ledger, schedule, {
@@ -599,7 +599,7 @@ describe("activateHeldSlot", () => {
     );
   });
 
-  it("allows immediate activation only directly after the terminal fact", () => {
+  it("allows immediate activation only directly after the terminal fact", async () => {
     const immediate = (plan: PhasePlan): PhasePlan => {
       const replacements = plan.replacements;
       if (replacements === undefined) {
@@ -613,7 +613,7 @@ describe("activateHeldSlot", () => {
         }
       };
     };
-    const { schedule, plan } = scheduleOf(immediate);
+    const { schedule, plan } = await scheduleOf(immediate);
     const target = primaryIn(schedule, FIXTURE_CELLS[0] as string);
     let ledger = createAssignmentLedger(STUDY_RUN_ID);
     ledger = append(ledger, schedule, {
@@ -667,8 +667,8 @@ describe("activateHeldSlot", () => {
     );
   });
 
-  it("refuses a disposition the locked policy does not select", () => {
-    const { schedule, plan } = scheduleOf();
+  it("refuses a disposition the locked policy does not select", async () => {
+    const { schedule, plan } = await scheduleOf();
     const target = primaryIn(schedule, FIXTURE_CELLS[0] as string);
     const settled = settlePrimaries(schedule, "agent_failed");
     const result = activateHeldSlot(
@@ -687,8 +687,8 @@ describe("activateHeldSlot", () => {
     );
   });
 
-  it("selects a held slot for corrupt evidence and records the reason", () => {
-    const { schedule, plan } = scheduleOf();
+  it("selects a held slot for corrupt evidence and records the reason", async () => {
+    const { schedule, plan } = await scheduleOf();
     const target = primaryIn(schedule, FIXTURE_CELLS[1] as string);
     const settled = settlePrimaries(schedule, "completed");
     const request: ActivationRequest = {
@@ -720,7 +720,7 @@ describe("activateHeldSlot", () => {
     );
   });
 
-  it("selects the held slot with the lowest reserve index of the cell", () => {
+  it("selects the held slot with the lowest reserve index of the cell", async () => {
     const twoSlots = (plan: PhasePlan): PhasePlan => {
       const replacements = plan.replacements;
       if (replacements === undefined) {
@@ -736,7 +736,7 @@ describe("activateHeldSlot", () => {
         paid_calls: { primary: 12, maximum_with_replacements: 24 }
       };
     };
-    const { schedule, plan } = scheduleOf(twoSlots);
+    const { schedule, plan } = await scheduleOf(twoSlots);
     const cell = FIXTURE_CELLS[0] as string;
     const target = primaryIn(schedule, cell);
     expect(schedule.assignments.filter((a) => a.cell_id === cell)).toHaveLength(
@@ -786,12 +786,12 @@ describe("activateHeldSlot", () => {
     expect(chosenSecond?.reserve_index).toBe(1);
   });
 
-  it("refuses activation when the plan freezes replacement kind none", () => {
+  it("refuses activation when the plan freezes replacement kind none", async () => {
     const noReplacements = (plan: PhasePlan): PhasePlan => ({
       ...plan,
       replacements: undefined
     });
-    const { schedule, plan } = scheduleOf(noReplacements);
+    const { schedule, plan } = await scheduleOf(noReplacements);
     const target = schedule.assignments[0];
     if (target === undefined) {
       throw new Error("Fixture schedule must hold a primary.");
@@ -818,8 +818,8 @@ describe("activateHeldSlot", () => {
 });
 
 describe("assignment states and block completeness", () => {
-  it("marks a never-activated held slot held_unused once the schedule settles", () => {
-    const { schedule } = scheduleOf();
+  it("marks a never-activated held slot held_unused once the schedule settles", async () => {
+    const { schedule } = await scheduleOf();
     const empty = createAssignmentLedger(STUDY_RUN_ID);
     expect(heldUnusedAssignments(schedule, empty)).toHaveLength(6);
     const heldId = schedule.assignments.find(
@@ -842,8 +842,8 @@ describe("assignment states and block completeness", () => {
     ).toBe("terminal");
   });
 
-  it("reports a block incomplete until the mapped replacement terminates", () => {
-    const { schedule, plan } = scheduleOf();
+  it("reports a block incomplete until the mapped replacement terminates", async () => {
+    const { schedule, plan } = await scheduleOf();
     const target = primaryIn(schedule, FIXTURE_CELLS[0] as string);
     let ledger = createAssignmentLedger(STUDY_RUN_ID);
     let order = 0;
@@ -928,8 +928,8 @@ describe("assignment states and block completeness", () => {
     expect(heldUnusedAssignments(schedule, finished)).toHaveLength(5);
   });
 
-  it("summarizes every required block of the fixture", () => {
-    const { schedule, plan } = scheduleOf();
+  it("summarizes every required block of the fixture", async () => {
+    const { schedule, plan } = await scheduleOf();
     expect(
       blockCompletion(
         schedule,

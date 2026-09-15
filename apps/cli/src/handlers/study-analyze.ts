@@ -28,6 +28,7 @@ import {
   isSha256Hex,
   sha256Hex,
   stableJsonStringify,
+  validateSchemaInstance,
   type Diagnostic,
   type Json
 } from "@oal/core";
@@ -55,7 +56,6 @@ import {
 } from "@oal/study-ir";
 import type { StudyRunHeader } from "@oal/scheduler";
 import { parsePackDocument } from "@oal/pack";
-import { SchemaValidator } from "@oal/core";
 import type { TrialInput } from "@oal/report";
 
 import type { CommandHandler } from "../commands.ts";
@@ -154,9 +154,11 @@ async function schemaErrors(
   document: Json
 ): Promise<readonly string[]> {
   const schema = await readSchema(name);
-  return new SchemaValidator(schema)
-    .errors(document)
-    .map((entry) => `${entry.code}: ${entry.message}`);
+  // Study documents are untrusted: their evaluation runs inside the
+  // bounded schema-worker boundary.
+  return (await validateSchemaInstance(schema, document)).map(
+    (entry) => `${entry.code}: ${entry.message}`
+  );
 }
 
 /** Load and verify the StudyRun directory. */
@@ -279,13 +281,13 @@ export async function loadStudyRun(root: string): Promise<{
         })
       );
     } else {
-      const protocolLoaded = loadProtocol(protocolDocument.value, {
+      const protocolLoaded = await loadProtocol(protocolDocument.value, {
         schema: await readSchema("study-protocol.v1.schema.json"),
         documentUri: path.join(root, RUN_INPUTS.protocol)
       });
       diagnostics.push(...protocolLoaded.diagnostics);
       if (protocolLoaded.protocol !== null) {
-        const phaseLoaded = loadPhasePlan(phaseDocument.value, {
+        const phaseLoaded = await loadPhasePlan(phaseDocument.value, {
           schema: await readSchema("phase-plan.v1.schema.json"),
           protocol: protocolLoaded.protocol,
           cellCount: header.child_batches.length,
@@ -359,10 +361,13 @@ export async function loadStudyRun(root: string): Promise<{
 
   if (lockRead.text !== null) {
     try {
-      const lock = protocolLockFromJson(JSON.parse(lockRead.text) as Json, {
-        schema: await readSchema("protocol-lock.v1.schema.json"),
-        documentUri: path.join(root, RUN_INPUTS.lock)
-      });
+      const lock = await protocolLockFromJson(
+        JSON.parse(lockRead.text) as Json,
+        {
+          schema: await readSchema("protocol-lock.v1.schema.json"),
+          documentUri: path.join(root, RUN_INPUTS.lock)
+        }
+      );
       diagnostics.push(...lock.diagnostics);
       if (lock.lock !== null) {
         const observed = protocolLockSha256(lock.lock);
@@ -799,7 +804,7 @@ export const studyAnalyzeCommand: CommandHandler = async (args, io) => {
   if (protocolRead.text !== null) {
     const document = parsePackDocument(protocolRead.text, RUN_INPUTS.protocol);
     if (document.value !== null) {
-      const protocol = loadProtocol(document.value, {
+      const protocol = await loadProtocol(document.value, {
         schema: await readSchema("study-protocol.v1.schema.json"),
         documentUri: path.join(root, RUN_INPUTS.protocol)
       });

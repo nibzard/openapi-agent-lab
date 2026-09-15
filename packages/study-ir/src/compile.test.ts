@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   canonicalJsonSha256,
-  SchemaValidator,
   sha256Hex,
+  validateSchemaInstance,
   type Json
 } from "@oal/core";
 import type { ContractIR, OperationIR } from "@oal/contract-ir";
@@ -52,10 +52,12 @@ function irOf(result: StudyCompileResult): StudyIR {
   return result.ir;
 }
 
-function compileFixture() {
-  const protocol = loadProtocol(baseProtocolDoc(), {
-    schema: protocolSchema
-  }).protocol;
+async function compileFixture() {
+  const protocol = (
+    await loadProtocol(baseProtocolDoc(), {
+      schema: protocolSchema
+    })
+  ).protocol;
   if (protocol === null) {
     throw new Error("Fixture protocol must load.");
   }
@@ -115,18 +117,21 @@ function minimalContract(keys: string[]): ContractIR {
 }
 
 describe("compileStudy", () => {
-  it("compiles a validated protocol into schema-valid IR", () => {
-    const result = compileFixture();
+  it("compiles a validated protocol into schema-valid IR", async () => {
+    const result = await compileFixture();
     expect(result.diagnostics).toEqual([]);
     expect(result.ir).not.toBeNull();
-    const violations = new SchemaValidator(irSchema).errors(
+    // Study documents are untrusted: their schema evaluation runs inside
+    // the bounded schema-worker boundary.
+    const violations = await validateSchemaInstance(
+      irSchema,
       studyIrJson(irOf(result))
     );
     expect(violations).toEqual([]);
   });
 
-  it("rewrites authored dotted patches into canonical nested objects", () => {
-    const ir = irOf(compileFixture());
+  it("rewrites authored dotted patches into canonical nested objects", async () => {
+    const ir = irOf(await compileFixture());
     const documentation = ir.factors.find(
       (factor) => factor.id === "documentation"
     );
@@ -141,7 +146,7 @@ describe("compileStudy", () => {
     });
   });
 
-  it("orders factors, levels, and cells canonically", () => {
+  it("orders factors, levels, and cells canonically", async () => {
     const reversed = baseProtocolDoc();
     const factors = reversed["factors"] as Json[];
     const first = factors[0];
@@ -150,13 +155,15 @@ describe("compileStudy", () => {
       throw new Error("Fixture must declare two factors.");
     }
     reversed["factors"] = [second, first];
-    const protocol = loadProtocol(reversed, {
-      schema: protocolSchema
-    }).protocol;
+    const protocol = (
+      await loadProtocol(reversed, {
+        schema: protocolSchema
+      })
+    ).protocol;
     if (protocol === null) {
       throw new Error("Reordered fixture protocol must load.");
     }
-    const result = compileStudy(protocol, {
+    const result = await compileStudy(protocol, {
       schema: irSchema,
       members: baseMembers()
     });
@@ -179,8 +186,8 @@ describe("compileStudy", () => {
     ]);
   });
 
-  it("freezes a digest for every referenced member", () => {
-    const ir = irOf(compileFixture());
+  it("freezes a digest for every referenced member", async () => {
+    const ir = irOf(await compileFixture());
     expect(ir.constants.run_profile_sha256).toBe(sha256Hex(RUN_PROFILE_TEXT));
     expect(ir.evaluation.contract_variant_set_sha256).toBe(
       sha256Hex(VARIANT_SET_TEXT)
@@ -190,35 +197,42 @@ describe("compileStudy", () => {
     );
   });
 
-  it("records the canonical protocol source digest", () => {
-    const protocol = loadProtocol(baseProtocolDoc(), {
-      schema: protocolSchema
-    }).protocol;
+  it("records the canonical protocol source digest", async () => {
+    const protocol = (
+      await loadProtocol(baseProtocolDoc(), {
+        schema: protocolSchema
+      })
+    ).protocol;
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
-    const ir = irOf(compileFixture());
+    const ir = irOf(await compileFixture());
     expect(ir.protocol.source_sha256).toBe(protocolSourceDigest(protocol));
     expect(ir.protocol.source_sha256).toBe(
       canonicalJsonSha256(protocolJson(protocol))
     );
   });
 
-  it("fails on a member the protocol names but the caller omits", () => {
-    const protocol = loadProtocol(baseProtocolDoc(), {
-      schema: protocolSchema
-    }).protocol;
+  it("fails on a member the protocol names but the caller omits", async () => {
+    const protocol = (
+      await loadProtocol(baseProtocolDoc(), {
+        schema: protocolSchema
+      })
+    ).protocol;
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
     const members = new Map(baseMembers());
     members.delete("phases/pilot.yaml");
-    const result = compileStudy(protocol, { schema: irSchema, members });
+    const result = await compileStudy(protocol, {
+      schema: irSchema,
+      members
+    });
     expect(result.ir).toBeNull();
     expect(codesOf(result.diagnostics)).toContain("OAL-STUDY-MEMBER-MISSING");
   });
 
-  it("verifies operation references against the contract", () => {
+  it("verifies operation references against the contract", async () => {
     const doc = baseProtocolDoc();
     const factors = doc["factors"] as Record<string, unknown>[];
     const documentation = factors[1] as {
@@ -231,13 +245,15 @@ describe("compileStudy", () => {
     blind.run_profile_patch = {
       "exposure.documentation_profile": "path:GET /v1/widgets"
     };
-    const protocol = loadProtocol(doc, {
-      schema: protocolSchema
-    }).protocol;
+    const protocol = (
+      await loadProtocol(doc, {
+        schema: protocolSchema
+      })
+    ).protocol;
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
-    const missing = compileStudy(protocol, {
+    const missing = await compileStudy(protocol, {
       schema: irSchema,
       members: baseMembers(),
       contract: minimalContract(["path:GET /v1/other"])
@@ -246,7 +262,7 @@ describe("compileStudy", () => {
     expect(codesOf(missing.diagnostics)).toContain(
       "OAL-STUDY-OPERATION-UNKNOWN"
     );
-    const present = compileStudy(protocol, {
+    const present = await compileStudy(protocol, {
       schema: irSchema,
       members: baseMembers(),
       contract: minimalContract(["path:GET /v1/widgets"])
@@ -256,14 +272,14 @@ describe("compileStudy", () => {
 });
 
 describe("compile determinism", () => {
-  it("produces byte-identical canonical IR for equal inputs", () => {
-    const first = compileFixture();
-    const second = compileFixture();
+  it("produces byte-identical canonical IR for equal inputs", async () => {
+    const first = await compileFixture();
+    const second = await compileFixture();
     expect(serializeStudyIr(irOf(second))).toBe(serializeStudyIr(irOf(first)));
     expect(studyIrSha256(irOf(second))).toBe(studyIrSha256(irOf(first)));
   });
 
-  it("is independent of authored key order inside the document", () => {
+  it("is independent of authored key order inside the document", async () => {
     const reordered = baseProtocolDoc();
     const constants = reordered["constants"] as Record<string, Json>;
     reordered["constants"] = {
@@ -272,14 +288,16 @@ describe("compile determinism", () => {
       required_parallel: fieldOf(constants, "required_parallel"),
       run_profile: fieldOf(constants, "run_profile")
     };
-    const other = loadProtocol(reordered, {
-      schema: protocolSchema
-    }).protocol;
+    const other = (
+      await loadProtocol(reordered, {
+        schema: protocolSchema
+      })
+    ).protocol;
     if (other === null) {
       throw new Error("Reordered fixture protocol must load.");
     }
-    const base = compileFixture();
-    const reorderedResult = compileStudy(other, {
+    const base = await compileFixture();
+    const reorderedResult = await compileStudy(other, {
       schema: irSchema,
       members: baseMembers()
     });
@@ -288,10 +306,12 @@ describe("compile determinism", () => {
     );
   });
 
-  it("changes the IR digest when member bytes change", () => {
-    const protocol = loadProtocol(baseProtocolDoc(), {
-      schema: protocolSchema
-    }).protocol;
+  it("changes the IR digest when member bytes change", async () => {
+    const protocol = (
+      await loadProtocol(baseProtocolDoc(), {
+        schema: protocolSchema
+      })
+    ).protocol;
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
@@ -300,8 +320,8 @@ describe("compile determinism", () => {
       "profiles/codex-high-raw-sequential.yaml",
       `${RUN_PROFILE_TEXT}# edited\n`
     );
-    const base = compileFixture();
-    const other = compileStudy(protocol, {
+    const base = await compileFixture();
+    const other = await compileStudy(protocol, {
       schema: irSchema,
       members: changed
     });

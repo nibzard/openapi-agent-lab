@@ -263,15 +263,15 @@ export interface FixtureStudy {
 }
 
 /** Load and compile the fixture study, or throw when the fixture is broken. */
-export function fixtureStudy(): FixtureStudy {
-  const protocolResult = loadProtocol(baseProtocolDoc(), {
+export async function fixtureStudy(): Promise<FixtureStudy> {
+  const protocolResult = await loadProtocol(baseProtocolDoc(), {
     schema: loadSchema("study-protocol.v1.schema.json")
   });
   const protocol = protocolResult.protocol;
   if (protocol === null) {
     throw new Error("Fixture protocol must load.");
   }
-  const phaseResult = loadPhasePlan(basePhasePlanDoc(), {
+  const phaseResult = await loadPhasePlan(basePhasePlanDoc(), {
     schema: loadSchema("phase-plan.v1.schema.json"),
     protocol,
     cellCount: FIXTURE_CELLS.length
@@ -280,7 +280,7 @@ export function fixtureStudy(): FixtureStudy {
   if (phasePlan === null) {
     throw new Error("Fixture phase plan must load.");
   }
-  const compiled = compileStudy(protocol, {
+  const compiled = await compileStudy(protocol, {
     schema: loadSchema("study-ir.v1.schema.json"),
     members: baseMembers()
   });

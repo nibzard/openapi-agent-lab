@@ -468,21 +468,21 @@ export interface TwoCellStudy {
  * Load, compile, and schedule the two-cell study, or throw when the
  * fixture is broken. The schedule is the frozen `assignments.json`.
  */
-export function twoCellStudy(options?: {
+export async function twoCellStudy(options?: {
   readonly activation_timing?:
     | "immediate_after_terminal"
     | "after_primary_schedule";
   readonly activateOnCorruptEvidence?: boolean;
   readonly direction?: "first_minus_second" | "second_minus_first";
-}): TwoCellStudy {
-  const protocolResult = loadProtocol(twoCellProtocolDoc(), {
+}): Promise<TwoCellStudy> {
+  const protocolResult = await loadProtocol(twoCellProtocolDoc(), {
     schema: loadSchema("study-protocol.v1.schema.json")
   });
   const protocol = protocolResult.protocol;
   if (protocol === null) {
     throw new Error("Two-cell fixture protocol must load.");
   }
-  const phaseResult = loadPhasePlan(twoCellPhasePlanDoc(options), {
+  const phaseResult = await loadPhasePlan(twoCellPhasePlanDoc(options), {
     schema: loadSchema("phase-plan.v1.schema.json"),
     protocol,
     cellCount: TWO_CELL_CELLS.length
@@ -491,7 +491,7 @@ export function twoCellStudy(options?: {
   if (phasePlan === null) {
     throw new Error("Two-cell fixture phase plan must load.");
   }
-  const compiled = compileStudy(protocol, {
+  const compiled = await compileStudy(protocol, {
     schema: loadSchema("study-ir.v1.schema.json"),
     members: twoCellMembers()
   });

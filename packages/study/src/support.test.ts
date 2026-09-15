@@ -48,10 +48,12 @@ function codesOf(findings: readonly StudyFinding[]): string[] {
   return findings.map((entry) => entry.code);
 }
 
-function twoCellProtocol(): StudyProtocol {
-  const loaded = loadProtocol(twoCellProtocolDoc(), {
-    schema: protocolSchema
-  }).protocol;
+async function twoCellProtocol(): Promise<StudyProtocol> {
+  const loaded = (
+    await loadProtocol(twoCellProtocolDoc(), {
+      schema: protocolSchema
+    })
+  ).protocol;
   if (loaded === null) {
     throw new Error("Two-cell fixture protocol must load.");
   }
@@ -63,39 +65,44 @@ function twoCellProtocol(): StudyProtocol {
  * optionally one mutation to the protocol document. A mutation that the
  * loader rejects throws, which fails the test as a broken fixture.
  */
-function twoCellPlan(
+async function twoCellPlan(
   mutate: (document: JsonObject) => void,
   mutateProtocol?: (document: JsonObject) => void
-): PhasePlan {
+): Promise<PhasePlan> {
   const document = twoCellPhasePlanDoc();
   mutate(document);
   const protocolDocument = twoCellProtocolDoc();
   if (mutateProtocol !== undefined) {
     mutateProtocol(protocolDocument);
   }
-  const loaded = loadPhasePlan(document, {
-    schema: phaseSchema,
-    protocol: twoCellProtocolOf(protocolDocument),
-    cellCount: 2
-  }).phasePlan;
+  const loaded = (
+    await loadPhasePlan(document, {
+      schema: phaseSchema,
+      protocol: await twoCellProtocolOf(protocolDocument),
+      cellCount: 2
+    })
+  ).phasePlan;
   if (loaded === null) {
     throw new Error("Mutated fixture plan must load.");
   }
   return loaded;
 }
 
-function twoCellProtocolOf(document: JsonObject): StudyProtocol {
-  const loaded = loadProtocol(document, { schema: protocolSchema }).protocol;
+async function twoCellProtocolOf(document: JsonObject): Promise<StudyProtocol> {
+  const loaded = (await loadProtocol(document, { schema: protocolSchema }))
+    .protocol;
   if (loaded === null) {
     throw new Error("Mutated fixture protocol must load.");
   }
   return loaded;
 }
 
-function baseProtocol(): StudyProtocol {
-  const loaded = loadProtocol(baseProtocolDoc(), {
-    schema: protocolSchema
-  }).protocol;
+async function baseProtocol(): Promise<StudyProtocol> {
+  const loaded = (
+    await loadProtocol(baseProtocolDoc(), {
+      schema: protocolSchema
+    })
+  ).protocol;
   if (loaded === null) {
     throw new Error("Base fixture protocol must load.");
   }
@@ -103,7 +110,7 @@ function baseProtocol(): StudyProtocol {
 }
 
 /** Six-cell plan of the base protocol, with or without strata. */
-function basePlan(within: boolean): PhasePlan {
+async function basePlan(within: boolean): Promise<PhasePlan> {
   const document = basePhasePlanDoc();
   const contrasts = (
     (document["analysis"] as JsonObject)["contrasts"] as JsonObject[]
@@ -111,11 +118,13 @@ function basePlan(within: boolean): PhasePlan {
   if (!within) {
     delete contrasts["within"];
   }
-  const loaded = loadPhasePlan(document, {
-    schema: phaseSchema,
-    protocol: baseProtocol(),
-    cellCount: 6
-  }).phasePlan;
+  const loaded = (
+    await loadPhasePlan(document, {
+      schema: phaseSchema,
+      protocol: await baseProtocol(),
+      cellCount: 6
+    })
+  ).phasePlan;
   if (loaded === null) {
     throw new Error("Base fixture plan must load.");
   }
@@ -129,18 +138,18 @@ const TWO_CELLS = [
 ] as const;
 
 describe("analysis support check", () => {
-  it("accepts the implemented binary risk difference plan", () => {
+  it("accepts the implemented binary risk difference plan", async () => {
     expect(
       checkAnalysisSupport({
-        phasePlan: twoCellPlan(() => {}),
+        phasePlan: await twoCellPlan(() => {}),
         cells: TWO_CELLS
       })
     ).toEqual([]);
   });
 
-  it("rejects a risk ratio measure without substituting a difference", () => {
+  it("rejects a risk ratio measure without substituting a difference", async () => {
     const findings = checkAnalysisSupport({
-      phasePlan: twoCellPlan((document) => {
+      phasePlan: await twoCellPlan((document) => {
         const estimand = (document["analysis"] as JsonObject)[
           "primary_estimand"
         ] as JsonObject;
@@ -152,9 +161,9 @@ describe("analysis support check", () => {
     expect(findings[0]?.severity).toBe("error");
   });
 
-  it("rejects a generic difference measure", () => {
+  it("rejects a generic difference measure", async () => {
     const findings = checkAnalysisSupport({
-      phasePlan: twoCellPlan((document) => {
+      phasePlan: await twoCellPlan((document) => {
         const estimand = (document["analysis"] as JsonObject)[
           "primary_estimand"
         ] as JsonObject;
@@ -164,9 +173,9 @@ describe("analysis support check", () => {
     expect(codesOf(findings)).toEqual([SupportCode.MeasureUnsupported]);
   });
 
-  it("rejects wald intervals before any estimate is computed", () => {
+  it("rejects wald intervals before any estimate is computed", async () => {
     const binary = checkAnalysisSupport({
-      phasePlan: twoCellPlan((document) => {
+      phasePlan: await twoCellPlan((document) => {
         const methods = (document["analysis"] as JsonObject)[
           "methods"
         ] as JsonObject;
@@ -177,7 +186,7 @@ describe("analysis support check", () => {
     expect(binary[0]?.message).toContain("binary_interval");
 
     const risk = checkAnalysisSupport({
-      phasePlan: twoCellPlan((document) => {
+      phasePlan: await twoCellPlan((document) => {
         const methods = (document["analysis"] as JsonObject)[
           "methods"
         ] as JsonObject;
@@ -188,10 +197,10 @@ describe("analysis support check", () => {
     expect(risk[0]?.message).toContain("risk_difference_interval");
   });
 
-  it("rejects marginal weighting beyond none", () => {
+  it("rejects marginal weighting beyond none", async () => {
     for (const value of ["equal_cells", "equal_assignments"]) {
       const findings = checkAnalysisSupport({
-        phasePlan: twoCellPlan((document) => {
+        phasePlan: await twoCellPlan((document) => {
           (document["analysis"] as JsonObject)["marginal_weighting"] = value;
         })
       });
@@ -200,9 +209,9 @@ describe("analysis support check", () => {
     }
   });
 
-  it("rejects a declared floor-ceiling factor", () => {
+  it("rejects a declared floor-ceiling factor", async () => {
     const findings = checkAnalysisSupport({
-      phasePlan: twoCellPlan((document) => {
+      phasePlan: await twoCellPlan((document) => {
         ((document["analysis"] as JsonObject)["floor_ceiling"] as JsonObject)[
           "apply_by_factor_level"
         ] = "api_shape";
@@ -212,12 +221,12 @@ describe("analysis support check", () => {
     expect(findings[0]?.message).toContain("api_shape");
   });
 
-  it("rejects populations the analyzer does not compose", () => {
+  it("rejects populations the analyzer does not compose", async () => {
     // The loader resolves an estimand population when the referenced
     // contrast declares the same one, so both fields must move together
     // for the archived vocabulary to parse; execution still refuses it.
     const findings = checkAnalysisSupport({
-      phasePlan: twoCellPlan((document) => {
+      phasePlan: await twoCellPlan((document) => {
         const analysis = document["analysis"] as JsonObject;
         const estimand = analysis["primary_estimand"] as JsonObject;
         estimand["population"] = "per_protocol";
@@ -232,9 +241,9 @@ describe("analysis support check", () => {
     expect(findings[0]?.message).toContain("per_protocol");
   });
 
-  it("rejects a primary outcome that mismatches its contrast metric", () => {
+  it("rejects a primary outcome that mismatches its contrast metric", async () => {
     const findings = checkAnalysisSupport({
-      phasePlan: twoCellPlan(
+      phasePlan: await twoCellPlan(
         (document) => {
           const estimand = (document["analysis"] as JsonObject)[
             "primary_estimand"
@@ -257,12 +266,12 @@ describe("analysis support check", () => {
     expect(findings[0]?.message).toContain("spare_binary");
   });
 
-  it("rejects a contrast that belongs to two comparison families", () => {
+  it("rejects a contrast that belongs to two comparison families", async () => {
     // A duplicate inside one family cannot load: the schema pins
     // uniqueItems. Two families sharing one contrast do load, and
     // execution refuses the undefined double adjustment.
     const findings = checkAnalysisSupport({
-      phasePlan: twoCellPlan((document) => {
+      phasePlan: await twoCellPlan((document) => {
         const analysis = document["analysis"] as JsonObject;
         const families = analysis["comparison_families"] as JsonObject[];
         families.push({
@@ -276,13 +285,13 @@ describe("analysis support check", () => {
     expect(codesOf(findings)).toEqual([SupportCode.FamilyOverlapping]);
   });
 
-  it("rejects a contrast side that matches several cells", () => {
+  it("rejects a contrast side that matches several cells", async () => {
     // The base design crosses api_shape with documentation, so a
     // contrast without strata matches three cells per side.
-    const cells = protocolCellViews(baseProtocol());
+    const cells = protocolCellViews(await baseProtocol());
     expect(cells).toHaveLength(6);
     const findings = checkAnalysisSupport({
-      phasePlan: basePlan(false),
+      phasePlan: await basePlan(false),
       cells
     });
     expect(codesOf(findings)).toEqual([
@@ -292,28 +301,30 @@ describe("analysis support check", () => {
     expect(findings[0]?.message).toContain("3 cells");
   });
 
-  it("accepts a fully pinned contrast over the same cells", () => {
+  it("accepts a fully pinned contrast over the same cells", async () => {
     expect(
       checkAnalysisSupport({
-        phasePlan: basePlan(true),
-        cells: protocolCellViews(baseProtocol())
+        phasePlan: await basePlan(true),
+        cells: protocolCellViews(await baseProtocol())
       })
     ).toEqual([]);
   });
 
-  it("skips the side check when no cell inventory is supplied", () => {
-    expect(checkAnalysisSupport({ phasePlan: basePlan(false) })).toEqual([]);
+  it("skips the side check when no cell inventory is supplied", async () => {
+    expect(checkAnalysisSupport({ phasePlan: await basePlan(false) })).toEqual(
+      []
+    );
   });
 });
 
 describe("analysis support in design review", () => {
-  it("fails review of a phase plan that requests a risk ratio", () => {
+  it("fails review of a phase plan that requests a risk ratio", async () => {
     const findings = reviewStudyDesign({
-      protocol: twoCellProtocol(),
+      protocol: await twoCellProtocol(),
       phases: new Map([
         [
           "pilot",
-          twoCellPlan((document) => {
+          await twoCellPlan((document) => {
             const estimand = (document["analysis"] as JsonObject)[
               "primary_estimand"
             ] as JsonObject;
@@ -330,25 +341,27 @@ describe("analysis support in design review", () => {
     ).toBe("error");
   });
 
-  it("accepts review of the implemented plan", () => {
+  it("accepts review of the implemented plan", async () => {
     const findings = reviewStudyDesign({
-      protocol: twoCellProtocol(),
-      phases: new Map([["pilot", twoCellPlan(() => {})]])
+      protocol: await twoCellProtocol(),
+      phases: new Map([["pilot", await twoCellPlan(() => {})]])
     });
     expect(codesOf(findings)).not.toContain(SupportCode.MeasureUnsupported);
   });
 });
 
 describe("analysis support in the analytical preflight", () => {
-  function lockOf(protocol: StudyProtocol): ProtocolLock {
-    const created = createProtocolLock(
-      protocol,
-      [...twoCellMembers()].map(([path, text]) => ({ path, text })),
-      [
-        { variant: "shape-a", sha256: sha256Hex("two cell shape a") },
-        { variant: "shape-b", sha256: sha256Hex("two cell shape b") }
-      ],
-      { schema: lockSchema }
+  async function lockOf(protocol: StudyProtocol): Promise<ProtocolLock> {
+    const created = (
+      await createProtocolLock(
+        protocol,
+        [...twoCellMembers()].map(([path, text]) => ({ path, text })),
+        [
+          { variant: "shape-a", sha256: sha256Hex("two cell shape a") },
+          { variant: "shape-b", sha256: sha256Hex("two cell shape b") }
+        ],
+        { schema: lockSchema }
+      )
     ).lock;
     if (created === null) {
       throw new Error("Fixture lock must be created.");
@@ -356,16 +369,16 @@ describe("analysis support in the analytical preflight", () => {
     return created;
   }
 
-  it("blocks a wald interval plan under a verified lock", () => {
-    const protocol = twoCellProtocol();
-    const lock = lockOf(protocol);
-    const verification = verifyProtocolLock(lock, {
+  it("blocks a wald interval plan under a verified lock", async () => {
+    const protocol = await twoCellProtocol();
+    const lock = await lockOf(protocol);
+    const verification = await verifyProtocolLock(lock, {
       members: [...twoCellMembers()].map(([path, text]) => ({ path, text }))
     });
     expect(verification.ok).toBe(true);
     const decision = preflightAnalyticalRun({
       protocol,
-      phasePlan: twoCellPlan((document) => {
+      phasePlan: await twoCellPlan((document) => {
         const methods = (document["analysis"] as JsonObject)[
           "methods"
         ] as JsonObject;
@@ -380,8 +393,8 @@ describe("analysis support in the analytical preflight", () => {
 });
 
 describe("analysis support in StudyRun planning", () => {
-  it("refuses to plan a StudyRun whose analysis requests a risk ratio", () => {
-    const study = twoCellStudy();
+  it("refuses to plan a StudyRun whose analysis requests a risk ratio", async () => {
+    const study = await twoCellStudy();
     const result = planStudyRun({
       study_run_id: TWO_CELL_RUN_ID,
       created_at: TWO_CELL_CREATED_AT,
@@ -390,7 +403,7 @@ describe("analysis support in StudyRun planning", () => {
         version: "1.0.0",
         protocol_lock_sha256: TWO_CELL_PROTOCOL_LOCK
       },
-      phasePlan: twoCellPlan((document) => {
+      phasePlan: await twoCellPlan((document) => {
         const estimand = (document["analysis"] as JsonObject)[
           "primary_estimand"
         ] as JsonObject;

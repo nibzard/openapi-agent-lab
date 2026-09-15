@@ -35,14 +35,16 @@ function fixtureEffectiveContracts() {
   ];
 }
 
-function lockFixture(): ProtocolLock {
-  const protocol = loadProtocol(baseProtocolDoc(), {
-    schema: protocolSchema
-  }).protocol;
+async function lockFixture(): Promise<ProtocolLock> {
+  const protocol = (
+    await loadProtocol(baseProtocolDoc(), {
+      schema: protocolSchema
+    })
+  ).protocol;
   if (protocol === null) {
     throw new Error("Fixture protocol must load.");
   }
-  const result = createProtocolLock(
+  const result = await createProtocolLock(
     protocol,
     fixtureMembers(),
     fixtureEffectiveContracts(),
@@ -61,8 +63,8 @@ function lockOf(result: ProtocolLockResult): ProtocolLock {
 }
 
 describe("createProtocolLock", () => {
-  it("creates a schema-valid lock over every member", () => {
-    const lock = lockFixture();
+  it("creates a schema-valid lock over every member", async () => {
+    const lock = await lockFixture();
     expect(Object.keys(lock.members).sort()).toEqual(
       [
         PROTOCOL_MEMBER_PATH,
@@ -80,8 +82,8 @@ describe("createProtocolLock", () => {
     expect(lock.pack.id).toBe("workspace-service");
   });
 
-  it("never contains its own digest", () => {
-    const lock = lockFixture();
+  it("never contains its own digest", async () => {
+    const lock = await lockFixture();
     const serialized = serializeProtocolLock(lock);
     expect(serialized).not.toContain("lock_sha256");
     expect(serialized).not.toContain(protocolLockSha256(lock));
@@ -90,27 +92,31 @@ describe("createProtocolLock", () => {
     );
   });
 
-  it("rejects a missing member", () => {
-    const protocol = loadProtocol(baseProtocolDoc(), {
-      schema: protocolSchema
-    }).protocol;
+  it("rejects a missing member", async () => {
+    const protocol = (
+      await loadProtocol(baseProtocolDoc(), {
+        schema: protocolSchema
+      })
+    ).protocol;
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
     const members = fixtureMembers().filter(
       (member) => member.path !== "phases/pilot.yaml"
     );
-    const result = createProtocolLock(protocol, members, [], {
+    const result = await createProtocolLock(protocol, members, [], {
       schema: lockSchema
     });
     expect(result.lock).toBeNull();
     expect(codesOf(result.diagnostics)).toContain("OAL-STUDY-MEMBER-MISSING");
   });
 
-  it("rejects an unsafe member path", () => {
-    const protocol = loadProtocol(baseProtocolDoc(), {
-      schema: protocolSchema
-    }).protocol;
+  it("rejects an unsafe member path", async () => {
+    const protocol = (
+      await loadProtocol(baseProtocolDoc(), {
+        schema: protocolSchema
+      })
+    ).protocol;
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
@@ -118,7 +124,7 @@ describe("createProtocolLock", () => {
       ...fixtureMembers(),
       { path: "../outside.yaml", text: "bytes" }
     ];
-    const result = createProtocolLock(protocol, members, [], {
+    const result = await createProtocolLock(protocol, members, [], {
       schema: lockSchema
     });
     expect(result.lock).toBeNull();
@@ -127,10 +133,12 @@ describe("createProtocolLock", () => {
     );
   });
 
-  it("rejects a duplicate member path", () => {
-    const protocol = loadProtocol(baseProtocolDoc(), {
-      schema: protocolSchema
-    }).protocol;
+  it("rejects a duplicate member path", async () => {
+    const protocol = (
+      await loadProtocol(baseProtocolDoc(), {
+        schema: protocolSchema
+      })
+    ).protocol;
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
@@ -138,21 +146,23 @@ describe("createProtocolLock", () => {
       ...fixtureMembers(),
       { path: "phases/pilot.yaml", text: "other bytes" }
     ];
-    const result = createProtocolLock(protocol, members, [], {
+    const result = await createProtocolLock(protocol, members, [], {
       schema: lockSchema
     });
     expect(result.lock).toBeNull();
     expect(codesOf(result.diagnostics)).toContain("OAL-STUDY-MEMBER-DUPLICATE");
   });
 
-  it("rejects a digest for an unreferenced variant", () => {
-    const protocol = loadProtocol(baseProtocolDoc(), {
-      schema: protocolSchema
-    }).protocol;
+  it("rejects a digest for an unreferenced variant", async () => {
+    const protocol = (
+      await loadProtocol(baseProtocolDoc(), {
+        schema: protocolSchema
+      })
+    ).protocol;
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
-    const result = createProtocolLock(
+    const result = await createProtocolLock(
       protocol,
       fixtureMembers(),
       [
@@ -167,14 +177,16 @@ describe("createProtocolLock", () => {
     );
   });
 
-  it("rejects a referenced variant without a digest", () => {
-    const protocol = loadProtocol(baseProtocolDoc(), {
-      schema: protocolSchema
-    }).protocol;
+  it("rejects a referenced variant without a digest", async () => {
+    const protocol = (
+      await loadProtocol(baseProtocolDoc(), {
+        schema: protocolSchema
+      })
+    ).protocol;
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
-    const result = createProtocolLock(
+    const result = await createProtocolLock(
       protocol,
       fixtureMembers(),
       [{ variant: "shape-a", sha256: sha256Hex("shape a") }],
@@ -188,23 +200,23 @@ describe("createProtocolLock", () => {
 });
 
 describe("verifyProtocolLock", () => {
-  it("accepts unchanged members", () => {
-    const lock = lockFixture();
-    const result = verifyProtocolLock(lock, {
+  it("accepts unchanged members", async () => {
+    const lock = await lockFixture();
+    const result = await verifyProtocolLock(lock, {
       members: fixtureMembers()
     });
     expect(result.drift).toEqual([]);
     expect(result.ok).toBe(true);
   });
 
-  it("reports exactly the member that drifted", () => {
-    const lock = lockFixture();
+  it("reports exactly the member that drifted", async () => {
+    const lock = await lockFixture();
     const members = fixtureMembers().map((member) =>
       member.path === "phases/pilot.yaml"
         ? { path: member.path, text: `${member.text}# edited` }
         : member
     );
-    const result = verifyProtocolLock(lock, { members });
+    const result = await verifyProtocolLock(lock, { members });
     expect(result.ok).toBe(false);
     expect(result.drift.length).toBe(1);
     const drift = result.drift[0];
@@ -217,12 +229,12 @@ describe("verifyProtocolLock", () => {
     expect(codesOf(result.diagnostics)).toContain("OAL-STUDY-LOCK-DRIFT");
   });
 
-  it("reports a locked member that disappeared", () => {
-    const lock = lockFixture();
+  it("reports a locked member that disappeared", async () => {
+    const lock = await lockFixture();
     const members = fixtureMembers().filter(
       (member) => member.path !== "blinding/participant-surface.yaml"
     );
-    const result = verifyProtocolLock(lock, { members });
+    const result = await verifyProtocolLock(lock, { members });
     expect(result.ok).toBe(false);
     expect(
       result.drift.some(
@@ -233,13 +245,13 @@ describe("verifyProtocolLock", () => {
     ).toBe(true);
   });
 
-  it("reports a supplied member the lock does not cover", () => {
-    const lock = lockFixture();
+  it("reports a supplied member the lock does not cover", async () => {
+    const lock = await lockFixture();
     const members = [
       ...fixtureMembers(),
       { path: "extra/new-member.yaml", text: "new bytes" }
     ];
-    const result = verifyProtocolLock(lock, { members });
+    const result = await verifyProtocolLock(lock, { members });
     expect(result.ok).toBe(false);
     expect(
       result.drift.some(
@@ -249,16 +261,17 @@ describe("verifyProtocolLock", () => {
     ).toBe(true);
   });
 
-  it("reports protocol identity drift", () => {
-    const lock = lockFixture();
+  it("reports protocol identity drift", async () => {
+    const lock = await lockFixture();
     const doc = baseProtocolDoc();
     const metadata = doc["metadata"] as { version: string };
     metadata.version = "2.0.0";
-    const protocol = loadProtocol(doc, { schema: protocolSchema }).protocol;
+    const protocol = (await loadProtocol(doc, { schema: protocolSchema }))
+      .protocol;
     if (protocol === null) {
       throw new Error("Edited fixture protocol must load.");
     }
-    const result = verifyProtocolLock(lock, {
+    const result = await verifyProtocolLock(lock, {
       members: fixtureMembers(),
       protocol
     });
@@ -276,9 +289,9 @@ describe("verifyProtocolLock", () => {
     ).toBe(true);
   });
 
-  it("reports a recorded lock digest that no longer matches", () => {
-    const lock = lockFixture();
-    const result = verifyProtocolLock(lock, {
+  it("reports a recorded lock digest that no longer matches", async () => {
+    const lock = await lockFixture();
+    const result = await verifyProtocolLock(lock, {
       members: fixtureMembers(),
       expectedLockSha256: sha256Hex("stale recorded digest")
     });
@@ -289,8 +302,8 @@ describe("verifyProtocolLock", () => {
     expect(result.lockSha256).toBe(protocolLockSha256(lock));
   });
 
-  it("reports a referenced variant the lock does not cover", () => {
-    const lock = lockFixture();
+  it("reports a referenced variant the lock does not cover", async () => {
+    const lock = await lockFixture();
     const doc = baseProtocolDoc();
     const factors = doc["factors"] as {
       levels: { id: string; contract_variant?: string }[];
@@ -300,11 +313,12 @@ describe("verifyProtocolLock", () => {
       throw new Error("Fixture protocol has no first factor.");
     }
     apiShape.levels.push({ id: "shape_c", contract_variant: "shape-c" });
-    const protocol = loadProtocol(doc, { schema: protocolSchema }).protocol;
+    const protocol = (await loadProtocol(doc, { schema: protocolSchema }))
+      .protocol;
     if (protocol === null) {
       throw new Error("Edited fixture protocol must load.");
     }
-    const result = verifyProtocolLock(lock, {
+    const result = await verifyProtocolLock(lock, {
       members: fixtureMembers(),
       protocol
     });
@@ -316,9 +330,9 @@ describe("verifyProtocolLock", () => {
 });
 
 describe("protocolLockFromJson", () => {
-  it("round-trips a lock through its persisted JSON form", () => {
-    const lock = lockFixture();
-    const parsed = protocolLockFromJson(protocolLockJson(lock), {
+  it("round-trips a lock through its persisted JSON form", async () => {
+    const lock = await lockFixture();
+    const parsed = await protocolLockFromJson(protocolLockJson(lock), {
       schema: lockSchema
     });
     expect(parsed.diagnostics).toEqual([]);
@@ -326,13 +340,13 @@ describe("protocolLockFromJson", () => {
     expect(protocolLockSha256(restored)).toBe(protocolLockSha256(lock));
   });
 
-  it("rejects a persisted lock with an unknown member", () => {
-    const lock = lockFixture();
+  it("rejects a persisted lock with an unknown member", async () => {
+    const lock = await lockFixture();
     const json = {
       ...(protocolLockJson(lock) as Record<string, unknown>),
       protocol_lock_sha256: "0".repeat(64)
     };
-    const parsed = protocolLockFromJson(json, { schema: lockSchema });
+    const parsed = await protocolLockFromJson(json, { schema: lockSchema });
     expect(parsed.lock).toBeNull();
     expect(codesOf(parsed.diagnostics)).toContain("OAL-STUDY-SCHEMA-INVALID");
   });

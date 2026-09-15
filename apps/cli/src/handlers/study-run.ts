@@ -21,9 +21,9 @@ import {
   invalidInput,
   isJsonObject,
   isSafeId,
-  SchemaValidator,
   sha256Hex,
   stableJsonStringify,
+  validateSchemaInstance,
   type Diagnostic,
   type Json
 } from "@oal/core";
@@ -111,7 +111,9 @@ export async function loadScheduleFile(target: string): Promise<{
     };
   }
   const schema = await readSchema("assignment-schedule.v1.schema.json");
-  const violations = new SchemaValidator(schema).errors(parsed);
+  // Study documents are untrusted: their schema evaluation runs inside
+  // the bounded schema-worker boundary.
+  const violations = await validateSchemaInstance(schema, parsed);
   if (violations.length > 0 || !isJsonObject(parsed)) {
     return {
       schedule: null,
@@ -257,7 +259,7 @@ export const studyRunCommand: CommandHandler = async (args, io) => {
   const verified =
     lockState.lock === null
       ? null
-      : verifyProtocolLock(lockState.lock, {
+      : await verifyProtocolLock(lockState.lock, {
           members: lockMembersOf(study),
           protocol: study.protocol
         });

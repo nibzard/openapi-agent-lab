@@ -13,8 +13,11 @@ function codesOf(diagnostics: readonly { code: string }[]): string[] {
   return diagnostics.map((entry) => entry.code);
 }
 
-function loadedProtocol(): ReturnType<typeof loadProtocol>["protocol"] {
-  return loadProtocol(baseProtocolDoc(), { schema: protocolSchema }).protocol;
+async function loadedProtocol() {
+  const loaded = await loadProtocol(baseProtocolDoc(), {
+    schema: protocolSchema
+  });
+  return loaded.protocol;
 }
 
 /** Mutate one contrast field of the fixture plan. */
@@ -33,12 +36,12 @@ function withContrast(
 }
 
 describe("loadPhasePlan schema conformance", () => {
-  it("loads a schema-valid plan without diagnostics", () => {
-    const protocol = loadedProtocol();
+  it("loads a schema-valid plan without diagnostics", async () => {
+    const protocol = await loadedProtocol();
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
-    const result = loadPhasePlan(basePhasePlanDoc(), {
+    const result = await loadPhasePlan(basePhasePlanDoc(), {
       schema,
       protocol,
       cellCount: 6
@@ -48,20 +51,20 @@ describe("loadPhasePlan schema conformance", () => {
     expect(result.phasePlan?.design.block?.repetitions).toBe(2);
   });
 
-  it("rejects a plan that misses a required member", () => {
-    const protocol = loadedProtocol();
+  it("rejects a plan that misses a required member", async () => {
+    const protocol = await loadedProtocol();
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
     const doc = basePhasePlanDoc();
     delete doc["paid_calls"];
-    const result = loadPhasePlan(doc, { schema, protocol });
+    const result = await loadPhasePlan(doc, { schema, protocol });
     expect(result.phasePlan).toBeNull();
     expect(codesOf(result.diagnostics)).toContain("OAL-STUDY-SCHEMA-INVALID");
   });
 
-  it("rejects a non-balanced primary count against the cell inventory", () => {
-    const protocol = loadedProtocol();
+  it("rejects a non-balanced primary count against the cell inventory", async () => {
+    const protocol = await loadedProtocol();
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
@@ -71,15 +74,19 @@ describe("loadPhasePlan schema conformance", () => {
     delete design["block"];
     const paid = doc["paid_calls"] as Record<string, number>;
     paid["primary"] = 10;
-    const result = loadPhasePlan(doc, { schema, protocol, cellCount: 4 });
+    const result = await loadPhasePlan(doc, {
+      schema,
+      protocol,
+      cellCount: 4
+    });
     expect(result.phasePlan).toBeNull();
     expect(codesOf(result.diagnostics)).toContain(
       "OAL-STUDY-DESIGN-UNBALANCED"
     );
   });
 
-  it("rejects a block structure that needs a different primary count", () => {
-    const protocol = loadedProtocol();
+  it("rejects a block structure that needs a different primary count", async () => {
+    const protocol = await loadedProtocol();
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
@@ -88,22 +95,30 @@ describe("loadPhasePlan schema conformance", () => {
     design["primary_assignments"] = 13;
     const paid = doc["paid_calls"] as Record<string, number>;
     paid["primary"] = 13;
-    const result = loadPhasePlan(doc, { schema, protocol, cellCount: 6 });
+    const result = await loadPhasePlan(doc, {
+      schema,
+      protocol,
+      cellCount: 6
+    });
     expect(result.phasePlan).toBeNull();
     expect(codesOf(result.diagnostics)).toContain(
       "OAL-STUDY-DESIGN-UNBALANCED"
     );
   });
 
-  it("rejects paid calls that disagree with the design", () => {
-    const protocol = loadedProtocol();
+  it("rejects paid calls that disagree with the design", async () => {
+    const protocol = await loadedProtocol();
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
     const doc = basePhasePlanDoc();
     const paid = doc["paid_calls"] as Record<string, number>;
     paid["primary"] = 11;
-    const result = loadPhasePlan(doc, { schema, protocol, cellCount: 6 });
+    const result = await loadPhasePlan(doc, {
+      schema,
+      protocol,
+      cellCount: 6
+    });
     expect(result.phasePlan).toBeNull();
     expect(codesOf(result.diagnostics)).toContain(
       "OAL-STUDY-PAID-CALLS-INCONSISTENT"
@@ -112,64 +127,64 @@ describe("loadPhasePlan schema conformance", () => {
 });
 
 describe("loadPhasePlan analysis references", () => {
-  it("rejects a contrast over an unknown metric", () => {
-    const protocol = loadedProtocol();
+  it("rejects a contrast over an unknown metric", async () => {
+    const protocol = await loadedProtocol();
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
     const doc = withContrast((contrast) => {
       contrast["metric"] = "not_a_metric";
     });
-    const result = loadPhasePlan(doc, { schema, protocol });
+    const result = await loadPhasePlan(doc, { schema, protocol });
     expect(result.phasePlan).toBeNull();
     expect(codesOf(result.diagnostics)).toContain("OAL-STUDY-METRIC-UNKNOWN");
   });
 
-  it("rejects a contrast over an unknown factor", () => {
-    const protocol = loadedProtocol();
+  it("rejects a contrast over an unknown factor", async () => {
+    const protocol = await loadedProtocol();
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
     const doc = withContrast((contrast) => {
       contrast["factor"] = "not_a_factor";
     });
-    const result = loadPhasePlan(doc, { schema, protocol });
+    const result = await loadPhasePlan(doc, { schema, protocol });
     expect(result.phasePlan).toBeNull();
     expect(codesOf(result.diagnostics)).toContain(
       "OAL-STUDY-CONTRAST-FACTOR-UNKNOWN"
     );
   });
 
-  it("rejects a contrast over an unknown level", () => {
-    const protocol = loadedProtocol();
+  it("rejects a contrast over an unknown level", async () => {
+    const protocol = await loadedProtocol();
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
     const doc = withContrast((contrast) => {
       contrast["levels"] = ["shape_a", "shape_z"];
     });
-    const result = loadPhasePlan(doc, { schema, protocol });
+    const result = await loadPhasePlan(doc, { schema, protocol });
     expect(result.phasePlan).toBeNull();
     expect(codesOf(result.diagnostics)).toContain(
       "OAL-STUDY-CONTRAST-LEVEL-UNKNOWN"
     );
   });
 
-  it("rejects a stratum that names an unknown level", () => {
-    const protocol = loadedProtocol();
+  it("rejects a stratum that names an unknown level", async () => {
+    const protocol = await loadedProtocol();
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
     const doc = withContrast((contrast) => {
       contrast["within"] = { documentation: "telepathic" };
     });
-    const result = loadPhasePlan(doc, { schema, protocol });
+    const result = await loadPhasePlan(doc, { schema, protocol });
     expect(result.phasePlan).toBeNull();
     expect(codesOf(result.diagnostics)).toContain("OAL-STUDY-STRATUM-UNKNOWN");
   });
 
-  it("rejects an estimand over an unknown contrast", () => {
-    const protocol = loadedProtocol();
+  it("rejects an estimand over an unknown contrast", async () => {
+    const protocol = await loadedProtocol();
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
@@ -177,13 +192,13 @@ describe("loadPhasePlan analysis references", () => {
     const analysis = doc["analysis"] as Record<string, unknown>;
     const estimand = analysis["primary_estimand"] as Record<string, unknown>;
     estimand["contrast"] = "not_a_contrast";
-    const result = loadPhasePlan(doc, { schema, protocol });
+    const result = await loadPhasePlan(doc, { schema, protocol });
     expect(result.phasePlan).toBeNull();
     expect(codesOf(result.diagnostics)).toContain("OAL-STUDY-CONTRAST-UNKNOWN");
   });
 
-  it("rejects a comparison family over an unknown contrast", () => {
-    const protocol = loadedProtocol();
+  it("rejects a comparison family over an unknown contrast", async () => {
+    const protocol = await loadedProtocol();
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
@@ -198,13 +213,13 @@ describe("loadPhasePlan analysis references", () => {
       throw new Error("Fixture plan has no comparison family.");
     }
     family["contrasts"] = ["not_a_contrast"];
-    const result = loadPhasePlan(doc, { schema, protocol });
+    const result = await loadPhasePlan(doc, { schema, protocol });
     expect(result.phasePlan).toBeNull();
     expect(codesOf(result.diagnostics)).toContain("OAL-STUDY-CONTRAST-UNKNOWN");
   });
 
-  it("rejects a risk measure over a non-binary outcome", () => {
-    const protocol = loadedProtocol();
+  it("rejects a risk measure over a non-binary outcome", async () => {
+    const protocol = await loadedProtocol();
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
@@ -218,15 +233,15 @@ describe("loadPhasePlan analysis references", () => {
     contrast["metric"] = "request_count";
     const estimand = analysis["primary_estimand"] as Record<string, unknown>;
     estimand["outcome"] = "request_count";
-    const result = loadPhasePlan(doc, { schema, protocol });
+    const result = await loadPhasePlan(doc, { schema, protocol });
     expect(result.phasePlan).toBeNull();
     expect(codesOf(result.diagnostics)).toContain(
       "OAL-STUDY-MEASURE-INCOMPATIBLE"
     );
   });
 
-  it("rejects a floor and ceiling rule over an unknown factor", () => {
-    const protocol = loadedProtocol();
+  it("rejects a floor and ceiling rule over an unknown factor", async () => {
+    const protocol = await loadedProtocol();
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
@@ -234,12 +249,12 @@ describe("loadPhasePlan analysis references", () => {
     const analysis = doc["analysis"] as Record<string, unknown>;
     const floor = analysis["floor_ceiling"] as Record<string, unknown>;
     floor["apply_by_factor_level"] = "not_a_factor";
-    const result = loadPhasePlan(doc, { schema, protocol });
+    const result = await loadPhasePlan(doc, { schema, protocol });
     expect(result.phasePlan).toBeNull();
     expect(codesOf(result.diagnostics)).toContain("OAL-STUDY-FACTOR-UNKNOWN");
   });
 
-  it("rejects a contrast over a nonvarying factor", () => {
+  it("rejects a contrast over a nonvarying factor", async () => {
     const protocolDoc = baseProtocolDoc();
     const factors = protocolDoc["factors"] as Record<string, unknown>[];
     const documentation = factors[1];
@@ -249,9 +264,11 @@ describe("loadPhasePlan analysis references", () => {
     documentation["levels"] = [
       (documentation["levels"] as Record<string, unknown>[])[0]
     ];
-    const protocol = loadProtocol(protocolDoc, {
-      schema: protocolSchema
-    }).protocol;
+    const protocol = (
+      await loadProtocol(protocolDoc, {
+        schema: protocolSchema
+      })
+    ).protocol;
     if (protocol === null) {
       throw new Error("Modified fixture protocol must load.");
     }
@@ -260,19 +277,19 @@ describe("loadPhasePlan analysis references", () => {
       contrast["levels"] = ["blind", "blind"];
       contrast["within"] = { api_shape: "shape_a" };
     });
-    const result = loadPhasePlan(doc, { schema, protocol });
+    const result = await loadPhasePlan(doc, { schema, protocol });
     expect(result.phasePlan).toBeNull();
     expect(codesOf(result.diagnostics)).toContain(
       "OAL-STUDY-CONTRAST-NONVARYING"
     );
   });
 
-  it("rejects a rubric check the rubric does not declare", () => {
-    const protocol = loadedProtocol();
+  it("rejects a rubric check the rubric does not declare", async () => {
+    const protocol = await loadedProtocol();
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
-    const result = loadPhasePlan(basePhasePlanDoc(), {
+    const result = await loadPhasePlan(basePhasePlanDoc(), {
       schema,
       protocol,
       knownChecks: new Set(["other_check"])
@@ -283,8 +300,8 @@ describe("loadPhasePlan analysis references", () => {
     );
   });
 
-  it("rejects a confirmatory phase without a multiplicity policy", () => {
-    const protocol = loadedProtocol();
+  it("rejects a confirmatory phase without a multiplicity policy", async () => {
+    const protocol = await loadedProtocol();
     if (protocol === null) {
       throw new Error("Fixture protocol must load.");
     }
@@ -301,7 +318,11 @@ describe("loadPhasePlan analysis references", () => {
     }
     family["multiplicity"] = "none";
     analysis["small_sample_label"] = "confirmatory";
-    const result = loadPhasePlan(doc, { schema, protocol, cellCount: 6 });
+    const result = await loadPhasePlan(doc, {
+      schema,
+      protocol,
+      cellCount: 6
+    });
     expect(result.phasePlan).toBeNull();
     expect(codesOf(result.diagnostics)).toContain(
       "OAL-STUDY-CONFIRMATORY-INCOMPLETE"

@@ -125,7 +125,7 @@ export async function loadStudy(root: string): Promise<LoadedStudy> {
     );
   }
   const schema = await readSchema("study-protocol.v1.schema.json");
-  const loaded = loadProtocol(parsed.value, {
+  const loaded = await loadProtocol(parsed.value, {
     schema,
     documentUri: path.join(absolute, PROTOCOL_MEMBER)
   });
@@ -237,7 +237,7 @@ export async function loadStudyPhase(
     );
   }
   const schema = await readSchema("phase-plan.v1.schema.json");
-  const loaded = loadPhasePlan(parsed.value, {
+  const loaded = await loadPhasePlan(parsed.value, {
     schema,
     protocol: study.protocol,
     cellCount,
@@ -287,7 +287,7 @@ export async function readLock(root: string): Promise<{
     };
   }
   const schema = await readSchema("protocol-lock.v1.schema.json");
-  const loaded = protocolLockFromJson(parsed, {
+  const loaded = await protocolLockFromJson(parsed, {
     schema,
     documentUri: path.join(root, LOCK_MEMBER)
   });

@@ -15,7 +15,7 @@ import {
   isJsonObject,
   isSafeId,
   isSha256Hex,
-  SchemaValidator,
+  validateSchemaInstance,
   type Diagnostic,
   type Json,
   type JsonObject
@@ -631,10 +631,10 @@ function readSafeId(
 }
 
 /** Load and validate one StudyProtocol document. Never throws on content. */
-export function loadProtocol(
+export async function loadProtocol(
   document: Json,
   options: ProtocolLoadOptions = {}
-): ProtocolLoadResult {
+): Promise<ProtocolLoadResult> {
   const diagnostics: Diagnostic[] = [];
   const report = (entry: Diagnostic): void => {
     diagnostics.push(entry);
@@ -642,7 +642,9 @@ export function loadProtocol(
   const uri = options.documentUri ?? null;
 
   if (options.schema !== undefined) {
-    const violations = new SchemaValidator(options.schema).errors(document);
+    // Study documents are untrusted: their schema evaluation runs inside
+    // the bounded schema-worker boundary.
+    const violations = await validateSchemaInstance(options.schema, document);
     for (const violation of violations) {
       report(
         diagnostic({

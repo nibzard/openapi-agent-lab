@@ -12,8 +12,8 @@ import {
   canonicalJson,
   canonicalJsonSha256,
   diagnostic,
-  SchemaValidator,
   sha256Hex,
+  validateSchemaInstance,
   type Diagnostic,
   type Json,
   type JsonObject
@@ -169,10 +169,10 @@ function irMetric(metric: ProtocolMetric): ProtocolMetric {
 }
 
 /** Compile a validated protocol into canonical StudyIR. */
-export function compileStudy(
+export async function compileStudy(
   protocol: StudyProtocol,
   options: StudyCompileOptions = {}
-): StudyCompileResult {
+): Promise<StudyCompileResult> {
   const diagnostics: Diagnostic[] = [];
   const report = (entry: Diagnostic): void => {
     diagnostics.push(entry);
@@ -267,7 +267,10 @@ export function compileStudy(
   };
 
   if (options.schema !== undefined) {
-    const violations = new SchemaValidator(options.schema).errors(
+    // Study documents are untrusted: their schema evaluation runs inside
+    // the bounded schema-worker boundary.
+    const violations = await validateSchemaInstance(
+      options.schema,
       studyIrJson(ir)
     );
     for (const violation of violations) {

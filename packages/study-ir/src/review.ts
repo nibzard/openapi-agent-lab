@@ -13,7 +13,7 @@ import {
   isJsonObject,
   isSafeId,
   isSha256Hex,
-  SchemaValidator,
+  validateSchemaInstance,
   type Diagnostic,
   type Json
 } from "@oal/core";
@@ -92,16 +92,18 @@ const SEVERITIES: ReadonlySet<string> = new Set<string>([
   "blocking"
 ]);
 
-function schemaDiagnostics(
+async function schemaDiagnostics(
   document: Json,
   schema: Json | undefined,
   documentUri: string | null,
   report: (entry: Diagnostic) => void
-): void {
+): Promise<void> {
   if (schema === undefined) {
     return;
   }
-  const violations = new SchemaValidator(schema).errors(document);
+  // Study review documents are untrusted: their evaluation runs inside
+  // the bounded schema-worker boundary.
+  const violations = await validateSchemaInstance(schema, document);
   for (const violation of violations) {
     report(
       diagnostic({
@@ -218,16 +220,16 @@ function checkApprovalConsistency(
 }
 
 /** Load one BlindingReview document. Never throws on content. */
-export function loadBlindingReview(
+export async function loadBlindingReview(
   document: Json,
   options: ReviewLoadOptions = {}
-): BlindingReviewLoadResult {
+): Promise<BlindingReviewLoadResult> {
   const diagnostics: Diagnostic[] = [];
   const report = (entry: Diagnostic): void => {
     diagnostics.push(entry);
   };
   const uri = options.documentUri ?? null;
-  schemaDiagnostics(document, options.schema, uri, report);
+  await schemaDiagnostics(document, options.schema, uri, report);
   if (!isJsonObject(document)) {
     report(
       diagnostic({
@@ -344,16 +346,16 @@ export function loadBlindingReview(
 }
 
 /** Load one EquivalenceReview document. Never throws on content. */
-export function loadEquivalenceReview(
+export async function loadEquivalenceReview(
   document: Json,
   options: ReviewLoadOptions = {}
-): EquivalenceReviewLoadResult {
+): Promise<EquivalenceReviewLoadResult> {
   const diagnostics: Diagnostic[] = [];
   const report = (entry: Diagnostic): void => {
     diagnostics.push(entry);
   };
   const uri = options.documentUri ?? null;
-  schemaDiagnostics(document, options.schema, uri, report);
+  await schemaDiagnostics(document, options.schema, uri, report);
   if (!isJsonObject(document)) {
     report(
       diagnostic({

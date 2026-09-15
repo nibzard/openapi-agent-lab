@@ -128,8 +128,8 @@ function cleanExecutor(): (launch: TrialLaunch) => Promise<TrialOutcome> {
 }
 
 describe("StudyRun planning", () => {
-  it("refuses to assemble a header when preflight failed", () => {
-    const study = twoCellStudy();
+  it("refuses to assemble a header when preflight failed", async () => {
+    const study = await twoCellStudy();
     const failing = {
       ok: false,
       diagnostics: []
@@ -141,8 +141,8 @@ describe("StudyRun planning", () => {
     );
   });
 
-  it("refuses to assemble a header when preflight holds an error", () => {
-    const study = twoCellStudy();
+  it("refuses to assemble a header when preflight holds an error", async () => {
+    const study = await twoCellStudy();
     const diagnostics: Diagnostic[] = [
       diagnostic({
         severity: "error",
@@ -158,8 +158,8 @@ describe("StudyRun planning", () => {
     );
   });
 
-  it("assembles a schema-valid header and one binding per assignment", () => {
-    const study = twoCellStudy();
+  it("assembles a schema-valid header and one binding per assignment", async () => {
+    const study = await twoCellStudy();
     const result = planStudyRun(planInputOf(study, PASSING_PREFLIGHT));
     const plan = result.plan;
     expect(plan).not.toBeNull();
@@ -186,7 +186,7 @@ describe("StudyRun planning", () => {
 
 describe("StudyRun execution", () => {
   it("launches every primary once and holds every held slot", async () => {
-    const study = twoCellStudy();
+    const study = await twoCellStudy();
     const planned = planStudyRun(planInputOf(study, PASSING_PREFLIGHT));
     const plan = planned.plan;
     if (plan === null) {
@@ -224,7 +224,7 @@ describe("StudyRun execution", () => {
   });
 
   it("binds each launch to its assignment run seed and identity", async () => {
-    const study = twoCellStudy();
+    const study = await twoCellStudy();
     const planned = planStudyRun(planInputOf(study, PASSING_PREFLIGHT));
     const plan = planned.plan;
     if (plan === null) {
@@ -270,7 +270,7 @@ describe("StudyRun execution", () => {
   });
 
   it("aborts on a batch-wide defect without consuming held slots", async () => {
-    const study = twoCellStudy();
+    const study = await twoCellStudy();
     const planned = planStudyRun(planInputOf(study, PASSING_PREFLIGHT));
     const plan = planned.plan;
     if (plan === null) {
@@ -319,7 +319,7 @@ describe("StudyRun execution", () => {
   });
 
   it("aborts on an operator interruption", async () => {
-    const study = twoCellStudy();
+    const study = await twoCellStudy();
     const planned = planStudyRun(planInputOf(study, PASSING_PREFLIGHT));
     const plan = planned.plan;
     if (plan === null) {
@@ -346,7 +346,7 @@ describe("StudyRun execution", () => {
   });
 
   it("records an executor failure as a harness abort that settles the ledger", async () => {
-    const study = twoCellStudy();
+    const study = await twoCellStudy();
     const planned = planStudyRun(planInputOf(study, PASSING_PREFLIGHT));
     const plan = planned.plan;
     if (plan === null) {
@@ -378,7 +378,7 @@ describe("StudyRun execution", () => {
   });
 
   it("activates one held replacement for an eligible pre-control failure", async () => {
-    const study = twoCellStudy();
+    const study = await twoCellStudy();
     const planned = planStudyRun(planInputOf(study, PASSING_PREFLIGHT));
     const plan = planned.plan;
     if (plan === null) {
@@ -425,7 +425,7 @@ describe("StudyRun execution", () => {
   });
 
   it("never activates a replacement for an agent failure", async () => {
-    const study = twoCellStudy();
+    const study = await twoCellStudy();
     const planned = planStudyRun(planInputOf(study, PASSING_PREFLIGHT));
     const plan = planned.plan;
     if (plan === null) {
@@ -451,7 +451,7 @@ describe("StudyRun execution", () => {
   });
 
   it("applies the after-primary-schedule timing rule", async () => {
-    const study = twoCellStudy({
+    const study = await twoCellStudy({
       activation_timing: "after_primary_schedule"
     });
     const planned = planStudyRun(planInputOf(study, PASSING_PREFLIGHT));
@@ -493,8 +493,8 @@ describe("StudyRun execution", () => {
 });
 
 describe("study completion derivation", () => {
-  it("refuses a completion record while a primary is unsettled", () => {
-    const study = twoCellStudy();
+  it("refuses a completion record while a primary is unsettled", async () => {
+    const study = await twoCellStudy();
     const planned = planStudyRun(planInputOf(study, PASSING_PREFLIGHT));
     const plan = planned.plan;
     if (plan === null) {
@@ -518,7 +518,7 @@ describe("study completion derivation", () => {
   });
 
   it("refuses a completion record with a malformed timestamp", async () => {
-    const study = twoCellStudy();
+    const study = await twoCellStudy();
     const planned = planStudyRun(planInputOf(study, PASSING_PREFLIGHT));
     const plan = planned.plan;
     if (plan === null) {
@@ -541,7 +541,7 @@ describe("study completion derivation", () => {
   });
 
   it("marks an aborted run from the ledger alone", async () => {
-    const study = twoCellStudy();
+    const study = await twoCellStudy();
     const planned = planStudyRun(planInputOf(study, PASSING_PREFLIGHT));
     const plan = planned.plan;
     if (plan === null) {
@@ -578,8 +578,8 @@ describe("study completion derivation", () => {
 });
 
 describe("fixture schedule", () => {
-  it("holds one held slot per cell over two complete blocks", () => {
-    const study = twoCellStudy();
+  it("holds one held slot per cell over two complete blocks", async () => {
+    const study = await twoCellStudy();
     const schedule: AssignmentSchedule = study.schedule;
     const primaries = schedule.assignments.filter(
       (assignment) => assignment.kind === "primary"

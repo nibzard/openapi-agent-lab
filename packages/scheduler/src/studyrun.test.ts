@@ -30,8 +30,8 @@ const runSchema = new SchemaValidator(loadSchema("study-run.v1.schema.json"));
 const CREATED_AT = "2026-08-27T09:30:00.000Z";
 const PHASE_LOCK_SHA256 = sha256Hex("fixture phase lock");
 
-function fixtureSchedule(): AssignmentSchedule {
-  const study = fixtureStudy();
+async function fixtureSchedule(): Promise<AssignmentSchedule> {
+  const study = await fixtureStudy();
   const result = buildAssignmentSchedule({
     study_run_id: STUDY_RUN_ID,
     ir: study.ir,
@@ -48,9 +48,10 @@ function fixtureSchedule(): AssignmentSchedule {
   return result.schedule;
 }
 
-function headerInputOf(
-  schedule: AssignmentSchedule = fixtureSchedule()
-): StudyRunHeaderInput {
+async function headerInputOf(
+  schedule?: AssignmentSchedule
+): Promise<StudyRunHeaderInput> {
+  const resolvedSchedule = schedule ?? (await fixtureSchedule());
   return {
     study_run_id: STUDY_RUN_ID,
     created_at: CREATED_AT,
@@ -66,15 +67,16 @@ function headerInputOf(
       phase_plan_sha256: PHASE_PLAN_SHA256,
       phase_lock_sha256: PHASE_LOCK_SHA256
     },
-    schedule,
+    schedule: resolvedSchedule,
     study_compatibility_sha256: sha256Hex("fixture study compatibility"),
     implementation_sha256: sha256Hex("fixture implementation"),
     analysis_plan_sha256: sha256Hex("fixture analysis plan"),
     cells: FIXTURE_CELLS.map((cellId) => ({
       cell_id: cellId,
       factor_levels:
-        schedule.assignments.find((assignment) => assignment.cell_id === cellId)
-          ?.factor_levels ?? {},
+        resolvedSchedule.assignments.find(
+          (assignment) => assignment.cell_id === cellId
+        )?.factor_levels ?? {},
       cell_compatibility_sha256: sha256Hex(`cell compatibility ${cellId}`)
     }))
   };
@@ -85,8 +87,8 @@ function codes(diagnostics: readonly { code: string }[]): string[] {
 }
 
 describe("buildStudyRunHeader", () => {
-  it("assembles the section 12.14 header over the fixture study", () => {
-    const result = buildStudyRunHeader(headerInputOf());
+  it("assembles the section 12.14 header over the fixture study", async () => {
+    const result = buildStudyRunHeader(await headerInputOf());
     const header = result.header;
     if (header === null) {
       throw new Error(
@@ -125,8 +127,8 @@ describe("buildStudyRunHeader", () => {
     ]);
   });
 
-  it("lists child batches in canonical cell-ID order with derived IDs", () => {
-    const result = buildStudyRunHeader(headerInputOf());
+  it("lists child batches in canonical cell-ID order with derived IDs", async () => {
+    const result = buildStudyRunHeader(await headerInputOf());
     const header = result.header;
     if (header === null) {
       throw new Error("Fixture header must build.");
@@ -160,9 +162,9 @@ describe("buildStudyRunHeader", () => {
     ).toBe(6);
   });
 
-  it("binds every child batch to the batch the schedule already recorded", () => {
-    const schedule = fixtureSchedule();
-    const result = buildStudyRunHeader(headerInputOf(schedule));
+  it("binds every child batch to the batch the schedule already recorded", async () => {
+    const schedule = await fixtureSchedule();
+    const result = buildStudyRunHeader(await headerInputOf(schedule));
     const header = result.header;
     if (header === null) {
       throw new Error("Fixture header must build.");
@@ -177,9 +179,9 @@ describe("buildStudyRunHeader", () => {
     }
   });
 
-  it("records the schedule identity, digest, and launch ceiling", () => {
-    const schedule = fixtureSchedule();
-    const result = buildStudyRunHeader(headerInputOf(schedule));
+  it("records the schedule identity, digest, and launch ceiling", async () => {
+    const schedule = await fixtureSchedule();
+    const result = buildStudyRunHeader(await headerInputOf(schedule));
     const header = result.header;
     if (header === null) {
       throw new Error("Fixture header must build.");
@@ -196,8 +198,8 @@ describe("buildStudyRunHeader", () => {
     );
   });
 
-  it("validates against study-run.v1.schema.json", () => {
-    const result = buildStudyRunHeader(headerInputOf());
+  it("validates against study-run.v1.schema.json", async () => {
+    const result = buildStudyRunHeader(await headerInputOf());
     const header = result.header;
     if (header === null) {
       throw new Error("Fixture header must build.");
@@ -206,9 +208,9 @@ describe("buildStudyRunHeader", () => {
     expect(serializeStudyRun(header)).not.toContain("\n");
   });
 
-  it("is deterministic and pins the canonical header bytes", () => {
-    const left = buildStudyRunHeader(headerInputOf()).header;
-    const right = buildStudyRunHeader(headerInputOf()).header;
+  it("is deterministic and pins the canonical header bytes", async () => {
+    const left = buildStudyRunHeader(await headerInputOf()).header;
+    const right = buildStudyRunHeader(await headerInputOf()).header;
     if (left === null || right === null) {
       throw new Error("Fixture header must build.");
     }
@@ -219,8 +221,8 @@ describe("buildStudyRunHeader", () => {
     );
   });
 
-  it("rejects a StudyRun or phase that contradicts the schedule", () => {
-    const mismatched = headerInputOf();
+  it("rejects a StudyRun or phase that contradicts the schedule", async () => {
+    const mismatched = await headerInputOf();
     const otherRun = buildStudyRunHeader({
       ...mismatched,
       study_run_id: "another-study-run"
@@ -239,8 +241,8 @@ describe("buildStudyRunHeader", () => {
     );
   });
 
-  it("rejects a malformed creation time and malformed digests", () => {
-    const base = headerInputOf();
+  it("rejects a malformed creation time and malformed digests", async () => {
+    const base = await headerInputOf();
     const badTime = buildStudyRunHeader({
       ...base,
       created_at: "2026-08-27T09:30:00Z"
@@ -268,8 +270,8 @@ describe("buildStudyRunHeader", () => {
     );
   });
 
-  it("rejects a cell inventory that disagrees with the schedule", () => {
-    const base = headerInputOf();
+  it("rejects a cell inventory that disagrees with the schedule", async () => {
+    const base = await headerInputOf();
     const missingBatch = buildStudyRunHeader({
       ...base,
       cells: base.cells.slice(1)

@@ -13,7 +13,7 @@ import {
   diagnostic,
   isJsonObject,
   isSafeId,
-  SchemaValidator,
+  validateSchemaInstance,
   type Diagnostic,
   type Json,
   type JsonObject
@@ -222,10 +222,10 @@ const PURPOSES: ReadonlySet<string> = new Set<string>([
 ]);
 
 /** Load and validate one PhasePlan document. Never throws on content. */
-export function loadPhasePlan(
+export async function loadPhasePlan(
   document: Json,
   options: PhasePlanLoadOptions
-): PhasePlanLoadResult {
+): Promise<PhasePlanLoadResult> {
   const diagnostics: Diagnostic[] = [];
   const report = (entry: Diagnostic): void => {
     diagnostics.push(entry);
@@ -233,7 +233,9 @@ export function loadPhasePlan(
   const uri = options.documentUri ?? null;
 
   if (options.schema !== undefined) {
-    const violations = new SchemaValidator(options.schema).errors(document);
+    // Study documents are untrusted: their schema evaluation runs inside
+    // the bounded schema-worker boundary.
+    const violations = await validateSchemaInstance(options.schema, document);
     for (const violation of violations) {
       report(
         diagnostic({
