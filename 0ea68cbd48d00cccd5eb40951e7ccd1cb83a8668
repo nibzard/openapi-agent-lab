@@ -1,0 +1,7 @@
+# Context
+
+T066 minor: the 504 mapping, rollback, and worker-replacement
+behavior existed since the boundary landed but had no server-level
+test. The fixture route is the only way to stage a transaction and
+then hit the deadline: generated bodies satisfy their patterns by
+construction, but a fixture body can be adversarial by hand.
