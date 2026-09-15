@@ -1,0 +1,29 @@
+# Context
+
+## Background
+The T066 handoff in to-do.json named three blockers found during the
+2026-09-14 evaluation. A three-agent comprehension workflow on
+2026-09-15 confirmed each with file:line evidence before this fix.
+
+## Why This Way
+- The configure point is the CLI dispatcher, not each handler: one
+  site covers replay, probe, trace import, eval, evaluate, report,
+  and study init, and commands with their own table (run, serve,
+  doctor) reconfigure afterwards. Last writer wins; one process
+  resolves one table, so no cross-contamination is observable today.
+- The exposure got a real GatewayState rather than a private promise
+  chain: serializeState is the sanctioned ordering mechanism, the
+  state ledger only records stage/commit/rollback of operation keys
+  (no hidden backend behavior), and the stateful mock work (T069)
+  builds on exactly this.
+- @oal/report gained a dependency on @oal/config for
+  schemaWorkerSettingsOf; the mapping stays in config so core keeps
+  no dependency on the table type.
+
+## Gotchas
+- configureSchemaWorker mutates one process-global singleton. If a
+  future feature runs concurrent exposures with DIFFERENT tables in
+  one process, the last configure wins and settings bleed across
+  exposures; per-call settings would be needed then.
+- grade() in doctor.ts is a nested function so the finally that
+  closes the worker still returns the graded check.
