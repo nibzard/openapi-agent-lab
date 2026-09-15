@@ -97,8 +97,8 @@ describe("operationKeysOfDocument", () => {
   });
 });
 
-describe("buildContractVariantDiff", () => {
-  const set = loadSet({
+describe("buildContractVariantDiff", async () => {
+  const set = await loadSet({
     common: {
       patch: [{ op: "add", path: "/info/contact", value: { name: "Support" } }],
       allowlist: ["/info/contact"]
@@ -210,7 +210,7 @@ describe("buildContractVariantDiff", () => {
     expect(diff.base_sha256).toBe(set.base.sha256);
   });
 
-  it("produces a document the diff schema accepts", () => {
+  it("produces a document the diff schema accepts", async () => {
     const diff = diffOver(
       mustApply(base, [
         {
@@ -221,7 +221,7 @@ describe("buildContractVariantDiff", () => {
       ]),
       null
     );
-    const loaded = loadContractVariantDiff(
+    const loaded = await loadContractVariantDiff(
       JSON.parse(JSON.stringify(diff)) as Json,
       schemas
     );

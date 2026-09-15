@@ -14,6 +14,7 @@ import {
   packRegistrySnapshot,
   VariantSchemaSet,
   type ContractVariantSet,
+  type LoadResult,
   type PackRegistrySnapshot
 } from "./model.ts";
 import { applyJsonPatch, type JsonPatchOperation } from "./patch.ts";
@@ -294,9 +295,11 @@ export function fixturePack(): PackRegistrySnapshot {
 }
 
 /** Load a fixture set through the loader, asserting success. */
-export function loadSet(fixture: SetFixture): ContractVariantSet {
+export async function loadSet(
+  fixture: SetFixture
+): Promise<ContractVariantSet> {
   const schemas = loadSchemas();
-  const result = loadSetWith(fixture, schemas);
+  const result = await loadSetWith(fixture, schemas);
   if (!result.ok) {
     throw new Error(
       `Fixture set does not load: ${result.diagnostics
@@ -307,6 +310,9 @@ export function loadSet(fixture: SetFixture): ContractVariantSet {
   return result.value;
 }
 
-function loadSetWith(fixture: SetFixture, schemas: VariantSchemaSet) {
-  return loadContractVariantSet(buildSet(fixture), schemas);
+async function loadSetWith(
+  fixture: SetFixture,
+  schemas: VariantSchemaSet
+): Promise<LoadResult<ContractVariantSet>> {
+  return await loadContractVariantSet(buildSet(fixture), schemas);
 }

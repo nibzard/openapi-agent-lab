@@ -55,7 +55,7 @@ const TERSE: VariantFixture = {
   ]
 };
 
-const set = loadSet({ common: COMMON, variants: [VERBOSE, TERSE] });
+const set = await loadSet({ common: COMMON, variants: [VERBOSE, TERSE] });
 const result = materializeContractVariantSet(set, pack);
 
 function success(): readonly MaterializeSuccess[] {
@@ -162,14 +162,14 @@ describe("end-to-end set over the hand-built base contract", () => {
     ).not.toBe(digestOf("terse", "response_selector:path:GET /tasks|200"));
   });
 
-  it("produces manifests and diffs the schemas accept", () => {
+  it("produces manifests and diffs the schemas accept", async () => {
     for (const entry of success()) {
-      const manifest = loadContractVariantManifest(
+      const manifest = await loadContractVariantManifest(
         JSON.parse(JSON.stringify(entry.manifest)) as Json,
         schemas
       );
       expect(manifest.ok).toBe(true);
-      const diff = loadContractVariantDiff(
+      const diff = await loadContractVariantDiff(
         JSON.parse(JSON.stringify(entry.diff)) as Json,
         schemas
       );
@@ -177,13 +177,13 @@ describe("end-to-end set over the hand-built base contract", () => {
     }
   });
 
-  it("materializes the same set bytes byte-identically twice", () => {
+  it("materializes the same set bytes byte-identically twice", async () => {
     const text = canonicalJson(
       buildSet({ common: COMMON, variants: [VERBOSE, TERSE] })
     );
     const runs: string[][] = [];
     for (let i = 0; i < 2; i += 1) {
-      const loaded = loadContractVariantSet(text, schemas);
+      const loaded = await loadContractVariantSet(text, schemas);
       if (!loaded.ok) {
         throw new Error(
           loaded.diagnostics.map((entry) => entry.message).join("; ")

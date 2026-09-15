@@ -91,8 +91,8 @@ function replaceVariant(
   };
 }
 
-function mustLoad(text: string): ContractVariantSet {
-  const result = loadContractVariantSet(text, schemas);
+async function mustLoad(text: string): Promise<ContractVariantSet> {
+  const result = await loadContractVariantSet(text, schemas);
   if (!result.ok) {
     throw new Error(
       result.diagnostics.map((entry) => entry.message).join("; ")
@@ -133,8 +133,8 @@ describe("scanForLeakedLabels", () => {
 });
 
 describe("materializeVariant", () => {
-  it("materializes one variant and verifies it", () => {
-    const set = loadSet({ common: COMMON, variants: [VERBOSE] });
+  it("materializes one variant and verifies it", async () => {
+    const set = await loadSet({ common: COMMON, variants: [VERBOSE] });
     const result = materializeVariant(set, "verbose", pack);
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -161,15 +161,15 @@ describe("materializeVariant", () => {
     }
   });
 
-  it("rejects a variant the set does not declare", () => {
-    const set = loadSet({ common: COMMON, variants: [VERBOSE] });
+  it("rejects a variant the set does not declare", async () => {
+    const set = await loadSet({ common: COMMON, variants: [VERBOSE] });
     expect(failureCodes(materializeVariant(set, "missing", pack))).toEqual([
       GenerateCode.VariantUnknown
     ]);
   });
 
-  it("rejects base bytes that no longer match the pinned digest", () => {
-    const set = loadSet({ common: COMMON, variants: [VERBOSE] });
+  it("rejects base bytes that no longer match the pinned digest", async () => {
+    const set = await loadSet({ common: COMMON, variants: [VERBOSE] });
     const changed: ContractVariantSet = {
       ...set,
       base: { ...set.base, source: `${set.base.source}\n` }
@@ -179,8 +179,8 @@ describe("materializeVariant", () => {
     ]);
   });
 
-  it("rejects a declared effective digest that disagrees", () => {
-    const set = loadSet({ common: COMMON, variants: [VERBOSE] });
+  it("rejects a declared effective digest that disagrees", async () => {
+    const set = await loadSet({ common: COMMON, variants: [VERBOSE] });
     const changed = replaceVariant(set, "verbose", (variant) => ({
       ...variant,
       effective_sha256: sha256Hex("other bytes")
@@ -190,11 +190,11 @@ describe("materializeVariant", () => {
     ]);
   });
 
-  it("rejects a patch outside its allowlist at materialization time", () => {
+  it("rejects a patch outside its allowlist at materialization time", async () => {
     // The loader is the first net. This set skipped validation, so
     // materialization must still refuse to apply an undeclared operation
     // instead of applying it silently.
-    const set = loadSet({
+    const set = await loadSet({
       common: null,
       variants: [
         {
@@ -221,11 +221,11 @@ describe("materializeVariant", () => {
     expect(failureCodes(result)).toEqual([GenerateCode.PatchRejected]);
   });
 
-  it("flags an undeclared change as drift", () => {
+  it("flags an undeclared change as drift", async () => {
     // A static transform replaces the whole document, so the allowlist of a
     // loaded set normally covers the root. This set declares a narrow
     // allowlist, and the diff classifier must catch the extra change.
-    const set = loadSet({ common: null, variants: [VERBOSE] });
+    const set = await loadSet({ common: null, variants: [VERBOSE] });
     const staticDocument = mustApply(
       JSON.parse(BASE_CONTRACT) as Json,
       VERBOSE.patch
@@ -247,8 +247,8 @@ describe("materializeVariant", () => {
     expect(failureCodes(result)).toEqual([GenerateCode.DriftDetected]);
   });
 
-  it("detects a factor label planted in a response description", () => {
-    const set = loadSet({
+  it("detects a factor label planted in a response description", async () => {
+    const set = await loadSet({
       common: null,
       variants: [
         {
@@ -269,8 +269,8 @@ describe("materializeVariant", () => {
     ]);
   });
 
-  it("detects an assignment label planted in an extension name", () => {
-    const set = loadSet({
+  it("detects an assignment label planted in an extension name", async () => {
+    const set = await loadSet({
       common: null,
       variants: [
         {
@@ -294,8 +294,8 @@ describe("materializeVariant", () => {
     ]);
   });
 
-  it("rejects an adapter digest that disagrees with the pack", () => {
-    const set = loadSet({ common: COMMON, variants: [VERBOSE] });
+  it("rejects an adapter digest that disagrees with the pack", async () => {
+    const set = await loadSet({ common: COMMON, variants: [VERBOSE] });
     const changed = replaceVariant(set, "verbose", (variant) => ({
       ...variant,
       behavior_adapters: variant.behavior_adapters.map((adapter) => ({
@@ -308,8 +308,8 @@ describe("materializeVariant", () => {
     ]);
   });
 
-  it("rejects an adapter the pack does not carry", () => {
-    const set = loadSet({ common: COMMON, variants: [VERBOSE] });
+  it("rejects an adapter the pack does not carry", async () => {
+    const set = await loadSet({ common: COMMON, variants: [VERBOSE] });
     const changed = replaceVariant(set, "verbose", (variant) => ({
       ...variant,
       behavior_adapters: variant.behavior_adapters.map((adapter) => ({
@@ -322,8 +322,8 @@ describe("materializeVariant", () => {
     ]);
   });
 
-  it("rejects an adapter capability that disagrees with the contract", () => {
-    const set = loadSet({ common: COMMON, variants: [VERBOSE] });
+  it("rejects an adapter capability that disagrees with the contract", async () => {
+    const set = await loadSet({ common: COMMON, variants: [VERBOSE] });
     const downgraded = {
       ...pack,
       adapters: pack.adapters.map((adapter) =>
@@ -337,8 +337,8 @@ describe("materializeVariant", () => {
     ).toEqual([GenerateCode.AdapterCapabilityMismatch]);
   });
 
-  it("rejects a semantic action the pack does not publish", () => {
-    const set = loadSet({ common: COMMON, variants: [VERBOSE] });
+  it("rejects a semantic action the pack does not publish", async () => {
+    const set = await loadSet({ common: COMMON, variants: [VERBOSE] });
     const changed = replaceVariant(set, "verbose", (variant) => ({
       ...variant,
       semantic: {
@@ -351,8 +351,8 @@ describe("materializeVariant", () => {
     ]);
   });
 
-  it("rejects a documentation example the pack does not publish", () => {
-    const set = loadSet({ common: COMMON, variants: [VERBOSE] });
+  it("rejects a documentation example the pack does not publish", async () => {
+    const set = await loadSet({ common: COMMON, variants: [VERBOSE] });
     const changed = replaceVariant(set, "verbose", (variant) => ({
       ...variant,
       documentation: {
@@ -368,8 +368,8 @@ describe("materializeVariant", () => {
     ]);
   });
 
-  it("rejects an effective contract that does not compile", () => {
-    const set = loadSet({
+  it("rejects an effective contract that does not compile", async () => {
+    const set = await loadSet({
       base: BASE_CONTRACT.replace(
         "#/components/schemas/Task",
         "#/components/schemas/Missing"
@@ -382,12 +382,12 @@ describe("materializeVariant", () => {
     ]);
   });
 
-  it("reports unwaived compiler diagnostics and honors waivers", () => {
+  it("reports unwaived compiler diagnostics and honors waivers", async () => {
     const unsupportedMedia = BASE_CONTRACT.replace(
       '"application/json"',
       '"application/x-custom"'
     );
-    const set = loadSet({
+    const set = await loadSet({
       base: unsupportedMedia,
       common: null,
       variants: [VERBOSE]
@@ -413,10 +413,10 @@ describe("materializeVariant", () => {
 describe("materializeContractVariantSet", () => {
   const TWO_VARIANTS = { common: COMMON, variants: [VERBOSE, TERSE] };
 
-  it("materializes the same set bytes identically twice", () => {
+  it("materializes the same set bytes identically twice", async () => {
     const text = canonicalJson(buildSet(TWO_VARIANTS));
-    const first = materializeContractVariantSet(mustLoad(text), pack);
-    const second = materializeContractVariantSet(mustLoad(text), pack);
+    const first = materializeContractVariantSet(await mustLoad(text), pack);
+    const second = materializeContractVariantSet(await mustLoad(text), pack);
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(true);
     if (first.ok && second.ok) {
@@ -434,15 +434,15 @@ describe("materializeContractVariantSet", () => {
     }
   });
 
-  it("flags a surface that varies without a declaration", () => {
-    const set = loadSet({ ...TWO_VARIANTS, expectedVariable: [] });
+  it("flags a surface that varies without a declaration", async () => {
+    const set = await loadSet({ ...TWO_VARIANTS, expectedVariable: [] });
     expect(failureCodes(materializeContractVariantSet(set, pack))).toEqual([
       GenerateCode.SurfaceDrift
     ]);
   });
 
-  it("flags a surface declared constant that varies", () => {
-    const set = loadSet({
+  it("flags a surface declared constant that varies", async () => {
+    const set = await loadSet({
       ...TWO_VARIANTS,
       expectedVariable: ["operation:path:GET /tasks"]
     });
@@ -451,15 +451,15 @@ describe("materializeContractVariantSet", () => {
     ]);
   });
 
-  it("flags a declared surface absent from every variant", () => {
-    const set = loadSet({ common: COMMON, variants: [VERBOSE] });
+  it("flags a declared surface absent from every variant", async () => {
+    const set = await loadSet({ common: COMMON, variants: [VERBOSE] });
     expect(failureCodes(materializeContractVariantSet(set, pack))).toEqual([
       GenerateCode.SurfaceMissing
     ]);
   });
 
-  it("flags documentation inventories that are not parallel", () => {
-    const set = loadSet(TWO_VARIANTS);
+  it("flags documentation inventories that are not parallel", async () => {
+    const set = await loadSet(TWO_VARIANTS);
     const widened = {
       ...pack,
       documentation: {

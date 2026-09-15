@@ -12,8 +12,8 @@ import {
   diagnostic,
   isJsonObject,
   parseJsonStrict,
-  SchemaValidator,
   sha256Hex,
+  validateSchemaInstance,
   type Diagnostic,
   type Json,
   type JsonObject
@@ -216,10 +216,9 @@ export interface VariantSchemaDocuments {
 
 export type VariantSchemaName = keyof VariantSchemaDocuments;
 
-/** Immutable, filesystem-free set of the three variant schema validators. */
+/** Immutable, filesystem-free set of the three variant schema documents. */
 export class VariantSchemaSet {
   private readonly documents: ReadonlyMap<VariantSchemaName, JsonObject>;
-  private readonly cache = new Map<VariantSchemaName, SchemaValidator>();
 
   private constructor(documents: ReadonlyMap<VariantSchemaName, JsonObject>) {
     this.documents = documents;
@@ -237,16 +236,6 @@ export class VariantSchemaSet {
 
   document(name: VariantSchemaName): JsonObject {
     return this.documents.get(name) as JsonObject;
-  }
-
-  validator(name: VariantSchemaName): SchemaValidator {
-    const cached = this.cache.get(name);
-    if (cached !== undefined) {
-      return cached;
-    }
-    const created = new SchemaValidator(this.document(name));
-    this.cache.set(name, created);
-    return created;
   }
 }
 
@@ -288,13 +277,18 @@ export function parseArtifactText(text: string): LoadResult<Json> {
   }
 }
 
-function schemaDiagnostics(
+async function schemaDiagnostics(
   schemas: VariantSchemaSet,
   name: VariantSchemaName,
   value: Json,
   pointer: string
-): readonly Diagnostic[] {
-  const violations = schemas.validator(name).errors(value);
+): Promise<readonly Diagnostic[]> {
+  // Variant artifacts are untrusted documents; their evaluation runs
+  // inside the bounded schema-worker boundary.
+  const violations = await validateSchemaInstance(
+    schemas.document(name),
+    value
+  );
   if (violations.length === 0) {
     return [];
   }
@@ -827,10 +821,10 @@ function parseInput(value: Json | string): LoadResult<Json> {
  * Load and validate one ContractVariantSet: schema validation first, then the
  * semantic checks the schema cannot express.
  */
-export function loadContractVariantSet(
+export async function loadContractVariantSet(
   value: Json | string,
   schemas: VariantSchemaSet
-): LoadResult<ContractVariantSet> {
+): Promise<LoadResult<ContractVariantSet>> {
   const parsed = parseInput(value);
   if (!parsed.ok) {
     return failure(parsed.diagnostics);
@@ -839,7 +833,7 @@ export function loadContractVariantSet(
   if (!object.ok) {
     return failure(object.diagnostics);
   }
-  const invalid = schemaDiagnostics(schemas, "set", parsed.value, "#");
+  const invalid = await schemaDiagnostics(schemas, "set", parsed.value, "#");
   if (invalid.length > 0) {
     return failure(invalid);
   }
@@ -852,10 +846,10 @@ export function loadContractVariantSet(
 }
 
 /** Load and validate one ContractVariantManifest. */
-export function loadContractVariantManifest(
+export async function loadContractVariantManifest(
   value: Json | string,
   schemas: VariantSchemaSet
-): LoadResult<ContractVariantManifest> {
+): Promise<LoadResult<ContractVariantManifest>> {
   const parsed = parseInput(value);
   if (!parsed.ok) {
     return failure(parsed.diagnostics);
@@ -864,7 +858,12 @@ export function loadContractVariantManifest(
   if (!object.ok) {
     return failure(object.diagnostics);
   }
-  const invalid = schemaDiagnostics(schemas, "manifest", parsed.value, "#");
+  const invalid = await schemaDiagnostics(
+    schemas,
+    "manifest",
+    parsed.value,
+    "#"
+  );
   if (invalid.length > 0) {
     return failure(invalid);
   }
@@ -877,10 +876,10 @@ export function loadContractVariantManifest(
 }
 
 /** Load and validate one ContractVariantDiff. */
-export function loadContractVariantDiff(
+export async function loadContractVariantDiff(
   value: Json | string,
   schemas: VariantSchemaSet
-): LoadResult<ContractVariantDiff> {
+): Promise<LoadResult<ContractVariantDiff>> {
   const parsed = parseInput(value);
   if (!parsed.ok) {
     return failure(parsed.diagnostics);
@@ -889,7 +888,7 @@ export function loadContractVariantDiff(
   if (!object.ok) {
     return failure(object.diagnostics);
   }
-  const invalid = schemaDiagnostics(schemas, "diff", parsed.value, "#");
+  const invalid = await schemaDiagnostics(schemas, "diff", parsed.value, "#");
   if (invalid.length > 0) {
     return failure(invalid);
   }

@@ -133,7 +133,7 @@ async function materializedVariantsOf(
       ]
     };
   }
-  const loaded = loadContractVariantSet(text, await variantSchemas());
+  const loaded = await loadContractVariantSet(text, await variantSchemas());
   if (!loaded.ok) {
     return { ok: false, diagnostics: [...loaded.diagnostics] };
   }
