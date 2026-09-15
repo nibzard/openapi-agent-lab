@@ -1,0 +1,21 @@
+# Context
+
+T066 hardening follow-ups after the boundary landed. The byte
+model changed shape: maxMessageBytes now bounds one message
+(request, or one registration) instead of request+registrations
+combined, so a warm bundle no longer re-pays its bytes on every
+submit. Registration refusal surfaces at assign time because that
+is the first moment the parent knows which worker lacks the bundle.
+
+Unicode-first compileRaw mirrors validator.ts compilePattern on
+purpose: pattern synthesis (gateway/pattern.ts) probes candidates
+with regex-test while the validator accepts instances with the same
+pattern; divergent flags would let a schema-valid value refuse its
+own synthesized probe.
+
+The hostile-pattern probe is a heuristic lint, not a proof: it
+derives its battery from the pattern's own literal characters,
+where nearly every catastrophic shape trips. Benign patterns answer
+in microseconds, so a 100 ms miss is hostile with near certainty.
+False negatives are acceptable; the serving boundary bounds the
+cost regardless.
