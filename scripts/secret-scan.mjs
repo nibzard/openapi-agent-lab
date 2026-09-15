@@ -34,6 +34,9 @@ import { fileURLToPath } from "node:url";
 /** Directories the scanner never enters. */
 const SKIPPED_DIRECTORIES = new Set([
   ".git",
+  // Agent worktrees under .claude are staging copies of this repository;
+  // their content is scanned in its canonical location.
+  ".claude",
   "node_modules",
   "dist",
   "coverage"
