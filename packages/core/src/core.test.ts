@@ -272,6 +272,34 @@ describe("schema validator", () => {
     expect(validator.errors(5).map((v) => v.code)).toContain("type");
   });
 
+  it("measures string length in Unicode code points", () => {
+    const validator = new SchemaValidator({
+      type: "string",
+      minLength: 2,
+      maxLength: 2
+    });
+    // Two supplementary-plane characters are two code points but four
+    // UTF-16 code units.
+    expect(validator.errors("😀😀")).toHaveLength(0);
+    expect(validator.errors("😀").map((v) => v.code)).toContain("minLength");
+    expect(validator.errors("😀😀😀").map((v) => v.code)).toContain(
+      "maxLength"
+    );
+  });
+
+  it("applies sibling keywords beside a reference", () => {
+    const validator = new SchemaValidator({
+      $defs: { tags: { type: "array" } },
+      $ref: "#/$defs/tags",
+      maxItems: 2
+    });
+    expect(validator.errors(["a", "b"])).toHaveLength(0);
+    expect(validator.errors(["a", "b", "c"]).map((v) => v.code)).toContain(
+      "maxItems"
+    );
+    expect(validator.errors("nope").map((v) => v.code)).toContain("type");
+  });
+
   it("reports unresolved references", () => {
     const validator = new SchemaValidator({ $ref: "#/$defs/missing" });
     expect(validator.errors("x").map((v) => v.code)).toContain("ref_not_found");

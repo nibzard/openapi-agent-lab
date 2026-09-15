@@ -90,6 +90,23 @@ function typeMatches(value: Json, type: string): boolean {
   return actual === type;
 }
 
+/**
+ * JSON Schema string lengths count Unicode code points, not UTF-16 code
+ * units, so a supplementary-plane character counts as one.
+ */
+function codePointLength(value: string): number {
+  let count = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    const next = i + 1 < value.length ? value.charCodeAt(i + 1) : 0;
+    if (code >= 0xd800 && code <= 0xdbff && next >= 0xdc00 && next <= 0xdfff) {
+      i += 1;
+    }
+    count += 1;
+  }
+  return count;
+}
+
 function stableStringifyScalar(value: Json): string {
   if (
     typeof value === "number" ||
@@ -205,6 +222,9 @@ export class SchemaValidator {
         );
         seen.delete(refKey);
       }
+      // Draft 2020-12: a reference applies beside, not instead of, sibling
+      // keywords.
+      this.validateKeywords(schema, instance, pointer, depth, violations, seen);
       return;
     }
 
@@ -313,8 +333,9 @@ export class SchemaValidator {
 
     // strings
     if (typeof instance === "string") {
+      const length = codePointLength(instance);
       const maxLength = schema["maxLength"];
-      if (typeof maxLength === "number" && instance.length > maxLength) {
+      if (typeof maxLength === "number" && length > maxLength) {
         push(
           "maxLength",
           `String length must be <= ${maxLength}.`,
@@ -322,7 +343,7 @@ export class SchemaValidator {
         );
       }
       const minLength = schema["minLength"];
-      if (typeof minLength === "number" && instance.length < minLength) {
+      if (typeof minLength === "number" && length < minLength) {
         push(
           "minLength",
           `String length must be >= ${minLength}.`,
