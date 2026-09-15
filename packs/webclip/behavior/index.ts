@@ -9,15 +9,21 @@
  * unrendered clip with 409, and the quota counts only live clips.
  *
  * The module runs as plain TypeScript under Node type stripping, so it
- * stays erasable-syntax only. It imports the one runtime value it
- * needs, the behavior error class, by relative path: a pack resolves
- * no bare workspace specifiers, because the module directory sits
- * outside the workspace package graph and the module process starts
- * with a minimal environment.
+ * stays erasable-syntax only. It imports the runtime values it needs,
+ * the behavior error class and the child loop, by relative path: a
+ * pack resolves no bare workspace specifiers, because the module
+ * directory sits outside the workspace package graph and the module
+ * process starts with a minimal environment.
+ *
+ * The behavior host spawns this file as a child process and marks the
+ * environment (OAL_BEHAVIOR_CHILD); the file then serves the module
+ * over the IPC protocol. An in-process import, as the test kit does,
+ * stays free of side effects.
  */
 
 import { createHash } from "node:crypto";
 
+import { runBehaviorChild } from "../../../packages/behavior-runtime/src/child.ts";
 import { BehaviorHttpError } from "../../../packages/behavior-api/src/error.ts";
 import type {
   BackendDescription,
@@ -625,3 +631,7 @@ export const backend: BackendModule = {
     return webclipBackend(context.contract);
   }
 };
+
+if (process.env.OAL_BEHAVIOR_CHILD === "1") {
+  void runBehaviorChild(backend);
+}
