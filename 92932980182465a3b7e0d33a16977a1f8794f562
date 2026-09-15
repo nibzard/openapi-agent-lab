@@ -1,0 +1,28 @@
+# Context
+
+## Background
+An external review of 0b22357 reported both defects as source-level
+findings and said it had not reproduced them end to end. A ten-agent
+verification pass confirmed each claim against HEAD; four adversarial
+refuters could not overturn either one. Two regression tests were
+added first and failed before the fix.
+
+## Why This Way
+Evaluating siblings instead of rejecting $ref-with-siblings follows
+the class contract: the validator declares a Draft 2020-12 subset
+(validator.ts header, SPEC section 23.5), and 2020-12 made $ref an
+applicator that applies beside siblings. Rejecting the combination
+would refuse valid OpenAPI 3.1 documents.
+
+## Gotchas
+- The OpenAPI compiler (packages/openapi/src/normalize.ts) inlines
+  non-cyclic refs and merges siblings, which masked the $ref defect
+  for compiled documents. Cyclic refs keep the $ref form and were
+  exposed, as was every direct SchemaValidator use.
+- codePointLength counts surrogate pairs in a loop instead of
+  Array.from or a /./gu match so a large body string validates
+  without an allocation proportional to its length.
+
+## Related
+- T072 tracks the independent conformance corpus that should keep
+  the next spec violation from landing silently.
