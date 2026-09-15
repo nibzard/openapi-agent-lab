@@ -2212,6 +2212,24 @@ supported format list: date, date-time, time, duration, email, hostname, IPv4,
 IPv6, URI, URI-reference, UUID, and common OpenAPI numeric/string formats.
 Unknown formats are explicit annotations, not silent assertion failures.
 
+An independent conformance corpus backs these claims. The official JSON Schema
+Test Suite, draft 2020-12, is vendored under
+`tests/conformance/json-schema-suite` at the revision recorded in its
+`manifest.json`, and `tests/json-schema-conformance.test.ts` enforces every
+case. A case may be excluded only through a manifest entry that names the
+reason, and the runner fails when an exclusion stops failing, so exclusions
+cannot outlive the defect they document. Known exclusions:
+
+- `$anchor`, `$dynamicRef`, `$dynamicAnchor`, `dependentSchemas`, and
+  `$vocabulary` are not implemented; references resolve as local JSON Pointers
+  only, without `$id` or base-URI scope tracking.
+- `unevaluatedItems` and `unevaluatedProperties` consider same-object
+  evaluators plus adjacent `contains` matches. Annotation collection across
+  in-place applicators (`$ref`, `allOf`, `anyOf`, `oneOf`, `not`,
+  `if`/`then`/`else`) is not implemented, so those cases are excluded.
+- The suite's optional directory is not vendored: format assertion is opt-in by
+  design, and the optional files target implementation-specific behavior.
+
 #### Deterministic schema generation
 
 Generation supports:

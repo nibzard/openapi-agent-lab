@@ -8,3 +8,4 @@ docs
 packs
 tests/fixtures
 .oal
+tests/conformance

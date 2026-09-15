@@ -1,0 +1,405 @@
+{
+  "source": "https://github.com/json-schema-org/JSON-Schema-Test-Suite",
+  "revision": "1d82f70b87bba8c6f5d47b6b7e256401215d635b",
+  "retrieved_at": "2026-09-15",
+  "license": "MIT",
+  "draft": "draft2020-12",
+  "notes": "Vendored from the main test directory only; the optional directory is not vendored because format assertion is opt-in by design and the optional files test implementation-specific behavior.",
+  "files": {
+    "additionalProperties.json": {
+      "enabled": true
+    },
+    "allOf.json": {
+      "enabled": true
+    },
+    "anchor.json": {
+      "enabled": false,
+      "reason": "$anchor resolution is not implemented."
+    },
+    "anyOf.json": {
+      "enabled": true
+    },
+    "boolean_schema.json": {
+      "enabled": true
+    },
+    "const.json": {
+      "enabled": true
+    },
+    "contains.json": {
+      "enabled": true
+    },
+    "content.json": {
+      "enabled": true
+    },
+    "default.json": {
+      "enabled": true
+    },
+    "defs.json": {
+      "enabled": true
+    },
+    "dependentRequired.json": {
+      "enabled": true
+    },
+    "dependentSchemas.json": {
+      "enabled": false,
+      "reason": "dependentSchemas is not implemented."
+    },
+    "dynamicRef.json": {
+      "enabled": false,
+      "reason": "$dynamicRef and $dynamicAnchor are not implemented."
+    },
+    "enum.json": {
+      "enabled": true
+    },
+    "exclusiveMaximum.json": {
+      "enabled": true
+    },
+    "exclusiveMinimum.json": {
+      "enabled": true
+    },
+    "format.json": {
+      "enabled": true
+    },
+    "if-then-else.json": {
+      "enabled": true
+    },
+    "infinite-loop-detection.json": {
+      "enabled": true
+    },
+    "items.json": {
+      "enabled": true
+    },
+    "maxContains.json": {
+      "enabled": true
+    },
+    "maxItems.json": {
+      "enabled": true
+    },
+    "maxLength.json": {
+      "enabled": true
+    },
+    "maxProperties.json": {
+      "enabled": true
+    },
+    "maximum.json": {
+      "enabled": true
+    },
+    "minContains.json": {
+      "enabled": true
+    },
+    "minItems.json": {
+      "enabled": true
+    },
+    "minLength.json": {
+      "enabled": true
+    },
+    "minProperties.json": {
+      "enabled": true
+    },
+    "minimum.json": {
+      "enabled": true
+    },
+    "multipleOf.json": {
+      "enabled": true
+    },
+    "not.json": {
+      "enabled": true
+    },
+    "oneOf.json": {
+      "enabled": true
+    },
+    "pattern.json": {
+      "enabled": true
+    },
+    "patternProperties.json": {
+      "enabled": true
+    },
+    "prefixItems.json": {
+      "enabled": true
+    },
+    "properties.json": {
+      "enabled": true
+    },
+    "propertyNames.json": {
+      "enabled": true
+    },
+    "ref.json": {
+      "enabled": true
+    },
+    "refRemote.json": {
+      "enabled": false,
+      "reason": "External documents have no base-URI scope tracking, so remote references cannot resolve."
+    },
+    "required.json": {
+      "enabled": true
+    },
+    "type.json": {
+      "enabled": true
+    },
+    "unevaluatedItems.json": {
+      "enabled": true
+    },
+    "unevaluatedProperties.json": {
+      "enabled": true
+    },
+    "uniqueItems.json": {
+      "enabled": true
+    },
+    "vocabulary.json": {
+      "enabled": false,
+      "reason": "$vocabulary and custom metaschema selection are not implemented."
+    }
+  },
+  "group_skips": [
+    {
+      "file": "defs.json",
+      "group": "validate definition against metaschema",
+      "reason": "The 2020-12 metaschema uses $dynamicRef, $anchor, and $vocabulary, which are not implemented."
+    },
+    {
+      "file": "not.json",
+      "group": "collect annotations inside a 'not', even if collection is disabled",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "ref.json",
+      "group": "remote ref, containing refs itself",
+      "reason": "References have no $id, base-URI, or anchor tracking; only local JSON Pointer references resolve."
+    },
+    {
+      "file": "ref.json",
+      "group": "Recursive references between schemas",
+      "reason": "References have no $id, base-URI, or anchor tracking; only local JSON Pointer references resolve."
+    },
+    {
+      "file": "ref.json",
+      "group": "refs with relative uris and defs",
+      "reason": "References have no $id, base-URI, or anchor tracking; only local JSON Pointer references resolve."
+    },
+    {
+      "file": "ref.json",
+      "group": "relative refs with absolute uris and defs",
+      "reason": "References have no $id, base-URI, or anchor tracking; only local JSON Pointer references resolve."
+    },
+    {
+      "file": "ref.json",
+      "group": "$id must be resolved against nearest parent, not just immediate parent",
+      "reason": "References have no $id, base-URI, or anchor tracking; only local JSON Pointer references resolve."
+    },
+    {
+      "file": "ref.json",
+      "group": "order of evaluation: $id and $ref",
+      "reason": "References have no $id, base-URI, or anchor tracking; only local JSON Pointer references resolve."
+    },
+    {
+      "file": "ref.json",
+      "group": "order of evaluation: $id and $anchor and $ref",
+      "reason": "References have no $id, base-URI, or anchor tracking; only local JSON Pointer references resolve."
+    },
+    {
+      "file": "ref.json",
+      "group": "order of evaluation: $id and $ref on nested schema",
+      "reason": "References have no $id, base-URI, or anchor tracking; only local JSON Pointer references resolve."
+    },
+    {
+      "file": "ref.json",
+      "group": "simple URN base URI with $ref via the URN",
+      "reason": "References have no $id, base-URI, or anchor tracking; only local JSON Pointer references resolve."
+    },
+    {
+      "file": "ref.json",
+      "group": "URN base URI with URN and JSON pointer ref",
+      "reason": "References have no $id, base-URI, or anchor tracking; only local JSON Pointer references resolve."
+    },
+    {
+      "file": "ref.json",
+      "group": "URN base URI with URN and anchor ref",
+      "reason": "References have no $id, base-URI, or anchor tracking; only local JSON Pointer references resolve."
+    },
+    {
+      "file": "ref.json",
+      "group": "URN ref with nested pointer ref",
+      "reason": "References have no $id, base-URI, or anchor tracking; only local JSON Pointer references resolve."
+    },
+    {
+      "file": "ref.json",
+      "group": "ref to if",
+      "reason": "References have no $id, base-URI, or anchor tracking; only local JSON Pointer references resolve."
+    },
+    {
+      "file": "ref.json",
+      "group": "ref to then",
+      "reason": "References have no $id, base-URI, or anchor tracking; only local JSON Pointer references resolve."
+    },
+    {
+      "file": "ref.json",
+      "group": "ref to else",
+      "reason": "References have no $id, base-URI, or anchor tracking; only local JSON Pointer references resolve."
+    },
+    {
+      "file": "ref.json",
+      "group": "ref with absolute-path-reference",
+      "reason": "References have no $id, base-URI, or anchor tracking; only local JSON Pointer references resolve."
+    },
+    {
+      "file": "unevaluatedItems.json",
+      "group": "unevaluatedItems with nested tuple",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedItems.json",
+      "group": "unevaluatedItems with nested items",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedItems.json",
+      "group": "unevaluatedItems with nested prefixItems and items",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedItems.json",
+      "group": "unevaluatedItems with nested unevaluatedItems",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedItems.json",
+      "group": "unevaluatedItems with anyOf",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedItems.json",
+      "group": "unevaluatedItems with oneOf",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedItems.json",
+      "group": "unevaluatedItems with if/then/else",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedItems.json",
+      "group": "unevaluatedItems with $ref",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedItems.json",
+      "group": "unevaluatedItems before $ref",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedItems.json",
+      "group": "unevaluatedItems with $dynamicRef",
+      "reason": "$dynamicRef and $dynamicAnchor are not implemented."
+    },
+    {
+      "file": "unevaluatedItems.json",
+      "group": "unevaluatedItems depends on multiple nested contains",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedItems.json",
+      "group": "unevaluatedItems and contains interact to control item dependency relationship",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedItems.json",
+      "group": "unevaluatedItems can see annotations from if without then and else",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedProperties.json",
+      "group": "unevaluatedProperties with nested properties",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedProperties.json",
+      "group": "unevaluatedProperties with nested patternProperties",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedProperties.json",
+      "group": "unevaluatedProperties with nested additionalProperties",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedProperties.json",
+      "group": "unevaluatedProperties with nested unevaluatedProperties",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedProperties.json",
+      "group": "unevaluatedProperties with anyOf",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedProperties.json",
+      "group": "unevaluatedProperties with oneOf",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedProperties.json",
+      "group": "unevaluatedProperties with if/then/else",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedProperties.json",
+      "group": "unevaluatedProperties with if/then/else, then not defined",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedProperties.json",
+      "group": "unevaluatedProperties with if/then/else, else not defined",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedProperties.json",
+      "group": "unevaluatedProperties with dependentSchemas",
+      "reason": "dependentSchemas is not implemented."
+    },
+    {
+      "file": "unevaluatedProperties.json",
+      "group": "unevaluatedProperties with $ref",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedProperties.json",
+      "group": "unevaluatedProperties before $ref",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedProperties.json",
+      "group": "unevaluatedProperties with $dynamicRef",
+      "reason": "$dynamicRef and $dynamicAnchor are not implemented."
+    },
+    {
+      "file": "unevaluatedProperties.json",
+      "group": "nested unevaluatedProperties, outer false, inner true, properties outside",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedProperties.json",
+      "group": "nested unevaluatedProperties, outer false, inner true, properties inside",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedProperties.json",
+      "group": "unevaluatedProperties + ref inside allOf / oneOf",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedProperties.json",
+      "group": "dynamic evalation inside nested refs",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedProperties.json",
+      "group": "unevaluatedProperties can see annotations from if without then and else",
+      "reason": "Annotation collection across in-place applicators ($ref, allOf, anyOf, oneOf, not, if/then/else) is not implemented; unevaluated* sees only same-object evaluators."
+    },
+    {
+      "file": "unevaluatedProperties.json",
+      "group": "dependentSchemas with unevaluatedProperties",
+      "reason": "dependentSchemas is not implemented."
+    }
+  ]
+}
