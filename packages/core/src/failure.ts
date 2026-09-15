@@ -194,6 +194,13 @@ const CAPABILITY: FailureClass[] = [
     "strict_blocker_or_limitation",
     "warning",
     "compile"
+  ),
+  entry(
+    "OAL-PATTERN-HOSTILE",
+    "capability",
+    "strict_blocker_or_limitation",
+    "warning",
+    "compile"
   )
 ];
 
@@ -419,6 +426,20 @@ const MOCK: FailureClass[] = [
   ),
   entry(
     "OAL-SCHEMA-WORKER-FAILED",
+    "mock",
+    "infrastructure_failed",
+    "error",
+    "serve"
+  ),
+  entry(
+    "OAL-SCHEMA-WORKER-QUEUE-FULL",
+    "mock",
+    "infrastructure_failed",
+    "error",
+    "serve"
+  ),
+  entry(
+    "OAL-SCHEMA-WORKER-MESSAGE-TOO-LARGE",
     "mock",
     "infrastructure_failed",
     "error",

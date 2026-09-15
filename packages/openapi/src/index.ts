@@ -110,3 +110,9 @@ export {
   type CompileOptions,
   type CompileResult
 } from "./compile.ts";
+
+export {
+  hostilePatternDiagnostics,
+  HOSTILE_PATTERN_CODE,
+  type HostilePatternOptions
+} from "./patterns.ts";

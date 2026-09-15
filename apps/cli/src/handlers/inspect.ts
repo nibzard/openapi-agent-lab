@@ -10,6 +10,7 @@ import {
   stableJsonStringify,
   type ExitCode
 } from "@oal/core";
+import { hostilePatternDiagnostics } from "@oal/openapi";
 
 import type { CommandArgs } from "../commands.ts";
 import type { Io } from "../io.ts";
@@ -53,6 +54,12 @@ export async function inspectCommand(
     resolved === null ? args.context.cwd : "/",
     args.context.maxSourceBytes
   );
+  // Every declared pattern answers a short adversarial probe inside
+  // the worker boundary. Strict mode makes a hostile pattern an error;
+  // the default records a warning.
+  const patternFindings = await hostilePatternDiagnostics(compiled.contract, {
+    strict: args.flags.has("strict")
+  });
   const report = isJsonObject(compiled.capabilityReport)
     ? compiled.capabilityReport
     : {};
@@ -83,6 +90,9 @@ export async function inspectCommand(
     compiled.pack === null
       ? pathOf(resolved?.entrypoint ?? source, args.context.cwd)
       : path.resolve(compiled.pack.root, compiled.contract.source.entrypoint);
+  const reportedDiagnostics = Array.isArray(report["diagnostics"])
+    ? report["diagnostics"]
+    : [];
   const artifact = {
     schema_version: 1,
     kind: "InspectReport",
@@ -103,7 +113,7 @@ export async function inspectCommand(
     operations: capabilityOperations,
     features: report["features"] ?? [],
     recommendations: report["recommendations"] ?? {},
-    diagnostics: report["diagnostics"] ?? [],
+    diagnostics: [...reportedDiagnostics, ...patternFindings],
     pack_eval_compatibility:
       compiled.pack === null
         ? null
@@ -119,7 +129,8 @@ export async function inspectCommand(
   };
   const strictFailure =
     args.flags.has("strict") &&
-    operations.some((operation) => operation.support.level !== "supported");
+    (operations.some((operation) => operation.support.level !== "supported") ||
+      patternFindings.some((finding) => finding.severity === "error"));
   if (args.context.format === "json") {
     io.stdout(stableJsonStringify(artifact));
   } else {
