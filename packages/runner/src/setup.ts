@@ -77,13 +77,18 @@ export const SetupCode = {
  * the terminal stage facts, so the caller only derives the disposition.
  */
 export class TrialSetupError extends Error {
+  readonly code: string;
+  readonly runId: string;
+
   constructor(
-    readonly code: string,
+    code: string,
     message: string,
-    readonly runId: string,
+    runId: string,
     options?: { cause?: unknown }
   ) {
     super(message, options);
+    this.code = code;
+    this.runId = runId;
     this.name = "TrialSetupError";
   }
 }

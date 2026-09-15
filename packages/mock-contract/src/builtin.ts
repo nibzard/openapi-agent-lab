@@ -20,7 +20,11 @@ export class BuiltinMockAdapter implements MockAdapter {
   readonly id = BUILTIN_MOCK_ADAPTER_ID;
   readonly version = "0.1.0";
 
-  constructor(private readonly fixtures: ContractFixture[] = []) {}
+  private readonly fixtures: ContractFixture[];
+
+  constructor(fixtures: ContractFixture[] = []) {
+    this.fixtures = fixtures;
+  }
 
   capabilities(): MockAdapterCapabilities {
     return {

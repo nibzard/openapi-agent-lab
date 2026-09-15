@@ -124,12 +124,11 @@ const MAX_RECORDED_EXCHANGE_FAILURES = 16;
  */
 export class ExposureProfileError extends Error {
   readonly code = "OAL-DOCS-PROFILE-INVALID";
+  readonly diagnostics: readonly Diagnostic[];
 
-  constructor(
-    readonly diagnostics: readonly Diagnostic[],
-    message: string
-  ) {
+  constructor(diagnostics: readonly Diagnostic[], message: string) {
     super(message);
+    this.diagnostics = diagnostics;
     this.name = "ExposureProfileError";
   }
 }

@@ -24,7 +24,11 @@ export class MemoryBlobStore implements BlobStore {
   private readonly blobs = new Map<string, Uint8Array>();
   private storedBytes = 0;
 
-  constructor(private readonly maxBytes = 16 * 1024 * 1024) {}
+  private readonly maxBytes: number;
+
+  constructor(maxBytes = 16 * 1024 * 1024) {
+    this.maxBytes = maxBytes;
+  }
 
   put(bytes: Uint8Array): { digest: string; blob_ref: string | null } {
     const digest = sha256HexBytes(bytes);

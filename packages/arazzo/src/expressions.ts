@@ -520,10 +520,13 @@ function requireName(name: string, text: string): string {
 class Evaluator {
   private steps = 0;
 
-  constructor(
-    private readonly context: RuntimeContext,
-    private readonly limits: ArazzoExpressionLimits
-  ) {}
+  private readonly context: RuntimeContext;
+  private readonly limits: ArazzoExpressionLimits;
+
+  constructor(context: RuntimeContext, limits: ArazzoExpressionLimits) {
+    this.context = context;
+    this.limits = limits;
+  }
 
   private tick(): void {
     this.steps += 1;
@@ -645,10 +648,13 @@ class CriterionParser {
   private pos = 0;
   private depth = 0;
 
-  constructor(
-    private readonly text: string,
-    private readonly limits: ArazzoExpressionLimits
-  ) {}
+  private readonly text: string;
+  private readonly limits: ArazzoExpressionLimits;
+
+  constructor(text: string, limits: ArazzoExpressionLimits) {
+    this.text = text;
+    this.limits = limits;
+  }
 
   offset(): number {
     return this.pos;

@@ -196,10 +196,13 @@ class StageQueue {
   private chain: Promise<void> = Promise.resolve();
   private failure: unknown = null;
 
-  constructor(
-    private readonly lifecycle: TrialLifecycle,
-    private readonly now: Clock
-  ) {}
+  private readonly lifecycle: TrialLifecycle;
+  private readonly now: Clock;
+
+  constructor(lifecycle: TrialLifecycle, now: Clock) {
+    this.lifecycle = lifecycle;
+    this.now = now;
+  }
 
   /** Whether one stage was already offered or recorded. */
   holds(stage: LifecycleStage): boolean {
@@ -247,7 +250,11 @@ class SessionWriter {
   private chain: Promise<void> = Promise.resolve();
   private failure: unknown = null;
 
-  constructor(private readonly sink: JsonlSink) {}
+  private readonly sink: JsonlSink;
+
+  constructor(sink: JsonlSink) {
+    this.sink = sink;
+  }
 
   append(event: AgentSessionEvent): void {
     this.chain = this.chain.then(async () => {

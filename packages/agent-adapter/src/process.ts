@@ -92,10 +92,13 @@ export class BoundedCapture {
   private held = 0;
   private seen = 0;
 
-  constructor(private readonly maxBytes: number) {
+  private readonly maxBytes: number;
+
+  constructor(maxBytes: number) {
     if (!Number.isInteger(maxBytes) || maxBytes <= 0) {
       throw new Error("maxBytes must be a positive integer.");
     }
+    this.maxBytes = maxBytes;
   }
 
   /** Append one chunk and drop the oldest bytes above the cap. */

@@ -341,10 +341,13 @@ class AssignmentLedger {
   private chain: Promise<void> = Promise.resolve();
   private failure: unknown = null;
 
-  constructor(
-    private readonly sink: JsonlSink,
-    private readonly batchId: string
-  ) {}
+  private readonly sink: JsonlSink;
+  private readonly batchId: string;
+
+  constructor(sink: JsonlSink, batchId: string) {
+    this.sink = sink;
+    this.batchId = batchId;
+  }
 
   append(event: AssignmentEvent, now: Clock): void {
     this.sequence += 1;

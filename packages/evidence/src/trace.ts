@@ -185,7 +185,11 @@ export interface TraceValidationOutcome {
 
 /** Append-only line sink. Each line flushes (section 25.4). */
 export class JsonlSink {
-  private constructor(private readonly path: string) {}
+  private readonly path: string;
+
+  private constructor(path: string) {
+    this.path = path;
+  }
 
   static async open(path: string): Promise<JsonlSink> {
     await mkdir(dirname(path), { recursive: true });
@@ -215,10 +219,13 @@ export class EventStream {
   private writeUpTo = 1;
   private tail: Promise<void> = Promise.resolve();
 
-  private constructor(
-    private readonly sink: JsonlSink,
-    private readonly idPrefix: string
-  ) {}
+  private readonly sink: JsonlSink;
+  private readonly idPrefix: string;
+
+  private constructor(sink: JsonlSink, idPrefix: string) {
+    this.sink = sink;
+    this.idPrefix = idPrefix;
+  }
 
   static open(
     sink: JsonlSink,

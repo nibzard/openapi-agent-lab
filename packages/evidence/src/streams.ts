@@ -71,7 +71,11 @@ export interface SemanticEvent {
 export class SemanticEventStream {
   private next = 1;
 
-  private constructor(private readonly sink: JsonlSink) {}
+  private readonly sink: JsonlSink;
+
+  private constructor(sink: JsonlSink) {
+    this.sink = sink;
+  }
 
   static open(sink: JsonlSink): SemanticEventStream {
     return new SemanticEventStream(sink);

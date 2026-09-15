@@ -181,12 +181,22 @@ export function discoverExternalRefs(baseUri: string, text: string): string[] {
 export class ReferenceResolver {
   private readonly targetKeys = new Set<string>();
 
+  private readonly documents: ReadonlyMap<string, Json>;
+  private readonly policy: RefPolicy;
+  private readonly limits: CompilerLimits;
+  private readonly fail: (diagnostic: Diagnostic) => never;
+
   constructor(
-    private readonly documents: ReadonlyMap<string, Json>,
-    private readonly policy: RefPolicy,
-    private readonly limits: CompilerLimits,
-    private readonly fail: (diagnostic: Diagnostic) => never
-  ) {}
+    documents: ReadonlyMap<string, Json>,
+    policy: RefPolicy,
+    limits: CompilerLimits,
+    fail: (diagnostic: Diagnostic) => never
+  ) {
+    this.documents = documents;
+    this.policy = policy;
+    this.limits = limits;
+    this.fail = fail;
+  }
 
   get uniqueTargetCount(): number {
     return this.targetKeys.size;

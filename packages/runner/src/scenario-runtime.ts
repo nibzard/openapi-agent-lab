@@ -69,12 +69,11 @@ export const ScenarioCode = {
 
 /** A scenario runtime defect from before or during the run. */
 export class ScenarioRuntimeError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    options?: { cause?: unknown }
-  ) {
+  readonly code: string;
+
+  constructor(code: string, message: string, options?: { cause?: unknown }) {
     super(message, options);
+    this.code = code;
     this.name = "ScenarioRuntimeError";
   }
 }
@@ -285,12 +284,18 @@ class StoreGatewayState implements GatewayState {
   private rollbackCount = 0;
   private readonly applied: string[] = [];
 
+  private readonly store: StateStore;
+  private readonly commitHook: (
+    events: readonly CommittedSemanticEvent[]
+  ) => void;
+
   constructor(
-    private readonly store: StateStore,
-    private readonly commitHook: (
-      events: readonly CommittedSemanticEvent[]
-    ) => void
-  ) {}
+    store: StateStore,
+    commitHook: (events: readonly CommittedSemanticEvent[]) => void
+  ) {
+    this.store = store;
+    this.commitHook = commitHook;
+  }
 
   /** The open request allocation, for the backend handle. */
   get request(): { sequence: number; requestId: string } | null {

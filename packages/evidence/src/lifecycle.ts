@@ -375,10 +375,13 @@ interface ResolvedScope {
 export class LifecycleStream {
   private nextSequence = 1;
 
-  private constructor(
-    private readonly sink: JsonlSink,
-    private readonly scope: ResolvedScope
-  ) {}
+  private readonly sink: JsonlSink;
+  private readonly scope: ResolvedScope;
+
+  private constructor(sink: JsonlSink, scope: ResolvedScope) {
+    this.sink = sink;
+    this.scope = scope;
+  }
 
   static open(sink: JsonlSink, scope?: LifecycleScope): LifecycleStream {
     return new LifecycleStream(sink, {

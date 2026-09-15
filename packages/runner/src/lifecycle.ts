@@ -103,7 +103,11 @@ export class TrialLifecycle {
   private readonly recorded: StageFact[] = [];
   private lastOrderIndex = -1;
 
-  private constructor(private readonly stream: LifecycleStream) {}
+  private readonly stream: LifecycleStream;
+
+  private constructor(stream: LifecycleStream) {
+    this.stream = stream;
+  }
 
   /** Open the ledger on an exclusively created trial directory. */
   static open(

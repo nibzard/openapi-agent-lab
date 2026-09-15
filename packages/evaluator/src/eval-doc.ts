@@ -404,7 +404,10 @@ class EvalLoader {
     | ((reference: string) => Json | undefined)
     | undefined;
 
-  constructor(private readonly options: EvalLoadOptions) {
+  private readonly options: EvalLoadOptions;
+
+  constructor(options: EvalLoadOptions) {
+    this.options = options;
     this.documentUri = options.documentUri ?? null;
     this.resolveText = options.resolveText;
     this.resolveDocument = options.resolveDocument;

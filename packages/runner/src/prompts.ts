@@ -298,10 +298,13 @@ class PlanBuilder {
   private readonly declared: FileDeclaration[] = [];
   private readonly byTarget = new Map<string, FileDeclaration>();
 
-  constructor(
-    private readonly pack: LoadedPack,
-    private readonly context: TemplateContext
-  ) {}
+  private readonly pack: LoadedPack;
+  private readonly context: TemplateContext;
+
+  constructor(pack: LoadedPack, context: TemplateContext) {
+    this.pack = pack;
+    this.context = context;
+  }
 
   add(
     source: string | null,

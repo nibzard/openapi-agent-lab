@@ -128,7 +128,11 @@ function sensitivityFor(relativePath: string): ManifestEntry["sensitivity"] {
  * must stay inside it.
  */
 export class ArtifactStore {
-  constructor(private readonly root: string) {}
+  private readonly root: string;
+
+  constructor(root: string) {
+    this.root = root;
+  }
 
   batchLayout(batchId: string): BatchLayout {
     return {

@@ -218,7 +218,10 @@ class RubricLoader {
     | ((reference: string) => Json | undefined)
     | undefined;
 
-  constructor(private readonly options: RubricLoadOptions) {
+  private readonly options: RubricLoadOptions;
+
+  constructor(options: RubricLoadOptions) {
+    this.options = options;
     this.limits = options.limits ?? DEFAULT_EXPRESSION_LIMITS;
     this.documentUri = options.documentUri ?? null;
     this.resolveSchema = options.resolveSchema;
