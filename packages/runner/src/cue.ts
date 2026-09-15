@@ -14,6 +14,7 @@ import {
   invalidInput,
   isJsonObject,
   isSha256Hex,
+  scanForbiddenTextInWorker,
   sha256Hex,
   type Diagnostic,
   type Json,
@@ -564,8 +565,13 @@ export interface CueAuditInput {
  * occurrences of one matched text collapse into one finding. The audit
  * fails when any finding is not an allowed exception or any pairwise
  * difference is not allowed.
+ *
+ * The policy patterns are pack-supplied, so every scan runs inside the
+ * bounded schema worker boundary: a hostile pattern cannot block the
+ * study process. The literal rules keep their substring semantics and
+ * travel through the same boundary.
  */
-export function buildCueAudit(input: CueAuditInput): CueAudit {
+export async function buildCueAudit(input: CueAuditInput): Promise<CueAudit> {
   if (!SAFE_ID.test(input.cellId)) {
     throw invalidInput(
       CueCode.CellIdUnsafe,
@@ -612,7 +618,7 @@ export function buildCueAudit(input: CueAuditInput): CueAudit {
       })
     );
     for (const text of material) {
-      scanText(text, entry.id, input, findings);
+      await scanText(text, entry.id, input, findings);
     }
   }
 
@@ -661,20 +667,27 @@ export function buildCueAudit(input: CueAuditInput): CueAudit {
   });
 }
 
-function scanText(
+/**
+ * Scan one text inside the bounded worker boundary. The boundary returns
+ * the distinct matches per rule in rule order, so the findings record
+ * exactly what the in-process scans recorded before.
+ */
+async function scanText(
   text: string,
   entryId: string,
   input: CueAuditInput,
   findings: CueAuditFinding[]
-): void {
-  for (const rule of input.policy.forbidden_literals) {
-    const matched = rule.case_insensitive
-      ? distinctRegexpMatches(
-          text,
-          new RegExp(escapeRegExp(rule.literal), "gi")
-        )
-      : distinctPlainMatches(text, rule.literal);
-    for (const match of matched) {
+): Promise<void> {
+  const scanned = await scanForbiddenTextInWorker(
+    input.policy.forbidden_literals.map((rule) => ({
+      literal: rule.literal,
+      caseInsensitive: rule.case_insensitive
+    })),
+    input.policy.forbidden_patterns,
+    text
+  );
+  input.policy.forbidden_literals.forEach((rule, index) => {
+    for (const match of scanned.literals[index] ?? []) {
       findings.push({
         kind: "literal",
         match,
@@ -682,9 +695,9 @@ function scanText(
         allowed_exception: exceptionApplies(input, entryId, rule.literal)
       });
     }
-  }
-  for (const pattern of input.policy.forbidden_patterns) {
-    for (const match of distinctRegexpMatches(text, new RegExp(pattern, "g"))) {
+  });
+  input.policy.forbidden_patterns.forEach((_pattern, index) => {
+    for (const match of scanned.patterns[index] ?? []) {
       findings.push({
         kind: "pattern",
         match,
@@ -692,7 +705,7 @@ function scanText(
         allowed_exception: false
       });
     }
-  }
+  });
 }
 
 /**
@@ -722,34 +735,6 @@ function exceptionApplies(
     }
   }
   return false;
-}
-
-function distinctPlainMatches(text: string, literal: string): string[] {
-  const matches: string[] = [];
-  let index = text.indexOf(literal);
-  while (index !== -1) {
-    const matched = text.slice(index, index + literal.length);
-    if (!matches.includes(matched)) {
-      matches.push(matched);
-    }
-    index = text.indexOf(literal, index + literal.length);
-  }
-  return matches;
-}
-
-function distinctRegexpMatches(text: string, regexp: RegExp): string[] {
-  const matches: string[] = [];
-  for (const match of text.matchAll(regexp)) {
-    const matched = match[0];
-    if (matched.length > 0 && !matches.includes(matched)) {
-      matches.push(matched);
-    }
-  }
-  return matches;
-}
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**

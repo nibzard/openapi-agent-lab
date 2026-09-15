@@ -221,7 +221,7 @@ export async function regradeRun(input: RegradeInput): Promise<RegradeResult> {
   }
 
   const evaluation = toEvaluation(
-    evaluateRubric({
+    await evaluateRubric({
       rubric: input.rubric,
       runId: input.evidence.runId,
       run: input.evidence.run,

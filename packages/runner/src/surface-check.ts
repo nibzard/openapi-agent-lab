@@ -313,14 +313,17 @@ function differenceAllowed(
  * that one cell shows and the other does not, and private artifacts on the
  * surface emit OAL-CUE-LEAK. Other unallowed differences emit OAL-CELL-DRIFT.
  * Required review evidence that is missing or not approved fails too.
+ *
+ * The scans run inside the bounded schema worker boundary, because the
+ * policy patterns are pack-supplied.
  */
-export function checkParticipantSurfaces(input: {
+export async function checkParticipantSurfaces(input: {
   readonly policy: ParticipantSurfacePolicy;
   readonly cells: readonly CellSurface[];
   readonly reviews?: readonly ReviewEvidence[] | undefined;
   readonly blindingMode?: ProtocolBlinding["mode"] | undefined;
   readonly isolation?: "advisory" | "os" | undefined;
-}): SurfaceCheckOutcome {
+}): Promise<SurfaceCheckOutcome> {
   const outcomes = compareCellSurfaces(input.policy, input.cells);
   const pairwise: CueAuditPairwise[] = outcomes.map((outcome) => ({
     cell_a: outcome.cellA,
@@ -335,7 +338,7 @@ export function checkParticipantSurfaces(input: {
   const diagnostics: Diagnostic[] = [];
   const audits: CueAudit[] = [];
   for (const cell of input.cells) {
-    const audit = buildCueAudit({
+    const audit = await buildCueAudit({
       cellId: cell.cellId,
       policy: input.policy,
       manifest: cell.manifest,

@@ -88,7 +88,7 @@ async function firstRubricCheckOf(
       `Rubric ${rubricPath} of pack ${identity.pack.root} is not readable.`
     );
   }
-  const rubric = loadRubric(parsed.value, { documentUri: rubricPath });
+  const rubric = await loadRubric(parsed.value, { documentUri: rubricPath });
   const first = rubric.rubric?.checks[0]?.id;
   if (rubric.rubric === null || first === undefined) {
     throw invalidInput(

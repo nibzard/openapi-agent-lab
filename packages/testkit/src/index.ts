@@ -152,11 +152,11 @@ export function readPackJson(
  * rubric document comes pre-parsed from the pack loader, which parses
  * `rubric` references as documents.
  */
-export function loadPackRubric(
+export async function loadPackRubric(
   pack: LoadedPack,
   rubricPath: string,
   root = findRepoRoot()
-): RubricLoadResult {
+): Promise<RubricLoadResult> {
   const reference = pack.references.find(
     (candidate) => candidate.role === "rubric" && candidate.path === rubricPath
   );
@@ -168,7 +168,7 @@ export function loadPackRubric(
   );
   const resolveSchema = (referencePath: string): Json | undefined =>
     readPackJson(pack, referencePath);
-  return loadRubric(reference.document, {
+  return await loadRubric(reference.document, {
     ...(schema === undefined ? {} : { schema }),
     resolveSchema,
     documentUri: `file://${path.join(pack.root, rubricPath)}`

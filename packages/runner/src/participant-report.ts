@@ -14,14 +14,20 @@ import {
   invalidInput,
   isWithin,
   parseJsonStrict,
-  SchemaValidator,
+  SchemaWorkerError,
   sha256Hex,
+  validateSchemaInstance,
   type Json,
-  type JsonObject
+  type JsonObject,
+  type SchemaViolation
 } from "@oal/core";
 import { Redactor } from "@oal/evidence";
 
-/** Stable codes of the report module. Each one is task evidence. */
+/**
+ * Stable codes of the report module. Each one is task evidence, except
+ * the two schema worker codes: those record an infrastructure failure
+ * of the bounded execution boundary, never a participant fault.
+ */
 export const ReportCode = {
   SourceUnknown: "OAL-RUN-REPORT-SOURCE-UNKNOWN",
   Missing: "OAL-RUN-REPORT-MISSING",
@@ -33,6 +39,8 @@ export const ReportCode = {
   JsonInvalid: "OAL-RUN-REPORT-JSON-INVALID",
   DuplicateKey: "OAL-RUN-REPORT-DUPLICATE-KEY",
   SchemaInvalid: "OAL-RUN-REPORT-SCHEMA-INVALID",
+  SchemaWorkerTimeout: "OAL-SCHEMA-WORKER-TIMEOUT",
+  SchemaWorkerFailed: "OAL-SCHEMA-WORKER-FAILED",
   WriteFailed: "OAL-RUN-REPORT-WRITE-FAILED"
 } as const;
 
@@ -262,7 +270,27 @@ async function parseAndPersist(
   }
 
   if (options.resultSchema !== null && options.resultSchema !== undefined) {
-    const violations = new SchemaValidator(options.resultSchema).errors(value);
+    // The result schema is pack-supplied pattern input, so the check
+    // runs inside the bounded worker boundary. A boundary failure is an
+    // infrastructure outcome recorded with the stable worker code; it is
+    // never a schema-invalid judgment against the participant.
+    let violations: SchemaViolation[];
+    try {
+      violations = await validateSchemaInstance(options.resultSchema, value);
+    } catch (cause: unknown) {
+      if (cause instanceof SchemaWorkerError) {
+        return {
+          status: "problem",
+          problem: {
+            code: cause.code,
+            subject: source.source,
+            message: cause.message
+          },
+          text: boundedText(rawText, limits.maxTextBytes, redactor)
+        };
+      }
+      throw cause;
+    }
     if (violations.length > 0) {
       return {
         status: "problem",

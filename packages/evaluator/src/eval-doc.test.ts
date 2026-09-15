@@ -191,7 +191,7 @@ describe("loadEval", () => {
   });
 
   it("checks only the document shape when no resolver is supplied", async () => {
-    const result = loadEval(SAMPLE_EVAL, {
+    const result = await loadEval(SAMPLE_EVAL, {
       schema: await schemaFile("eval.v1.schema.json")
     });
     expect(result.eval).not.toBeNull();
@@ -558,7 +558,7 @@ describe("loadEvalCases and loadEvalCase", () => {
       "",
       JSON.stringify({ id: "second", input: { topic: "errors" } })
     ].join("\n");
-    const result = loadEvalCases(`${text}\n`, {
+    const result = await loadEvalCases(`${text}\n`, {
       ...(await caseOptions()),
       idPointer: "/id"
     });
@@ -570,7 +570,7 @@ describe("loadEvalCases and loadEvalCase", () => {
   });
 
   it("reports the line of a broken case", async () => {
-    const result = loadEvalCases("{bad}\n", await caseOptions());
+    const result = await loadEvalCases("{bad}\n", await caseOptions());
     expect(result.cases).toEqual([]);
     expect(result.diagnostics[0]?.message).toContain("line 1");
     expect(result.diagnostics[0]?.code).toBe("OAL-EVAL-CASE-INVALID");
@@ -578,13 +578,13 @@ describe("loadEvalCases and loadEvalCase", () => {
 
   it("loads one case and rejects one without input", async () => {
     const schema = (await caseOptions()).schema;
-    const good = loadEvalCase(
+    const good = await loadEvalCase(
       { id: "one", input: { topic: "operations" } },
       { schema }
     );
     expect(good.case?.id).toBe("one");
     expect(good.diagnostics).toEqual([]);
-    const bad = loadEvalCase({ id: "one", input: {} }, { schema });
+    const bad = await loadEvalCase({ id: "one", input: {} }, { schema });
     expect(bad.case).toBeNull();
     expect(errorsOf(bad.diagnostics)).toEqual(["OAL-EVAL-CASE-INVALID"]);
   });

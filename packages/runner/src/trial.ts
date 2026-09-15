@@ -305,6 +305,11 @@ function reportStatusOf(report: ReportOutcome): TrialOutcome["reportStatus"] {
       return "absent";
     case ReportCode.SchemaInvalid:
       return "schema_invalid";
+    // A schema worker failure is infrastructure, never a participant
+    // fault, so it must not count as a malformed report either.
+    case ReportCode.SchemaWorkerTimeout:
+    case ReportCode.SchemaWorkerFailed:
+      return "unavailable_due_to_infrastructure";
     default:
       return "malformed";
   }
@@ -547,7 +552,7 @@ export async function runTrial(
     evaluationSkipCode = TrialCode.TraceCorrupt;
   } else {
     try {
-      const evaluated = evaluateRubric({
+      const evaluated = await evaluateRubric({
         rubric: plan.evaluation.rubric,
         runId,
         run: runMetadataOf(options.plan, setup, adapter.id),

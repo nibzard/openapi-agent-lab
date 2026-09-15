@@ -382,8 +382,8 @@ async function evaluationSchema(): Promise<Json> {
   return JSON.parse(await readFile(EVALUATION_SCHEMA_PATH, "utf8")) as Json;
 }
 
-function steelRubric(): Rubric {
-  const result = loadRubric(STEEL_RECOVERY, {
+async function steelRubric(): Promise<Rubric> {
+  const result = await loadRubric(STEEL_RECOVERY, {
     resolveSchema: () => RESULT_SCHEMA
   });
   if (result.rubric === null) {
@@ -392,11 +392,11 @@ function steelRubric(): Rubric {
   return result.rubric;
 }
 
-function loadFixture(
+async function loadFixture(
   document: Json,
   options: Record<string, unknown> = {}
-): Rubric {
-  const result = loadRubric(document, {
+): Promise<Rubric> {
+  const result = await loadRubric(document, {
     resolveSchema: () => RESULT_SCHEMA,
     ...options
   });
@@ -406,11 +406,11 @@ function loadFixture(
   return result.rubric;
 }
 
-function evaluate(
+async function evaluate(
   rubric: Rubric,
   overrides: Partial<EvaluateOptions> = {}
-): EvaluationResult {
-  return evaluateRubric({
+): Promise<EvaluationResult> {
+  return await evaluateRubric({
     rubric,
     runId: RUN_ID,
     run: RUN,
@@ -431,8 +431,8 @@ function checkOf(result: EvaluationResult, id: string): CheckResult {
 }
 
 describe("steel-recovery evaluation", () => {
-  it("passes the happy path and records the captures", () => {
-    const result = evaluate(steelRubric());
+  it("passes the happy path and records the captures", async () => {
+    const result = await evaluate(await steelRubric());
     expect(result.status).toBe("passed");
     expect(result.score).toBe(1);
     expect(result.passedWeight).toBe(11);
@@ -466,14 +466,14 @@ describe("steel-recovery evaluation", () => {
     expect(result.infrastructureErrors).toEqual([]);
   });
 
-  it("fails at a step and names that step in the evidence", () => {
+  it("fails at a step and names that step in the evidence", async () => {
     const events = passingEvents();
     const recovered = events[6];
     if (recovered === undefined || recovered.response === null) {
       throw new Error("The fixture is missing the recovered read.");
     }
     recovered.response.body = binaryBody(WRONG_SHA);
-    const result = evaluate(steelRubric(), { events });
+    const result = await evaluate(await steelRubric(), { events });
     expect(result.status).toBe("failed");
     const flow = checkOf(result, "recovery_flow");
     expect(flow.status).toBe("failed");
@@ -487,11 +487,11 @@ describe("steel-recovery evaluation", () => {
     expect(flow.message).toContain("recovered_read");
   });
 
-  it("fails a postcondition and points at the postcondition", () => {
+  it("fails a postcondition and points at the postcondition", async () => {
     const state: JsonObject = {
       computers: { "cmp-1": { state: "running", revision: 6 } }
     };
-    const result = evaluate(steelRubric(), { state });
+    const result = await evaluate(await steelRubric(), { state });
     const flow = checkOf(result, "recovery_flow");
     expect(flow.status).toBe("failed");
     expect(flow.failedPointers).toEqual(["postconditions/final_paused"]);
@@ -499,7 +499,7 @@ describe("steel-recovery evaluation", () => {
     expect(result.status).toBe("failed");
   });
 
-  it("backtracks instead of committing to the first candidate", () => {
+  it("backtracks instead of committing to the first candidate", async () => {
     const document: Json = {
       rubric_version: 1,
       id: "backtrack",
@@ -560,7 +560,7 @@ describe("steel-recovery evaluation", () => {
         request_body: binaryBody(CLEAN_SHA)
       })
     ];
-    const result = evaluate(loadFixture(document), { events });
+    const result = await evaluate(await loadFixture(document), { events });
     const flow = checkOf(result, "write_after_create");
     expect(flow.status).toBe("passed");
     expect(flow.captures).toEqual({ computer_id: "cmp-2" });
@@ -568,7 +568,7 @@ describe("steel-recovery evaluation", () => {
     expect(result.status).toBe("passed");
   });
 
-  it("requires every event to be consumed by match all", () => {
+  it("requires every event to be consumed by match all", async () => {
     const document: Json = {
       rubric_version: 1,
       id: "all-steps",
@@ -600,13 +600,13 @@ describe("steel-recovery evaluation", () => {
     if (create === undefined || pause === undefined) {
       throw new Error("The fixture is missing the boundary events.");
     }
-    const matched = evaluate(loadFixture(document), {
+    const matched = await evaluate(await loadFixture(document), {
       events: [create, pause]
     });
     expect(checkOf(matched, "two_calls").status).toBe("passed");
     expect(checkOf(matched, "two_calls").eventIds).toEqual(["evt-1", "evt-8"]);
 
-    const crowded = evaluate(loadFixture(document));
+    const crowded = await evaluate(await loadFixture(document));
     expect(checkOf(crowded, "two_calls").status).toBe("failed");
     expect(checkOf(crowded, "two_calls").steps[0]?.status).toBe("selected");
     expect(checkOf(crowded, "two_calls").steps[1]?.status).toBe("unmatched");
@@ -614,7 +614,7 @@ describe("steel-recovery evaluation", () => {
 });
 
 describe("evaluator scoring and status", () => {
-  it("keeps the score under the threshold as a failure", () => {
+  it("keeps the score under the threshold as a failure", async () => {
     const document: Json = {
       ...STEEL_RECOVERY,
       checks: [
@@ -628,14 +628,14 @@ describe("evaluator scoring and status", () => {
         }
       ]
     };
-    const result = evaluate(loadFixture(document));
+    const result = await evaluate(await loadFixture(document));
     expect(result.passedWeight).toBe(11);
     expect(result.totalWeight).toBe(41);
     expect(result.score).toBeCloseTo(0.268, 3);
     expect(result.status).toBe("failed");
   });
 
-  it("reports an error status when any check errors", () => {
+  it("reports an error status when any check errors", async () => {
     const document: Json = {
       ...STEEL_RECOVERY,
       checks: [
@@ -653,7 +653,9 @@ describe("evaluator scoring and status", () => {
         }
       ]
     };
-    const result = evaluate(loadFixture(document), { report: null });
+    const result = await evaluate(await loadFixture(document), {
+      report: null
+    });
     expect(result.status).toBe("error");
     const reported = checkOf(result, "result_report");
     expect(reported.status).toBe("error");
@@ -665,16 +667,16 @@ describe("evaluator scoring and status", () => {
     ]);
   });
 
-  it("produces the same document twice", () => {
-    const first = evaluate(steelRubric());
-    const second = evaluate(steelRubric());
+  it("produces the same document twice", async () => {
+    const first = await evaluate(await steelRubric());
+    const second = await evaluate(await steelRubric());
     expect(first).toEqual(second);
     expect(toEvaluation(first)).toEqual(toEvaluation(second));
   });
 });
 
 describe("evaluator limits", () => {
-  it("turns a candidate overflow into an infrastructure error", () => {
+  it("turns a candidate overflow into an infrastructure error", async () => {
     const document: Json = {
       ...STEEL_RECOVERY,
       checks: [
@@ -698,7 +700,7 @@ describe("evaluator limits", () => {
       ],
       signals: []
     };
-    const result = evaluate(loadFixture(document), {
+    const result = await evaluate(await loadFixture(document), {
       limits: { maxCandidates: 3 }
     });
     const flow = checkOf(result, "create_then_pause");
@@ -709,8 +711,8 @@ describe("evaluator limits", () => {
     expect(result.status).toBe("error");
   });
 
-  it("turns an oversized capture into an infrastructure error", () => {
-    const result = evaluate(steelRubric(), {
+  it("turns an oversized capture into an infrastructure error", async () => {
+    const result = await evaluate(await steelRubric(), {
       limits: { maxCaptureBytes: 4 }
     });
     const flow = checkOf(result, "recovery_flow");
@@ -718,7 +720,7 @@ describe("evaluator limits", () => {
     expect(flow.error?.code).toBe("OAL-CHECK-CAPTURE-LIMIT");
   });
 
-  it("keeps a type error out of the task score", () => {
+  it("keeps a type error out of the task score", async () => {
     const document: Json = {
       ...STEEL_RECOVERY,
       checks: [
@@ -738,7 +740,7 @@ describe("evaluator limits", () => {
         }
       ]
     };
-    const result = evaluate(loadFixture(document));
+    const result = await evaluate(await loadFixture(document));
     const broken = checkOf(result, "broken_predicate");
     expect(broken.status).toBe("error");
     expect(result.infrastructureErrors.map((error) => error.code)).toEqual([
@@ -753,7 +755,7 @@ describe("evaluator limits", () => {
 });
 
 describe("on_missing policies", () => {
-  function reportCheck(onMissing: string): CheckResult {
+  async function reportCheck(onMissing: string): Promise<CheckResult> {
     const document: Json = {
       ...STEEL_RECOVERY,
       checks: [
@@ -769,16 +771,18 @@ describe("on_missing policies", () => {
       ],
       signals: []
     };
-    const result = evaluate(loadFixture(document), { report: null });
+    const result = await evaluate(await loadFixture(document), {
+      report: null
+    });
     return checkOf(result, "result_report");
   }
 
-  it("fails by default", () => {
-    expect(reportCheck("fail").status).toBe("failed");
+  it("fails by default", async () => {
+    expect((await reportCheck("fail")).status).toBe("failed");
   });
 
-  it("skips when the policy is skip and skips the whole run", () => {
-    const skipped = reportCheck("skip");
+  it("skips when the policy is skip and skips the whole run", async () => {
+    const skipped = await reportCheck("skip");
     expect(skipped.status).toBe("skipped");
     const document: Json = {
       ...STEEL_RECOVERY,
@@ -795,21 +799,23 @@ describe("on_missing policies", () => {
       ],
       signals: []
     };
-    const result = evaluate(loadFixture(document), { report: null });
+    const result = await evaluate(await loadFixture(document), {
+      report: null
+    });
     expect(result.status).toBe("skipped");
     expect(result.score).toBe(0);
   });
 
-  it("errors when the policy is error", () => {
-    const errored = reportCheck("error");
+  it("errors when the policy is error", async () => {
+    const errored = await reportCheck("error");
     expect(errored.status).toBe("error");
     expect(errored.error?.code).toBe("OAL-CHECK-MISSING-VALUE");
   });
 });
 
 describe("json schema checks", () => {
-  it("reports the violating pointers of the report", () => {
-    const result = evaluate(steelRubric(), {
+  it("reports the violating pointers of the report", async () => {
+    const result = await evaluate(await steelRubric(), {
       report: { fan_out: { supported: false } }
     });
     const reported = checkOf(result, "result_report");
@@ -818,8 +824,8 @@ describe("json schema checks", () => {
     expect(result.status).toBe("failed");
   });
 
-  it("errors when the referenced schema is not loaded", () => {
-    const result = evaluate(steelRubric(), {
+  it("errors when the referenced schema is not loaded", async () => {
+    const result = await evaluate(await steelRubric(), {
       resolveSchema: () => undefined
     });
     const reported = checkOf(result, "result_report");
@@ -827,7 +833,7 @@ describe("json schema checks", () => {
     expect(reported.error?.code).toBe("OAL-RUBRIC-SCHEMA-UNRESOLVED");
   });
 
-  it("validates the last JSON response body", () => {
+  it("validates the last JSON response body", async () => {
     const document: Json = {
       ...STEEL_RECOVERY,
       checks: [
@@ -842,7 +848,7 @@ describe("json schema checks", () => {
       ],
       signals: []
     };
-    const result = evaluate(loadFixture(document));
+    const result = await evaluate(await loadFixture(document));
     const pause = checkOf(result, "pause_response");
     expect(pause.status).toBe("failed");
     expect(pause.failedPointers).toEqual(["/fan_out", "/checkpoint_used"]);
@@ -850,7 +856,7 @@ describe("json schema checks", () => {
 });
 
 describe("artifact checks", () => {
-  function artifactRubric(): Rubric {
+  async function artifactRubric(): Promise<Rubric> {
     const document: Json = {
       ...STEEL_RECOVERY,
       checks: [
@@ -875,11 +881,11 @@ describe("artifact checks", () => {
       ],
       signals: []
     };
-    return loadFixture(document);
+    return await loadFixture(document);
   }
 
-  it("passes when every assertion holds", () => {
-    const result = evaluate(artifactRubric(), {
+  it("passes when every assertion holds", async () => {
+    const result = await evaluate(await artifactRubric(), {
       artifacts: {
         "logs/run.jsonl": {
           present: true,
@@ -902,8 +908,8 @@ describe("artifact checks", () => {
     ]);
   });
 
-  it("fails when the media type differs", () => {
-    const result = evaluate(artifactRubric(), {
+  it("fails when the media type differs", async () => {
+    const result = await evaluate(await artifactRubric(), {
       artifacts: {
         "logs/run.jsonl": {
           present: true,
@@ -991,7 +997,7 @@ describe("documentation and semantic streams", () => {
     }
   ];
 
-  it("counts semantic events with a counted match", () => {
+  it("counts semantic events with a counted match", async () => {
     const document: Json = {
       ...STEEL_RECOVERY,
       checks: [
@@ -1008,7 +1014,7 @@ describe("documentation and semantic streams", () => {
       ],
       signals: []
     };
-    const result = evaluate(loadFixture(document), {
+    const result = await evaluate(await loadFixture(document), {
       semanticEvents: SEMANTIC
     });
     const counted = checkOf(result, "one_checkpoint");
@@ -1016,7 +1022,7 @@ describe("documentation and semantic streams", () => {
     expect(counted.eventIds).toEqual(["sem-1"]);
   });
 
-  it("runs ordered steps over documentation events", () => {
+  it("runs ordered steps over documentation events", async () => {
     const document: Json = {
       ...STEEL_RECOVERY,
       checks: [
@@ -1035,7 +1041,7 @@ describe("documentation and semantic streams", () => {
       ],
       signals: []
     };
-    const result = evaluate(loadFixture(document), {
+    const result = await evaluate(await loadFixture(document), {
       documentationEvents: [SERVED]
     });
     const docs = checkOf(result, "docs_served");
@@ -1044,7 +1050,7 @@ describe("documentation and semantic streams", () => {
     expect(docs.steps[0]?.status).toBe("selected");
   });
 
-  it("fails an ordered existential check when the steps run backwards", () => {
+  it("fails an ordered existential check when the steps run backwards", async () => {
     const document: Json = {
       ...STEEL_RECOVERY,
       checks: [
@@ -1067,7 +1073,7 @@ describe("documentation and semantic streams", () => {
       ],
       signals: []
     };
-    const result = evaluate(loadFixture(document), {
+    const result = await evaluate(await loadFixture(document), {
       documentationEvents: [
         documentation("doc-1", 1, "served", "/openapi.json"),
         documentation("doc-2", 2, "served", "/.well-known/ai-plugin.json")
@@ -1078,7 +1084,7 @@ describe("documentation and semantic streams", () => {
     expect(docs.failedPointers).toEqual(["steps/opened"]);
   });
 
-  it("counts ordered matches against the declared bounds", () => {
+  it("counts ordered matches against the declared bounds", async () => {
     const counted = (bound: JsonObject): Json => ({
       ...STEEL_RECOVERY,
       checks: [
@@ -1112,30 +1118,42 @@ describe("documentation and semantic streams", () => {
       documentation("doc-4", 4, "served", "/.well-known/ai-plugin.json")
     ];
 
-    const shortFall = evaluate(loadFixture(counted({ min_count: 2 })), {
-      documentationEvents: onePair
-    });
+    const shortFall = await evaluate(
+      await loadFixture(counted({ min_count: 2 })),
+      {
+        documentationEvents: onePair
+      }
+    );
     expect(checkOf(shortFall, "discovery_pairs").status).toBe("failed");
 
-    const enough = evaluate(loadFixture(counted({ min_count: 2 })), {
-      documentationEvents: twoPairs
-    });
+    const enough = await evaluate(
+      await loadFixture(counted({ min_count: 2 })),
+      {
+        documentationEvents: twoPairs
+      }
+    );
     const pairs = checkOf(enough, "discovery_pairs");
     expect(pairs.status).toBe("passed");
     expect(pairs.eventIds).toEqual(["doc-1", "doc-2"]);
 
-    const capped = evaluate(loadFixture(counted({ max_count: 1 })), {
-      documentationEvents: twoPairs
-    });
+    const capped = await evaluate(
+      await loadFixture(counted({ max_count: 1 })),
+      {
+        documentationEvents: twoPairs
+      }
+    );
     expect(checkOf(capped, "discovery_pairs").status).toBe("failed");
 
-    const within = evaluate(loadFixture(counted({ max_count: 1 })), {
-      documentationEvents: onePair
-    });
+    const within = await evaluate(
+      await loadFixture(counted({ max_count: 1 })),
+      {
+        documentationEvents: onePair
+      }
+    );
     expect(checkOf(within, "discovery_pairs").status).toBe("passed");
   });
 
-  it("counts ordered matches over semantic events", () => {
+  it("counts ordered matches over semantic events", async () => {
     const document: Json = {
       ...STEEL_RECOVERY,
       checks: [
@@ -1156,7 +1174,7 @@ describe("documentation and semantic streams", () => {
       ],
       signals: []
     };
-    const result = evaluate(loadFixture(document), {
+    const result = await evaluate(await loadFixture(document), {
       semanticEvents: SEMANTIC
     });
     const ordered = checkOf(result, "checkpoint_then_pause");
@@ -1165,7 +1183,7 @@ describe("documentation and semantic streams", () => {
     expect(ordered.message).toContain("1 ordered matches");
   });
 
-  it("walks every step in stream order for a universal match", () => {
+  it("walks every step in stream order for a universal match", async () => {
     const document: Json = {
       ...STEEL_RECOVERY,
       checks: [
@@ -1188,7 +1206,7 @@ describe("documentation and semantic streams", () => {
       ],
       signals: []
     };
-    const aligned = evaluate(loadFixture(document), {
+    const aligned = await evaluate(await loadFixture(document), {
       documentationEvents: [
         documentation("doc-1", 1, "served", "/openapi.json"),
         documentation("doc-2", 2, "served", "/.well-known/ai-plugin.json"),
@@ -1197,7 +1215,7 @@ describe("documentation and semantic streams", () => {
     });
     expect(checkOf(aligned, "docs_served").status).toBe("passed");
 
-    const swapped = evaluate(loadFixture(document), {
+    const swapped = await evaluate(await loadFixture(document), {
       documentationEvents: [
         documentation("doc-1", 1, "served", "/.well-known/ai-plugin.json"),
         documentation("doc-2", 2, "served", "/openapi.json")
@@ -1205,7 +1223,7 @@ describe("documentation and semantic streams", () => {
     });
     expect(checkOf(swapped, "docs_served").status).toBe("failed");
 
-    const delayed = evaluate(loadFixture(document), {
+    const delayed = await evaluate(await loadFixture(document), {
       documentationEvents: [
         documentation("doc-1", 1, "served", "/.well-known/ai-plugin.json"),
         documentation("doc-2", 2, "served", "/openapi.json"),
@@ -1215,7 +1233,7 @@ describe("documentation and semantic streams", () => {
     expect(checkOf(delayed, "docs_served").status).toBe("failed");
   });
 
-  it("requires every event to satisfy a universal match", () => {
+  it("requires every event to satisfy a universal match", async () => {
     const document: Json = {
       ...STEEL_RECOVERY,
       checks: [
@@ -1230,12 +1248,12 @@ describe("documentation and semantic streams", () => {
       ],
       signals: []
     };
-    const passing = evaluate(loadFixture(document), {
+    const passing = await evaluate(await loadFixture(document), {
       documentationEvents: [SERVED]
     });
     expect(checkOf(passing, "all_served").status).toBe("passed");
 
-    const failing = evaluate(loadFixture(document), {
+    const failing = await evaluate(await loadFixture(document), {
       documentationEvents: [SERVED, documentation("doc-2", 2, "error")]
     });
     expect(checkOf(failing, "all_served").status).toBe("failed");
@@ -1263,8 +1281,11 @@ describe("the normalized header view", () => {
     });
   }
 
-  function headerRubric(init: { where?: string; expression?: string }): Rubric {
-    return loadFixture({
+  async function headerRubric(init: {
+    where?: string;
+    expression?: string;
+  }): Promise<Rubric> {
+    return await loadFixture({
       rubric_version: 1,
       id: "header-view",
       scoring: { method: "weighted_binary", pass_threshold: 1 },
@@ -1303,7 +1324,7 @@ describe("the normalized header view", () => {
     });
   }
 
-  it("reads request and response headers by lowercase name", () => {
+  it("reads request and response headers by lowercase name", async () => {
     const event = headerEvent({
       requestHeaders: [
         { name: "Accept", values: ["text/markdown"], redacted: false }
@@ -1312,8 +1333,8 @@ describe("the normalized header view", () => {
         { name: "Content-Type", values: ["text/markdown"], redacted: false }
       ]
     });
-    const result = evaluate(
-      headerRubric({
+    const result = await evaluate(
+      await headerRubric({
         where:
           "event.request.header_values.accept != null && " +
           '"text/markdown" in event.request.header_values.accept && ' +
@@ -1325,7 +1346,7 @@ describe("the normalized header view", () => {
     expect(checkOf(result, "header_probe").status).toBe("passed");
   });
 
-  it("keeps the wire order when repeated lines group into one record", () => {
+  it("keeps the wire order when repeated lines group into one record", async () => {
     const event = headerEvent({
       requestHeaders: [
         {
@@ -1335,8 +1356,8 @@ describe("the normalized header view", () => {
         }
       ]
     });
-    const result = evaluate(
-      headerRubric({
+    const result = await evaluate(
+      await headerRubric({
         where:
           "event.request.header_values.accept == " +
           '["image/svg+xml", "text/markdown"]'
@@ -1346,15 +1367,15 @@ describe("the normalized header view", () => {
     expect(checkOf(result, "header_probe").status).toBe("passed");
   });
 
-  it("matches header names without case and keeps record order", () => {
+  it("matches header names without case and keeps record order", async () => {
     const event = headerEvent({
       requestHeaders: [
         { name: "Accept", values: ["text/markdown"], redacted: false },
         { name: "accept", values: ["image/svg+xml"], redacted: false }
       ]
     });
-    const result = evaluate(
-      headerRubric({
+    const result = await evaluate(
+      await headerRubric({
         where:
           "event.request.header_values.accept == " +
           '["text/markdown", "image/svg+xml"]'
@@ -1364,17 +1385,19 @@ describe("the normalized header view", () => {
     expect(checkOf(result, "header_probe").status).toBe("passed");
   });
 
-  it("answers null for an absent header", () => {
-    const result = evaluate(
-      headerRubric({ where: "event.request.header_values.accept == null" }),
+  it("answers null for an absent header", async () => {
+    const result = await evaluate(
+      await headerRubric({
+        where: "event.request.header_values.accept == null"
+      }),
       { events: [headerEvent({})] }
     );
     expect(checkOf(result, "header_probe").status).toBe("passed");
   });
 
-  it("fails a guarded membership test on an absent header", () => {
-    const result = evaluate(
-      headerRubric({
+  it("fails a guarded membership test on an absent header", async () => {
+    const result = await evaluate(
+      await headerRubric({
         where:
           "event.request.header_values.accept != null && " +
           '"text/markdown" in event.request.header_values.accept'
@@ -1385,9 +1408,9 @@ describe("the normalized header view", () => {
     expect(result.infrastructureErrors).toEqual([]);
   });
 
-  it("raises a type error when a membership test reads null directly", () => {
-    const result = evaluate(
-      headerRubric({
+  it("raises a type error when a membership test reads null directly", async () => {
+    const result = await evaluate(
+      await headerRubric({
         where: '"text/markdown" in event.request.header_values.accept'
       }),
       { events: [headerEvent({})] }
@@ -1396,14 +1419,14 @@ describe("the normalized header view", () => {
     expect(result.infrastructureErrors).toHaveLength(1);
   });
 
-  it("exposes the view on the events array of a signal", () => {
+  it("exposes the view on the events array of a signal", async () => {
     const event = headerEvent({
       requestHeaders: [
         { name: "accept", values: ["text/markdown"], redacted: false }
       ]
     });
-    const result = evaluate(
-      headerRubric({
+    const result = await evaluate(
+      await headerRubric({
         expression: '"text/markdown" in events[0].request.header_values.accept'
       }),
       { events: [event] }
@@ -1411,7 +1434,7 @@ describe("the normalized header view", () => {
     expect(result.signals.header_signal).toBe(true);
   });
 
-  it("splits a comma-joined accept value into elements", () => {
+  it("splits a comma-joined accept value into elements", async () => {
     const event = headerEvent({
       requestHeaders: [
         {
@@ -1421,8 +1444,8 @@ describe("the normalized header view", () => {
         }
       ]
     });
-    const result = evaluate(
-      headerRubric({
+    const result = await evaluate(
+      await headerRubric({
         where:
           '"text/markdown" in event.request.header_values.accept && ' +
           'event.request.header_values.accept == ["text/markdown", "text/html"]'
@@ -1432,14 +1455,14 @@ describe("the normalized header view", () => {
     expect(checkOf(result, "header_probe").status).toBe("passed");
   });
 
-  it("strips quality parameters from accept elements", () => {
+  it("strips quality parameters from accept elements", async () => {
     const event = headerEvent({
       requestHeaders: [
         { name: "accept", values: ["text/markdown;q=0.9"], redacted: false }
       ]
     });
-    const result = evaluate(
-      headerRubric({
+    const result = await evaluate(
+      await headerRubric({
         where:
           '"text/markdown" in event.request.header_values.accept && ' +
           'event.request.header_values.accept == ["text/markdown"]'
@@ -1449,7 +1472,7 @@ describe("the normalized header view", () => {
     expect(checkOf(result, "header_probe").status).toBe("passed");
   });
 
-  it("strips the charset parameter from content-type without splitting", () => {
+  it("strips the charset parameter from content-type without splitting", async () => {
     const event = headerEvent({
       responseHeaders: [
         {
@@ -1459,8 +1482,8 @@ describe("the normalized header view", () => {
         }
       ]
     });
-    const result = evaluate(
-      headerRubric({
+    const result = await evaluate(
+      await headerRubric({
         where:
           'event.response.header_values["content-type"] == ' +
           '["text/markdown"]'
@@ -1470,7 +1493,7 @@ describe("the normalized header view", () => {
     expect(checkOf(result, "header_probe").status).toBe("passed");
   });
 
-  it("does not match a media type the accept header omits", () => {
+  it("does not match a media type the accept header omits", async () => {
     const event = headerEvent({
       requestHeaders: [
         {
@@ -1480,8 +1503,8 @@ describe("the normalized header view", () => {
         }
       ]
     });
-    const result = evaluate(
-      headerRubric({
+    const result = await evaluate(
+      await headerRubric({
         where: '"text/markdown" in event.request.header_values.accept'
       }),
       { events: [event] }
@@ -1490,7 +1513,7 @@ describe("the normalized header view", () => {
     expect(result.infrastructureErrors).toEqual([]);
   });
 
-  it("turns a values-bound hit into an infrastructure error", () => {
+  it("turns a values-bound hit into an infrastructure error", async () => {
     const event = headerEvent({
       requestHeaders: [
         {
@@ -1500,8 +1523,8 @@ describe("the normalized header view", () => {
         }
       ]
     });
-    const result = evaluate(
-      headerRubric({
+    const result = await evaluate(
+      await headerRubric({
         where: '"text/markdown" in event.request.header_values.accept'
       }),
       { events: [event], limits: { maxHeaderValues: 1 } }
@@ -1514,14 +1537,14 @@ describe("the normalized header view", () => {
     );
   });
 
-  it("turns a names-bound hit into an infrastructure error", () => {
+  it("turns a names-bound hit into an infrastructure error", async () => {
     const event = headerEvent({
       requestHeaders: [
         { name: "accept", values: ["text/markdown"], redacted: false }
       ]
     });
-    const result = evaluate(
-      headerRubric({
+    const result = await evaluate(
+      await headerRubric({
         where: "event.request.header_values.accept != null"
       }),
       { events: [event], limits: { maxHeaderNames: 0 } }
@@ -1534,7 +1557,7 @@ describe("the normalized header view", () => {
 describe("evaluation document conformance", () => {
   it("validates the wire document of a passing run", async () => {
     const validator = new SchemaValidator(await evaluationSchema());
-    const document = toEvaluation(evaluate(steelRubric()), {
+    const document = toEvaluation(await evaluate(await steelRubric()), {
       evaluator: { name: "@oal/evaluator", version: EVALUATOR_VERSION }
     });
     expect(validator.errors(document as unknown as Json)).toEqual([]);
@@ -1548,8 +1571,8 @@ describe("evaluation document conformance", () => {
     });
   });
 
-  it("keeps the evaluator name and version in the document", () => {
-    const document = toEvaluation(evaluate(steelRubric()));
+  it("keeps the evaluator name and version in the document", async () => {
+    const document = toEvaluation(await evaluate(await steelRubric()));
     expect(document.evaluator).toEqual({
       name: EVALUATOR_NAME,
       version: EVALUATOR_VERSION
@@ -1557,16 +1580,18 @@ describe("evaluation document conformance", () => {
     expect(document.evaluated_at).toBeUndefined();
   });
 
-  it("records the timestamp it is given", () => {
+  it("records the timestamp it is given", async () => {
     const document = toEvaluation(
-      evaluate(steelRubric(), { evaluatedAt: "2026-01-01T00:00:09.000Z" })
+      await evaluate(await steelRubric(), {
+        evaluatedAt: "2026-01-01T00:00:09.000Z"
+      })
     );
     expect(document.evaluated_at).toBe("2026-01-01T00:00:09.000Z");
   });
 
   it("rejects a document that breaks the schema", async () => {
     const validator = new SchemaValidator(await evaluationSchema());
-    const document = toEvaluation(evaluate(steelRubric()));
+    const document = toEvaluation(await evaluate(await steelRubric()));
     const broken = {
       ...document,
       status: "unknown",
@@ -1575,8 +1600,8 @@ describe("evaluation document conformance", () => {
     expect(validator.errors(broken).length).toBeGreaterThan(0);
   });
 
-  it("omits empty evidence arrays from the wire form", () => {
-    const document = toEvaluation(evaluate(projectionRubric()));
+  it("omits empty evidence arrays from the wire form", async () => {
+    const document = toEvaluation(await evaluate(await projectionRubric()));
     const fanOut = document.checks.find((check) => check.id === "fan_out");
     expect(fanOut?.event_ids).toBeUndefined();
     expect(fanOut?.captures).toBeUndefined();
@@ -1589,8 +1614,8 @@ describe("evaluation document conformance", () => {
  * A pure predicate reads no report value, so section 26.8 gives it no
  * event, pointer, or artifact evidence to record.
  */
-function projectionRubric(): Rubric {
-  const result = loadRubric(
+async function projectionRubric(): Promise<Rubric> {
+  const result = await loadRubric(
     {
       ...STEEL_RECOVERY,
       checks: [
@@ -1613,9 +1638,9 @@ function projectionRubric(): Rubric {
 }
 
 describe("rubric digest", () => {
-  it("depends on the rubric content only", () => {
-    const first = evaluate(steelRubric());
-    const second = evaluate(loadFixture(STEEL_RECOVERY));
+  it("depends on the rubric content only", async () => {
+    const first = await evaluate(await steelRubric());
+    const second = await evaluate(await loadFixture(STEEL_RECOVERY));
     expect(first.rubricSha256).toBe(second.rubricSha256);
     expect(first.rubricSha256).toMatch(/^[a-f0-9]{64}$/);
   });
@@ -1776,8 +1801,8 @@ describe("evaluation evidence invariant (section 26.8)", () => {
     }
   };
 
-  function evaluateMixed(): EvaluationResult {
-    return evaluate(loadFixture(MIXED_RUBRIC), {
+  async function evaluateMixed(): Promise<EvaluationResult> {
+    return await evaluate(await loadFixture(MIXED_RUBRIC), {
       documentationEvents: [DOC_SERVED],
       semanticEvents: [CHECKPOINT_CREATED],
       artifacts: MIXED_ARTIFACTS
@@ -1795,16 +1820,16 @@ describe("evaluation evidence invariant (section 26.8)", () => {
     ];
   }
 
-  it("passes every kind of the mixed rubric", () => {
-    const result = evaluateMixed();
+  it("passes every kind of the mixed rubric", async () => {
+    const result = await evaluateMixed();
     expect(result.status).toBe("passed");
     expect(result.checks.map((check) => check.status)).toEqual(
       result.checks.map(() => "passed")
     );
   });
 
-  it("records event, pointer, or artifact evidence for every check", () => {
-    const result = evaluateMixed();
+  it("records event, pointer, or artifact evidence for every check", async () => {
+    const result = await evaluateMixed();
     expect(result.checks).toHaveLength(7);
     for (const check of result.checks) {
       expect(evidenceOf(check).length).toBeGreaterThan(0);
@@ -1823,8 +1848,8 @@ describe("evaluation evidence invariant (section 26.8)", () => {
     ]);
   });
 
-  it("references the report artifact from report-valued checks", () => {
-    const result = evaluateMixed();
+  it("references the report artifact from report-valued checks", async () => {
+    const result = await evaluateMixed();
     expect(checkOf(result, "fan_out_reported").artifactRefs).toEqual([
       REPORT_ARTIFACT_REF
     ]);
@@ -1833,8 +1858,8 @@ describe("evaluation evidence invariant (section 26.8)", () => {
     ]);
   });
 
-  it("keeps at least one evidence field of every wire check record", () => {
-    const document = toEvaluation(evaluateMixed());
+  it("keeps at least one evidence field of every wire check record", async () => {
+    const document = toEvaluation(await evaluateMixed());
     expect(document.checks).toHaveLength(7);
     for (const check of document.checks) {
       const channels = [
@@ -1847,15 +1872,15 @@ describe("evaluation evidence invariant (section 26.8)", () => {
     }
   });
 
-  it("warns for every check that declares no evidence class", () => {
-    const declared = loadRubric(MIXED_RUBRIC, {
+  it("warns for every check that declares no evidence class", async () => {
+    const declared = await loadRubric(MIXED_RUBRIC, {
       resolveSchema: () => RESULT_SCHEMA
     });
     expect(
       declared.diagnostics.filter((entry) => entry.severity === "warning")
     ).toEqual([]);
 
-    const stripped = loadRubric(
+    const stripped = await loadRubric(
       {
         ...MIXED_RUBRIC,
         checks: MIXED_CHECKS.map((check) => {
@@ -1934,7 +1959,7 @@ describe("sequence tie-breaking (section 26.6)", () => {
     ];
   }
 
-  function tieRubric(): Rubric {
+  async function tieRubric(): Promise<Rubric> {
     const document: Json = {
       rubric_version: 1,
       id: "tie-break",
@@ -1966,11 +1991,11 @@ describe("sequence tie-breaking (section 26.6)", () => {
       ],
       signals: []
     };
-    return loadFixture(document);
+    return await loadFixture(document);
   }
 
-  it("selects the lexicographically smallest complete event tuple", () => {
-    const result = evaluate(tieRubric(), { events: tieEvents() });
+  it("selects the lexicographically smallest complete event tuple", async () => {
+    const result = await evaluate(await tieRubric(), { events: tieEvents() });
     const flow = checkOf(result, "probe_then_confirm");
     expect(flow.status).toBe("passed");
     // (evt-0001, evt-0003) sorts before (evt-0002, evt-0004).
@@ -1983,9 +2008,9 @@ describe("sequence tie-breaking (section 26.6)", () => {
     expect(result.status).toBe("passed");
   });
 
-  it("picks the same tuple on a repeat evaluation", () => {
-    const first = evaluate(tieRubric(), { events: tieEvents() });
-    const second = evaluate(tieRubric(), { events: tieEvents() });
+  it("picks the same tuple on a repeat evaluation", async () => {
+    const first = await evaluate(await tieRubric(), { events: tieEvents() });
+    const second = await evaluate(await tieRubric(), { events: tieEvents() });
     expect(second.checks[0]?.eventIds).toEqual(first.checks[0]?.eventIds);
     expect(second.checks[0]?.eventIds).toEqual(["evt-0001", "evt-0003"]);
   });
@@ -2025,8 +2050,8 @@ describe("required checks and threshold (section 26.5)", () => {
     };
   }
 
-  it("stays failed when the score passes but a required check fails", () => {
-    const result = evaluate(loadFixture(jointRubric(true, 9)));
+  it("stays failed when the score passes but a required check fails", async () => {
+    const result = await evaluate(await loadFixture(jointRubric(true, 9)));
     // Every non-required check passed and the score meets the threshold.
     expect(result.passedWeight).toBe(9);
     expect(result.totalWeight).toBe(10);
@@ -2039,8 +2064,8 @@ describe("required checks and threshold (section 26.5)", () => {
     expect(result.status).toBe("failed");
   });
 
-  it("stays failed when required checks pass but the score misses the threshold", () => {
-    const result = evaluate(loadFixture(jointRubric(false, 9)));
+  it("stays failed when required checks pass but the score misses the threshold", async () => {
+    const result = await evaluate(await loadFixture(jointRubric(false, 9)));
     const flow = checkOf(result, "flow");
     expect(flow.status).toBe("passed");
     expect(flow.required).toBe(true);

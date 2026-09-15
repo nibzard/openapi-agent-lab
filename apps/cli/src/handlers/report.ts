@@ -422,12 +422,12 @@ export function reportOf(
 }
 
 /** Re-grade one trial with a loaded rubric over its recorded evidence. */
-export function regradeTrial(
+export async function regradeTrial(
   trial: LoadedTrial,
   rubric: Rubric,
   schemas: ReadonlyMap<string, Json>
-): Evaluation {
-  const result = evaluateRubric({
+): Promise<Evaluation> {
+  const result = await evaluateRubric({
     rubric,
     runId: trial.runId,
     run: runMetadataOf(trial),
@@ -559,7 +559,7 @@ export const reportCommand: CommandHandler = async (args, io) => {
     }
     const rubricPath = path.resolve(args.context.cwd, rubricFlag);
     const read = await readRubricDocument(rubricPath);
-    const loaded = loadRubric(read.document, { documentUri: rubricPath });
+    const loaded = await loadRubric(read.document, { documentUri: rubricPath });
     if (loaded.rubric === null) {
       emitDiagnostics(io, args.context, loaded.diagnostics);
       return EXIT_INVALID;
@@ -578,7 +578,7 @@ export const reportCommand: CommandHandler = async (args, io) => {
   for (const trial of trials) {
     let evaluation = trial.evaluation;
     if (regrade && rubric !== null && rubricSha !== null) {
-      const regenerated = regradeTrial(trial, rubric, rubricSchemas);
+      const regenerated = await regradeTrial(trial, rubric, rubricSchemas);
       evaluatorIdentity = regenerated.evaluator ?? null;
       evaluation = regenerated;
       const artifact = await writeDerivedEvaluation(

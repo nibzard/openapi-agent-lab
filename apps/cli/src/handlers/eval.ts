@@ -427,7 +427,7 @@ export const evalValidateCommand: CommandHandler = async (args, io) => {
     parsed.value,
     args.context.maxSourceBytes
   );
-  const result = loadEval(parsed.value, {
+  const result = await loadEval(parsed.value, {
     schema: schemas.eval,
     caseSchema: schemas.case,
     rubricSchema: schemas.rubric,

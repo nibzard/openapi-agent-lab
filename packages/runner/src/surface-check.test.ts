@@ -142,7 +142,7 @@ const PLAIN_INSTRUCTIONS = filePlan(
 );
 
 describe("compareCellSurfaces", () => {
-  it("passes two cells with the same rendered surface", () => {
+  it("passes two cells with the same rendered surface", async () => {
     const a = cell("cell-a", [PLAIN_INSTRUCTIONS, PLAIN_TASK]);
     const b = cell("cell-b", [
       PLAIN_INSTRUCTIONS,
@@ -155,12 +155,15 @@ describe("compareCellSurfaces", () => {
     expect(outcomes[0]?.cellB).toBe("cell-b");
     expect(outcomes[0]?.differences).toEqual([]);
 
-    const check = checkParticipantSurfaces({ policy: policy(), cells: [a, b] });
+    const check = await checkParticipantSurfaces({
+      policy: policy(),
+      cells: [a, b]
+    });
     expect(check.diagnostics).toEqual([]);
     expect(check.audits.map((audit) => audit.result)).toEqual(["pass", "pass"]);
   });
 
-  it("fails a shared entry whose bytes drift outside the allowlist", () => {
+  it("fails a shared entry whose bytes drift outside the allowlist", async () => {
     const a = cell("cell-a", [
       PLAIN_INSTRUCTIONS,
       filePlan("TASK.md", "Task version one.")
@@ -180,7 +183,10 @@ describe("compareCellSurfaces", () => {
       ])
     ).toEqual([["file-TASK.md", "bytes", false, null]]);
 
-    const check = checkParticipantSurfaces({ policy: policy(), cells: [a, b] });
+    const check = await checkParticipantSurfaces({
+      policy: policy(),
+      cells: [a, b]
+    });
     expect(check.diagnostics.map((entry) => entry.code)).toEqual([
       "OAL-CELL-DRIFT"
     ]);
@@ -194,7 +200,7 @@ describe("compareCellSurfaces", () => {
     expect(check.audits.every((audit) => audit.result === "fail")).toBe(true);
   });
 
-  it("reports an entry only one cell holds as a cue leak", () => {
+  it("reports an entry only one cell holds as a cue leak", async () => {
     const a = cell("cell-a", [PLAIN_INSTRUCTIONS, PLAIN_TASK]);
     const b = cell("cell-b", [
       PLAIN_INSTRUCTIONS,
@@ -212,7 +218,10 @@ describe("compareCellSurfaces", () => {
       ])
     ).toEqual([["file-hint.md", "name", false, "b"]]);
 
-    const check = checkParticipantSurfaces({ policy: policy(), cells: [a, b] });
+    const check = await checkParticipantSurfaces({
+      policy: policy(),
+      cells: [a, b]
+    });
     expect(check.diagnostics.map((entry) => entry.code)).toEqual([
       "OAL-CUE-LEAK"
     ]);
@@ -265,7 +274,7 @@ describe("compareCellSurfaces", () => {
     ).toEqual([["route", false]]);
   });
 
-  it("allows differences on treatment-owned paths and catalogs", () => {
+  it("allows differences on treatment-owned paths and catalogs", async () => {
     const a = cell(
       "cell-a",
       [
@@ -331,11 +340,12 @@ describe("compareCellSurfaces", () => {
     ]);
     expect(differences?.every((difference) => difference.allowed)).toBe(true);
     expect(
-      checkParticipantSurfaces({ policy: policy(), cells: [a, b] }).diagnostics
+      (await checkParticipantSurfaces({ policy: policy(), cells: [a, b] }))
+        .diagnostics
     ).toEqual([]);
   });
 
-  it("allows a difference on an entry marked as treatment provenance", () => {
+  it("allows a difference on an entry marked as treatment provenance", async () => {
     const a = cell("cell-a", [PLAIN_TASK], {
       responseCatalogs: [
         {
@@ -365,11 +375,12 @@ describe("compareCellSurfaces", () => {
     ]);
     expect(differences?.every((difference) => difference.allowed)).toBe(true);
     expect(
-      checkParticipantSurfaces({ policy: policy(), cells: [a, b] }).diagnostics
+      (await checkParticipantSurfaces({ policy: policy(), cells: [a, b] }))
+        .diagnostics
     ).toEqual([]);
   });
 
-  it("honors the pairwise surface-difference allowlist by entry id", () => {
+  it("honors the pairwise surface-difference allowlist by entry id", async () => {
     const document = policyDocument();
     document["pairwise_surface_diff_allowlist"] = [
       {
@@ -387,8 +398,12 @@ describe("compareCellSurfaces", () => {
       outcomes[0]?.differences.map((difference) => difference.allowed)
     ).toEqual([true]);
     expect(
-      checkParticipantSurfaces({ policy: allowlistPolicy, cells: [a, b] })
-        .diagnostics
+      (
+        await checkParticipantSurfaces({
+          policy: allowlistPolicy,
+          cells: [a, b]
+        })
+      ).diagnostics
     ).toEqual([]);
   });
 
@@ -401,13 +416,16 @@ describe("compareCellSurfaces", () => {
 });
 
 describe("checkParticipantSurfaces", () => {
-  it("emits OAL-CUE-LEAK for a forbidden literal on one cell", () => {
+  it("emits OAL-CUE-LEAK for a forbidden literal on one cell", async () => {
     const a = cell("cell-a", [PLAIN_TASK]);
     const b = cell("cell-b", [
       filePlan("TASK.md", "Complete the benchmark checklist.")
     ]);
 
-    const check = checkParticipantSurfaces({ policy: policy(), cells: [a, b] });
+    const check = await checkParticipantSurfaces({
+      policy: policy(),
+      cells: [a, b]
+    });
     expect(check.diagnostics.map((entry) => entry.code)).toEqual([
       "OAL-CUE-LEAK",
       "OAL-CELL-DRIFT"
@@ -416,14 +434,17 @@ describe("checkParticipantSurfaces", () => {
     expect(check.audits.every((audit) => audit.result === "fail")).toBe(true);
   });
 
-  it("emits OAL-CUE-LEAK when a manifest delivers a private artifact", () => {
+  it("emits OAL-CUE-LEAK when a manifest delivers a private artifact", async () => {
     const a = cell("cell-a", [
       PLAIN_TASK,
       filePlan("factor-levels.json", "[]", "participant-file")
     ]);
     const b = cell("cell-b", [PLAIN_TASK]);
 
-    const check = checkParticipantSurfaces({ policy: policy(), cells: [a, b] });
+    const check = await checkParticipantSurfaces({
+      policy: policy(),
+      cells: [a, b]
+    });
     expect(check.diagnostics.map((entry) => entry.code)).toEqual([
       "OAL-CUE-LEAK",
       "OAL-CUE-LEAK"
@@ -431,14 +452,14 @@ describe("checkParticipantSurfaces", () => {
     expect(check.diagnostics[0]?.message).toContain("factor-levels.json");
   });
 
-  it("requires the declared equivalence and blinding reviews", () => {
+  it("requires the declared equivalence and blinding reviews", async () => {
     const document = policyDocument();
     document["required_reviews"] = { equivalence: true, blinding: true };
     const strictPolicy = parseSurfacePolicy(document);
     const a = cell("cell-a", [PLAIN_TASK]);
     const b = cell("cell-b", [PLAIN_TASK]);
 
-    const missing = checkParticipantSurfaces({
+    const missing = await checkParticipantSurfaces({
       policy: strictPolicy,
       cells: [a, b]
     });
@@ -448,7 +469,7 @@ describe("checkParticipantSurfaces", () => {
       SurfaceCheckCode.ReviewMissing
     ]);
 
-    const partial = checkParticipantSurfaces({
+    const partial = await checkParticipantSurfaces({
       policy: strictPolicy,
       cells: [a, b],
       reviews: [
@@ -461,7 +482,7 @@ describe("checkParticipantSurfaces", () => {
       SurfaceCheckCode.ReviewMissing
     ]);
 
-    const covered = checkParticipantSurfaces({
+    const covered = await checkParticipantSurfaces({
       policy: strictPolicy,
       cells: [a, b],
       reviews: [
@@ -476,9 +497,9 @@ describe("checkParticipantSurfaces", () => {
     expect(covered.diagnostics).toEqual([]);
   });
 
-  it("warns when a strict policy runs under advisory isolation", () => {
+  it("warns when a strict policy runs under advisory isolation", async () => {
     const a = cell("cell-a", [PLAIN_TASK]);
-    const check = checkParticipantSurfaces({
+    const check = await checkParticipantSurfaces({
       policy: policy(),
       cells: [a],
       blindingMode: "strict",

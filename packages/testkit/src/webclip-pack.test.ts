@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { isJsonObject, type Json, type JsonObject } from "@oal/core";
-import { evaluateRubric } from "@oal/evaluator";
+import { evaluateRubric, type EvaluationResult } from "@oal/evaluator";
 import type { TraceEvent } from "@oal/evidence";
 
 import {
@@ -24,13 +24,13 @@ const RUN: JsonObject = { run_id: RUN_ID, mode: "record" };
 const RESULT_SCHEMA = "schemas/site-errand-result.schema.json";
 const PROBE_SCHEMA = "schemas/comprehension-probe.schema.json";
 
-function evaluate(
+async function evaluate(
   events: readonly TraceEvent[],
   report: Json
-): ReturnType<typeof evaluateRubric> {
+): Promise<EvaluationResult> {
   return evaluateRubric({
     rubric: rubricOf(
-      loadPackRubric(pack.loaded, "evals/site-errand/rubric.yaml")
+      await loadPackRubric(pack.loaded, "evals/site-errand/rubric.yaml")
     ),
     runId: RUN_ID,
     run: RUN,
@@ -41,10 +41,7 @@ function evaluate(
   });
 }
 
-function checkStatus(
-  result: ReturnType<typeof evaluateRubric>,
-  id: string
-): string {
+function checkStatus(result: EvaluationResult, id: string): string {
   const check = result.checks.find((candidate) => candidate.id === id);
   if (check === undefined) {
     throw new Error(`Check ${id} is missing from the result.`);
@@ -104,8 +101,11 @@ describe("the webclip pack", () => {
     expect(svg?.schema_ref).toBeNull();
   });
 
-  it("loads the rubric and both report schemas", () => {
-    const result = loadPackRubric(pack.loaded, "evals/site-errand/rubric.yaml");
+  it("loads the rubric and both report schemas", async () => {
+    const result = await loadPackRubric(
+      pack.loaded,
+      "evals/site-errand/rubric.yaml"
+    );
     expect(result.diagnostics).toEqual([]);
     expect(rubricOf(result).id).toBe("webclip-site-errand");
     for (const schemaPath of [RESULT_SCHEMA, PROBE_SCHEMA]) {
@@ -396,8 +396,8 @@ function errandReport(
 }
 
 describe("the corrected webclip site-errand rubric", () => {
-  it("passes a complete trace with all required checks", () => {
-    const result = evaluate(errandEvents(), errandReport());
+  it("passes a complete trace with all required checks", async () => {
+    const result = await evaluate(errandEvents(), errandReport());
     expect(result.status).toBe("passed");
     expect(result.score).toBe(1);
     expect(result.passedWeight).toBe(7);
@@ -419,7 +419,7 @@ describe("the corrected webclip site-errand rubric", () => {
     });
   });
 
-  it("passes when the two clip lifecycles interleave", () => {
+  it("passes when the two clip lifecycles interleave", async () => {
     const events = errandEvents([
       "create_markdown",
       "render_markdown",
@@ -431,13 +431,13 @@ describe("the corrected webclip site-errand rubric", () => {
       "delete_markdown",
       "read_quota"
     ]);
-    const result = evaluate(events, errandReport());
+    const result = await evaluate(events, errandReport());
     expect(result.status).toBe("passed");
     expect(checkStatus(result, "markdown_clip_chain")).toBe("passed");
     expect(checkStatus(result, "image_clip_chain")).toBe("passed");
   });
 
-  it("passes when the image clip is created first", () => {
+  it("passes when the image clip is created first", async () => {
     const events = errandEvents([
       "create_image",
       "create_markdown",
@@ -449,15 +449,15 @@ describe("the corrected webclip site-errand rubric", () => {
       "delete_markdown",
       "read_quota"
     ]);
-    const result = evaluate(events, errandReport());
+    const result = await evaluate(events, errandReport());
     expect(result.status).toBe("passed");
     expect(checkStatus(result, "markdown_clip_chain")).toBe("passed");
     expect(checkStatus(result, "image_clip_chain")).toBe("passed");
     expect(checkStatus(result, "clip_ids_distinct")).toBe("passed");
   });
 
-  it("passes when the accept header joins media types with commas", () => {
-    const result = evaluate(
+  it("passes when the accept header joins media types with commas", async () => {
+    const result = await evaluate(
       errandEvents(CANONICAL_ORDER, {
         markdownFetch: { accept: "text/markdown, text/html" }
       }),
@@ -467,8 +467,8 @@ describe("the corrected webclip site-errand rubric", () => {
     expect(checkStatus(result, "markdown_clip_chain")).toBe("passed");
   });
 
-  it("passes when the accept element carries a quality parameter", () => {
-    const result = evaluate(
+  it("passes when the accept element carries a quality parameter", async () => {
+    const result = await evaluate(
       errandEvents(CANONICAL_ORDER, {
         markdownFetch: { accept: "text/markdown;q=0.9" }
       }),
@@ -478,8 +478,8 @@ describe("the corrected webclip site-errand rubric", () => {
     expect(checkStatus(result, "markdown_clip_chain")).toBe("passed");
   });
 
-  it("passes when the served content-type carries a charset parameter", () => {
-    const result = evaluate(
+  it("passes when the served content-type carries a charset parameter", async () => {
+    const result = await evaluate(
       errandEvents(CANONICAL_ORDER, {
         markdownFetch: { contentType: "text/markdown; charset=utf-8" }
       }),
@@ -489,8 +489,8 @@ describe("the corrected webclip site-errand rubric", () => {
     expect(checkStatus(result, "markdown_clip_chain")).toBe("passed");
   });
 
-  it("accepts a report with an empty uncertainties list", () => {
-    const result = evaluate(errandEvents(), errandReport());
+  it("accepts a report with an empty uncertainties list", async () => {
+    const result = await evaluate(errandEvents(), errandReport());
     expect(errandReport().uncertainties).toEqual([]);
     expect(checkStatus(result, "result_report")).toBe("passed");
     expect(result.status).toBe("passed");
@@ -503,8 +503,11 @@ describe("the corrected webclip site-errand rubric against failing traces", () =
    * table, because the acceptance map cites test titles as they
    * appear in this file.
    */
-  function expectMissingStepToFail(part: ErrandPartId, check: string): void {
-    const result = evaluate(
+  async function expectMissingStepToFail(
+    part: ErrandPartId,
+    check: string
+  ): Promise<void> {
+    const result = await evaluate(
       errandEvents(CANONICAL_ORDER, { omit: part }),
       errandReport()
     );
@@ -512,87 +515,93 @@ describe("the corrected webclip site-errand rubric against failing traces", () =
     expect(checkStatus(result, check)).toBe("failed");
   }
 
-  function expectDeniedClaimToFail(field: string, check: string): void {
+  async function expectDeniedClaimToFail(
+    field: string,
+    check: string
+  ): Promise<void> {
     const claims: Partial<Record<string, boolean>> = { [field]: false };
-    const result = evaluate(errandEvents(), errandReport(claims));
+    const result = await evaluate(errandEvents(), errandReport(claims));
     expect(result.status).toBe("failed");
     expect(checkStatus(result, check)).toBe("failed");
   }
 
-  it("fails the task when create_markdown is missing", () => {
-    expectMissingStepToFail("create_markdown", "markdown_clip_chain");
+  it("fails the task when create_markdown is missing", async () => {
+    await expectMissingStepToFail("create_markdown", "markdown_clip_chain");
   });
 
-  it("fails the task when render_markdown is missing", () => {
-    expectMissingStepToFail("render_markdown", "markdown_clip_chain");
+  it("fails the task when render_markdown is missing", async () => {
+    await expectMissingStepToFail("render_markdown", "markdown_clip_chain");
   });
 
-  it("fails the task when fetch_markdown is missing", () => {
-    expectMissingStepToFail("fetch_markdown", "markdown_clip_chain");
+  it("fails the task when fetch_markdown is missing", async () => {
+    await expectMissingStepToFail("fetch_markdown", "markdown_clip_chain");
   });
 
-  it("fails the task when extract_markdown is missing", () => {
-    expectMissingStepToFail("extract_markdown", "markdown_clip_chain");
+  it("fails the task when extract_markdown is missing", async () => {
+    await expectMissingStepToFail("extract_markdown", "markdown_clip_chain");
   });
 
-  it("fails the task when delete_markdown is missing", () => {
-    expectMissingStepToFail("delete_markdown", "markdown_clip_chain");
+  it("fails the task when delete_markdown is missing", async () => {
+    await expectMissingStepToFail("delete_markdown", "markdown_clip_chain");
   });
 
-  it("fails the task when read_quota is missing", () => {
-    expectMissingStepToFail("read_quota", "markdown_clip_chain");
+  it("fails the task when read_quota is missing", async () => {
+    await expectMissingStepToFail("read_quota", "markdown_clip_chain");
   });
 
-  it("fails the task when create_image is missing", () => {
-    expectMissingStepToFail("create_image", "image_clip_chain");
+  it("fails the task when create_image is missing", async () => {
+    await expectMissingStepToFail("create_image", "image_clip_chain");
   });
 
-  it("fails the task when render_image is missing", () => {
-    expectMissingStepToFail("render_image", "image_clip_chain");
+  it("fails the task when render_image is missing", async () => {
+    await expectMissingStepToFail("render_image", "image_clip_chain");
   });
 
-  it("fails the task when fetch_image is missing", () => {
-    expectMissingStepToFail("fetch_image", "image_clip_chain");
+  it("fails the task when fetch_image is missing", async () => {
+    await expectMissingStepToFail("fetch_image", "image_clip_chain");
   });
 
-  it("fails the task when the report denies clips_created", () => {
-    expectDeniedClaimToFail("clips_created", "markdown_clip_chain");
+  it("fails the task when the report denies clips_created", async () => {
+    await expectDeniedClaimToFail("clips_created", "markdown_clip_chain");
   });
 
-  it("fails the task when the report denies markdown_clipped", () => {
-    expectDeniedClaimToFail("markdown_clipped", "markdown_clip_chain");
+  it("fails the task when the report denies markdown_clipped", async () => {
+    await expectDeniedClaimToFail("markdown_clipped", "markdown_clip_chain");
   });
 
-  it("fails the task when the report denies markdown_content_fetched", () => {
-    expectDeniedClaimToFail("markdown_content_fetched", "markdown_clip_chain");
+  it("fails the task when the report denies markdown_content_fetched", async () => {
+    await expectDeniedClaimToFail(
+      "markdown_content_fetched",
+      "markdown_clip_chain"
+    );
   });
 
-  it("fails the task when the report denies text_extracted", () => {
-    expectDeniedClaimToFail("text_extracted", "markdown_clip_chain");
+  it("fails the task when the report denies text_extracted", async () => {
+    await expectDeniedClaimToFail("text_extracted", "markdown_clip_chain");
   });
 
-  it("fails the task when the report denies clip_deleted", () => {
-    expectDeniedClaimToFail("clip_deleted", "markdown_clip_chain");
+  it("fails the task when the report denies clip_deleted", async () => {
+    await expectDeniedClaimToFail("clip_deleted", "markdown_clip_chain");
   });
 
-  it("fails the task when the report denies quota_checked", () => {
-    expectDeniedClaimToFail("quota_checked", "markdown_clip_chain");
+  it("fails the task when the report denies quota_checked", async () => {
+    await expectDeniedClaimToFail("quota_checked", "markdown_clip_chain");
   });
 
-  it("fails the task when the report denies image_clipped", () => {
-    expectDeniedClaimToFail("image_clipped", "image_clip_chain");
+  it("fails the task when the report denies image_clipped", async () => {
+    await expectDeniedClaimToFail("image_clipped", "image_clip_chain");
   });
 
-  it("fails the task when the report denies both_rendered", () => {
-    expectDeniedClaimToFail("both_rendered", "image_clip_chain");
+  it("fails the task when the report denies both_rendered", async () => {
+    await expectDeniedClaimToFail("both_rendered", "image_clip_chain");
   });
 
-  it("fails the task when the report denies image_content_fetched", () => {
-    expectDeniedClaimToFail("image_content_fetched", "image_clip_chain");
+  it("fails the task when the report denies image_content_fetched", async () => {
+    await expectDeniedClaimToFail("image_content_fetched", "image_clip_chain");
   });
 
-  it("fails the task when both creates return one identifier", () => {
-    const result = evaluate(
+  it("fails the task when both creates return one identifier", async () => {
+    const result = await evaluate(
       errandEvents(CANONICAL_ORDER, { imageId: MARKDOWN_ID }),
       errandReport()
     );
@@ -602,8 +611,8 @@ describe("the corrected webclip site-errand rubric against failing traces", () =
     expect(checkStatus(result, "image_clip_chain")).toBe("passed");
   });
 
-  it("fails the task when the two formats are swapped", () => {
-    const result = evaluate(
+  it("fails the task when the two formats are swapped", async () => {
+    const result = await evaluate(
       errandEvents(CANONICAL_ORDER, {
         markdownCreate: { url: ESSAY_URL, format: "image" },
         imageCreate: { url: DASHBOARD_URL, format: "markdown" }
@@ -615,8 +624,8 @@ describe("the corrected webclip site-errand rubric against failing traces", () =
     expect(checkStatus(result, "image_clip_chain")).toBe("failed");
   });
 
-  it("fails the task when the two URLs are swapped", () => {
-    const result = evaluate(
+  it("fails the task when the two URLs are swapped", async () => {
+    const result = await evaluate(
       errandEvents(CANONICAL_ORDER, {
         markdownCreate: { url: DASHBOARD_URL, format: "markdown" },
         imageCreate: { url: ESSAY_URL, format: "image" }
@@ -628,8 +637,8 @@ describe("the corrected webclip site-errand rubric against failing traces", () =
     expect(checkStatus(result, "image_clip_chain")).toBe("failed");
   });
 
-  it("fails the task when the image clip is the deleted one", () => {
-    const result = evaluate(
+  it("fails the task when the image clip is the deleted one", async () => {
+    const result = await evaluate(
       errandEvents(CANONICAL_ORDER, { deletedClip: "image" }),
       errandReport()
     );
@@ -638,8 +647,8 @@ describe("the corrected webclip site-errand rubric against failing traces", () =
     expect(checkStatus(result, "single_clip_deletion")).toBe("passed");
   });
 
-  it("fails the task when both clips are deleted", () => {
-    const result = evaluate(
+  it("fails the task when both clips are deleted", async () => {
+    const result = await evaluate(
       errandEvents(CANONICAL_ORDER, { alsoDeleteImage: true }),
       errandReport()
     );
@@ -648,8 +657,8 @@ describe("the corrected webclip site-errand rubric against failing traces", () =
     expect(checkStatus(result, "markdown_clip_chain")).toBe("passed");
   });
 
-  it("fails the task when the markdown render reports status failed", () => {
-    const result = evaluate(
+  it("fails the task when the markdown render reports status failed", async () => {
+    const result = await evaluate(
       errandEvents(CANONICAL_ORDER, { markdownRenderStatus: "failed" }),
       errandReport()
     );
@@ -662,8 +671,8 @@ describe("the corrected webclip site-errand rubric against failing traces", () =
     expect(checkStatus(result, "image_clip_chain")).toBe("passed");
   });
 
-  it("fails the task when the markdown fetch asks for the picture", () => {
-    const result = evaluate(
+  it("fails the task when the markdown fetch asks for the picture", async () => {
+    const result = await evaluate(
       errandEvents(CANONICAL_ORDER, {
         markdownFetch: { accept: "image/svg+xml" }
       }),
@@ -673,8 +682,8 @@ describe("the corrected webclip site-errand rubric against failing traces", () =
     expect(checkStatus(result, "markdown_clip_chain")).toBe("failed");
   });
 
-  it("fails the task when the image fetch is served markdown", () => {
-    const result = evaluate(
+  it("fails the task when the image fetch is served markdown", async () => {
+    const result = await evaluate(
       errandEvents(CANONICAL_ORDER, {
         imageFetch: { contentType: "text/markdown" }
       }),
@@ -684,7 +693,7 @@ describe("the corrected webclip site-errand rubric against failing traces", () =
     expect(checkStatus(result, "image_clip_chain")).toBe("failed");
   });
 
-  it("fails the task when the quota read precedes the deletion", () => {
+  it("fails the task when the quota read precedes the deletion", async () => {
     const events = errandEvents([
       "create_markdown",
       "create_image",
@@ -696,12 +705,12 @@ describe("the corrected webclip site-errand rubric against failing traces", () =
       "read_quota",
       "delete_markdown"
     ]);
-    const result = evaluate(events, errandReport());
+    const result = await evaluate(events, errandReport());
     expect(result.status).toBe("failed");
     expect(checkStatus(result, "markdown_clip_chain")).toBe("failed");
   });
 
-  it("keeps passing when the api_model answer avoids the word clip", () => {
+  it("keeps passing when the api_model answer avoids the word clip", async () => {
     const report = {
       ...errandReport(),
       api_model:
@@ -711,14 +720,14 @@ describe("the corrected webclip site-errand rubric against failing traces", () =
         "close the capture lifecycle, and the account endpoint reports " +
         "the quota."
     };
-    const result = evaluate(errandEvents(), report);
+    const result = await evaluate(errandEvents(), report);
     expect(result.status).toBe("passed");
     expect(result.score).toBe(1);
     expect(checkStatus(result, "comprehension_probe")).toBe("failed");
   });
 
-  it("keeps passing with an extra create call and records it", () => {
-    const result = evaluate(
+  it("keeps passing with an extra create call and records it", async () => {
+    const result = await evaluate(
       errandEvents(CANONICAL_ORDER, { extraCreate: true }),
       errandReport()
     );

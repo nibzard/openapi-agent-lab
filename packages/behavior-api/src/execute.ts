@@ -4,9 +4,17 @@
  * validation before commit, semantic-event registry checks, and
  * rollback on any failure. Requests are handled serially per run in
  * ingress order by the caller.
+ *
+ * The state and event schema checks evaluate pack-supplied schemas, so
+ * they run inside the bounded schema worker boundary and share the
+ * per-call timeout window of the backend call.
  */
 
-import { SchemaValidator, type Json } from "@oal/core";
+import {
+  SchemaWorkerError,
+  validateSchemaInstance,
+  type Json
+} from "@oal/core";
 import {
   BehaviorHttpError,
   BehaviorTimeoutError,
@@ -130,24 +138,20 @@ export async function executeBehaviorRequest(
   }
 
   if (result.nextState !== undefined) {
-    const stateCheck = checkState(result.nextState, options);
+    const stateCheck = await boundedChecks(
+      checkState(result.nextState, options),
+      timeoutMs
+    );
     if (stateCheck !== null) {
-      return {
-        ok: false,
-        kind: "internal",
-        code: "behavior_internal_error",
-        message: stateCheck
-      };
+      return stateCheck;
     }
   }
-  const eventCheck = checkSemanticEvents(result, options.eventRegistry);
+  const eventCheck = await boundedChecks(
+    checkSemanticEvents(result, options.eventRegistry),
+    timeoutMs
+  );
   if (eventCheck !== null) {
-    return {
-      ok: false,
-      kind: "internal",
-      code: "behavior_internal_error",
-      message: eventCheck
-    };
+    return eventCheck;
   }
 
   return {
@@ -156,6 +160,62 @@ export async function executeBehaviorRequest(
     state: result.nextState ?? state,
     committed: result.nextState !== undefined
   };
+}
+
+/**
+ * Run the post-call schema checks inside the same bounded window as the
+ * backend call. The checks evaluate pack-supplied schemas, so they run
+ * in the worker boundary; a deadline or boundary failure keeps the
+ * stable timeout and internal outcome shapes and rolls state back.
+ */
+async function boundedChecks(
+  checks: Promise<string | null>,
+  timeoutMs: number
+): Promise<ExecuteOutcome | null> {
+  let outcome: string | null;
+  try {
+    outcome = await withTimeout(checks, timeoutMs);
+  } catch (error) {
+    if (error instanceof BehaviorTimeoutError) {
+      return {
+        ok: false,
+        kind: "timeout",
+        code: "behavior_timeout",
+        timeoutMs: error.timeoutMs,
+        message: error.message
+      };
+    }
+    if (
+      error instanceof SchemaWorkerError &&
+      error.code === "OAL-SCHEMA-WORKER-TIMEOUT"
+    ) {
+      // The schema worker deadline fired inside the bounded window; the
+      // request reports the same stable timeout shape as a backend that
+      // ran past its bound.
+      return {
+        ok: false,
+        kind: "timeout",
+        code: "behavior_timeout",
+        timeoutMs,
+        message: error.message
+      };
+    }
+    return {
+      ok: false,
+      kind: "internal",
+      code: "behavior_internal_error",
+      message: error instanceof Error ? error.message : String(error)
+    };
+  }
+  if (outcome !== null) {
+    return {
+      ok: false,
+      kind: "internal",
+      code: "behavior_internal_error",
+      message: outcome
+    };
+  }
+  return null;
 }
 
 /**
@@ -181,7 +241,10 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   });
 }
 
-function checkState(state: Json, options: ExecuteOptions): string | null {
+async function checkState(
+  state: Json,
+  options: ExecuteOptions
+): Promise<string | null> {
   let serialized: string;
   try {
     serialized = JSON.stringify(state);
@@ -192,8 +255,7 @@ function checkState(state: Json, options: ExecuteOptions): string | null {
     return `nextState exceeds the ${options.maxStateBytes} byte state limit`;
   }
   if (options.stateSchema !== undefined) {
-    const validator = new SchemaValidator(options.stateSchema);
-    const errors = validator.errors(state);
+    const errors = await validateSchemaInstance(options.stateSchema, state);
     if (errors.length > 0) {
       return `nextState violates the pack state schema at ${errors[0]?.pointer ?? "/"}: ${errors[0]?.message ?? "invalid"}`;
     }
@@ -201,10 +263,10 @@ function checkState(state: Json, options: ExecuteOptions): string | null {
   return null;
 }
 
-function checkSemanticEvents(
+async function checkSemanticEvents(
   result: BehaviorResult,
   registry: ReadonlyMap<string, RegisteredEvent>
-): string | null {
+): Promise<string | null> {
   const events = result.semanticEvents ?? [];
   for (const event of events) {
     const registered = registry.get(event.name);
@@ -214,8 +276,10 @@ function checkSemanticEvents(
     if (registered.eventVersion !== event.eventVersion) {
       return `semantic event ${event.name} declares version ${event.eventVersion}, registry pins ${registered.eventVersion}`;
     }
-    const validator = new SchemaValidator(registered.payloadSchema);
-    const errors = validator.errors(event.payload);
+    const errors = await validateSchemaInstance(
+      registered.payloadSchema,
+      event.payload
+    );
     if (errors.length > 0) {
       return `semantic event ${event.name} payload violates its schema at ${errors[0]?.pointer ?? "/"}`;
     }

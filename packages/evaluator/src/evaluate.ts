@@ -15,8 +15,9 @@
 import {
   canonicalJson,
   canonicalJsonSha256,
-  SchemaValidator,
+  SchemaWorkerError,
   toOalError,
+  validateSchemaInstance,
   type Json,
   type JsonObject,
   type SchemaViolation
@@ -388,10 +389,15 @@ function unmatchedStep(id: string): StepOutcome {
 }
 
 /**
- * Evaluate one run against one rubric. The function is synchronous and
- * free of side effects; it reads only the frozen inputs.
+ * Evaluate one run against one rubric. The function is free of side
+ * effects beyond the schema worker boundary: it reads only the frozen
+ * inputs, and every schema check runs inside the bounded boundary, so a
+ * hostile pattern cannot block the evaluator. Checks run one at a time
+ * so the boundary queue stays bounded and the result stays deterministic.
  */
-export function evaluateRubric(options: EvaluateOptions): EvaluationResult {
+export async function evaluateRubric(
+  options: EvaluateOptions
+): Promise<EvaluationResult> {
   const limits: EvaluatorLimits = {
     ...DEFAULT_EVALUATOR_LIMITS,
     ...(options.limits ?? {})
@@ -425,9 +431,10 @@ export function evaluateRubric(options: EvaluateOptions): EvaluationResult {
       return compiled;
     }
   };
-  const checks = options.rubric.checks.map((check) =>
-    evaluateCheck(check, context)
-  );
+  const checks: CheckResult[] = [];
+  for (const check of options.rubric.checks) {
+    checks.push(await evaluateCheck(check, context));
+  }
   const signals: Record<string, boolean> = {};
   const infrastructureErrors: InfrastructureErrorRecord[] = [];
   for (const check of checks) {
@@ -487,10 +494,10 @@ function overallStatus(
   return "passed";
 }
 
-function evaluateCheck(
+async function evaluateCheck(
   check: RubricCheck,
   context: EvaluationContext
-): CheckResult {
+): Promise<CheckResult> {
   const base: CheckResult = {
     id: check.id,
     kind: check.kind,
@@ -547,7 +554,7 @@ function evaluateCheck(
           base
         );
       case "json_schema":
-        return jsonSchemaCheck(check, context, base);
+        return await jsonSchemaCheck(check, context, base);
       case "artifact":
         return artifactCheck(check, context, base);
     }
@@ -1305,11 +1312,18 @@ function expressionErrorResult(
   };
 }
 
-function jsonSchemaCheck(
+/**
+ * Validate one evaluation input against a pack-supplied schema. The
+ * schema is untrusted pattern input, so the check runs inside the
+ * bounded worker boundary. A boundary failure is an infrastructure
+ * outcome: the check status becomes error and the stable worker code is
+ * recorded, never a participant task failure.
+ */
+async function jsonSchemaCheck(
   check: Extract<RubricCheck, { kind: "json_schema" }>,
   context: EvaluationContext,
   base: CheckResult
-): CheckResult {
+): Promise<CheckResult> {
   const schema = context.resolveSchema(check.schema);
   if (schema === undefined) {
     return {
@@ -1335,7 +1349,27 @@ function jsonSchemaCheck(
       `The ${check.value} value is`
     );
   }
-  const violations = new SchemaValidator(schema).errors(target);
+  let violations: SchemaViolation[];
+  try {
+    violations = await validateSchemaInstance(schema, target);
+  } catch (cause: unknown) {
+    if (cause instanceof SchemaWorkerError) {
+      return {
+        ...started,
+        status: "error",
+        message:
+          cause.code === EvaluatorErrorCode.CheckSchemaWorkerTimeout
+            ? "The schema check exceeded its execution deadline."
+            : "The schema check failed inside its execution boundary.",
+        error: infrastructureError({
+          code: cause.code,
+          message: cause.message,
+          checkId: check.id
+        })
+      };
+    }
+    throw cause;
+  }
   if (violations.length === 0) {
     return {
       ...started,

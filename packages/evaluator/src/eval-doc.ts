@@ -23,10 +23,12 @@ import {
   isSafeRelativePath,
   parseJsonStrict,
   resolveJsonPointer,
-  SchemaValidator,
+  SchemaWorkerError,
+  validateSchemaInstance,
   type Diagnostic,
   type Json,
-  type JsonObject
+  type JsonObject,
+  type SchemaViolation
 } from "@oal/core";
 
 import { loadRubric } from "./rubric.ts";
@@ -150,14 +152,17 @@ export interface EvalCasesResult {
 
 /**
  * Load and check one eval document. The function never throws on
- * document content; every problem is reported as a diagnostic.
+ * document content; every problem is reported as a diagnostic. Shape
+ * validation runs inside the bounded schema worker boundary, because the
+ * documents and the referenced case schema are pack-supplied; a boundary
+ * failure is reported as one diagnostic with the stable worker code.
  */
-export function loadEval(
+export async function loadEval(
   document: Json,
   options: EvalLoadOptions = {}
-): EvalLoadResult {
+): Promise<EvalLoadResult> {
   const loader = new EvalLoader(options);
-  const evaluation = loader.load(document);
+  const evaluation = await loader.load(document);
   return {
     eval: evaluation === null || loader.failed ? null : evaluation,
     caseCount: loader.caseCount,
@@ -166,16 +171,26 @@ export function loadEval(
 }
 
 /** Load one JSONL case line. */
-export function loadEvalCase(
+export async function loadEvalCase(
   document: Json,
   options: EvalCaseOptions = {}
-): EvalCaseResult {
+): Promise<EvalCaseResult> {
   const diagnostics: Diagnostic[] = [];
   const pointer = options.pointer ?? "#/";
   if (options.schema !== undefined) {
-    for (const violation of new SchemaValidator(options.schema).errors(
-      document
-    )) {
+    let violations: SchemaViolation[];
+    try {
+      violations = await validateSchemaInstance(options.schema, document);
+    } catch (cause: unknown) {
+      if (cause instanceof SchemaWorkerError) {
+        diagnostics.push(
+          caseError(cause.message, pointer, options.documentUri, cause.code)
+        );
+        return { case: null, diagnostics };
+      }
+      throw cause;
+    }
+    for (const violation of violations) {
       diagnostics.push(
         caseError(
           `${violation.code}: ${violation.message}`,
@@ -243,10 +258,10 @@ export function loadEvalCase(
  * skipped, case identifiers must be unique, and the id pointer must name
  * a non-empty string inside every case.
  */
-export function loadEvalCases(
+export async function loadEvalCases(
   text: string,
   options: EvalCaseOptions & { idPointer?: string | undefined } = {}
-): EvalCasesResult {
+): Promise<EvalCasesResult> {
   const diagnostics: Diagnostic[] = [];
   const cases: EvalCase[] = [];
   const seen = new Set<string>();
@@ -271,7 +286,7 @@ export function loadEvalCases(
       );
       continue;
     }
-    const loaded = loadEvalCase(parsed, {
+    const loaded = await loadEvalCase(parsed, {
       ...(options.schema === undefined ? {} : { schema: options.schema }),
       ...(options.documentUri === undefined
         ? {}
@@ -318,12 +333,13 @@ export function loadEvalCases(
 function caseError(
   message: string,
   pointer: string,
-  documentUri: string | undefined
+  documentUri: string | undefined,
+  code: string = EvalDocCode.CaseInvalid
 ): Diagnostic {
   return diagnostic({
     severity: "error",
     phase: "compile",
-    code: EvalDocCode.CaseInvalid,
+    code,
     message,
     ...(documentUri === undefined ? {} : { document_uri: documentUri }),
     json_pointer: pointer
@@ -394,11 +410,21 @@ class EvalLoader {
     this.resolveDocument = options.resolveDocument;
   }
 
-  load(document: Json): Eval | null {
+  async load(document: Json): Promise<Eval | null> {
     if (this.options.schema !== undefined) {
-      const violations = new SchemaValidator(this.options.schema).errors(
-        document
-      );
+      let violations: SchemaViolation[];
+      try {
+        violations = await validateSchemaInstance(
+          this.options.schema,
+          document
+        );
+      } catch (cause: unknown) {
+        if (cause instanceof SchemaWorkerError) {
+          this.error(cause.code, cause.message, "#/");
+          return null;
+        }
+        throw cause;
+      }
       for (const violation of violations) {
         this.error(
           EvalDocCode.EvalInvalid,
@@ -425,7 +451,7 @@ class EvalLoader {
       task === null || task.target === undefined ? undefined : task.target
     );
     const scope = this.readOperationScope(fieldOf(document, "operation_scope"));
-    const cases = this.readCases(fieldOf(document, "cases"));
+    const cases = await this.readCases(fieldOf(document, "cases"));
     const result = this.readResult(fieldOf(document, "result"));
     const rubric = this.readReference(
       fieldOf(document, "rubric"),
@@ -452,7 +478,7 @@ class EvalLoader {
     }
     this.checkTaskSource(task);
     this.checkResultSchema(result);
-    this.checkRubric(rubric);
+    await this.checkRubric(rubric);
     return {
       id,
       prompt_set: promptSet,
@@ -724,7 +750,9 @@ class EvalLoader {
     return entries;
   }
 
-  private readCases(value: Json | undefined): EvalCases | undefined | null {
+  private async readCases(
+    value: Json | undefined
+  ): Promise<EvalCases | undefined | null> {
     if (value === undefined) {
       return undefined;
     }
@@ -762,16 +790,16 @@ class EvalLoader {
     if (source === null || schema === null) {
       return null;
     }
-    this.loadCaseLines(source, schema, idPointer);
+    await this.loadCaseLines(source, schema, idPointer);
     return { source, schema, id_pointer: idPointer };
   }
 
   /** Load the case lines, then record the shared case input keys. */
-  private loadCaseLines(
+  private async loadCaseLines(
     source: string,
     schema: string,
     idPointer: string
-  ): void {
+  ): Promise<void> {
     if (this.resolveText === undefined) {
       return;
     }
@@ -784,7 +812,7 @@ class EvalLoader {
       );
       return;
     }
-    const result = loadEvalCases(text, {
+    const result = await loadEvalCases(text, {
       ...(this.options.caseSchema === undefined
         ? {}
         : { schema: this.options.caseSchema }),
@@ -803,11 +831,19 @@ class EvalLoader {
     }
     this.caseCount = result.cases.length;
     this.caseInputKeys = sharedKeys(result.cases);
-    this.checkCaseInputs(result.cases, schema);
+    await this.checkCaseInputs(result.cases, schema);
   }
 
-  /** Validate every case input against the referenced case schema. */
-  private checkCaseInputs(cases: readonly EvalCase[], schema: string): void {
+  /**
+   * Validate every case input against the referenced case schema. The
+   * case schema is pack-supplied pattern input, so the checks run inside
+   * the bounded worker boundary; a boundary failure is one diagnostic
+   * with the stable worker code.
+   */
+  private async checkCaseInputs(
+    cases: readonly EvalCase[],
+    schema: string
+  ): Promise<void> {
     if (this.resolveDocument === undefined) {
       return;
     }
@@ -829,9 +865,18 @@ class EvalLoader {
       return;
     }
     this.warnSchemaDraft(document, "#/cases/schema");
-    const validator = new SchemaValidator(document);
     for (const oneCase of cases) {
-      for (const violation of validator.errors(oneCase.input)) {
+      let violations: SchemaViolation[];
+      try {
+        violations = await validateSchemaInstance(document, oneCase.input);
+      } catch (cause: unknown) {
+        if (cause instanceof SchemaWorkerError) {
+          this.error(cause.code, cause.message, "#/cases/schema");
+          return;
+        }
+        throw cause;
+      }
+      for (const violation of violations) {
         this.error(
           EvalDocCode.EvalInvalid,
           `Case ${JSON.stringify(oneCase.id)} input: ${violation.code}: ${
@@ -1014,7 +1059,7 @@ class EvalLoader {
   }
 
   /** An inline rubric must compile with the rubric loader. */
-  private checkRubric(reference: string): void {
+  private async checkRubric(reference: string): Promise<void> {
     if (this.resolveDocument === undefined) {
       return;
     }
@@ -1027,7 +1072,7 @@ class EvalLoader {
       );
       return;
     }
-    const rubric = loadRubric(document, {
+    const rubric = await loadRubric(document, {
       ...(this.options.rubricSchema === undefined
         ? {}
         : { schema: this.options.rubricSchema }),

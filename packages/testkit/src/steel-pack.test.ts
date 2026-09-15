@@ -38,13 +38,13 @@ function referencesOf(role: string): readonly string[] {
     .map((reference) => reference.path);
 }
 
-function evaluate(
+async function evaluate(
   rubricPath: string,
   events: readonly TraceEvent[],
   report: Json
 ): ReturnType<typeof evaluateRubric> {
   return evaluateRubric({
-    rubric: rubricOf(loadPackRubric(pack.loaded, rubricPath)),
+    rubric: rubricOf(await loadPackRubric(pack.loaded, rubricPath)),
     runId: RUN_ID,
     run: RUN,
     events,
@@ -79,7 +79,7 @@ describe("the Steel Computer pack", () => {
     expect(media[0]?.message).toContain("application/zip");
   });
 
-  it("loads every rubric with zero diagnostics", () => {
+  it("loads every rubric with zero diagnostics", async () => {
     const rubricPaths = referencesOf("rubric");
     expect(rubricPaths).toEqual([
       "evals/checkpoint-recovery/rubric.yaml",
@@ -88,11 +88,13 @@ describe("the Steel Computer pack", () => {
       "evals/site-errand/rubric.yaml",
       "evals/open-ended/rubric.yaml"
     ]);
-    const ids = rubricPaths.map((rubricPath) => {
-      const result = loadPackRubric(pack.loaded, rubricPath);
-      expect(result.diagnostics).toEqual([]);
-      return rubricOf(result).id;
-    });
+    const ids = await Promise.all(
+      rubricPaths.map(async (rubricPath) => {
+        const result = await loadPackRubric(pack.loaded, rubricPath);
+        expect(result.diagnostics).toEqual([]);
+        return rubricOf(result).id;
+      })
+    );
     expect(ids).toEqual([
       "steel-checkpoint-recovery",
       "steel-basic-lifecycle",
@@ -140,7 +142,7 @@ describe("the Steel Computer pack", () => {
 });
 
 describe("the Steel Computer rubrics against a passing trace", () => {
-  it("scores the checkpoint-recovery happy path as passed", () => {
+  it("scores the checkpoint-recovery happy path as passed", async () => {
     const session = "s-1";
     const upload = (name: string, sha: string, sequence: number) =>
       traceExchange({
@@ -203,11 +205,15 @@ describe("the Steel Computer rubrics against a passing trace", () => {
         response_body: traceJsonBody({ id: session, status: "released" })
       })
     ];
-    const result = evaluate("evals/checkpoint-recovery/rubric.yaml", events, {
-      released_session: true,
-      saved_state_create_supported: false,
-      notes: "Steel v1 publishes no saved-state session creation."
-    });
+    const result = await evaluate(
+      "evals/checkpoint-recovery/rubric.yaml",
+      events,
+      {
+        released_session: true,
+        saved_state_create_supported: false,
+        notes: "Steel v1 publishes no saved-state session creation."
+      }
+    );
     expect(result.status).toBe("passed");
     expect(result.checks.map((check) => [check.id, check.status])).toEqual([
       ["recovery_flow", "passed"],
@@ -218,7 +224,7 @@ describe("the Steel Computer rubrics against a passing trace", () => {
     ]);
   });
 
-  it("scores the basic-lifecycle happy path as passed", () => {
+  it("scores the basic-lifecycle happy path as passed", async () => {
     const session = "s-2";
     const read = (status: string, sequence: number) =>
       traceExchange({
@@ -254,7 +260,7 @@ describe("the Steel Computer rubrics against a passing trace", () => {
       }),
       read("released", 4)
     ];
-    const result = evaluate("evals/basic-lifecycle/rubric.yaml", events, {
+    const result = await evaluate("evals/basic-lifecycle/rubric.yaml", events, {
       session_created: true,
       session_released: true,
       final_status: "released"
@@ -263,7 +269,7 @@ describe("the Steel Computer rubrics against a passing trace", () => {
     expect(result.score).toBe(1);
   });
 
-  it("scores the documentation-discovery happy path as passed", () => {
+  it("scores the documentation-discovery happy path as passed", async () => {
     const events = [
       traceExchange({
         event_id: "evt-1",
@@ -275,7 +281,7 @@ describe("the Steel Computer rubrics against a passing trace", () => {
         response_body: traceJsonBody({ id: "s-3", status: "live" })
       })
     ];
-    const result = evaluate(
+    const result = await evaluate(
       "evals/documentation-discovery/rubric.yaml",
       events,
       {

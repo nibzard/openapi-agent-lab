@@ -434,11 +434,11 @@ interface CompiledEval {
   readonly resultSchemaSha256: string | null;
 }
 
-function compileEvalDocuments(
+async function compileEvalDocuments(
   pack: LoadedPack,
   evalId: string,
   findings: Diagnostic[]
-): CompiledEval | null {
+): Promise<CompiledEval | null> {
   const entries = pack.manifest["evals"];
   const list = Array.isArray(entries) ? entries : [];
   let declared: JsonObject | null = null;
@@ -474,7 +474,7 @@ function compileEvalDocuments(
   const resolveDocument = (reference: string): Json | undefined =>
     packDocumentOf(pack, reference);
 
-  const loaded = loadEval(declared as Json, {
+  const loaded = await loadEval(declared as Json, {
     resolveText,
     resolveDocument,
     documentUri: `${pack.root}/${pack.manifestName}#/evals/${evalId}`
@@ -502,7 +502,7 @@ function compileEvalDocuments(
     );
     return null;
   }
-  const rubricLoaded = loadRubric(rubricReference.document, {
+  const rubricLoaded = await loadRubric(rubricReference.document, {
     resolveSchema: resolveDocument,
     documentUri: `${pack.root}/${rubricPath ?? "rubric"}`
   });
@@ -528,7 +528,7 @@ function compileEvalDocuments(
     // already validated every input against it. This pass loads the
     // lines structurally; the repository eval-case schema governs the
     // line shape when a caller supplies it.
-    const loadedCases = loadEvalCases(source.text, {
+    const loadedCases = await loadEvalCases(source.text, {
       documentUri: `${pack.root}/${evaluation.cases.source}`
     });
     findings.push(...loadedCases.diagnostics);
@@ -766,7 +766,11 @@ export async function runPreflight(
   const semanticSha256 = str(contract?.["semantic_sha256"]) ?? "";
 
   // Steps 6 and 7: eval, cases, rubric.
-  const compiledEval = compileEvalDocuments(pack, options.evalId, findings);
+  const compiledEval = await compileEvalDocuments(
+    pack,
+    options.evalId,
+    findings
+  );
   if (compiledEval === null) {
     return { ok: false, findings, plan: null };
   }

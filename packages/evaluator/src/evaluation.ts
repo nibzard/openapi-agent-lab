@@ -39,6 +39,8 @@ export const EvaluatorErrorCode = {
   CheckCandidateLimit: "OAL-CHECK-CANDIDATE-LIMIT",
   CheckCaptureLimit: "OAL-CHECK-CAPTURE-LIMIT",
   CheckHeaderViewLimit: "OAL-CHECK-HEADER-VIEW-LIMIT",
+  CheckSchemaWorkerTimeout: "OAL-SCHEMA-WORKER-TIMEOUT",
+  CheckSchemaWorkerFailed: "OAL-SCHEMA-WORKER-FAILED",
   RubricSchemaUnresolved: "OAL-RUBRIC-SCHEMA-UNRESOLVED",
   RubricInvalid: DiagnosticCode.RubricInvalid,
   EvaluatorCrashed: DiagnosticCode.EvaluatorCrashed

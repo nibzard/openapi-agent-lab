@@ -15,6 +15,7 @@ import type { Socket } from "node:net";
 
 import {
   canonicalJsonSha256,
+  configureSchemaWorker,
   DiagnosticCode,
   errorDiagnostics,
   formatRfc3339,
@@ -577,6 +578,16 @@ async function startRawHttpExposure(
   }
   const visibility: ContractVisibility = options.visibility ?? "file";
   const documentation = options.documentation;
+  // The schema worker boundary serves this exposure with the resource
+  // settings of the run's limit table, so a hostile pattern inside the
+  // contract is bounded by the configured deadline and queue bounds.
+  configureSchemaWorker({
+    deadlineMs: request.limits.schemaWorkerDeadlineMs,
+    workerCount: request.limits.schemaWorkerCount,
+    maxPending: request.limits.schemaWorkerMaxPending,
+    maxMessageBytes: request.limits.schemaWorkerMaxMessageBytes,
+    memoryBytes: request.limits.schemaWorkerMemoryBytes
+  });
   const candidates = conventionalCandidates(
     documentation?.candidates ?? {},
     visibility

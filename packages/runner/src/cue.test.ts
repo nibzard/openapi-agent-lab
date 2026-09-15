@@ -159,11 +159,11 @@ describe("parseSurfacePolicy", () => {
 });
 
 describe("buildCueAudit", () => {
-  it("detects a forbidden literal case-insensitively", () => {
+  it("detects a forbidden literal case-insensitively", async () => {
     const manifest = cellManifest([
       filePlan("TASK.md", "Run the BENCHmark suite now.")
     ]);
-    const audit = buildCueAudit({
+    const audit = await buildCueAudit({
       cellId: "cell-a",
       policy: parsedPolicy(),
       manifest,
@@ -184,11 +184,11 @@ describe("buildCueAudit", () => {
     expect(audit.document["result"]).toBe("fail");
   });
 
-  it("keeps a case-sensitive literal silent under changed case", () => {
+  it("keeps a case-sensitive literal silent under changed case", async () => {
     const manifest = cellManifest([
       filePlan("TASK.md", "Welcome to the Control-Arm demo.")
     ]);
-    const audit = buildCueAudit({
+    const audit = await buildCueAudit({
       cellId: "cell-a",
       policy: parsedPolicy(),
       manifest,
@@ -204,11 +204,11 @@ describe("buildCueAudit", () => {
     expect(audit.result).toBe("pass");
   });
 
-  it("matches a forbidden pattern over rendered bytes", () => {
+  it("matches a forbidden pattern over rendered bytes", async () => {
     const manifest = cellManifest([
       filePlan("TASK.md", "The evaluator grades every submission.")
     ]);
-    const audit = buildCueAudit({
+    const audit = await buildCueAudit({
       cellId: "cell-a",
       policy: parsedPolicy(),
       manifest,
@@ -230,7 +230,7 @@ describe("buildCueAudit", () => {
     ]);
   });
 
-  it("pins an exception to one entry and one factor level", () => {
+  it("pins an exception to one entry and one factor level", async () => {
     const files = [
       filePlan("INSTRUCTIONS.md", "Start the benchmark when told."),
       filePlan("TASK.md", "Finish the benchmark task.")
@@ -241,7 +241,7 @@ describe("buildCueAudit", () => {
       surfaceEntry: `file-${file.target}`,
       text: file.text ?? ""
     }));
-    const atLevel = buildCueAudit({
+    const atLevel = await buildCueAudit({
       cellId: "cell-a",
       policy,
       manifest,
@@ -260,7 +260,7 @@ describe("buildCueAudit", () => {
     ]);
     expect(atLevel.result).toBe("fail");
 
-    const otherLevel = buildCueAudit({
+    const otherLevel = await buildCueAudit({
       cellId: "cell-a",
       policy,
       manifest,
@@ -271,7 +271,7 @@ describe("buildCueAudit", () => {
       otherLevel.findings.every((finding) => !finding.allowed_exception)
     ).toBe(true);
 
-    const noLevels = buildCueAudit({
+    const noLevels = await buildCueAudit({
       cellId: "cell-a",
       policy,
       manifest,
@@ -282,7 +282,7 @@ describe("buildCueAudit", () => {
     ).toBe(true);
   });
 
-  it("scans rendered bytes, not the source template", () => {
+  it("scans rendered bytes, not the source template", async () => {
     const context = resolveContext({
       values: { "case.name": "the benchmark results" }
     });
@@ -298,7 +298,7 @@ describe("buildCueAudit", () => {
     expect(rendered.variables).toEqual(["case.name"]);
 
     const manifest = cellManifest([filePlan("TASK.md", rendered.text)]);
-    const audit = buildCueAudit({
+    const audit = await buildCueAudit({
       cellId: "cell-a",
       policy: parsedPolicy(),
       manifest,
@@ -308,7 +308,7 @@ describe("buildCueAudit", () => {
       "benchmark"
     ]);
 
-    const sourceOnly = buildCueAudit({
+    const sourceOnly = await buildCueAudit({
       cellId: "cell-a",
       policy: parsedPolicy(),
       manifest,
@@ -323,7 +323,7 @@ describe("buildCueAudit", () => {
     expect(sourceOnly.result).toBe("pass");
   });
 
-  it("scans entry names, so a revealing environment name is caught", () => {
+  it("scans entry names, so a revealing environment name is caught", async () => {
     const manifest = compileSurfaceManifest({
       cellId: "cell-a",
       runId: "r-7f3a91",
@@ -333,7 +333,7 @@ describe("buildCueAudit", () => {
         { name: "OAL_BENCHMARK_MODE", source: "participant.environment" }
       ]
     }).manifest;
-    const audit = buildCueAudit({
+    const audit = await buildCueAudit({
       cellId: "cell-a",
       policy: parsedPolicy(),
       manifest,
@@ -350,9 +350,9 @@ describe("buildCueAudit", () => {
     ]);
   });
 
-  it("fails on an unallowed pairwise difference and records the pair", () => {
+  it("fails on an unallowed pairwise difference and records the pair", async () => {
     const manifest = cellManifest([filePlan("TASK.md", "Plain task text.")]);
-    const audit = buildCueAudit({
+    const audit = await buildCueAudit({
       cellId: "cell-a",
       policy: parsedPolicy(),
       manifest,
@@ -382,33 +382,25 @@ describe("buildCueAudit", () => {
     ]);
   });
 
-  it("rejects rendered bytes for an unknown entry and a cell mismatch", () => {
+  it("rejects rendered bytes for an unknown entry and a cell mismatch", async () => {
     const manifest = cellManifest([filePlan("TASK.md", "Plain task text.")]);
     const policy = parsedPolicy();
 
-    try {
-      buildCueAudit({
-        cellId: "cell-a",
-        policy,
-        manifest,
-        rendered: [{ surfaceEntry: "file-MISSING", text: "text" }]
-      });
-      throw new Error("expected a thrown error");
-    } catch (error) {
-      expect((error as { code?: string }).code).toBe(CueCode.EntryUnknown);
-    }
+    const unknown = await buildCueAudit({
+      cellId: "cell-a",
+      policy,
+      manifest,
+      rendered: [{ surfaceEntry: "file-MISSING", text: "text" }]
+    }).catch((error: unknown) => error);
+    expect((unknown as { code?: string }).code).toBe(CueCode.EntryUnknown);
 
-    try {
-      buildCueAudit({
-        cellId: "cell-b",
-        policy,
-        manifest,
-        rendered: []
-      });
-      throw new Error("expected a thrown error");
-    } catch (error) {
-      expect((error as { code?: string }).code).toBe(CueCode.CellIdMismatch);
-    }
+    const mismatch = await buildCueAudit({
+      cellId: "cell-b",
+      policy,
+      manifest,
+      rendered: []
+    }).catch((error: unknown) => error);
+    expect((mismatch as { code?: string }).code).toBe(CueCode.CellIdMismatch);
   });
 
   it("produces a document that conforms to cue-audit.v1.schema.json", async () => {
@@ -417,7 +409,7 @@ describe("buildCueAudit", () => {
     const schema = parseJsonStrict(await readFile(SCHEMA_PATH, "utf8"), {
       maxBytes: 1_048_576
     });
-    const audit = buildCueAudit({
+    const audit = await buildCueAudit({
       cellId: "cell-a",
       policy: parsedPolicy(),
       manifest,

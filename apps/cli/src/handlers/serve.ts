@@ -9,6 +9,7 @@ import { mkdir, open, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  closeSchemaWorker,
   EXIT_INVALID,
   EXIT_OK,
   EXIT_UNSUPPORTED,
@@ -24,7 +25,7 @@ import {
   type Json,
   type JsonObject
 } from "@oal/core";
-import { LIMIT_DEFAULTS } from "@oal/config";
+import { LIMIT_DEFAULTS, type LimitTable } from "@oal/config";
 import type { ContractIR } from "@oal/contract-ir";
 import { mintRunCredentials } from "@oal/gateway";
 import {
@@ -487,6 +488,12 @@ export async function startServe(options: {
   readonly identity: RunMetaInput;
   /** True when this call resumes an interrupted serve. */
   readonly resumed: boolean;
+  /**
+   * Resource limits of the serve. The schema worker boundary serves the
+   * contract's patterns under the configured deadline and queue bounds;
+   * the default table applies when omitted.
+   */
+  readonly limits?: LimitTable;
 }): Promise<ServeSession> {
   await mkdir(options.controlDir, { recursive: true });
   const evidenceDir = options.evidenceDir ?? options.controlDir;
@@ -518,6 +525,7 @@ export async function startServe(options: {
     (await eventCount(documentationPath)) + 1
   );
   const minted = mintRunCredentials(options.contract, options.runSeed);
+  const limits = options.limits ?? LIMIT_DEFAULTS;
   const handle = await createRawHttpExposure({
     fixtures: options.pack === null ? [] : packResponseFixtures(options.pack)
   })({
@@ -526,7 +534,7 @@ export async function startServe(options: {
     evalId: "manual",
     trialSeed: options.runSeed,
     contract: options.contract,
-    limits: LIMIT_DEFAULTS,
+    limits,
     host: options.host,
     port: options.port,
     now: (): number => Date.now(),
@@ -900,5 +908,8 @@ export const serveCommand: CommandHandler = async (args, io) => {
   }
   await session.handle.close();
   session.store.close();
+  // The schema worker threads served this process alone; stop them so a
+  // finished serve leaves no workers behind.
+  closeSchemaWorker();
   return EXIT_OK;
 };

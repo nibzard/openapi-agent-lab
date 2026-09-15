@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, beforeAll, describe, expect, it } from "vitest";
 
 import {
   SchemaValidator,
@@ -37,7 +37,7 @@ const RUN_ID = "run-1";
 const SCOPE_DIR = "runs/bat-0001/trials/run-1";
 const DERIVED_AT = "2026-08-27T13:00:00.000Z";
 
-function rubricOf(id: string, expression: string): Rubric {
+async function rubricOf(id: string, expression: string): Promise<Rubric> {
   const document: Json = {
     rubric_version: 1,
     id,
@@ -54,7 +54,7 @@ function rubricOf(id: string, expression: string): Rubric {
     ],
     signals: []
   };
-  const result = loadRubric(document);
+  const result = await loadRubric(document);
   if (result.rubric === null) {
     throw new Error(`The ${id} fixture did not load.`);
   }
@@ -62,8 +62,8 @@ function rubricOf(id: string, expression: string): Rubric {
 }
 
 /** The stored rubric passes on the recorded state; the variant fails. */
-const STORED_RUBRIC = rubricOf("regrade-original", "state.ready == true");
-const VARIANT_RUBRIC = rubricOf("regrade-variant", "state.ready == false");
+let STORED_RUBRIC: Rubric;
+let VARIANT_RUBRIC: Rubric;
 
 const EVIDENCE: RegradeEvidence = {
   runId: RUN_ID,
@@ -79,10 +79,10 @@ function evaluationText(evaluation: object): string {
 }
 
 /** The preregistered evaluation.json of a finalized run. */
-function storedEvaluation(): string {
+async function storedEvaluation(): Promise<string> {
   return evaluationText(
     toEvaluation(
-      evaluateRubric({
+      await evaluateRubric({
         rubric: STORED_RUBRIC,
         runId: EVIDENCE.runId,
         run: EVIDENCE.run,
@@ -102,6 +102,11 @@ describe("regradeRun (section 27.7)", () => {
   let root: string;
   let store: ArtifactStore;
 
+  beforeAll(async () => {
+    STORED_RUBRIC = await rubricOf("regrade-original", "state.ready == true");
+    VARIANT_RUBRIC = await rubricOf("regrade-variant", "state.ready == false");
+  });
+
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), "oal-regrade-"));
     store = new ArtifactStore(root);
@@ -112,7 +117,7 @@ describe("regradeRun (section 27.7)", () => {
   });
 
   async function writeStoredEvaluation(): Promise<string> {
-    const text = storedEvaluation();
+    const text = await storedEvaluation();
     await store.writeOnce(`${SCOPE_DIR}/evaluation.json`, text);
     return text;
   }
@@ -207,7 +212,7 @@ describe("regradeRun (section 27.7)", () => {
     ).toBe(true);
     expect(await store.read(first.path)).toBe(firstBytes);
     expect(await store.read(`${SCOPE_DIR}/evaluation.json`)).toBe(
-      storedEvaluation()
+      await storedEvaluation()
     );
   });
 
@@ -265,7 +270,7 @@ describe("regradeRun (section 27.7)", () => {
       const otherStore = new ArtifactStore(otherRoot);
       await otherStore.writeOnce(
         `${SCOPE_DIR}/evaluation.json`,
-        storedEvaluation()
+        await storedEvaluation()
       );
       const second = await regradeRun({
         store: otherStore,

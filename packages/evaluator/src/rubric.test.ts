@@ -263,7 +263,7 @@ describe("loadRubric", () => {
   });
 
   it("rejects an unknown scoring method", async () => {
-    const result = loadRubric(
+    const result = await loadRubric(
       {
         ...SAMPLE_RUBRIC,
         scoring: { method: "sum_of_weights", pass_threshold: 1 }

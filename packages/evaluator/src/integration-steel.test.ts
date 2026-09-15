@@ -61,11 +61,11 @@ function totalWeightOf(rubric: Rubric): number {
 }
 
 /** Evaluate one trace against one Steel rubric. */
-function evaluate(
+async function evaluate(
   rubric: Rubric,
   evalId: SteelEvalId,
   events: readonly TraceEvent[]
-): EvaluationResult {
+): Promise<EvaluationResult> {
   return evaluateRubric({
     rubric,
     runId: "eval-integration-run-01",
@@ -139,9 +139,9 @@ function shuffledEvalIds(): readonly SteelEvalId[] {
 }
 
 describe("evaluator integration: steel computer rubrics", () => {
-  it("loads every shipped rubric with the repository schema", () => {
+  it("loads every shipped rubric with the repository schema", async () => {
     for (const evalId of STEEL_EVAL_IDS) {
-      const rubric = steelRubric(evalId);
+      const rubric = await steelRubric(evalId);
       expect(rubric.id).toBe(`steel-${evalId}`);
       expect(rubric.scoring.method).toBe("weighted_binary");
       expect(rubric.checks.length).toBeGreaterThan(0);
@@ -150,7 +150,7 @@ describe("evaluator integration: steel computer rubrics", () => {
     }
   });
 
-  it("loads the rubrics to the digests the runner freezes", () => {
+  it("loads the rubrics to the digests the runner freezes", async () => {
     // The digests equal the rubric_sha256 of a real loopback trial, so
     // this suite and the runner agree on the same rubric bytes.
     const expected: Readonly<Record<SteelEvalId, string>> = {
@@ -162,22 +162,22 @@ describe("evaluator integration: steel computer rubrics", () => {
         "01af41d4a579a268384e11fa979bfe8b1814b525dad727deb4c2ab08b1624db8"
     };
     for (const evalId of STEEL_EVAL_IDS) {
-      const rubric = steelRubric(evalId);
+      const rubric = await steelRubric(evalId);
       expect(canonicalJsonSha256(rubric as unknown as Json)).toBe(
         expected[evalId]
       );
     }
   });
 
-  it("passes every rubric on its passing trace", () => {
+  it("passes every rubric on its passing trace", async () => {
     const totals: Readonly<Record<SteelEvalId, number>> = {
       "checkpoint-recovery": 12,
       "basic-lifecycle": 9,
       "documentation-discovery": 10
     };
     for (const evalId of STEEL_EVAL_IDS) {
-      const rubric = steelRubric(evalId);
-      const result = evaluate(rubric, evalId, passingTrace(evalId));
+      const rubric = await steelRubric(evalId);
+      const result = await evaluate(rubric, evalId, passingTrace(evalId));
 
       expect(result.rubricId).toBe(`steel-${evalId}`);
       expect(result.status).toBe("passed");
@@ -210,8 +210,8 @@ describe("evaluator integration: steel computer rubrics", () => {
     }
   });
 
-  it("fails the checkpoint-recovery rubric when the recovery step is missing", () => {
-    const rubric = steelRubric("checkpoint-recovery");
+  it("fails the checkpoint-recovery rubric when the recovery step is missing", async () => {
+    const rubric = await steelRubric("checkpoint-recovery");
     // The participant never restores the seed bytes: the restore upload
     // and the recovered read are gone, so the flow stops after the
     // changed read.
@@ -224,7 +224,7 @@ describe("evaluator integration: steel computer rubrics", () => {
       releaseSession(6),
       readSession(7, "released")
     ];
-    const result = evaluate(rubric, "checkpoint-recovery", events);
+    const result = await evaluate(rubric, "checkpoint-recovery", events);
 
     expect(result.status).toBe("failed");
     expect(result.score).toBe(4 / 12);
@@ -244,15 +244,15 @@ describe("evaluator integration: steel computer rubrics", () => {
     }
   });
 
-  it("fails the basic-lifecycle rubric when the live read is missing", () => {
-    const rubric = steelRubric("basic-lifecycle");
+  it("fails the basic-lifecycle rubric when the live read is missing", async () => {
+    const rubric = await steelRubric("basic-lifecycle");
     // The participant never observes the live session.
     const events = [
       createSession(1),
       releaseSession(2),
       readSession(3, "released")
     ];
-    const result = evaluate(rubric, "basic-lifecycle", events);
+    const result = await evaluate(rubric, "basic-lifecycle", events);
 
     expect(result.status).toBe("failed");
     expect(result.score).toBe(3 / 9);
@@ -266,11 +266,11 @@ describe("evaluator integration: steel computer rubrics", () => {
     expect(flow?.postconditions).toEqual([]);
   });
 
-  it("fails the documentation-discovery rubric on a second create", () => {
-    const rubric = steelRubric("documentation-discovery");
+  it("fails the documentation-discovery rubric on a second create", async () => {
+    const rubric = await steelRubric("documentation-discovery");
     // Two session creations break the exactly-one rule.
     const events = [createSession(1), createSession(2)];
-    const result = evaluate(rubric, "documentation-discovery", events);
+    const result = await evaluate(rubric, "documentation-discovery", events);
 
     expect(result.status).toBe("failed");
     expect(result.score).toBe(6 / 10);
@@ -287,11 +287,11 @@ describe("evaluator integration: steel computer rubrics", () => {
     });
   });
 
-  it("produces byte-identical evaluation documents for identical inputs", () => {
+  it("produces byte-identical evaluation documents for identical inputs", async () => {
     for (const evalId of shuffledEvalIds()) {
-      const rubric = steelRubric(evalId);
-      const first = evaluate(rubric, evalId, passingTrace(evalId));
-      const second = evaluate(rubric, evalId, passingTrace(evalId));
+      const rubric = await steelRubric(evalId);
+      const first = await evaluate(rubric, evalId, passingTrace(evalId));
+      const second = await evaluate(rubric, evalId, passingTrace(evalId));
       expect(canonicalJson(toEvaluation(second) as unknown as Json)).toBe(
         canonicalJson(toEvaluation(first) as unknown as Json)
       );
@@ -299,10 +299,10 @@ describe("evaluator integration: steel computer rubrics", () => {
     }
   });
 
-  it("marks unmatched requests and captures the session identifier", () => {
+  it("marks unmatched requests and captures the session identifier", async () => {
     // One undeclared route fails the universal check, while the ordered
     // flow still matches: the probe sits after the released read.
-    const rubric = steelRubric("checkpoint-recovery");
+    const rubric = await steelRubric("checkpoint-recovery");
     const events = [
       createSession(1),
       uploadFile(2, "brief.txt"),
@@ -315,7 +315,7 @@ describe("evaluator integration: steel computer rubrics", () => {
       readSession(9, "released"),
       unmatchedProbe(10)
     ];
-    const result = evaluate(rubric, "checkpoint-recovery", events);
+    const result = await evaluate(rubric, "checkpoint-recovery", events);
     expect(result.status).toBe("failed");
     expect(result.passedWeight).toBe(11);
     expect(result.totalWeight).toBe(12);

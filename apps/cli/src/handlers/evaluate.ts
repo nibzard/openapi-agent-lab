@@ -392,7 +392,7 @@ export const evaluateCommand: CommandHandler = async (args, io) => {
   if (rubricFlag !== undefined) {
     const rubricPath = path.resolve(args.context.cwd, rubricFlag);
     const read = await readRubricDocument(rubricPath);
-    const loaded = loadRubric(read.document, {
+    const loaded = await loadRubric(read.document, {
       schema: await loadRubricSchema(),
       documentUri: rubricPath
     });
@@ -442,7 +442,7 @@ export const evaluateCommand: CommandHandler = async (args, io) => {
     let regraded: EvaluationFacts | null = null;
     let derivedArtifact: string | null = null;
     if (rubric !== null && rubricSha !== null) {
-      const result = evaluateRubric({
+      const result = await evaluateRubric({
         rubric,
         runId: trial.runId,
         run: runMetadataOf(trial),

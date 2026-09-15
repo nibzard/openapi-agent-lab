@@ -86,7 +86,9 @@ export type SteelEvalId = (typeof STEEL_EVAL_IDS)[number];
  * `schema:` references inside the rubric resolve against the pack root,
  * which is the convention the pack rubrics follow.
  */
-export function loadSteelRubric(evalId: SteelEvalId): RubricLoadResult {
+export async function loadSteelRubric(
+  evalId: SteelEvalId
+): Promise<RubricLoadResult> {
   const rubricPath = path.join("evals", evalId, "rubric.yaml");
   const document = parseSteelYaml(
     readFileSync(path.join(steelPackRoot(), rubricPath), "utf8")
@@ -95,7 +97,7 @@ export function loadSteelRubric(evalId: SteelEvalId): RubricLoadResult {
     path.join(repoRoot(), "schemas", "rubric.v1.schema.json"),
     "utf8"
   );
-  return loadRubric(document, {
+  return await loadRubric(document, {
     schema: JSON.parse(schema) as Json,
     resolveSchema: (reference: string): Json | undefined => {
       try {
@@ -109,8 +111,8 @@ export function loadSteelRubric(evalId: SteelEvalId): RubricLoadResult {
 }
 
 /** The rubric of one Steel eval, or a thrown error when it did not load. */
-export function steelRubric(evalId: SteelEvalId): Rubric {
-  const result = loadSteelRubric(evalId);
+export async function steelRubric(evalId: SteelEvalId): Promise<Rubric> {
+  const result = await loadSteelRubric(evalId);
   if (result.rubric !== null && result.diagnostics.length === 0) {
     return result.rubric;
   }

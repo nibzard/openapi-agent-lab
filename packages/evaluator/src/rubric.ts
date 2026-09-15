@@ -14,11 +14,13 @@ import {
   diagnostic,
   isJsonObject,
   isSafeId,
-  SchemaValidator,
+  SchemaWorkerError,
+  validateSchemaInstance,
   DiagnosticCode,
   type Diagnostic,
   type Json,
-  type JsonObject
+  type JsonObject,
+  type SchemaViolation
 } from "@oal/core";
 import {
   compileExpression,
@@ -184,14 +186,17 @@ const KNOWN_SCORING_METHODS: ReadonlySet<string> = new Set(["weighted_binary"]);
 
 /**
  * Load and compile one rubric document. The function never throws on
- * document content; every problem is reported as a diagnostic.
+ * document content; every problem is reported as a diagnostic. Shape
+ * validation runs inside the bounded schema worker boundary, because the
+ * document is pack-supplied input; a boundary failure is reported as one
+ * diagnostic with the stable worker code.
  */
-export function loadRubric(
+export async function loadRubric(
   document: Json,
   options: RubricLoadOptions = {}
-): RubricLoadResult {
+): Promise<RubricLoadResult> {
   const loader = new RubricLoader(options);
-  const rubric = loader.load(document);
+  const rubric = await loader.load(document);
   return {
     rubric: rubric === null || loader.failed ? null : rubric,
     diagnostics: loader.diagnostics
@@ -219,11 +224,21 @@ class RubricLoader {
     this.resolveSchema = options.resolveSchema;
   }
 
-  load(document: Json): Rubric | null {
+  async load(document: Json): Promise<Rubric | null> {
     if (this.options.schema !== undefined) {
-      const violations = new SchemaValidator(this.options.schema).errors(
-        document
-      );
+      let violations: SchemaViolation[];
+      try {
+        violations = await validateSchemaInstance(
+          this.options.schema,
+          document
+        );
+      } catch (cause: unknown) {
+        if (cause instanceof SchemaWorkerError) {
+          this.error(cause.code, cause.message, "#/");
+          return null;
+        }
+        throw cause;
+      }
       for (const violation of violations) {
         this.error(
           DiagnosticCode.RubricInvalid,

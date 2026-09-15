@@ -76,7 +76,7 @@ describe("scaffoldPack", () => {
         "utf8"
       )
     ) as Json;
-    const loaded = loadRubric(parsed.value, {
+    const loaded = await loadRubric(parsed.value, {
       schema,
       documentUri: rubricPath
     });
