@@ -118,6 +118,27 @@ describe("schema worker boundary", () => {
     }
   });
 
+  it("refuses a registration above the byte bound at the worker", async () => {
+    // The request itself is tiny; only the schema bundle is over the
+    // bound, so the refusal happens when the worker would receive the
+    // registration, not at submit time.
+    const heavy = {
+      type: "string",
+      description: "d".repeat(512)
+    } as unknown as Json;
+    const tight = new SchemaWorkerService({ maxMessageBytes: 256 });
+    try {
+      await expect(
+        tight.validate(heavy, "value" as unknown as Json)
+      ).rejects.toMatchObject({
+        code: "OAL-SCHEMA-WORKER-MESSAGE-TOO-LARGE",
+        message: /schema bundle registration needs/
+      });
+    } finally {
+      tight.close();
+    }
+  });
+
   it("runs raw pattern probes inside the boundary", async () => {
     await expect(patternAcceptsInWorker("^a+$", "aaa")).resolves.toBe(true);
     await expect(patternAcceptsInWorker("^a+$", "b")).resolves.toBe(false);

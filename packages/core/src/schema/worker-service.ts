@@ -150,7 +150,14 @@ export class SchemaWorkerService {
     return this.settings;
   }
 
-  /** Identity of a schema bundle, registering it on first use. */
+  /**
+   * Identity of a schema bundle, registering it on first use. The
+   * service stores the schema and its reference table by reference:
+   * identity follows the object, and the workers keep the bytes they
+   * received. A caller that mutates a schema after first use changes
+   * nothing inside the boundary, so treat every registered schema and
+   * reference table as immutable from the first call on.
+   */
   bundleOf(schema: Json, refs?: Record<string, Json>): string {
     const refsKey = refs === undefined ? "" : refsKeyOf(refs);
     const known = this.knownBundleId(schema, refsKey);
@@ -299,17 +306,10 @@ export class SchemaWorkerService {
       );
     }
     const effectiveDeadline = deadlineMs ?? this.settings.deadlineMs;
-    const bytes = Buffer.byteLength(
-      JSON.stringify({
-        request,
-        registrations: registrations.map((bundle) => ({
-          bundleId: bundle.id,
-          root: bundle.root,
-          refs: bundle.refs
-        }))
-      }),
-      "utf8"
-    );
+    // Only the request itself counts here. A bundle's registration
+    // bytes are charged once per worker, at the moment that worker
+    // receives them, not on every submit.
+    const bytes = Buffer.byteLength(JSON.stringify(request), "utf8");
     if (bytes > this.settings.maxMessageBytes) {
       throw new SchemaWorkerError(
         "OAL-SCHEMA-WORKER-MESSAGE-TOO-LARGE",
@@ -352,6 +352,19 @@ export class SchemaWorkerService {
       if (slot === null) {
         slot = this.spawn();
         if (slot === null) {
+          // No idle worker, no room or means to start one. When no
+          // live worker exists at all, the queued jobs can never run;
+          // fail them now instead of at their deadlines.
+          if (this.slots.length === 0) {
+            for (const job of this.queue.splice(0)) {
+              job.reject(
+                new SchemaWorkerError(
+                  "OAL-SCHEMA-WORKER-FAILED",
+                  "The schema worker boundary could not start a worker for the job."
+                )
+              );
+            }
+          }
           return;
         }
       }
@@ -441,13 +454,26 @@ export class SchemaWorkerService {
       if (slot.registered.has(bundle.id)) {
         continue;
       }
-      slot.registered.add(bundle.id);
-      slot.worker.postMessage({
+      const message = {
         kind: "register",
         bundleId: bundle.id,
         root: bundle.root,
         refs: bundle.refs
-      } satisfies SchemaWorkerRequest);
+      } satisfies SchemaWorkerRequest;
+      const bytes = Buffer.byteLength(JSON.stringify(message), "utf8");
+      if (bytes > this.settings.maxMessageBytes) {
+        // This worker has not seen the bundle, so the job cannot run
+        // there: the registration message itself is over the bound.
+        job.reject(
+          new SchemaWorkerError(
+            "OAL-SCHEMA-WORKER-MESSAGE-TOO-LARGE",
+            `A schema bundle registration needs ${bytes} bytes; the bound is ${this.settings.maxMessageBytes}.`
+          )
+        );
+        return;
+      }
+      slot.registered.add(bundle.id);
+      slot.worker.postMessage(message);
     }
     slot.current = job;
     slot.timer = setTimeout(() => {
@@ -565,9 +591,14 @@ export async function validateSchemaInstance(
 /** Test one candidate against one raw pattern inside the boundary. */
 export async function patternAcceptsInWorker(
   pattern: string,
-  candidate: string
+  candidate: string,
+  options: { deadlineMs?: number } = {}
 ): Promise<boolean> {
-  return schemaWorkerService().regexTest(pattern, candidate);
+  return schemaWorkerService().regexTest(
+    pattern,
+    candidate,
+    options.deadlineMs
+  );
 }
 
 /**

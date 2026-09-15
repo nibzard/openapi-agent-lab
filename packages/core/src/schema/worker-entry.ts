@@ -82,12 +82,28 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * Compile one raw pattern the way the schema validator compiles schema
+ * patterns: unicode mode first, then a plain compile. Both paths must
+ * accept the same language, or a pattern that passes schema validation
+ * could refuse its own probe. Returns null when both compiles fail.
+ */
+function compileRaw(source: string, flags = ""): RegExp | null {
+  try {
+    return new RegExp(source, flags === "" ? "u" : `${flags}u`);
+  } catch {
+    try {
+      return new RegExp(source, flags);
+    } catch {
+      return null;
+    }
+  }
+}
+
 /** First printable ASCII character the pattern accepts. */
 function firstPrintableMatch(source: string): string | null {
-  let probe: RegExp;
-  try {
-    probe = new RegExp(source);
-  } catch {
+  const probe = compileRaw(source);
+  if (probe === null) {
     return null;
   }
   for (let code = 0x20; code <= 0x7e; code += 1) {
@@ -112,31 +128,23 @@ function runJob(
       return { type: "violations", violations };
     }
     case "regex-test": {
-      let value = false;
-      try {
-        value = new RegExp(request.pattern).test(request.candidate);
-      } catch {
-        value = false;
-      }
+      const probe = compileRaw(request.pattern);
+      const value = probe === null ? false : probe.test(request.candidate);
       return { type: "boolean", value };
     }
     case "regex-first-printable":
       return { type: "string", value: firstPrintableMatch(request.pattern) };
     case "scan-text": {
-      const literals = request.literals.map((rule) =>
-        rule.caseInsensitive
-          ? distinctRegexpMatches(
-              request.text,
-              new RegExp(escapeRegExp(rule.literal), "gi")
-            )
-          : distinctPlainMatches(request.text, rule.literal)
-      );
-      const patterns = request.patterns.map((pattern) => {
-        try {
-          return distinctRegexpMatches(request.text, new RegExp(pattern, "g"));
-        } catch {
-          return [];
+      const literals = request.literals.map((rule) => {
+        if (!rule.caseInsensitive) {
+          return distinctPlainMatches(request.text, rule.literal);
         }
+        const probe = compileRaw(escapeRegExp(rule.literal), "gi");
+        return probe === null ? [] : distinctRegexpMatches(request.text, probe);
+      });
+      const patterns = request.patterns.map((pattern) => {
+        const probe = compileRaw(pattern, "g");
+        return probe === null ? [] : distinctRegexpMatches(request.text, probe);
       });
       return { type: "scan", literals, patterns };
     }
