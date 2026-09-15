@@ -1,0 +1,32 @@
+# Context
+
+## Background
+T069 (review-fix-plan F5) connected scenario execution end to end:
+shared gateway request path, behavior child bootstrap, state commit
+and final snapshot in the runner, webclip's eight stateful operations,
+and the scripted participant through the public run command.
+
+## Why This Way
+- AC-125 is marked partial, not covered: the happy path and the
+  failing control are durable tests, while isolation (--count 2),
+  seed determinism (same batch id in two workspaces), and injected
+  backend failure rollback were proven live on 2026-09-15 through the
+  oal bin only. The map keeps requires_live true.
+- T074 records the replay gap: oal replay --verify rebuilds a
+  stateless fixture gateway, so it cannot replay scenario batches
+  (eight-of-nine mismatch on a healthy run). Fixing it needs a design
+  decision on how frozen inputs reference the behavior module.
+- The docs-claims test pins "Implemented components, not connected"
+  in the README, so that heading stays; its list now names only the
+  surfaces that are still unconnected (direct and catalog tools,
+  study scheduler).
+
+## Gotchas
+- The quickstart scenario command writes .oal/runs/<batch> under the
+  repository root; .gitignore covers .oal/ so demo batches leave no
+  git noise. Verified live before committing the doc text.
+
+## Related
+Commits 32241b9 (erasable syntax), deea323 (mock script engine),
+b32ac6c (webclip self-start), 3645190 (--agent-script), 1820369 and
+earlier T069 work.
