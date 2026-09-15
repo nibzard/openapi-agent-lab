@@ -1138,7 +1138,7 @@
       "id": "T066",
       "title": "Bound every execution path that evaluates untrusted patterns",
       "priority": 1,
-      "status": "doing",
+      "status": "done",
       "details": "Move schema and pattern evaluation for contract- and pack-supplied regular expressions behind a shared asynchronous worker boundary with deadline, queue, message-size, and worker-resource limits; cache compiled schemas in the worker; apply to request validation, response validation and generation, participant reports, rubric checks, cue and redaction rules, and patternProperties; timeouts become infrastructure outcomes without state mutation. Evaluation 2026-09-14 on branch worktree-agent-a095c8d50d9033394 (rebases cleanly onto main; the worker core is verified: hostile patterns hit the deadline, transactions roll back, workers are replaced). Do not merge yet. Blockers: wire the five schemaWorker LimitTable fields into configureSchemaWorker from every serving path, they are dead config today; fix the unhandled-rejection flake in worker-service.test.ts by attaching handlers at promise creation; restore the exposure ingress-order guarantee the unserialized async pipeline broke (exposure.ts passes no GatewayState to the server). Remaining scope: route cue scanText through scanForbiddenTextInWorker (it has no production caller), and route participant-report, evaluator rubric and eval-doc, behavior-api, pack schemas, contract-variant, and study-ir validation through the boundary; produce the step-3 inventory of remaining pack-supplied patterns; add strict-mode hostile-pattern acceptance checks and diagnostics. Minors: register the two remaining worker codes in the failure registry; add a server-level test for the 504 timeout mapping, rollback, and worker replacement; document the bundle immutability assumption; reject queued jobs when worker spawn fails; charge bundle registration bytes once per worker; add the worker codes to SPEC sections 15.2 and 32.2 and the limits to docs/security.md; call closeSchemaWorker on serving teardown.",
       "steps": [
         "Add a worker-pool schema evaluator in packages/core with config limits from packages/config.",
@@ -1149,7 +1149,7 @@
       ],
       "tags": ["security", "gateway"],
       "files": ["docs/review-fix-plan.md"],
-      "updated_at": "2026-09-14T15:26:35Z"
+      "updated_at": "2026-09-15T18:31:06.480Z"
     },
     {
       "id": "T067",
