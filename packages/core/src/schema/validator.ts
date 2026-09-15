@@ -107,6 +107,40 @@ function codePointLength(value: string): number {
   return count;
 }
 
+/**
+ * Compile a schema pattern. Unicode mode is tried first so property
+ * escapes such as \\p{L} work; patterns that unicode mode rejects fall
+ * back to a plain compile. Returns undefined when both fail.
+ */
+function compilePattern(pattern: string): RegExp | undefined {
+  try {
+    return new RegExp(pattern, "u");
+  } catch {
+    try {
+      return new RegExp(pattern);
+    } catch {
+      return undefined;
+    }
+  }
+}
+
+/**
+ * Canonical dedupe key for uniqueItems. Object keys sort, so two objects
+ * that differ only in key order produce the same key and compare equal.
+ */
+function canonicalKey(value: Json): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalKey).join(",")}]`;
+  }
+  if (isJsonObject(value)) {
+    const keys = Object.keys(value).sort();
+    return `{${keys
+      .map((k) => `${JSON.stringify(k)}:${canonicalKey(value[k] as Json)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
 function stableStringifyScalar(value: Json): string {
   if (
     typeof value === "number" ||
@@ -233,7 +267,17 @@ export class SchemaValidator {
 
   private lookupRef(ref: string): Json | undefined {
     if (ref.startsWith("#")) {
-      return resolveJsonPointer(this.root, ref.slice(1));
+      const fragment = ref.slice(1);
+      // The reference value is a URI, so its fragment is percent-encoded.
+      // Decode before pointer resolution; keep the raw fragment when it
+      // holds an invalid escape sequence.
+      let decoded = fragment;
+      try {
+        decoded = decodeURIComponent(fragment);
+      } catch {
+        decoded = fragment;
+      }
+      return resolveJsonPointer(this.root, decoded);
     }
     return this.resolveRef(ref);
   }
@@ -290,13 +334,23 @@ export class SchemaValidator {
       const multipleOf = schema["multipleOf"];
       if (typeof multipleOf === "number" && multipleOf > 0) {
         const quotient = instance / multipleOf;
-        const epsilon = Math.abs(quotient) * 1e-9;
-        if (Math.abs(quotient - Math.round(quotient)) > epsilon) {
+        if (!Number.isFinite(quotient)) {
+          // The quotient overflows to infinity; the multiple cannot be
+          // confirmed, so the value is not a multiple.
           push(
             "multipleOf",
             `Value is not a multiple of ${multipleOf}.`,
             "multipleOf"
           );
+        } else {
+          const epsilon = Math.abs(quotient) * 1e-9;
+          if (Math.abs(quotient - Math.round(quotient)) > epsilon) {
+            push(
+              "multipleOf",
+              `Value is not a multiple of ${multipleOf}.`,
+              "multipleOf"
+            );
+          }
         }
       }
       const maximum = schema["maximum"];
@@ -352,10 +406,8 @@ export class SchemaValidator {
       }
       const pattern = schema["pattern"];
       if (typeof pattern === "string") {
-        let re: RegExp | undefined;
-        try {
-          re = new RegExp(pattern);
-        } catch {
+        const re = compilePattern(pattern);
+        if (re === undefined) {
           violations.push({
             pointer,
             code: "pattern_invalid",
@@ -449,6 +501,9 @@ export class SchemaValidator {
         for (let i = 0; i < instance.length; i += 1) {
           if (this.isValid(contains, instance[i] as Json)) {
             matchCount += 1;
+            // A contains match marks the item evaluated, even when the
+            // minContains assertion itself fails.
+            evaluatedItems.add(i);
           }
         }
         if (matchCount < minContains) {
@@ -486,7 +541,7 @@ export class SchemaValidator {
       if (schema["uniqueItems"] === true) {
         const seenValues = new Set<string>();
         for (const item of instance) {
-          const key = stableStringifyScalar(item);
+          const key = canonicalKey(item);
           if (seenValues.has(key)) {
             push("uniqueItems", "Array items are not unique.", "uniqueItems");
             break;
@@ -495,17 +550,26 @@ export class SchemaValidator {
         }
       }
       const unevaluatedItems = schema["unevaluatedItems"];
-      if (unevaluatedItems !== undefined && unevaluatedItems !== false) {
+      if (unevaluatedItems !== undefined) {
         for (let i = 0; i < instance.length; i += 1) {
           if (!evaluatedItems.has(i)) {
-            this.validateNode(
-              unevaluatedItems,
-              instance[i] as Json,
-              appendIndex(pointer, i),
-              depth + 1,
-              violations,
-              seen
-            );
+            if (unevaluatedItems === false) {
+              violations.push({
+                pointer: appendIndex(pointer, i),
+                code: "unevaluatedItems",
+                message: "Unevaluated items are not allowed.",
+                schema_path: "/unevaluatedItems"
+              });
+            } else {
+              this.validateNode(
+                unevaluatedItems,
+                instance[i] as Json,
+                appendIndex(pointer, i),
+                depth + 1,
+                violations,
+                seen
+              );
+            }
           }
         }
       }
@@ -533,10 +597,8 @@ export class SchemaValidator {
       const patternProperties = schema["patternProperties"];
       if (isJsonObject(patternProperties)) {
         for (const pattern of Object.keys(patternProperties)) {
-          let re: RegExp;
-          try {
-            re = new RegExp(pattern);
-          } catch {
+          const re = compilePattern(pattern);
+          if (re === undefined) {
             continue;
           }
           const subSchema = patternProperties[pattern] as Json;
@@ -647,20 +709,26 @@ export class SchemaValidator {
         }
       }
       const unevaluatedProperties = schema["unevaluatedProperties"];
-      if (
-        unevaluatedProperties !== undefined &&
-        unevaluatedProperties !== false
-      ) {
+      if (unevaluatedProperties !== undefined) {
         for (const key of Object.keys(instance)) {
           if (!evaluatedProperties.has(key)) {
-            this.validateNode(
-              unevaluatedProperties,
-              instance[key] as Json,
-              appendPointer(pointer, key),
-              depth + 1,
-              violations,
-              seen
-            );
+            if (unevaluatedProperties === false) {
+              violations.push({
+                pointer: appendPointer(pointer, key),
+                code: "unevaluatedProperties",
+                message: `Unevaluated property ${JSON.stringify(key)} is not allowed.`,
+                schema_path: "/unevaluatedProperties"
+              });
+            } else {
+              this.validateNode(
+                unevaluatedProperties,
+                instance[key] as Json,
+                appendPointer(pointer, key),
+                depth + 1,
+                violations,
+                seen
+              );
+            }
           }
         }
       }

@@ -305,6 +305,99 @@ describe("schema validator", () => {
     expect(validator.errors("x").map((v) => v.code)).toContain("ref_not_found");
   });
 
+  it("decodes escaped reference fragments", () => {
+    const validator = new SchemaValidator({
+      $defs: {
+        "tilde~field": { type: "integer" },
+        "slash/field": { type: "integer" },
+        "percent%field": { type: "integer" },
+        'foo"bar': { type: "number" }
+      },
+      properties: {
+        tilde: { $ref: "#/$defs/tilde~0field" },
+        slash: { $ref: "#/$defs/slash~1field" },
+        percent: { $ref: "#/$defs/percent%25field" },
+        quote: { $ref: "#/$defs/foo%22bar" }
+      }
+    });
+    expect(
+      validator.errors({ tilde: 1, slash: 2, percent: 3, quote: 4 })
+    ).toHaveLength(0);
+    expect(
+      validator
+        .errors({ tilde: "x", slash: "x", percent: "x", quote: "x" })
+        .map((v) => v.code)
+    ).toEqual(["type", "type", "type", "type"]);
+  });
+
+  it("compiles patterns in unicode mode first", () => {
+    const validator = new SchemaValidator({
+      type: "string",
+      pattern: "^\\p{L}+$"
+    });
+    expect(validator.errors("wordé")).toHaveLength(0);
+    expect(validator.errors("word1").map((v) => v.code)).toContain("pattern");
+    // A pattern that unicode mode rejects still compiles without the flag.
+    const lenient = new SchemaValidator({ type: "string", pattern: "a\\-b" });
+    expect(lenient.errors("a-b")).toHaveLength(0);
+  });
+
+  it("treats objects with reordered keys as equal", () => {
+    const validator = new SchemaValidator({ uniqueItems: true });
+    expect(
+      validator
+        .errors([
+          { a: 1, b: 2 },
+          { b: 2, a: 1 }
+        ])
+        .map((v) => v.code)
+    ).toContain("uniqueItems");
+    expect(
+      validator.errors([
+        { a: 1, b: 2 },
+        { a: 1, b: 3 }
+      ])
+    ).toHaveLength(0);
+  });
+
+  it("rejects a multipleOf quotient that overflows to infinity", () => {
+    const validator = new SchemaValidator({ multipleOf: 1e-308 });
+    expect(validator.errors(1e308).map((v) => v.code)).toContain("multipleOf");
+  });
+
+  it("enforces unevaluated keywords set to false", () => {
+    const items = new SchemaValidator({
+      type: "array",
+      prefixItems: [{ type: "number" }],
+      unevaluatedItems: false
+    });
+    expect(items.errors([1])).toHaveLength(0);
+    expect(items.errors([1, "x"]).map((v) => v.code)).toContain(
+      "unevaluatedItems"
+    );
+    const props = new SchemaValidator({
+      type: "object",
+      properties: { a: { type: "number" } },
+      unevaluatedProperties: false
+    });
+    expect(props.errors({ a: 1 })).toHaveLength(0);
+    expect(props.errors({ a: 1, b: "x" }).map((v) => v.code)).toContain(
+      "unevaluatedProperties"
+    );
+  });
+
+  it("counts contains matches as evaluated items", () => {
+    const validator = new SchemaValidator({
+      type: "array",
+      contains: { type: "number" },
+      unevaluatedItems: false
+    });
+    expect(validator.errors([1, 2])).toHaveLength(0);
+    expect(validator.errors([1, "x", true]).map((v) => v.code)).toContain(
+      "unevaluatedItems"
+    );
+  });
+
   it("validates string formats only when assertion is requested", () => {
     const validator = new SchemaValidator({ type: "string", format: "uuid" });
     expect(validator.errors("not-a-uuid")).toHaveLength(0);
