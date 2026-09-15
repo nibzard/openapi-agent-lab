@@ -1,0 +1,25 @@
+# Context
+
+## Key Trade-offs
+- Newest-first list order was a judgment call: the module draft
+  served insertion order, but the contract documents newest first
+  twice (operation description and items schema). The backend is
+  the conformance target, so it follows the documented semantics
+  the participant reads.
+- The isolation advisory (OAL-PACK-ISOLATION-ADVISORY) is
+  expected, not suppressed: this build runs scenario behavior
+  trusted-local and the validator says so.
+- Cursor is the last served clip id; the contract calls it
+  opaque, and ids are stable, so this satisfies opacity while
+  staying deterministic.
+
+## Gotchas
+- The backend imports BehaviorHttpError by relative path into
+  packages/; a pack resolves no bare workspace specifiers. ESLint
+  ignores packs/** for this reason (no tsconfig project covers
+  them); testkit imports keep them type-checked.
+- idsAdapter pads to 8 digits (clip_00000001); the state schema
+  pattern ^clip_[0-9a-z]+$ admits it.
+
+## Related
+- Runtime: eeb4ee6; wiring: 25b00cc; gateway seam: 5c0ff5d
