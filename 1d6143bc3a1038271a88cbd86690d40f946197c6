@@ -1,0 +1,22 @@
+# Context
+
+## Background
+T063 added the live probe but no earlier doc caught up with it.
+Verification against 0b22357 found: README.md:4 claimed "The
+production service is not contacted" unconditionally and never
+mentioned the probe command; docs/security.md contained zero
+occurrences of "probe"; docs/research-methods.md still described
+warn-and-substitute behavior that checkAnalysisSupport had replaced
+with rejection in T067.
+
+## Why This Way
+Safety claims are now command-specific. The offline default stays
+the headline; the probe is documented as the one operator-initiated
+exception, with its opt-in flags named where an operator would look
+first (README opening, Network policy in security.md).
+
+## Gotchas
+The refusal lists in security.md ("prevents these inputs from") were
+left untouched on purpose: they scope to untrusted inputs such as
+documents, packs, prompts, and agent output. Probe traffic is
+operator-initiated, not input-driven, so the lists stay true.
