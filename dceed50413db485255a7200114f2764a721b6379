@@ -1,0 +1,15 @@
+# Context
+
+## Background
+T066 closed the unbounded-regex exposure found in the external
+review of 0b22357. Ten commits this session, 18e7ab4 through
+101da9a, landed the worker branch and routed the remaining
+surfaces.
+
+## Gotchas
+- The worktree .claude/worktrees/agent-a095c8d50d9033394 stays in
+  place; removal is left to the user.
+- The one latent site outside the boundary is
+  @oal/agent-adapter validateAgentSessionEvent: export-only, no
+  production caller. docs/security.md records the rule to route it
+  before it gains one.
