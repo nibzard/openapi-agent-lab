@@ -1,0 +1,36 @@
+# Design: --agent-script and the webclip participant
+
+## Problem
+Review-fix-plan item F5 requires a scripted participant to complete
+the corrected webclip task through the public run command, read
+returned identifiers, and send real Accept headers, with no guessed
+fixture identifiers. The run command had no way to hand the mock
+adapter a script.
+
+## Approach
+- loadAgentScript resolves the path against the command cwd, parses
+  with parseJsonStrict, and runs validateMockScript plus
+  validateScriptTemplates before preflight, so a broken participant
+  fails at exit 2 before any batch directory is written.
+- selectAdapter takes the script as a second argument; a script with
+  a non-mock selector keeps the specific AgentScriptUnsupported code
+  only for codex-cli, while a bogus selector stays AgentUnsupported.
+- The happy script (mock-participant.json) sends nine requests, every
+  one with credentialName OAL_AUTH_BEARER because the gateway verifies
+  the declared security alternative per request even though the pack
+  sets security.enforce false.
+- The failing script requests a clip id that cannot exist, receives
+  404, and fails with MOCK_HTTP_STATUS_MISMATCH, which the runner maps
+  to agent_failed through OAL-AGENT-EXIT-NONZERO.
+
+## Gotchas
+- Determinism proof needs the same --batch id and --cohort-seed in two
+  separate workspaces: deriveTrialSeed mixes in the run id, so two
+  different batch ids legitimately diverge (render duration_ms).
+- oal replay --verify cannot replay scenario runs yet: replayRun
+  rebuilds a stateless fixture gateway and the frozen inputs lack the
+  behavior module. Follow-up task, not fixed here.
+
+## References
+docs/review-fix-plan.md item F5; to-do.json T069; live evidence in
+/tmp/oal-t069 during development (workspace since removed).
