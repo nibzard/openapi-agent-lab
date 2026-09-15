@@ -196,9 +196,9 @@ Small pilots are labeled directional. Unplanned contrasts stay descriptive.
 The analyzer refuses pooled estimates across different compatibility keys.
 
 The methods above are the implemented ones. Requesting an unimplemented
-option, such as a Wald interval, currently records a warning and reports the
-implemented method instead. Rejecting unsupported options before analytical
-execution is work package F3 of the
+option, such as a Wald interval, is rejected before analytical execution.
+`checkAnalysisSupport` in `@oal/study` reports an error diagnostic during
+protocol validation and analysis. This was work package F3 of the
 [review fix plan](review-fix-plan.md).
 
 ## Study artifacts

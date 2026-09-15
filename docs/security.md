@@ -62,6 +62,19 @@ Every effective server URL is rewritten before the participant sees the
 contract. An agent that tries to reach the named production server cannot
 resolve it through the mock. The `@oal/gateway` package enforces these rules.
 
+### Operator-authorized live probing
+
+`oal probe` is the one operator-initiated exception to the offline default.
+The commands above never send traffic on their own. A probe sends recorded
+requests to the base URL you pass in `--base-url`, and it sends a real
+credential from the environment variable you name in `--credential-env`.
+
+The default mode replays GET, HEAD, and OPTIONS requests only. Other methods
+replay after you pass `--allow-writes`. A redirect stays manual, so a 3xx
+compares as a status and a write is never re-issued. The credential value is
+registered as a run secret before anything is written. See
+[usage](usage.md#live-conformance-probe) for the full command behavior.
+
 ## Filesystem and workspace policy
 
 Each trial receives distinct roots for inputs, workspace, output, state,

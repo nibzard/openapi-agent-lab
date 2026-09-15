@@ -1,8 +1,10 @@
 # OpenAPI Agent Lab
 
 OpenAPI Agent Lab turns an OpenAPI document into a deterministic environment. An
-AI agent can discover, call, and be evaluated against an API. The production
-service is not contacted.
+AI agent can discover, call, and be evaluated against an API. The default
+commands are offline: the production service is not contacted. The one
+exception is `oal probe`, which replays recorded requests against a live base
+URL that you name.
 
 > Supply a local OpenAPI 3.0 or 3.1 document. Get a safe deterministic mock that
 > an agent can use. Optionally attach a pack that turns interactions into a
@@ -19,8 +21,8 @@ The execution surface splits into three states:
 - **Working end to end.** Raw HTTP execution: `oal inspect`, `oal serve` in
   contract mode, `oal run --exposure raw-http` with the mock, generic, or
   Codex adapter, plus `oal evaluate`, `oal report`, `oal compare`,
-  `oal replay`, `oal friction`, and `oal doctor`. Study authoring works
-  through `oal study init`, `validate`, and `schedule`, and `oal study
+  `oal replay`, `oal friction`, `oal probe`, and `oal doctor`. Study authoring
+  works through `oal study init`, `validate`, and `schedule`, and `oal study
   analyze` runs the frozen analysis on an assembled study-run directory.
 - **Implemented components, not connected.** The behavior runtime, the state
   store, the direct-tool and catalog-tool surfaces, and the study scheduler
