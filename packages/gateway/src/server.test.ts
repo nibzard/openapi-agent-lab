@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { Json } from "@oal/core";
-import { LIMIT_DEFAULTS } from "@oal/config";
+import { closeSchemaWorker, configureSchemaWorker, type Json } from "@oal/core";
+import { LIMIT_DEFAULTS, schemaWorkerSettingsOf } from "@oal/config";
 import type {
   ContractIR,
   MediaContentIR,
@@ -1827,5 +1827,73 @@ describe("contract schema version gate", () => {
     );
     expect(result.status).toBe(500);
     expect(result.frameworkCode).toBe("contract_schema_version_unsupported");
+  });
+});
+
+describe("schema worker boundary", () => {
+  it("maps a deadline to 504, rolls the transaction back, and keeps serving", async () => {
+    // The deadline sits far above worker startup and far below the
+    // exponential work a hostile pattern forces, so the outcome does
+    // not depend on machine speed.
+    configureSchemaWorker({
+      ...schemaWorkerSettingsOf(LIMIT_DEFAULTS),
+      deadlineMs: 250
+    });
+    try {
+      const op = operation({
+        responses: [response({ content: [jsonContent("sch_hostile")] })]
+      });
+      const hostile = contract({
+        operations: [op],
+        schemas: {
+          sch_hostile: schema("sch_hostile", {
+            type: "object",
+            required: ["code"],
+            properties: {
+              code: { type: "string", pattern: "^(a+)+$" }
+            }
+          })
+        }
+      });
+      const state = createGatewayState();
+      const stuck = await handleGatewayRequest(
+        options({
+          contract: hostile,
+          state,
+          fixtures: [
+            {
+              id: "fx_hostile",
+              operation: "path:GET /things",
+              status: 200,
+              media_type: "application/json",
+              body: {
+                kind: "json_inline",
+                value: { code: `${"a".repeat(48)}!` }
+              }
+            }
+          ]
+        }),
+        1,
+        request({})
+      );
+      expect(stuck.status).toBe(504);
+      expect(stuck.frameworkCode).toBe("OAL-SCHEMA-WORKER-TIMEOUT");
+      expect(stuck.headers["content-type"]).toBe("application/problem+json");
+      // The timeout rolled the open transaction back: no effect was
+      // applied and the revision did not advance.
+      expect(state.appliedEffects).toEqual([]);
+      expect(state.revision).toBe(0);
+      expect(state.rollbacks).toBe(1);
+      // The boundary replaced the wedged worker: the next request
+      // through the same process still serves.
+      const healthy = await handleGatewayRequest(
+        options({ state: createGatewayState() }),
+        2,
+        request({})
+      );
+      expect(healthy.status).toBe(200);
+    } finally {
+      closeSchemaWorker();
+    }
   });
 });
