@@ -1243,7 +1243,7 @@
       "id": "T072",
       "title": "Add an independent JSON Schema conformance corpus",
       "priority": 2,
-      "status": "todo",
+      "status": "done",
       "details": "Vendor a curated slice of the official JSON Schema Test Suite (MIT) that covers the Draft 2020-12 subset declared in SPEC section 23.5, and run it against the exported SchemaValidator. Every failing case is either fixed in the validator or documented as an explicit unsupported reject; no case may silently misread. External review found two spec violations on 2026-09-15 (UTF-16 length counting and ignored reference siblings); this corpus keeps the next one from landing silently.",
       "steps": [
         "Select the suite files that match the declared keyword subset.",
@@ -1254,7 +1254,7 @@
       ],
       "tags": ["core", "schema", "testing"],
       "files": ["SPEC.md", "packages/core/src/schema/validator.ts"],
-      "updated_at": "2026-09-15T16:28:40Z"
+      "updated_at": "2026-09-15T16:56:48.687Z"
     },
     {
       "id": "T073",
