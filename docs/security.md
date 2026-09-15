@@ -186,6 +186,11 @@ Every limit is configurable downward. Selected defaults and local ceilings:
 | Trial wall time         | 30 minutes   | 60 minutes    |
 | Batch trials            | 1            | 100           |
 | Parallel trials         | 1            | 10            |
+| Schema worker deadline  | 1 second     | 30 seconds    |
+| Schema worker processes | 2            | 8             |
+| Schema worker queue     | 128 pending  | 1,024 pending |
+| Schema worker message   | 8 MiB        | 32 MiB        |
+| Schema worker memory    | 256 MiB      | 1 GiB         |
 
 Parsing controls bound YAML alias expansion, reference depth, duplicate keys,
 regex evaluation, and XML entity expansion. At runtime, the gateway rejects
@@ -193,6 +198,58 @@ overload explicitly. It returns `413` for an oversized body and `414` for an
 oversized target. It returns `429` when a quota is exceeded. Validation
 always runs before any state mutation. A limit event stays visible in the
 evidence.
+
+## Schema and pattern evaluation boundary
+
+Every regular expression that comes from, or is checked against, untrusted
+data runs inside a bounded worker pool. The `@oal/core` package owns the
+pool. Each worker is a separate process with a deadline, a queue bound, a
+message-size bound, and a memory bound. The five schema-worker limits in the
+table above control the pool.
+
+Untrusted data means both operands:
+
+- The pattern, from a contract, pack, or study document.
+- The tested value. A fixed schema plus an adversarial value can backtrack
+  just as hard as an adversarial pattern. First-party schemas that validate
+  untrusted documents also run inside the boundary.
+
+The following surfaces evaluate inside the boundary:
+
+- Gateway request validation, response validation, and response generation.
+- Path-parameter pattern checks and pattern synthesis. The gateway collects
+  pattern strings per path family in the serving process, but every
+  execution of those strings happens in a worker.
+- Evaluator checks: rubrics, eval documents, result schemas.
+- Pack validation: manifests, prompt sets, eval entries, semantic event
+  registries, and the built PackIR.
+- Contract-variant loading: sets, manifests, and diffs.
+- Study loading: protocol, phases, compile, lock, and review documents.
+- Cue forbidden-text scans.
+
+A deadline produces code `OAL-SCHEMA-WORKER-TIMEOUT`. The gateway maps it to
+a `504` infrastructure outcome, rolls back the open transaction, and
+replaces the worker. No state mutation survives a timeout. A message above
+the size bound produces `OAL-SCHEMA-WORKER-MESSAGE-TOO-LARGE`. A full queue
+produces `OAL-SCHEMA-WORKER-QUEUE-FULL`.
+
+### Pattern inventory: what still runs in the serving process
+
+These sites compile or execute patterns outside the worker. Each one is safe
+for a stated reason:
+
+| Site                                | Why it stays in the serving process            |
+| ----------------------------------- | ---------------------------------------------- |
+| `@oal/core` credential key pattern  | Fixed first-party literal.                     |
+| `@oal/gateway` parameter parsing    | Fixed first-party literals.                    |
+| `@oal/runner` cue pattern compile   | Compile check only. Execution runs in a worker. |
+| `@oal/contract-variant` description | The untrusted label is escaped before use.     |
+| First-party schema literals         | Fixed patterns shipped with the repository.    |
+
+One latent site remains. `@oal/agent-adapter` validates agent session events
+against a schema document and compiles the schema's patterns in process. No
+production path calls it today. Route it through the boundary before it
+gains a production caller.
 
 ## Isolation honesty
 

@@ -2448,6 +2448,8 @@ but still produce one transactionally stored API exchange event.
 | Request/rate quota exceeded              |            429 | request_quota_exceeded    |
 | Scenario operation unavailable           |            501 | mock_behavior_unavailable |
 | Backend timed out                        |            504 | behavior_timeout          |
+| Schema evaluation deadline exceeded      |            504 | OAL-SCHEMA-WORKER-TIMEOUT |
+| Schema evaluation failed in its boundary |            500 | OAL-SCHEMA-WORKER-FAILED |
 | Backend result violates contract         |            500 | mock_response_invalid     |
 | Unexpected internal failure              |            500 | internal_error            |
 
@@ -5987,6 +5989,11 @@ frozen. Hosted service enforces hard ceilings.
 | Extension memory                     |    512 MiB |                     1 GiB |
 | Extension CPU                        |     1 core |                   2 cores |
 | Extension process count              |         64 |                       128 |
+| Schema worker deadline               |   1 second |              30 seconds |
+| Schema worker processes              |          2 |                         8 |
+| Schema worker queue                  | 128 pending |               1,024 pending |
+| Schema worker message                |     8 MiB |                    32 MiB |
+| Schema worker memory                 |   256 MiB |                     1 GiB |
 
 ### 31.2 Parsing controls
 
@@ -6044,7 +6051,7 @@ message wording.
 | Parse            | OAL-JSON-INVALID, OAL-YAML-INVALID, OAL-YAML-ALIAS-LIMIT, OAL-DUPLICATE-KEY                                                                                   | Compile failure.                                             |
 | OpenAPI          | OAL-OAS-VERSION-UNSUPPORTED, OAL-OAS-STRUCTURE-INVALID, OAL-OAS-ROUTE-AMBIGUOUS                                                                               | Error or capability outcome.                                 |
 | References       | OAL-REF-NOT-FOUND, OAL-REF-OUTSIDE-ROOT, OAL-REF-REMOTE-DISABLED, OAL-REF-LIMIT                                                                               | Compile failure or scoped unsupported feature.               |
-| Capability       | OAL-CAP-CALLBACK-UNSUPPORTED, OAL-CAP-AUTH-FLOW-UNSUPPORTED, OAL-CAP-SCHEMA-APPROXIMATED                                                                      | Strict blocker or explicit non-strict limitation.            |
+| Capability       | OAL-CAP-CALLBACK-UNSUPPORTED, OAL-CAP-AUTH-FLOW-UNSUPPORTED, OAL-CAP-SCHEMA-APPROXIMATED, OAL-PATTERN-HOSTILE                                                 | Strict blocker or explicit non-strict limitation.            |
 | Pack             | OAL-PACK-DIGEST-MISMATCH, OAL-BEHAVIOR-OPERATION-MISSING, OAL-RUBRIC-INVALID                                                                                  | Setup failure.                                               |
 | Study            | OAL-STUDY-SCHEMA-INVALID, OAL-PROTOCOL-LOCK-MISMATCH, OAL-PHASE-LOCK-MISMATCH, OAL-SCHEDULE-INVALID, OAL-CELL-DRIFT, OAL-CUE-LEAK, OAL-COMPATIBILITY-MISMATCH | Preflight failure or invalid analytical evidence.            |
 | Startup          | OAL-PORT-BIND-FAILED, OAL-STATE-DIGEST-MISMATCH, OAL-ARTIFACT-EXISTS, OAL-MOCK-NOT-READY                                                                      | Infrastructure failure.                                      |
@@ -6052,7 +6059,7 @@ message wording.
 | Adapter/provider | OAL-AGENT-NOT-FOUND, OAL-AGENT-CAPABILITY-UNSUPPORTED, OAL-PROVIDER-AUTH-FAILED, OAL-PROVIDER-UNAVAILABLE                                                     | Preflight, provider, or infrastructure failure.              |
 | Agent execution  | OAL-AGENT-EXIT-NONZERO, OAL-AGENT-TIMEOUT, OAL-AGENT-CANCELLED, OAL-AGENT-BUDGET-EXHAUSTED                                                                    | Valid unsuccessful agent outcome if evidence remains sound.  |
 | HTTP behavior    | authentication_failed, route_not_found, method_not_allowed, request_schema_invalid, invalid_state, fault_injected                                             | Normal trace evidence.                                       |
-| Mock             | OAL-GENERATION-FAILED, OAL-STATE-COMMIT-FAILED, OAL-MOCK-INTERNAL                                                                                             | Infrastructure failure.                                      |
+| Mock             | OAL-GENERATION-FAILED, OAL-STATE-COMMIT-FAILED, OAL-MOCK-INTERNAL, OAL-SCHEMA-WORKER-TIMEOUT, OAL-SCHEMA-WORKER-FAILED, OAL-SCHEMA-WORKER-QUEUE-FULL, OAL-SCHEMA-WORKER-MESSAGE-TOO-LARGE | Infrastructure failure.                                      |
 | Evaluation       | OAL-REPORT-MISSING, OAL-REPORT-INVALID, OAL-CHECK-FAILED, OAL-CHECK-INDETERMINATE, OAL-EVALUATOR-CRASHED                                                      | Task failure or evaluation infrastructure failure.           |
 | Persistence      | OAL-ARTIFACT-WRITE-FAILED, OAL-HASH-MISMATCH, OAL-INVALID-EVIDENCE, OAL-DISK-LIMIT                                                                            | Infrastructure-invalid evidence.                             |
 
