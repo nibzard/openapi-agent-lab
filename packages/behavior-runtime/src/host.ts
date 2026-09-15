@@ -139,6 +139,24 @@ export class BehaviorModuleHost implements BehaviorBackend {
     return result as InitializeResult;
   }
 
+  /**
+   * Project one state through the backend's projection. The projection
+   * runs in the child like every other backend call; a backend that
+   * implements no project rejects with behavior_project_unsupported.
+   */
+  async project(
+    state: Readonly<Json>,
+    request: BehaviorRequest | null
+  ): Promise<Json> {
+    const result = await this.call({
+      id: this.takeId(),
+      kind: "project",
+      state: state as Json,
+      request
+    });
+    return result as Json;
+  }
+
   async handle(
     request: BehaviorRequest,
     context: HandleContext

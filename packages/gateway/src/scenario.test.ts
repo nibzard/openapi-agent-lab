@@ -178,6 +178,7 @@ function thingsContract(): ContractIR {
         request_body: {
           required: true,
           content: [jsonContent("sch_thing_input")],
+          description: null,
           source_pointer: ""
         },
         responses: [
@@ -501,7 +502,12 @@ describe("scenario backend seam", () => {
         response: {
           status: 200,
           mediaType: "text/plain",
-          body: { kind: "text", text: "hello\nworld" }
+          body: {
+            kind: "text",
+            text: "hello\nworld",
+            sizeBytes: 12,
+            sha256: "0".repeat(64)
+          }
         }
       }
     ]);
@@ -554,7 +560,9 @@ describe("scenario backend seam", () => {
     );
     expect(response.status).toBe(200);
     const seen = backend.requests[0];
-    expect(seen).toBeDefined();
+    if (seen === undefined) {
+      throw new Error("The backend saw no request.");
+    }
     expect(seen.operation.key).toBe("path:GET /things");
     expect(seen.parameters.path).toEqual({});
     expect(seen.parameters.query).toEqual({ limit: 5 });
@@ -584,6 +592,9 @@ describe("scenario backend seam", () => {
       })
     );
     const seen = backend.requests[0];
+    if (seen === undefined) {
+      throw new Error("The backend saw no request.");
+    }
     expect(seen.body).toEqual({ kind: "json", value: { name: "first" } });
     expect(seen.selectedRequestMediaType).toBe("application/json");
   });
