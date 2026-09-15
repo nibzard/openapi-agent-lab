@@ -1,0 +1,16 @@
+# Context
+
+Part of T066: bound every execution path that evaluates untrusted
+patterns. Pack and contract-variant artifacts reach a first-party
+process from disk, so their schemas and instances are untrusted even
+though the schemas themselves ship with the repository. The hostile
+case is a fixed schema plus an adversarial instance: catastrophic
+backtracking needs only one hostile operand.
+
+Follows the pattern set by 0e92cd5/9e499bf: the schema set exposes
+raw documents only, and validateSchemaInstance compiles and executes
+in the schema worker. The in-process SchemaValidator cache is gone on
+purpose — keeping it would leave a second, unbounded compile path.
+
+Gotcha: grep treats packages/pack/src/manifest.ts as binary (raw NUL
+in a template literal at line 517); use grep -a on that file.
