@@ -219,6 +219,9 @@ importers:
 
   packages/gateway:
     dependencies:
+      '@oal/behavior-api':
+        specifier: workspace:*
+        version: link:../behavior-api
       '@oal/capability':
         specifier: workspace:*
         version: link:../capability

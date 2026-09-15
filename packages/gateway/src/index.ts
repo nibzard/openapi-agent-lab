@@ -62,6 +62,19 @@ export {
 export { createGatewayState, type GatewayState } from "./state.ts";
 
 export {
+  scenarioCandidateOf,
+  scenarioRequestOf,
+  type ScenarioBackend,
+  type ScenarioCandidate,
+  type ScenarioCommit,
+  type ScenarioExchange,
+  type ScenarioOutcome,
+  type ScenarioRequestInput,
+  type ScenarioResponse,
+  type ScenarioTransaction
+} from "./scenario.ts";
+
+export {
   parseMultipart,
   type MultipartPart,
   type MultipartResult

@@ -18,7 +18,7 @@ import { parseMultipart, type MultipartPart } from "./multipart.ts";
 import { FRAMEWORK_ERRORS, problemDocument } from "./problem.ts";
 import { validateResponse, type ResponseValidationResult } from "./response.ts";
 import { matchRoute } from "./router.ts";
-import { matchRequestMedia } from "./negotiate.ts";
+import { matchRequestMedia, parseAccept } from "./negotiate.ts";
 import {
   compilePathParameterPatterns,
   pathFamilyKey
@@ -28,6 +28,13 @@ import {
   type ContractFixture,
   type SelectedResponse
 } from "./select.ts";
+import {
+  scenarioCandidateOf,
+  scenarioRequestOf,
+  type ScenarioBackend,
+  type ScenarioOutcome,
+  type ScenarioTransaction
+} from "./scenario.ts";
 import type { GatewayState } from "./state.ts";
 import {
   createContractSchemaLookup,
@@ -73,6 +80,12 @@ export interface GatewayOptions {
   runSeed: string;
   /** Transactional state; committed only after response validation. */
   state?: GatewayState;
+  /**
+   * Scenario backend for scenario mode. Present only when the runner
+   * spawned a behavior module; the pipeline then routes every validated
+   * request through it instead of contract selection.
+   */
+  backend?: ScenarioBackend;
 }
 
 const HOP_BY_HOP = new Set([
@@ -336,14 +349,22 @@ async function pipeline(
   // still produce identical responses.
   const schemaLookup = contractSchemaLookup(contract);
 
-  // Step 7: request media type must be declared.
-  if (operation.request_body !== null && request.body !== undefined) {
-    const declared = operation.request_body.content.map(
-      (entry) => entry.media_type
-    );
-    if (matchRequestMedia(declared, contentType) === null) {
-      return framework(FRAMEWORK_ERRORS.mediaTypeUnsupported, requestId);
-    }
+  // Step 7: request media type must be declared. The matched type
+  // rides along: the scenario backend receives what the request
+  // actually selected.
+  const selectedRequestMediaType =
+    operation.request_body !== null && request.body !== undefined
+      ? matchRequestMedia(
+          operation.request_body.content.map((entry) => entry.media_type),
+          contentType
+        )
+      : null;
+  if (
+    operation.request_body !== null &&
+    request.body !== undefined &&
+    selectedRequestMediaType === null
+  ) {
+    return framework(FRAMEWORK_ERRORS.mediaTypeUnsupported, requestId);
   }
 
   // Step 8: request validation. A worker-bound failure here happens
@@ -379,40 +400,108 @@ async function pipeline(
     };
   }
 
-  // Steps 10 to 12: contract backend selection. The Accept header joins
+  // Steps 10 to 12: backend selection. The Accept header joins
   // selection so the value comes from the media type that is served.
   // The backend runs inside a state transaction: the staged mutation
   // stays invisible until response validation commits it. A
   // worker-bound failure rolls the transaction back, so a timeout
   // never mutates state.
   options.state?.stage(operation.key);
-  // A generated id must satisfy the strictest pattern any path
-  // parameter of the served operation's family declares, so the table
-  // of those patterns joins the generation options (section 15.6).
-  const parameterPatterns = pathPatternsFor(contract).get(
-    pathFamilyKey(operation)
-  );
   let selected: SelectedResponse;
-  try {
-    const candidate = await selectResponse(
-      operation.key,
-      operation.responses,
-      options.fixtures ?? [],
-      {
-        seed: `${options.runSeed}:${operation.uid}`,
-        lookup: schemaLookup,
-        ...(parameterPatterns === undefined ? {} : { parameterPatterns })
-      },
-      headerValue(raw.headers, "accept")
-    );
-    if (candidate === null) {
+  let scenarioTransaction: ScenarioTransaction | undefined;
+  if (options.backend !== undefined) {
+    // Scenario mode: the behavior backend answers the validated
+    // request. Media check, response validation, serialization, and
+    // commit below are shared with contract mode, so a scenario
+    // response can never bypass the contract. Backend failure details
+    // stay out of the response body; section 15.2 forbids leaking
+    // internals to the participant.
+    let outcome: ScenarioOutcome;
+    try {
+      outcome = await options.backend.handle(
+        scenarioRequestOf({
+          operation,
+          principal: auth.principal,
+          parameters: parameterResult.parameters,
+          body: request.body,
+          selectedRequestMediaType,
+          acceptedResponseMediaTypes: parseAccept(
+            headerValue(raw.headers, "accept")
+          ).map((entry) => entry.type)
+        }),
+        requestId
+      );
+    } catch {
+      // The handle is an adapter around a child process; a throw is an
+      // infrastructure fault, not a domain answer.
       options.state?.rollback();
-      return framework(FRAMEWORK_ERRORS.mockBehaviorUnavailable, requestId);
+      return framework(FRAMEWORK_ERRORS.internalError, requestId);
     }
-    selected = candidate;
-  } catch (error) {
-    options.state?.rollback();
-    return framework(schemaWorkerFramework(error), requestId, detailOf(error));
+    if (outcome.kind === "timeout") {
+      options.state?.rollback();
+      return framework(
+        FRAMEWORK_ERRORS.behaviorTimeout,
+        requestId,
+        `The backend exceeded its ${outcome.timeoutMs} ms bound.`
+      );
+    }
+    if (outcome.kind === "internal") {
+      options.state?.rollback();
+      return framework(FRAMEWORK_ERRORS.internalError, requestId);
+    }
+    const candidate = scenarioCandidateOf(
+      options.backend.name,
+      operation.responses,
+      outcome
+    );
+    if (!candidate.ok) {
+      options.state?.rollback();
+      return framework(FRAMEWORK_ERRORS.mockResponseInvalid, requestId);
+    }
+    selected = candidate.selected;
+    scenarioTransaction = {
+      exchange: {
+        requestId,
+        method,
+        target: raw.target,
+        operationKey: operation.key,
+        status: selected.status
+      },
+      ...(candidate.commit === undefined ? {} : { commit: candidate.commit })
+    };
+  } else {
+    // Contract mode. A generated id must satisfy the strictest pattern
+    // any path parameter of the served operation's family declares, so
+    // the table of those patterns joins the generation options
+    // (section 15.6).
+    const parameterPatterns = pathPatternsFor(contract).get(
+      pathFamilyKey(operation)
+    );
+    try {
+      const candidate = await selectResponse(
+        operation.key,
+        operation.responses,
+        options.fixtures ?? [],
+        {
+          seed: `${options.runSeed}:${operation.uid}`,
+          lookup: schemaLookup,
+          ...(parameterPatterns === undefined ? {} : { parameterPatterns })
+        },
+        headerValue(raw.headers, "accept")
+      );
+      if (candidate === null) {
+        options.state?.rollback();
+        return framework(FRAMEWORK_ERRORS.mockBehaviorUnavailable, requestId);
+      }
+      selected = candidate;
+    } catch (error) {
+      options.state?.rollback();
+      return framework(
+        schemaWorkerFramework(error),
+        requestId,
+        detailOf(error)
+      );
+    }
   }
 
   // Response media negotiation.
@@ -474,9 +563,16 @@ async function pipeline(
       safeHeaders[name] = value;
     }
   }
-  // Step 13 for the contract backend: the transaction commits only
-  // after every check above passed.
-  options.state?.commit();
+  // Step 13: the transaction commits only after every check above
+  // passed. A scenario transaction carries the state transition and
+  // semantic events; a persistent implementation throws when its store
+  // commit fails, and the participant then receives a bounded 500
+  // instead of a response whose state was never stored (section 17.1).
+  try {
+    options.state?.commit(scenarioTransaction);
+  } catch {
+    return framework(FRAMEWORK_ERRORS.stateCommitFailed, requestId);
+  }
   return {
     status: selected.status,
     headers: safeHeaders,

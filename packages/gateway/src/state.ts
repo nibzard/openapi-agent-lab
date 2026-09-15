@@ -1,3 +1,5 @@
+import type { ScenarioTransaction } from "./scenario.ts";
+
 /**
  * Gateway state transactions (specification section 15.1 step 13).
  * The pipeline stages one transaction per served product request and
@@ -8,8 +10,14 @@
 export interface GatewayState {
   /** Stage one domain effect inside the open transaction. */
   stage(effect: string): void;
-  /** Apply the open transaction and bump the revision. */
-  commit(): void;
+  /**
+   * Apply the open transaction and bump the revision. A scenario
+   * transaction carries the state transition and semantic events to
+   * persist; the in-memory implementation ignores it. A persistent
+   * implementation throws when its store commit fails, which the
+   * pipeline maps to a bounded 500.
+   */
+  commit(scenario?: ScenarioTransaction): void;
   /** Discard the open transaction; the revision stays unchanged. */
   rollback(): void;
   /** Number of committed transactions. */

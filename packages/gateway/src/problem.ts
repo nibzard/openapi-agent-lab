@@ -91,6 +91,11 @@ export const FRAMEWORK_ERRORS = {
     code: "mock_response_invalid",
     title: "The backend result violates the contract."
   },
+  stateCommitFailed: {
+    status: 500,
+    code: "OAL-STATE-COMMIT-FAILED",
+    title: "The state transaction failed to commit."
+  },
   contractVersionUnsupported: {
     status: 500,
     code: "contract_schema_version_unsupported",

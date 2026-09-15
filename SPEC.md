@@ -2451,6 +2451,7 @@ but still produce one transactionally stored API exchange event.
 | Schema evaluation deadline exceeded      |            504 | OAL-SCHEMA-WORKER-TIMEOUT |
 | Schema evaluation failed in its boundary |            500 | OAL-SCHEMA-WORKER-FAILED |
 | Backend result violates contract         |            500 | mock_response_invalid     |
+| State transaction failed to commit       |            500 | OAL-STATE-COMMIT-FAILED   |
 | Unexpected internal failure              |            500 | internal_error            |
 
 Framework errors SHOULD use RFC 9457 **application/problem+json** with stable
