@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { Buffer } from "node:buffer";
 import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
-import { createServer, type Server } from "node:http";
+import { createServer, type IncomingHttpHeaders, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -121,6 +121,14 @@ interface CapturedRequest {
   url: string;
   authorization: string;
   body: string;
+  headers: IncomingHttpHeaders;
+}
+
+/** One scripted reply of the sequence exposure server. */
+interface SequencedReply {
+  readonly status: number;
+  readonly body: string;
+  readonly headers?: Record<string, string>;
 }
 
 async function startExposureServer(
@@ -138,24 +146,72 @@ async function startExposureServer(
         method: message.method ?? "GET",
         url: message.url ?? "/",
         authorization: message.headers.authorization ?? "none",
-        body: bodyText
+        body: bodyText,
+        headers: message.headers
       });
       response.writeHead(status, { "content-type": "application/json" });
       response.end(body);
     });
   });
-  await new Promise<void>((resolvePromise, rejectPromise) => {
-    server.once("error", rejectPromise);
-    server.listen(0, "127.0.0.1", () => {
-      resolvePromise();
-    });
-  });
+  await listen(server);
   const address = server.address() as AddressInfo;
   return {
     server,
     requests,
     baseUrl: `http://127.0.0.1:${address.port}/api`
   };
+}
+
+/**
+ * Serve one reply per request, in order. Past the last reply the server
+ * answers 500, so any extra request fails its declared expected status.
+ */
+async function startSequenceServer(
+  replies: readonly SequencedReply[]
+): Promise<{ server: Server; requests: CapturedRequest[]; baseUrl: string }> {
+  const requests: CapturedRequest[] = [];
+  let next = 0;
+  const server = createServer((message, response) => {
+    let bodyText = "";
+    message.on("data", (chunk: Buffer) => {
+      bodyText += chunk.toString("utf8");
+    });
+    message.on("end", () => {
+      requests.push({
+        method: message.method ?? "GET",
+        url: message.url ?? "/",
+        authorization: message.headers.authorization ?? "none",
+        body: bodyText,
+        headers: message.headers
+      });
+      const reply = replies[next] ?? {
+        status: 500,
+        body: '{"error":"no reply left"}'
+      };
+      next += 1;
+      response.writeHead(reply.status, {
+        "content-type": "application/json",
+        ...(reply.headers ?? {})
+      });
+      response.end(reply.body);
+    });
+  });
+  await listen(server);
+  const address = server.address() as AddressInfo;
+  return {
+    server,
+    requests,
+    baseUrl: `http://127.0.0.1:${address.port}/api`
+  };
+}
+
+async function listen(server: Server): Promise<void> {
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    server.once("error", rejectPromise);
+    server.listen(0, "127.0.0.1", () => {
+      resolvePromise();
+    });
+  });
 }
 
 async function closeServer(server: Server): Promise<void> {
@@ -224,10 +280,18 @@ describe("MockAgentAdapter.run", () => {
         "agent.session_event",
         "agent.session_event",
         "agent.session_event",
+        "agent.session_event",
         "agent.exited"
       ]);
       expect(previews(events, "stdout")).toEqual(["creating computer"]);
       expect(kindsOn(events, "jsonrpc")).toEqual(["thread.started"]);
+      // A script that reaches its final message finished its turn, so
+      // the runner can count the report agreement denominator.
+      expect(kindsOn(events, "adapter")).toEqual([
+        "mock.script",
+        "mock.note",
+        "turn.completed"
+      ]);
       expect(events.at(-1)?.type).toBe("agent.exited");
       const note = events.find(
         (event) => streamPayload(event)?.kind === "mock.note"
@@ -328,6 +392,12 @@ describe("MockAgentAdapter.run", () => {
       expect(result.status).toBe("failed");
       expect(result.errorCode).toBe("MOCK_HTTP_STATUS_MISMATCH");
       expect(previews(events, "stdout")).toEqual([]);
+      // A script cut short by a failed request never completes a turn.
+      expect(kindsOn(events, "adapter")).toEqual([
+        "mock.script",
+        "http.request",
+        "http.response"
+      ]);
     } finally {
       await rm(state.root, { recursive: true, force: true });
     }
@@ -593,6 +663,328 @@ describe("MockAgentAdapter.run", () => {
         expect(validateAgentSessionEvent(event, schema)).toEqual([]);
       }
       expect(JSON.stringify(collector.events)).not.toContain(MOCK_KEY);
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("MockAgentAdapter.run with capture and templates", () => {
+  it("carries captured ids into later paths, headers, and the report", async () => {
+    const exposure = await startSequenceServer([
+      { status: 201, body: '{"id":"clip_7"}', headers: { etag: 'W/"7"' } },
+      { status: 201, body: '{"id":"clip_8"}' },
+      {
+        status: 200,
+        body: "# markdown",
+        headers: { "content-type": "text/markdown" }
+      },
+      { status: 200, body: '{"text":"clip text"}' },
+      { status: 204, body: "" }
+    ]);
+    openServers.push(exposure.server);
+    const state = await harness(
+      {
+        requests: [
+          {
+            path: "/v1/clips",
+            method: "POST",
+            credentialName: "X_API_KEY",
+            body: { url: "https://example.test/a" },
+            expectStatus: 201,
+            capture: { body: { clipA: "id" }, headers: { clipEtag: "etag" } }
+          },
+          {
+            path: "/v1/clips",
+            method: "POST",
+            credentialName: "X_API_KEY",
+            body: { url: "https://example.test/b" },
+            expectStatus: 201,
+            capture: { body: { clipB: "id" } }
+          },
+          {
+            path: "/v1/clips/{{clipA}}/render?neighbor={{clipB}}",
+            credentialName: "X_API_KEY",
+            headers: { accept: "text/markdown", "if-match": "{{clipEtag}}" },
+            expectStatus: 200
+          },
+          {
+            path: "/v1/clips/{{clipA}}/extract",
+            method: "POST",
+            credentialName: "X_API_KEY",
+            body: { after: "{{clipB}}" },
+            expectStatus: 200
+          },
+          {
+            path: "/v1/clips/{{clipB}}",
+            method: "DELETE",
+            credentialName: "X_API_KEY",
+            expectStatus: 204
+          }
+        ],
+        finalReport: {
+          first_clip: "{{clipA}}",
+          second_clip: "{{clipB}}",
+          deleted: true
+        }
+      },
+      {},
+      exposure.baseUrl
+    );
+    try {
+      const { result, events } = await runScript(state);
+      expect(result.status).toBe("completed");
+      expect(result.finalText).toBe(
+        '{"first_clip":"clip_7","second_clip":"clip_8","deleted":true}'
+      );
+      expect(exposure.requests.length).toBe(5);
+      expect(exposure.requests[0]?.url).toBe("/api/v1/clips");
+      expect(exposure.requests[2]?.url).toBe(
+        "/api/v1/clips/clip_7/render?neighbor=clip_8"
+      );
+      expect(exposure.requests[2]?.headers.accept).toBe("text/markdown");
+      expect(exposure.requests[2]?.headers["if-match"]).toBe('W/"7"');
+      expect(exposure.requests[2]?.authorization).toBe(`Bearer ${MOCK_KEY}`);
+      expect(JSON.parse(exposure.requests[3]?.body ?? "{}")).toEqual({
+        after: "clip_8"
+      });
+      expect(exposure.requests[4]?.url).toBe("/api/v1/clips/clip_8");
+      expect(kindsOn(events, "adapter")).toEqual([
+        "mock.script",
+        "http.request",
+        "http.response",
+        "http.capture",
+        "http.request",
+        "http.response",
+        "http.capture",
+        "http.request",
+        "http.response",
+        "http.request",
+        "http.response",
+        "http.request",
+        "http.response",
+        "turn.completed"
+      ]);
+      expect(JSON.stringify(events)).not.toContain(MOCK_KEY);
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("sends script headers and never drops the injected credential", async () => {
+    const exposure = await startExposureServer(200, '{"ok":true}');
+    openServers.push(exposure.server);
+    const state = await harness(
+      {
+        requests: [
+          {
+            path: "/v1/clips",
+            method: "POST",
+            credentialName: "X_API_KEY",
+            body: { url: "https://example.test/a" },
+            headers: {
+              accept: "image/svg+xml",
+              "content-type": "application/merge-patch+json",
+              "x-trace": "t-1",
+              authorization: "Bearer script-value"
+            },
+            expectStatus: 200
+          }
+        ]
+      },
+      {},
+      exposure.baseUrl
+    );
+    try {
+      const { result } = await runScript(state);
+      expect(result.status).toBe("completed");
+      const headers = exposure.requests[0]?.headers;
+      expect(headers?.accept).toBe("image/svg+xml");
+      expect(headers?.["content-type"]).toBe("application/merge-patch+json");
+      expect(headers?.["x-trace"]).toBe("t-1");
+      expect(exposure.requests[0]?.authorization).toBe(`Bearer ${MOCK_KEY}`);
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("records the expected status and a message when the status differs", async () => {
+    const exposure = await startExposureServer(404, '{"error":"missing"}');
+    openServers.push(exposure.server);
+    const state = await harness(
+      {
+        requests: [
+          { path: "/v1/clips/clip_9", method: "DELETE", expectStatus: 204 }
+        ],
+        events: [{ channel: "stdout", text: "never emitted" }]
+      },
+      {},
+      exposure.baseUrl
+    );
+    try {
+      const { result, events } = await runScript(state);
+      expect(result.status).toBe("failed");
+      expect(result.errorCode).toBe("MOCK_HTTP_STATUS_MISMATCH");
+      const note = events.find(
+        (event) => streamPayload(event)?.kind === "http.response"
+      );
+      expect(note?.extensions.expectedStatus).toBe(204);
+      expect(note?.extensions.error).toBe(
+        "expected status 204 but received 404"
+      );
+      expect(previews(events, "stdout")).toEqual([]);
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("fails the participant when a declared body path is missing", async () => {
+    const exposure = await startExposureServer(200, '{"other":"value"}');
+    openServers.push(exposure.server);
+    const state = await harness(
+      {
+        requests: [
+          {
+            path: "/v1/clips",
+            method: "POST",
+            expectStatus: 200,
+            capture: { body: { clipId: "id" } }
+          },
+          { path: "/v1/clips/{{clipId}}", method: "DELETE", expectStatus: 204 }
+        ]
+      },
+      {},
+      exposure.baseUrl
+    );
+    try {
+      const { result, events } = await runScript(state);
+      expect(result.status).toBe("failed");
+      expect(result.errorCode).toBe("MOCK_CAPTURE_FAILED");
+      expect(exposure.requests.length).toBe(1);
+      const note = events.find(
+        (event) => streamPayload(event)?.kind === "http.capture"
+      );
+      expect(note?.extensions.error).toBe(
+        "cannot capture a declared value: the response body has no value at id"
+      );
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("fails the participant when a declared header is absent", async () => {
+    const exposure = await startExposureServer(200, '{"id":"clip_7"}');
+    openServers.push(exposure.server);
+    const state = await harness(
+      {
+        requests: [
+          {
+            path: "/v1/clips",
+            method: "POST",
+            expectStatus: 200,
+            capture: { headers: { clipEtag: "etag" } }
+          }
+        ]
+      },
+      {},
+      exposure.baseUrl
+    );
+    try {
+      const { result, events } = await runScript(state);
+      expect(result.status).toBe("failed");
+      expect(result.errorCode).toBe("MOCK_CAPTURE_FAILED");
+      const note = events.find(
+        (event) => streamPayload(event)?.kind === "http.capture"
+      );
+      expect(note?.extensions.error).toBe(
+        "cannot capture a declared value: the response has no etag header"
+      );
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("parses the emitted final report as structured output", async () => {
+    const exposure = await startSequenceServer([
+      { status: 201, body: '{"id":"clip_8"}' }
+    ]);
+    openServers.push(exposure.server);
+    const state = await harness(
+      {
+        requests: [
+          {
+            path: "/v1/clips",
+            method: "POST",
+            expectStatus: 201,
+            capture: { body: { clipId: "id" } }
+          }
+        ],
+        finalReport: { clip_id: "{{clipId}}", created: true }
+      },
+      { resultSchemaPath: "/run/tmp/result.schema.json" },
+      exposure.baseUrl
+    );
+    try {
+      const { result } = await runScript(state);
+      expect(result.finalText).toBe('{"clip_id":"clip_8","created":true}');
+      expect(result.finalJson).toEqual({ clip_id: "clip_8", created: true });
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects at load time a variable nothing captures", async () => {
+    const state = await harness({
+      requests: [
+        {
+          path: "/v1/clips",
+          method: "POST",
+          capture: { body: { clipId: "id" } }
+        },
+        { path: "/v1/clips/{{unknown}}/render" }
+      ]
+    });
+    try {
+      expect(() => {
+        void state.adapter.prepare(state.context);
+      }).toThrowError(
+        /requests\[1\].path uses \{\{unknown\}\} but no earlier request captures it/
+      );
+    } finally {
+      await rm(state.root, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps an existing-shape script running unchanged", async () => {
+    const exposure = await startExposureServer(201, '{"id":"c_1"}');
+    openServers.push(exposure.server);
+    const state = await harness(
+      {
+        requests: [
+          {
+            path: "/computers",
+            method: "POST",
+            credentialName: "X_API_KEY",
+            body: { name: "worker" },
+            expectStatus: 201
+          }
+        ],
+        finalText: '{"computer_id":"c_1"}'
+      },
+      {},
+      exposure.baseUrl
+    );
+    try {
+      const { result, events } = await runScript(state);
+      expect(result.status).toBe("completed");
+      expect(result.exitCode).toBe(0);
+      expect(result.finalText).toBe('{"computer_id":"c_1"}');
+      expect(kindsOn(events, "adapter")).toEqual([
+        "mock.script",
+        "http.request",
+        "http.response",
+        "turn.completed"
+      ]);
     } finally {
       await rm(state.root, { recursive: true, force: true });
     }

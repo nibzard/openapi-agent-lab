@@ -31,9 +31,15 @@ import {
   DEFAULT_MOCK_ADAPTER_ID,
   DEFAULT_MOCK_CAPABILITIES,
   MOCK_ADAPTER_VERSION,
+  MOCK_CAPTURE_FAILED,
   MOCK_HTTP_REQUEST_FAILED,
   MOCK_HTTP_STATUS_MISMATCH,
   MOCK_SCRIPT_INVALID,
+  MOCK_TEMPLATE_UNRESOLVED,
+  readBodyPath,
+  renderTemplate,
+  renderTemplatesDeep,
+  validateScriptTemplates,
   type MockAgentConfig,
   type MockAgentScript,
   type MockEventSpec,
@@ -92,7 +98,10 @@ export class MockAgentAdapter implements AgentAdapter {
    * performs no writes and no network calls.
    */
   prepare(context: AgentRunContext): Promise<MockPreparedAgent> {
-    const problems = validateMockScript(this.script);
+    const problems = [
+      ...validateMockScript(this.script),
+      ...validateScriptTemplates(this.script)
+    ];
     if (problems.length > 0) {
       throw new Error(
         `${MOCK_SCRIPT_INVALID}: ${this.id} rejected its script: ${problems.join("; ")}`
@@ -149,6 +158,9 @@ export class MockAgentAdapter implements AgentAdapter {
       durationMs: run.script.durationMs ?? 0
     });
 
+    // Values the requests capture, by variable name. The same map serves
+    // every step and the final report, so the run stays deterministic.
+    const variables: Record<string, string> = {};
     for (const request of run.script.requests ?? []) {
       if (stopForControl(signal, deadline, outcome)) {
         break;
@@ -159,7 +171,7 @@ export class MockAgentAdapter implements AgentAdapter {
       if (stopForControl(signal, deadline, outcome)) {
         break;
       }
-      await performRequest(request, context, recorder, outcome);
+      await performRequest(request, context, recorder, outcome, variables);
     }
 
     for (const event of run.script.events ?? []) {
@@ -196,11 +208,34 @@ export class MockAgentAdapter implements AgentAdapter {
       stopForControl(signal, deadline, outcome);
     }
 
+    // The final report renders after every request, so it can quote any
+    // captured value. Load-time validation blocks unknown variables; this
+    // guard turns any survivor into a participant failure.
+    let scriptedFinalText = run.script.finalText ?? null;
+    if (run.script.finalReport !== undefined && outcome.status === undefined) {
+      const rendered = renderTemplatesDeep(run.script.finalReport, variables);
+      if (rendered.missing.length > 0) {
+        outcome.status = "failed";
+        outcome.errorCode = MOCK_TEMPLATE_UNRESOLVED;
+        recorder.adapterEvent("mock.report", {
+          error: `final report uses an unknown variable: ${rendered.missing.join(", ")}`
+        });
+      } else {
+        scriptedFinalText = JSON.stringify(rendered.value);
+      }
+    }
     const forcedStatus = outcome.status ?? run.script.status ?? "completed";
     const exitCode = resolveExitCode(outcome.status, run.script.exitCode);
-    const finalText =
-      outcome.status === undefined ? (run.script.finalText ?? null) : null;
+    const finalText = outcome.status === undefined ? scriptedFinalText : null;
     const finalJson = parseStructuredOutput(finalText, context);
+
+    // A script that ran to its final message finished its turn, so the
+    // runner can count the report agreement denominator (section 22.3,
+    // 27.3). A script cut short by control or by a failed request never
+    // completes a turn, and the empty default script reports nothing.
+    if (outcome.status === undefined && scriptedFinalText !== null) {
+      recorder.adapterEvent("turn.completed", { source: "final_message" });
+    }
 
     recorder.exited({
       exitCode,
@@ -248,15 +283,17 @@ function emitScriptEvent(
 }
 
 /**
- * Run one scripted request against the exposure base URL. Only the path, the
- * method, and the response status are recorded. Header values never reach an
- * event, so a credential cannot leak through the transcript.
+ * Run one scripted request against the exposure base URL. Only the rendered
+ * path, the method, and the response status are recorded. Header values and
+ * captured values never reach an event, so a credential cannot leak through
+ * the transcript.
  */
 async function performRequest(
   request: MockRequestSpec,
   context: AgentRunContext,
   recorder: SessionEventRecorder,
-  outcome: { status?: AgentRunResult["status"]; errorCode?: string }
+  outcome: { status?: AgentRunResult["status"]; errorCode?: string },
+  variables: Record<string, string>
 ): Promise<void> {
   const baseUrl = context.exposure.baseUrl;
   if (baseUrl === undefined) {
@@ -269,54 +306,224 @@ async function performRequest(
     });
     return;
   }
+  // Render every templated surface first. Load-time validation blocks
+  // unknown variables; this guard turns any survivor into a participant
+  // failure instead of a request with an unexpanded token.
+  const renderedPath = renderTemplate(request.path, variables);
+  const missing = [...renderedPath.missing];
   const headers: Record<string, string> = {};
-  if (request.credentialName !== undefined) {
-    const value = context.toolEnvironment[request.credentialName];
-    if (value !== undefined) {
-      headers.Authorization = `Bearer ${value}`;
-    }
+  for (const [name, value] of Object.entries(request.headers ?? {})) {
+    const rendered = renderTemplate(value, variables);
+    missing.push(...rendered.missing);
+    headers[name] = rendered.text;
   }
-  const body =
-    request.body === undefined ? undefined : JSON.stringify(request.body);
-  if (body !== undefined) {
-    headers["content-type"] = "application/json";
+  const renderedBody =
+    request.body === undefined
+      ? undefined
+      : renderTemplatesDeep(request.body, variables);
+  if (renderedBody !== undefined) {
+    missing.push(...renderedBody.missing);
   }
   const method = request.method ?? "GET";
+  if (missing.length > 0) {
+    outcome.status = "failed";
+    outcome.errorCode = MOCK_TEMPLATE_UNRESOLVED;
+    recorder.adapterEvent("http.request", {
+      path: request.path,
+      method,
+      error: `request uses an unknown variable: ${missing.join(", ")}`
+    });
+    return;
+  }
+  const body =
+    renderedBody === undefined ? undefined : JSON.stringify(renderedBody.value);
+  if (body !== undefined && !hasHeader(headers, "content-type")) {
+    headers["content-type"] = "application/json";
+  }
+  const sentHeaders = applyCredential(headers, request.credentialName, context);
   recorder.adapterEvent("http.request", {
-    path: request.path,
+    path: renderedPath.text,
     method,
     credential: request.credentialName ?? "none"
   });
-  let status: number;
+  let received: { status: number; headers: Headers; text: string };
   try {
-    const response = await fetch(joinUrl(baseUrl, request.path), {
+    const response = await fetch(joinUrl(baseUrl, renderedPath.text), {
       method,
-      headers,
+      headers: sentHeaders,
       ...(body === undefined ? {} : { body })
     });
-    status = response.status;
-    await response.arrayBuffer().then(
-      () => undefined,
-      () => undefined
-    );
+    received = {
+      status: response.status,
+      headers: response.headers,
+      text: await response.text()
+    };
   } catch (error) {
     outcome.status = "failed";
     outcome.errorCode = MOCK_HTTP_REQUEST_FAILED;
     recorder.adapterEvent("http.response", {
-      path: request.path,
+      path: renderedPath.text,
       error: error instanceof Error ? error.message : "fetch failed"
     });
     return;
   }
+  const mismatched =
+    request.expectStatus !== undefined &&
+    request.expectStatus !== received.status;
   recorder.adapterEvent("http.response", {
-    path: request.path,
+    path: renderedPath.text,
     method,
-    status
+    status: received.status,
+    ...(mismatched
+      ? {
+          expectedStatus: request.expectStatus,
+          error: `expected status ${request.expectStatus} but received ${received.status}`
+        }
+      : {})
   });
-  if (request.expectStatus !== undefined && request.expectStatus !== status) {
+  if (mismatched) {
     outcome.status = "failed";
     outcome.errorCode = MOCK_HTTP_STATUS_MISMATCH;
+    return;
   }
+  applyCapture(
+    request,
+    renderedPath.text,
+    received,
+    recorder,
+    outcome,
+    variables
+  );
+}
+
+/**
+ * Copy declared response values into the script variables. Only the
+ * variable names reach the event, never the values, because a captured
+ * header can echo a credential. A missing value fails the participant.
+ */
+function applyCapture(
+  request: MockRequestSpec,
+  path: string,
+  received: { status: number; headers: Headers; text: string },
+  recorder: SessionEventRecorder,
+  outcome: { status?: AgentRunResult["status"]; errorCode?: string },
+  variables: Record<string, string>
+): void {
+  const capture = request.capture;
+  if (capture === undefined) {
+    return;
+  }
+  const names: string[] = [];
+  const bodyCaptures = Object.entries(capture.body ?? {});
+  let parsedBody: unknown;
+  if (bodyCaptures.length > 0) {
+    if (received.text.trim().length === 0) {
+      captureFailed(recorder, outcome, path, "the response body is empty");
+      return;
+    }
+    try {
+      parsedBody = JSON.parse(received.text) as unknown;
+    } catch {
+      captureFailed(recorder, outcome, path, "the response body is not JSON");
+      return;
+    }
+  }
+  for (const [name, pointer] of bodyCaptures) {
+    const value = readBodyPath(parsedBody, pointer);
+    if (value === undefined || value === null) {
+      captureFailed(
+        recorder,
+        outcome,
+        path,
+        `the response body has no value at ${pointer}`
+      );
+      return;
+    }
+    if (
+      typeof value !== "string" &&
+      typeof value !== "number" &&
+      typeof value !== "boolean"
+    ) {
+      captureFailed(
+        recorder,
+        outcome,
+        path,
+        `the value at ${pointer} is not a string, number, or boolean`
+      );
+      return;
+    }
+    variables[name] = String(value);
+    names.push(name);
+  }
+  for (const [name, headerName] of Object.entries(capture.headers ?? {})) {
+    const value = received.headers.get(headerName);
+    if (value === null) {
+      captureFailed(
+        recorder,
+        outcome,
+        path,
+        `the response has no ${headerName} header`
+      );
+      return;
+    }
+    variables[name] = value;
+    names.push(name);
+  }
+  if (names.length > 0) {
+    recorder.adapterEvent("http.capture", { path, variables: names });
+  }
+}
+
+/** Record one capture failure and stop the run as a participant error. */
+function captureFailed(
+  recorder: SessionEventRecorder,
+  outcome: { status?: AgentRunResult["status"]; errorCode?: string },
+  path: string,
+  reason: string
+): void {
+  outcome.status = "failed";
+  outcome.errorCode = MOCK_CAPTURE_FAILED;
+  recorder.adapterEvent("http.capture", {
+    path,
+    error: `cannot capture a declared value: ${reason}`
+  });
+}
+
+/** True when the headers already carry one name, ignoring case. */
+function hasHeader(
+  headers: Readonly<Record<string, string>>,
+  name: string
+): boolean {
+  const lowered = name.toLowerCase();
+  return Object.keys(headers).some((key) => key.toLowerCase() === lowered);
+}
+
+/**
+ * Apply the credential authorization last. The result drops every case
+ * variant of the name first, so a script header can neither duplicate the
+ * token nor drop it.
+ */
+function applyCredential(
+  headers: Record<string, string>,
+  credentialName: string | undefined,
+  context: AgentRunContext
+): Record<string, string> {
+  if (credentialName === undefined) {
+    return headers;
+  }
+  const value = context.toolEnvironment[credentialName];
+  if (value === undefined) {
+    return headers;
+  }
+  const out: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(headers)) {
+    if (key.toLowerCase() === "authorization") {
+      continue;
+    }
+    out[key] = entry;
+  }
+  out.Authorization = `Bearer ${value}`;
+  return out;
 }
 
 /** Append a slash-leading path to a base URL without dropping its prefix. */
