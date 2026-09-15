@@ -8,6 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@oal/config": "workspace:*",
     "@oal/core": "workspace:*",
     "@oal/evaluator": "workspace:*",
     "@oal/evidence": "workspace:*",

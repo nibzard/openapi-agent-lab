@@ -167,3 +167,24 @@ export function resolveLimits(
   }
   return resolved;
 }
+
+/**
+ * Schema-worker settings of one limits table, in the shape the worker
+ * boundary accepts. The return type is structural, so `@oal/config`
+ * stays independent of `@oal/core` (section 31.1).
+ */
+export function schemaWorkerSettingsOf(table: LimitTable): {
+  deadlineMs: number;
+  workerCount: number;
+  maxPending: number;
+  maxMessageBytes: number;
+  memoryBytes: number;
+} {
+  return {
+    deadlineMs: table.schemaWorkerDeadlineMs,
+    workerCount: table.schemaWorkerCount,
+    maxPending: table.schemaWorkerMaxPending,
+    maxMessageBytes: table.schemaWorkerMaxMessageBytes,
+    memoryBytes: table.schemaWorkerMemoryBytes
+  };
+}

@@ -281,6 +281,9 @@ importers:
 
   packages/report:
     dependencies:
+      '@oal/config':
+        specifier: workspace:*
+        version: link:../config
       '@oal/core':
         specifier: workspace:*
         version: link:../core

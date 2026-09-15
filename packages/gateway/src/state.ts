@@ -23,8 +23,9 @@ export interface GatewayState {
 }
 
 /**
- * In-memory GatewayState. The pipeline runs synchronously, so one
- * transaction is open at a time and no interleaving is possible.
+ * In-memory GatewayState. Pipelines that share a state are serialized
+ * in submission order, so one transaction is open at a time and no
+ * interleaving is possible.
  */
 export function createGatewayState(): GatewayState {
   let revision = 0;

@@ -9,6 +9,7 @@
 
 import {
   canonicalJsonSha256,
+  configureSchemaWorker,
   diagnostic,
   isJsonObject,
   isSafeId,
@@ -23,6 +24,7 @@ import {
   LIMIT_DEFAULTS,
   PROFILE_LIMIT_DEFAULTS,
   resolveLimits,
+  schemaWorkerSettingsOf,
   type LimitTable,
   type RunProfile
 } from "@oal/config";
@@ -673,6 +675,20 @@ export async function runPreflight(
   options: PreflightOptions
 ): Promise<PreflightResult> {
   const findings: Diagnostic[] = [];
+
+  // The schema-worker boundary must carry this run's table before the
+  // first pack pattern evaluation: eval and rubric loading below this
+  // point already validate pack-supplied schemas. An invalid override
+  // keeps the defaults here and is reported at step 10 below.
+  try {
+    configureSchemaWorker(
+      schemaWorkerSettingsOf(
+        resolveLimits({ ...(options.limitOverrides ?? {}) })
+      )
+    );
+  } catch {
+    configureSchemaWorker(schemaWorkerSettingsOf(LIMIT_DEFAULTS));
+  }
 
   if (!isSafeId(options.batchId)) {
     throw new Error(

@@ -6,6 +6,7 @@ import {
   PROFILE_LIMIT_DEFAULTS,
   makeRunProfile,
   resolveLimits,
+  schemaWorkerSettingsOf,
   type LimitTable
 } from "./index.ts";
 
@@ -168,5 +169,18 @@ describe("profile limit ceilings", () => {
     expect(profile.execution.count).toBe(2);
     expect(profile.limits.max_api_requests).toBe(100);
     expect(profile.limits.max_agent_tool_calls).toBe(500);
+  });
+});
+
+describe("schema worker settings", () => {
+  it("derives the schema-worker settings of a limits table", () => {
+    const table = resolveLimits({ schemaWorkerDeadlineMs: 2_000 });
+    expect(schemaWorkerSettingsOf(table)).toEqual({
+      deadlineMs: 2_000,
+      workerCount: table.schemaWorkerCount,
+      maxPending: table.schemaWorkerMaxPending,
+      maxMessageBytes: table.schemaWorkerMaxMessageBytes,
+      memoryBytes: table.schemaWorkerMemoryBytes
+    });
   });
 });

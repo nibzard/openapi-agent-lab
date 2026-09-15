@@ -84,17 +84,22 @@ describe("schema worker boundary", () => {
     });
     try {
       const schema: Json = { type: "string", pattern: REGEX_BOMB };
-      const blocked = tight.validate(schema, `${"a".repeat(1024)}!`);
-      const waiting = tight.validate(schema, `${"a".repeat(512)}!`);
+      // Rejection handlers attach at creation, not after intermediate
+      // awaits: the deadline timer can reject the queued jobs in one
+      // macrotask and a later one, and a promise that sits rejected
+      // across a macrotask boundary without a handler is reported as
+      // an unhandled rejection.
+      const blockedRejected = expect(
+        tight.validate(schema, `${"a".repeat(1024)}!`)
+      ).rejects.toMatchObject({ code: "OAL-SCHEMA-WORKER-TIMEOUT" });
+      const waitingRejected = expect(
+        tight.validate(schema, `${"a".repeat(512)}!`)
+      ).rejects.toMatchObject({ code: "OAL-SCHEMA-WORKER-TIMEOUT" });
       await expect(
         tight.validate(schema, `${"a".repeat(256)}!`)
       ).rejects.toMatchObject({ code: "OAL-SCHEMA-WORKER-QUEUE-FULL" });
-      await expect(waiting).rejects.toMatchObject({
-        code: "OAL-SCHEMA-WORKER-TIMEOUT"
-      });
-      await expect(blocked).rejects.toMatchObject({
-        code: "OAL-SCHEMA-WORKER-TIMEOUT"
-      });
+      await waitingRejected;
+      await blockedRejected;
     } finally {
       tight.close();
     }

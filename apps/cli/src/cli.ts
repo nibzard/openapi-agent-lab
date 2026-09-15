@@ -1,10 +1,13 @@
 import {
+  closeSchemaWorker,
+  configureSchemaWorker,
   EXIT_INFRASTRUCTURE,
   EXIT_INVALID,
   EXIT_OK,
   toOalError,
   type ExitCode
 } from "@oal/core";
+import { LIMIT_DEFAULTS, schemaWorkerSettingsOf } from "@oal/config";
 
 import { parseCommandLine } from "./argv.ts";
 import {
@@ -89,7 +92,18 @@ export async function main(
       flags: parsed.flags,
       context
     };
-    const code = await parsed.command.handler(args, io);
+    // Every command that evaluates contract or pack patterns runs the
+    // evaluation through the shared schema-worker boundary. Configure
+    // the default table up front, so no path evaluates on implicit
+    // settings; commands with their own resolved table (run, serve,
+    // doctor) reconfigure before their serving starts.
+    configureSchemaWorker(schemaWorkerSettingsOf(LIMIT_DEFAULTS));
+    let code: ExitCode;
+    try {
+      code = await parsed.command.handler(args, io);
+    } finally {
+      closeSchemaWorker();
+    }
     return finalize(code);
   } catch (error) {
     const typed = toOalError(error);

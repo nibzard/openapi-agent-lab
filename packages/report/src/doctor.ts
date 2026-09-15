@@ -13,7 +13,13 @@
  * stable check id, so output ordering is deterministic.
  */
 
-import { canonicalJson, type Json } from "@oal/core";
+import {
+  canonicalJson,
+  closeSchemaWorker,
+  configureSchemaWorker,
+  type Json
+} from "@oal/core";
+import { schemaWorkerSettingsOf } from "@oal/config";
 import { closeDatabase, integrityCheck, openDatabase } from "@oal/state-store";
 import {
   handleGatewayRequest,
@@ -467,42 +473,58 @@ export async function checkAdapter(
 /** Gateway determinism double-check through the full pipeline. */
 export async function checkGatewayDeterminism(): Promise<DoctorCheck> {
   const asJson = (value: unknown): Json => value as Json;
-  const options = probeGatewayOptions();
-  const first = await handleGatewayRequest(options, 1, PROBE_REQUEST);
-  const second = await handleGatewayRequest(options, 1, PROBE_REQUEST);
-  const third = await handleGatewayRequest(
-    probeGatewayOptions(),
-    1,
-    PROBE_REQUEST
-  );
-  const firstJson = canonicalJson(asJson(first));
-  const same =
-    firstJson === canonicalJson(asJson(second)) &&
-    firstJson === canonicalJson(asJson(third));
-  if (!same) {
-    return {
-      id: "gateway.determinism",
-      status: "fail",
-      message: "The gateway produced different responses for identical inputs."
-    };
+  // The probe evaluates patterns through the worker boundary like any
+  // serving path, bounded by the probe table's worker settings.
+  configureSchemaWorker(schemaWorkerSettingsOf(DOCTOR_PROBE_LIMITS));
+  try {
+    const options = probeGatewayOptions();
+    const first = await handleGatewayRequest(options, 1, PROBE_REQUEST);
+    const second = await handleGatewayRequest(options, 1, PROBE_REQUEST);
+    const third = await handleGatewayRequest(
+      probeGatewayOptions(),
+      1,
+      PROBE_REQUEST
+    );
+    return grade(first, second, third);
+  } finally {
+    closeSchemaWorker();
   }
-  if (first.frameworkCode !== null) {
-    return {
-      id: "gateway.determinism",
-      status: "warn",
-      message: `The gateway is deterministic but the probe hit framework error ${first.frameworkCode}.`,
-      detail: { status: first.status, framework_code: first.frameworkCode }
-    };
-  }
-  return {
-    id: "gateway.determinism",
-    status: "pass",
-    message: "The gateway returns identical responses for identical inputs.",
-    detail: {
-      status: first.status,
-      provenance: first.provenance
+
+  function grade(
+    first: Awaited<ReturnType<typeof handleGatewayRequest>>,
+    second: Awaited<ReturnType<typeof handleGatewayRequest>>,
+    third: Awaited<ReturnType<typeof handleGatewayRequest>>
+  ): DoctorCheck {
+    const firstJson = canonicalJson(asJson(first));
+    const same =
+      firstJson === canonicalJson(asJson(second)) &&
+      firstJson === canonicalJson(asJson(third));
+    if (!same) {
+      return {
+        id: "gateway.determinism",
+        status: "fail",
+        message:
+          "The gateway produced different responses for identical inputs."
+      };
     }
-  };
+    if (first.frameworkCode !== null) {
+      return {
+        id: "gateway.determinism",
+        status: "warn",
+        message: `The gateway is deterministic but the probe hit framework error ${first.frameworkCode}.`,
+        detail: { status: first.status, framework_code: first.frameworkCode }
+      };
+    }
+    return {
+      id: "gateway.determinism",
+      status: "pass",
+      message: "The gateway returns identical responses for identical inputs.",
+      detail: {
+        status: first.status,
+        provenance: first.provenance
+      }
+    };
+  }
 }
 
 /** Writability of the artifact directory. */

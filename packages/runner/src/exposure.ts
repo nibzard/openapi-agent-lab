@@ -28,7 +28,7 @@ import {
   type JsonObject
 } from "@oal/core";
 import { CONTRACT_IR_SCHEMA_VERSION, type ContractIR } from "@oal/contract-ir";
-import type { LimitTable } from "@oal/config";
+import { schemaWorkerSettingsOf, type LimitTable } from "@oal/config";
 import {
   Redactor,
   redactPath,
@@ -39,6 +39,7 @@ import {
   type TraceEvent
 } from "@oal/evidence";
 import {
+  createGatewayState,
   FRAMEWORK_ERRORS,
   handleGatewayRequest,
   matchRoute,
@@ -581,13 +582,9 @@ async function startRawHttpExposure(
   // The schema worker boundary serves this exposure with the resource
   // settings of the run's limit table, so a hostile pattern inside the
   // contract is bounded by the configured deadline and queue bounds.
-  configureSchemaWorker({
-    deadlineMs: request.limits.schemaWorkerDeadlineMs,
-    workerCount: request.limits.schemaWorkerCount,
-    maxPending: request.limits.schemaWorkerMaxPending,
-    maxMessageBytes: request.limits.schemaWorkerMaxMessageBytes,
-    memoryBytes: request.limits.schemaWorkerMemoryBytes
-  });
+  // The settings are process-global: one run resolves one table before
+  // any exposure starts, and the last exposure to configure wins.
+  configureSchemaWorker(schemaWorkerSettingsOf(request.limits));
   const candidates = conventionalCandidates(
     documentation?.candidates ?? {},
     visibility
@@ -637,6 +634,11 @@ async function startRawHttpExposure(
   // later request of the same run serves (section 15.5).
   const fixtures: ContractFixture[] =
     options.fixtures === undefined ? [] : [...options.fixtures];
+  // One state serializes the pipelines of this exposure in ingress
+  // order: the gateway awaits worker replies between staging and
+  // commit, so without a shared state the pipelines run concurrently
+  // and completion order stops matching ingress order.
+  const gatewayState = createGatewayState();
   const admission = new AdmissionControl(request.limits);
   const exchangeFailures: ExposureFailureRecord[] = [];
   let exchangeFailureTotal = 0;
@@ -802,7 +804,8 @@ async function startRawHttpExposure(
           contract: request.contract,
           limits: request.limits,
           fixtures,
-          runSeed: request.trialSeed
+          runSeed: request.trialSeed,
+          state: gatewayState
         },
         reserved.sequence,
         { method, target, headers, body: bytes }
