@@ -1,0 +1,7 @@
+# Context
+
+Completes the T066 routing sweep: the conformance probe was the
+last CLI gate that compiled a first-party schema in process. The
+threat model counts the tested value as the untrusted operand too,
+so first-party schemas validating untrusted documents belong inside
+the boundary.
