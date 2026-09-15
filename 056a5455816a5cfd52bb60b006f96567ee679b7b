@@ -1,0 +1,8 @@
+# Context
+
+Keeps SPEC and docs/security.md in step with the landed boundary
+(review remediation priority 1 asked for doc sync). The inventory
+table is the durable record of T066 step 3: it names every parent
+process pattern site with its safety reason, and flags the one
+latent site (agent-adapter event validation, no production caller
+today) so it is not forgotten when it gains one.
