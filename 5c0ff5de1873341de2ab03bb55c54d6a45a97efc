@@ -1,0 +1,32 @@
+# Context
+
+## Why This Way
+Task T069 step one: one shared request path for contract and scenario
+modes. The alternative — a parallel scenario pipeline — would fork
+validation, negotiation, and commit semantics, which is exactly what
+section 9.2 forbids. The seam is one optional GatewayOptions.backend;
+absent it, every existing byte of contract behavior is unchanged
+(252 gateway tests untouched besides additions).
+
+## Gotchas
+- The backend receives only validated context: schema-validated
+  parameters keyed by NAME and re-routed by declared location, the
+  parsed body (Json view for multipart, text string for text media),
+  the matched request media type, and Accept preference order. It
+  never sees raw bytes. Query scalars are deserialized with type
+  hints, so "5" arrives as number 5 even without a schema ref.
+- validateResponse already rejects undeclared statuses
+  (status_undeclared), so the scenario path inherits that check for
+  free; scenarioCandidateOf still resolves the declared response for
+  media negotiation.
+- serializeState chains per state object, so one state sees backend
+  calls strictly in ingress order (pinned by a concurrency test);
+  stateless installs run concurrent.
+- domain errors are served responses without a commit payload: the
+  exchange is recorded, no transition rides along.
+
+## Related
+- SPEC.md section 15.2 gained the OAL-STATE-COMMIT-FAILED row.
+- Next commits: runner bootstrap (frozen executable inputs, child
+  host, operation coverage), store-backed GatewayState, final
+  snapshot/projection, then the webclip flip.
