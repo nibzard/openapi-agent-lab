@@ -1,0 +1,23 @@
+# Context
+
+## Why This Way
+The exclusion mechanism is the point of the task. An earlier external
+review argued a home-grown validator can silently misread unsupported
+semantics; the corpus turns every unsupported case into a visible,
+reason-carrying manifest entry, and the "keeps every skip justified"
+test fails the moment an exclusion stops failing. Exclusions therefore
+can only shrink through real fixes.
+
+## Gotchas
+- Upstream suite files keep their exact bytes; the directory is in
+  .prettierignore so reformatting cannot blur provenance. The revision
+  (1d82f70b, 2026-09-13) is pinned in manifest.json.
+- The optional/ suite directory is deliberately not vendored: format
+  assertion is opt-in by design in this validator, and the optional
+  files target implementation-specific behavior.
+- Updating the vendored revision requires re-triaging: new cases that
+  fail need either a fix or a new manifest entry with a reason. The
+  size guard makes a silent corpus shrink impossible.
+
+## Related
+- SPEC section 23.5 records the covered subset and exclusions.
