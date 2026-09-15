@@ -1,0 +1,22 @@
+# Context
+
+## Background
+BehaviorModuleHost (packages/behavior-runtime/src/host.ts) spawns
+process.execPath with the pack entrypoint and a minimal environment
+{PATH, HOME, LANG, OAL_BEHAVIOR_CHILD: "1"}. The child must serve the
+behavior protocol itself.
+
+## Why This Way
+The pack entry imports runBehaviorChild from
+../../../packages/behavior-runtime/src/child.ts by relative path. A
+bare specifier would resolve through package node_modules from the
+importing file's own package, but the direct relative import keeps the
+pack loadable without a build step and matches how the host resolves
+the entry.
+
+## Gotchas
+- Without the marker gate, importing the pack entry in-process (tests,
+  pack load) would start a child protocol listener on every import.
+- The gateway still verifies a declared security alternative on every
+  request even when pack security.enforce is false, so participants
+  must send the minted credential (OAL_AUTH_BEARER) on every call.
