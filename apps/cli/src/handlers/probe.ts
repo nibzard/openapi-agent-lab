@@ -19,7 +19,6 @@ import {
   EXIT_INFRASTRUCTURE,
   EXIT_OK,
   EXIT_UNSUPPORTED,
-  SchemaValidator,
   diagnostic,
   formatRfc3339,
   invalidInput,
@@ -27,6 +26,7 @@ import {
   sha256Hex,
   stableJsonStringify,
   unsupported,
+  validateSchemaInstance,
   type Diagnostic,
   type Json,
   type JsonObject,
@@ -518,14 +518,15 @@ function clipHeaderRecords(
  * Schema errors of one assembled conformance document. The probe runs
  * this gate immediately before it writes, so no document that fails
  * schemas/conformance.v1.schema.json (section 10.4) reaches the out
- * directory.
+ * directory. Live-service answers fill the document, so its evaluation
+ * runs inside the bounded schema-worker boundary.
  */
 export async function conformanceSchemaErrors(
   document: Json
 ): Promise<readonly SchemaViolation[]> {
   const schemaFile = path.join(defaultSchemaDir(), CONFORMANCE_SCHEMA);
   const schema = JSON.parse(await readFile(schemaFile, "utf8")) as Json;
-  return new SchemaValidator(schema).errors(document);
+  return validateSchemaInstance(schema, document);
 }
 
 /** Terminal projection of one conformance document. */
