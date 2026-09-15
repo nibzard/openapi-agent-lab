@@ -1,0 +1,9 @@
+# Context
+
+T066 step 4 (strict-mode hostile-pattern checks). Detection lives
+in @oal/openapi because that is where a compiled ContractIR is at
+hand; the probe itself runs in the schema worker via the new
+per-call deadline on patternAcceptsInWorker. inspect is the first
+caller because it already owns the --strict contract-failure
+semantics (EXIT_UNSUPPORTED). pack validate and run preflight can
+adopt the same call later if operators ask for it.
