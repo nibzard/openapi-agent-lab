@@ -1,0 +1,16 @@
+# Context
+
+## Background
+The external review of 0b22357 listed three priorities. Two already
+had tasks (T066 untrusted-pattern bounds, T069 one stateful task
+through the public CLI); the third, usefulness on an API owned
+outside this project, had none. The review also asked for an
+independent conformance corpus over the declared Draft 2020-12
+subset, which T040 never covered: T040 checked OpenAPI documents,
+not the JSON Schema test suite.
+
+## Why This Way
+T072 is unblocked and independent of the stateful work; it hardens
+the measurement layer everything else reports through. T073 depends
+on T069 so the external validation runs against a validated
+environment instead of contract-only fixtures.
