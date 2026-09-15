@@ -1,0 +1,14 @@
+# Context
+
+## Background
+The T066 worker-boundary work lives in the worktree at
+.claude/worktrees/agent-a095c8d50d9033394 (commits "Add bounded
+schema worker boundary" and "Route gateway schema work through the
+worker", plus uncommitted edits). The scanner descended into that
+staging copy and flagged fixture secrets that the allowlist already
+covers at their canonical paths, failing the gate for work that never
+touched the shipped tree.
+
+## Gotchas
+Do not delete or merge that worktree as a side effect of unrelated
+work; T066 owns it.
