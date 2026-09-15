@@ -1,0 +1,31 @@
+# Design: Capture and templates for mock scripts
+
+## Problem
+The mock agent could send fixed requests but could not read returned
+identifiers, so it could never complete a stateful task: create a
+clip, then act on the clip the backend minted. Scripts also could not
+finish a turn, because disposition rule 7 (section 22.3) requires a
+session event with kind turn.completed.
+
+## Approach
+- capture.body maps variable names to dot paths into the parsed JSON
+  response; capture.headers maps names to response header names. A
+  missing value fails the participant with MOCK_CAPTURE_FAILED.
+- {{name}} substitution covers request path, header values, body
+  objects (rendered deep), and the finalReport object.
+- validateScriptTemplates runs at adapter prepare and at CLI script
+  load, so an unknown variable never reaches the network.
+- turn.completed fires only when the scripted flow reached a final
+  message (finalText resolved or finalReport rendered) and no control
+  or failure status cut it short. The empty default script stays
+  agent_incomplete, which quickstart documents.
+
+## Key Trade-offs
+- Captured values never reach session events; only variable names are
+  recorded, because a captured header can echo a credential.
+- applyCredential rewrites the Authorization header last and drops
+  script-supplied case variants, so a script cannot displace the
+  minted token.
+
+## References
+Specification sections 21, 22.3, 27.3; review-fix-plan.md item F5.
