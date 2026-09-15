@@ -442,6 +442,12 @@ importers:
 
   packages/testkit:
     dependencies:
+      '@oal/behavior-api':
+        specifier: workspace:*
+        version: link:../behavior-api
+      '@oal/behavior-runtime':
+        specifier: workspace:*
+        version: link:../behavior-runtime
       '@oal/config':
         specifier: workspace:*
         version: link:../config

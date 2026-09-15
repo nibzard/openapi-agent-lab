@@ -9,7 +9,10 @@ export default tseslint.config(
       "coverage/**",
       "*.tsbuildinfo",
       ".oal/**",
-      ".claude/**"
+      ".claude/**",
+      // Pack behavior modules sit outside every tsconfig project; the
+      // typecheck still covers them through the tests that import them.
+      "packs/**"
     ]
   },
   js.configs.recommended,

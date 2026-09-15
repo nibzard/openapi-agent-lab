@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/packs/webclip/schemas/scenario-state.schema.json",
+  "title": "webclip scenario state",
+  "description": "Domain state of the webclip behavior backend. Only live clips stay in the document: a deletion removes the clip from both clips and order, so every later read of the identifier answers 404.",
+  "type": "object",
+  "properties": {
+    "clips": {
+      "type": "object",
+      "description": "Live clips keyed by clip identifier.",
+      "additionalProperties": { "$ref": "#/$defs/clip" }
+    },
+    "order": {
+      "type": "array",
+      "description": "Identifiers of live clips in insertion order.",
+      "items": { "$ref": "#/$defs/clipId" },
+      "uniqueItems": true
+    },
+    "account": { "$ref": "#/$defs/account" }
+  },
+  "required": ["clips", "order", "account"],
+  "additionalProperties": false,
+  "$defs": {
+    "clipId": {
+      "type": "string",
+      "description": "Clip identifier allocated by the ids service.",
+      "pattern": "^clip_[0-9a-z]+$"
+    },
+    "clip": {
+      "type": "object",
+      "description": "One live clip.",
+      "properties": {
+        "id": { "$ref": "#/$defs/clipId" },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "The clipped page, echoed from the create request."
+        },
+        "format": {
+          "type": "string",
+          "enum": ["markdown", "html", "image"],
+          "description": "Captured representation, fixed at creation."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "rendered", "extracted", "failed"],
+          "description": "Lifecycle status. The backend never sets failed."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation time from the deterministic clock."
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Free-form note echoed from the create request."
+        }
+      },
+      "required": ["id", "url", "format", "status", "created_at"],
+      "additionalProperties": false
+    },
+    "account": {
+      "type": "object",
+      "description": "The owning account and its quota limit.",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "pattern": "^acct_[0-9a-z]+$",
+          "description": "Stable account identifier allocated once at initialize."
+        },
+        "plan": {
+          "type": "string",
+          "enum": ["free", "pro"],
+          "description": "Account plan."
+        },
+        "clips_limit": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Clips the plan allows in total."
+        }
+      },
+      "required": ["account_id", "plan", "clips_limit"],
+      "additionalProperties": false
+    }
+  }
+}

@@ -4,12 +4,18 @@ kind: Pack
 metadata:
   id: webclip
   name: webclip
-  # 0.2.0 ships the corrected site-errand rubric: two verified clip
+  # 0.3.0 flips the pack to scenario behavior: the module under
+  # behavior/ owns the clip lifecycle, so two creates return two
+  # distinct clips, a deletion answers 404 on every later read, and
+  # extraction waits for a render. The 0.2.0 stateless fixtures are
+  # gone; the gateway never consults them in scenario mode.
+  #
+  # 0.2.0 shipped the corrected site-errand rubric: two verified clip
   # chains, distinct identifiers, header-based representation checks,
   # full report cross-checks, and a non-scoring comprehension probe.
   # Evidence and scores recorded under 0.1.0 stay under 0.1.0; any
   # regrading of them is labeled derived.
-  version: 0.2.0
+  version: 0.3.0
   description: >-
     A greenfield pack that demonstrates the friction-measurement loop
     on a new API.
@@ -21,70 +27,11 @@ requires:
 
 contract:
   entrypoint: contract/openapi.json
-  # Authored after the webclip-before batch (2026-08-30): the stateless
-  # mock answered every create with the same generated markdown clip and
-  # the list never showed the second clip, so two of three participants
-  # re-created the image clip and failed the exactly-two-clips check.
-  # These fixtures make the served answers consistent with the errand.
-  # Static bodies still cannot echo the request; that repair needs the
-  # behavior backend. The content endpoint keeps no fixture: a fixture
-  # overrides Accept negotiation in the gateway, so wiring image/svg+xml
-  # would serve the picture to a text/markdown request.
-  response_fixtures:
-    - id: clip-created
-      operation: "path:POST /v1/clips"
-      status: 201
-      media_type: application/json
-      headers: {}
-      default: true
-      body:
-        kind: json_file
-        source: fixtures/clip-created.json
-    - id: clips-page
-      operation: "path:GET /v1/clips"
-      status: 200
-      media_type: application/json
-      headers: {}
-      default: true
-      body:
-        kind: json_file
-        source: fixtures/clips-page.json
-    - id: clip-read
-      operation: "path:GET /v1/clips/{clipId}"
-      status: 200
-      media_type: application/json
-      headers: {}
-      default: true
-      body:
-        kind: json_file
-        source: fixtures/clip-read.json
-    - id: render-result
-      operation: "path:POST /v1/clips/{clipId}/render"
-      status: 200
-      media_type: application/json
-      headers: {}
-      default: true
-      body:
-        kind: json_file
-        source: fixtures/render-result.json
-    - id: extract-result
-      operation: "path:POST /v1/clips/{clipId}/extract"
-      status: 200
-      media_type: application/json
-      headers: {}
-      default: true
-      body:
-        kind: json_file
-        source: fixtures/extract-result.json
-    - id: account-read
-      operation: "path:GET /v1/account"
-      status: 200
-      media_type: application/json
-      headers: {}
-      default: true
-      body:
-        kind: json_file
-        source: fixtures/account.json
+  # The 2026-08-30 webclip-before batch showed the stateless limit: a
+  # static body cannot echo the request, so every create served one
+  # fixed clip and the list never showed the second one. Scenario mode
+  # answers every operation from behavior state instead, so the pack
+  # declares no response fixture (SPEC 15.5, 16.1).
 
 server:
   host: 127.0.0.1
@@ -96,9 +43,26 @@ server:
   concurrency: serial
 
 behavior:
-  mode: contract
+  # Scenario execution (SPEC 16): the module owns the clip lifecycle in
+  # JSON state behind the frozen contract. The runner spawns it in a
+  # child process, verifies exact operation coverage, and commits every
+  # served exchange through the sealed state store transactionally.
+  mode: scenario
   completeness: exact
   fallback: none
+  backend:
+    kind: module
+    entrypoint: behavior/index.ts
+    export: backend
+  state_schema: schemas/scenario-state.schema.json
+  state_schema_version: 1
+  # The virtual clock keeps a run deterministic: every timestamp a
+  # response serves comes from this epoch plus one tick per committed
+  # exchange, so identical seeds replay identical bodies.
+  clock:
+    kind: virtual
+    initial: "2000-01-01T00:00:00.000Z"
+    tick_ms: 1
 
 # The request pipeline verifies a declared security alternative on
 # every request (SPEC section 31, step 6), so the pack admits the

@@ -8,6 +8,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@oal/behavior-api": "workspace:*",
+    "@oal/behavior-runtime": "workspace:*",
     "@oal/config": "workspace:*",
     "@oal/contract-ir": "workspace:*",
     "@oal/core": "workspace:*",

@@ -50,34 +50,38 @@ function checkStatus(result: EvaluationResult, id: string): string {
 }
 
 describe("the webclip pack", () => {
-  it("validates with zero errors and zero warnings", () => {
+  it("validates with zero errors and the one isolation advisory", () => {
     expect(pack.validation.errors).toEqual([]);
-    expect(pack.validation.warnings).toEqual([]);
+    // Scenario behavior runs trusted-local in this build, and the
+    // validator says so instead of letting the label imply a boundary
+    // the build does not enforce.
+    expect(pack.validation.warnings.map((warning) => warning.code)).toEqual([
+      "OAL-PACK-ISOLATION-ADVISORY"
+    ]);
     expect(pack.validation.packIr).not.toBeNull();
     const behavior = pack.loaded.manifest.behavior as JsonObject;
-    expect(behavior.mode).toBe("contract");
+    expect(behavior.mode).toBe("scenario");
     expect(pack.loaded.manifest.evals).toHaveLength(1);
     expect(pack.loaded.manifest.scenarios).toHaveLength(1);
     const metadata = pack.loaded.manifest.metadata as JsonObject;
-    expect(metadata.version).toBe("0.2.0");
-    // The after state: six authored fixtures cover every operation the
-    // errand touches except the content endpoint, which keeps Accept
-    // negotiation, and the bodyless delete.
-    const contract = pack.loaded.manifest.contract as JsonObject;
-    const fixtures = contract.response_fixtures as Json[];
-    expect(fixtures).toHaveLength(6);
+    expect(metadata.version).toBe("0.3.0");
+    // The scenario state: the module owns every operation, the state
+    // schema gates every commit, and no contract fixture remains.
     expect(
-      pack.loaded.references
-        .filter((reference) => reference.role === "fixture_body")
-        .map((reference) => reference.path)
-    ).toEqual([
-      "fixtures/clip-created.json",
-      "fixtures/clips-page.json",
-      "fixtures/clip-read.json",
-      "fixtures/render-result.json",
-      "fixtures/extract-result.json",
-      "fixtures/account.json"
-    ]);
+      pack.loaded.references.find(
+        (reference) => reference.role === "behavior_entrypoint"
+      )?.path
+    ).toBe("behavior/index.ts");
+    expect(
+      pack.loaded.references.find(
+        (reference) => reference.role === "state_schema"
+      )?.path
+    ).toBe("schemas/scenario-state.schema.json");
+    expect(
+      pack.loaded.references.filter(
+        (reference) => reference.role === "fixture_body"
+      )
+    ).toEqual([]);
   });
 
   it("compiles the eight greenfield operations with none unsupported", async () => {
