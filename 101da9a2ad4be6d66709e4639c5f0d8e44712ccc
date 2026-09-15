@@ -1,0 +1,21 @@
+# Context
+
+## Background
+Commit 8a1dc88 appended hostile-pattern findings (Diagnostic[]) to the
+inspect artifact. TypeScript interfaces get no implicit index signature,
+so Diagnostic[] is not assignable to the Json recursive type. The
+artifact failed typecheck at stableJsonStringify(artifact) while the
+study-ir cascade was in flight, which masked the break.
+
+## Why This Way
+apps/cli/src/diagnostics.ts already had a private diagnosticToJson
+serializer that emits the canonical diagnostic shape validated by
+schemas/diagnostic.v1.schema.json. Exporting it keeps one serializer
+instead of a hand-rolled mapping in the handler.
+
+## Gotchas
+- A Json-typed object literal cannot hold interface values like
+  Diagnostic even when every field is Json-compatible. Route them
+  through diagnosticToJson.
+- Related: eb271d9, 413242b, d8a0630 embed only Json values, so they
+  never hit this.
