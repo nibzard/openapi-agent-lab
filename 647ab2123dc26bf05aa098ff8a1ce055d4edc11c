@@ -1,0 +1,20 @@
+# Context
+
+## Background
+The vendored conformance corpus (next commit) found these six defects
+on its first triage run. Each failure was reproduced as a failing unit
+test at the exported boundary before the fix, following the same
+pattern as the two review findings fixed earlier the same day.
+
+## Gotchas
+- The "counts contains matches as evaluated items" test initially
+  asserted the wrong expectation: the suite confirms that only items
+  MATCHING contains count as evaluated, so [1, 2, "foo"] under
+  contains {type: string} is invalid. The suite corrected the author,
+  not the other way round.
+- multipleOf overflow rejects by suite decree ("always invalid, but
+  naive implementations may raise an overflow error"): the true
+  quotient may be an exact multiple mathematically, but double
+  precision cannot confirm it, so it rejects.
+- canonicalKey sorts object keys recursively; jsonScalarEquals already
+  did this for enum and const, and uniqueItems was the odd one out.
