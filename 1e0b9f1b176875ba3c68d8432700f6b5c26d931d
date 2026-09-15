@@ -1,0 +1,24 @@
+# Context
+
+## Background
+The oal bin (apps/cli/src/index.ts, #!/usr/bin/env node) runs through
+Node 24.18 type stripping. Node enables strip-only mode for the CLI
+entry, which accepts erasable syntax only and throws
+ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX on parameter properties.
+
+## Why This Way
+Every earlier test ran through vitest or main() in-process, which
+compiles through esbuild and erases parameter properties silently.
+The first live `oal run` through a real node process exposed the gap.
+
+## Gotchas
+- Single-line and multi-line constructor signatures both hide these;
+  the reliable scanner is a regex over the raw source:
+  /constructor\([^)]*?\b(?:private|public|protected)\b[^)]*?\)/gs
+- Bare `readonly` constructor parameters (no access modifier) are also
+  rejected by strip-only mode.
+- `readonly string[]` and `readonly SourceLine[]` array types and
+  readonly inside option-object types are false positives.
+
+## Related
+Follows the T069 scenario-execution work that first spawned the bin.
