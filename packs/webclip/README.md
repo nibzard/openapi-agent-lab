@@ -132,24 +132,30 @@ count. The task states no exactly-two-creates constraint, so a third
 create call is a diagnostic, not a failure. The result schema also
 accepts an empty `uncertainties` list, so nobody must invent one.
 
-## Standing limitation until the behavior backend
+## The behavior backend
 
-The corrected rubric cannot be satisfied end to end through the
-served pack, because the contract fixtures are static:
+Work item F5 landed the stateful backend this section used to await.
+The pack ships a behavior module (`behavior/index.ts`) that implements
+all eight operations against request-dependent synthetic state:
 
-- Every create returns the same markdown clip body, so the two
-  identifiers never differ and no create echoes its request.
-- The account read hard-codes `clips_used: 1`, whatever was deleted.
-- Render and extract never change state and never return 409.
-- The content endpoint cannot carry a fixture, because a fixture
-  overrides `Accept` negotiation in the gateway.
+- Each create mints a distinct clip identifier and echoes its request.
+- Render moves a clip to `rendered`, extraction refuses an unrendered
+  clip with 409, and a deleted clip answers 404 on every later read.
+- The content endpoint negotiates through the declared `Accept`
+  schemas, so markdown and image fetches return their own types.
+- Every committed change records a validated semantic event, and the
+  account read counts live clips.
+
+A scripted participant (`evals/site-errand/mock-participant.json`)
+completes the corrected errand through `oal run` with disposition
+`completed` and score 1. The old fixture limits are gone: identifiers
+differ, quota follows the live clips, and 409 is reachable.
 
 The recorded 3 of 3 pass rate of the webclip-after batch belongs to
 pack 0.1.0 and its rubric. Old evidence and scores stay under their
 original version; any re-scoring under the corrected rubric runs
 through `oal report --regrade` and is labeled derived. The rubric is
-not relaxed to keep the old pass rate. Work item F5 lands the
-stateful backend that closes the gap.
+not relaxed to keep the old pass rate.
 
 ## Layout
 
@@ -157,10 +163,11 @@ stateful backend that closes the gap.
 | ----------- | ------------------------------------------- |
 | contract/   | The hand-written webclip OpenAPI document   |
 | fixtures/   | The six authored response bodies            |
+| behavior/   | The stateful scenario behavior module       |
 | prompts/    | Naturalistic prompt set instructions        |
 | tasks/      | The site-errand work request                |
 | schemas/    | The result schema and comprehension probe   |
-| evals/      | The site-errand rubric                      |
+| evals/      | The site-errand rubric and mock participants |
 | tests/      | Reserved for pack-local checks              |
 
 Validate with `oal pack validate <this-directory>`.

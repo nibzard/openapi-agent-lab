@@ -62,6 +62,7 @@ deferred and blocks release readiness.
 | AC-082 | "Existing ten prototype tests pass or have one-to-one equivalent parity tests with recorded mapping." | Seven of the ten prototype signal areas map to real parity tests. Three need scenario behavior handlers. | `packs/steel-computer/PARITY.md`; `packages/testkit/src/steel-parity.test.ts`. |
 | AC-083 | "Golden fake-agent checkpoint recovery passes the ordered trace and final-state rubric." | The rubric passes on the recorded golden trace. A live end-to-end pass needs the scenario backend; contract-mode responses are stateless. This criterion requires live evidence, which the golden replay cannot provide. | `packages/testkit/src/steel-pack.test.ts`; `packages/runner/src/integration-trial.test.ts`. |
 | AC-084 | "Current Steel auth, lifecycle, file, environment, checkpoint, idempotency, SSE, binary, and stand-in behavior matches frozen golden cases." | Auth, lifecycle, files, checkpoints, and binary responses match frozen goldens in contract mode. Idempotency replay, SSE streams, and safe stand-ins need the scenario backend. | `packages/testkit/src/steel-parity-golden.test.ts`; `packages/testkit/src/steel-parity.test.ts`. |
+| AC-125 | "A scripted participant completes the corrected webclip errand through the public run command; isolation, determinism, rollback, and a failing control stay proven." | The happy path and the failing participant run as durable tests through the public run command. Isolation across a batch, seed determinism across workspaces, and injected backend failure rollback were proven live only. | `apps/cli/src/run.test.ts`; `packages/testkit/src/webclip-behavior.test.ts`. |
 
 ## Deferred registry
 
@@ -104,8 +105,8 @@ Status counts per specification group, generated from
 | 42.10 | Release completeness | 3 | 3 | 0 | 0 | 0 |
 | 42.11 | Cross-cutting and workflow | 10 | 9 | 0 | 1 | 0 |
 | 42.12 | Research protocols | 20 | 11 | 0 | 8 | 1 |
-| review | Review remediation | 7 | 1 | 0 | 0 | 6 |
-| total | | 127 | 102 | 2 | 16 | 7 |
+| review | Review remediation | 7 | 1 | 0 | 1 | 5 |
+| total | | 127 | 102 | 2 | 17 | 6 |
 
 ## Release readiness
 

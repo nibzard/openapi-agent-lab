@@ -1189,7 +1189,7 @@
       "id": "T069",
       "title": "Connect scenario execution and prove a live stateful task",
       "priority": 2,
-      "status": "todo",
+      "status": "done",
       "details": "Refactor the gateway into one shared asynchronous request path for contract and scenario modes; add child bootstrap with frozen executable inputs; commit state and semantic events after validation; wire final snapshot and projection into the runner; implement webclip's eight operations with request-dependent local synthetic state; prove a scripted participant completes the corrected task through the public run command with isolation, determinism, rollback, and a failing participant control.",
       "steps": [
         "Unify gateway request handling behind validation.",
@@ -1201,7 +1201,7 @@
       "tags": ["gateway", "runner", "webclip"],
       "files": ["docs/review-fix-plan.md"],
       "depends_on": ["T066", "T068"],
-      "updated_at": "2026-09-10T05:37:00Z"
+      "updated_at": "2026-09-15T20:10:00Z"
     },
     {
       "id": "T070",
@@ -1273,6 +1273,23 @@
       "files": ["docs/quickstart.md", "docs/authoring-packs.md"],
       "depends_on": ["T069"],
       "updated_at": "2026-09-15T16:28:40Z"
+    },
+    {
+      "id": "T074",
+      "title": "Replay scenario batches with stateful behavior",
+      "priority": 3,
+      "status": "todo",
+      "details": "oal replay --verify rebuilds a stateless fixture gateway, so it cannot replay a scenario batch: served values come from fixtures, frozen inputs lack the behavior module, and verification mismatches on healthy runs. Decide the replay design for scenario mode (freeze behavior sources by content hash, or store the compiled pack path), extend replayRun to serve stateful behavior for the replay window, and keep contract-mode replay unchanged. Found while proving T069 live: an eight-of-nine mismatch on a healthy scenario run.",
+      "steps": [
+        "Decide how frozen batch inputs reference the behavior module.",
+        "Extend the replay gateway to run the frozen behavior.",
+        "Replay a healthy scenario batch and verify a clean match.",
+        "Add a regression test that replays the scripted webclip run."
+      ],
+      "tags": ["replay", "scenario", "report"],
+      "files": ["packages/report/src/replay.ts"],
+      "depends_on": ["T069"],
+      "updated_at": "2026-09-15T20:10:00Z"
     }
   ]
 }

@@ -218,6 +218,40 @@ mode refuses the run with exit code `4` until you pass it. Pass a
 `--sandbox` value that permits network access, because the agent must reach
 the gateway over HTTP.
 
+## Run a scripted participant against stateful behavior
+
+The webclip pack ships a behavior module, so its backend keeps state:
+each create returns a new identifier, and later calls read what earlier
+calls changed. The mock agent can drive it with a script. The script
+sends real requests, reads the identifiers the backend returns, and
+sends the `Accept` header each content fetch needs:
+
+```sh
+oal run packs/webclip \
+  --eval site-errand \
+  --agent mock-agent \
+  --agent-script packs/webclip/evals/site-errand/mock-participant.json \
+  --batch webclip-demo
+```
+
+This run still costs nothing. It completes the errand, so the last
+line reports the success and the command exits with status `0`:
+
+```text
+run webclip-demo-run-01: completed (OAL-RUN-DISPOSITION-COMPLETED) censor=none
+```
+
+The trial directory records what the backend committed. Open
+`state.final.json`: the revision counts six committed changes, and the
+final state holds the one clip the errand keeps. Open
+`semantic-events.redacted.jsonl` for the six lifecycle events, one per
+committed change.
+
+A second script in the same directory fails on purpose. It requests an
+identifier no backend can mint, so the trial ends `agent_failed` and
+commits nothing. Run it by replacing the file name with
+`mock-participant-failing.json`.
+
 ## The run directory
 
 Every batch writes an immutable directory under `.oal/runs/<batch-id>/`. The

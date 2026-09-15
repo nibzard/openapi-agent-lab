@@ -21,12 +21,15 @@ The execution surface splits into three states:
 - **Working end to end.** Raw HTTP execution: `oal inspect`, `oal serve` in
   contract mode, `oal run --exposure raw-http` with the mock, generic, or
   Codex adapter, plus `oal evaluate`, `oal report`, `oal compare`,
-  `oal replay`, `oal friction`, `oal probe`, and `oal doctor`. Study authoring
-  works through `oal study init`, `validate`, and `schedule`, and `oal study
-  analyze` runs the frozen analysis on an assembled study-run directory.
-- **Implemented components, not connected.** The behavior runtime, the state
-  store, the direct-tool and catalog-tool surfaces, and the study scheduler
-  exist as tested packages. The run commands do not drive them yet.
+  `oal replay`, `oal friction`, `oal probe`, and `oal doctor`. Scenario
+  execution works through `oal run` for packs with a behavior module: the
+  runner drives the stateful backend, records committed state and semantic
+  events, and grades the errand. Study authoring works through
+  `oal study init`, `validate`, and `schedule`, and `oal study analyze` runs
+  the frozen analysis on an assembled study-run directory.
+- **Implemented components, not connected.** The direct-tool and
+  catalog-tool surfaces and the study scheduler exist as tested packages.
+  The run commands do not drive them yet.
 - **Refused by the command-line interface.** `oal serve --mode scenario`,
   `oal run --exposure direct-tools|catalog-tools`, and participant launch in
   `oal study run` exit with code `4` and a diagnostic. The
@@ -39,9 +42,10 @@ The execution surface splits into three states:
   authentication rules, validators, examples, and response generators. This
   gives you a mock server with no handwritten handlers.
 - **Scenario fidelity.** An optional versioned pack adds response fixtures,
-  tasks, result schemas, and deterministic rubrics. This makes interactions
-  reproducible and gradeable. Stateful scenario execution is not connected
-  yet: contract mode serves deterministic but stateless responses.
+  tasks, result schemas, deterministic rubrics, and a behavior module with
+  stateful operations. `oal run` executes such packs through the behavior
+  runtime; `oal serve` stays in contract mode and serves deterministic but
+  stateless responses.
 - **Exposure treatments.** Raw HTTP is the one exposure the run engine
   serves today. Direct-tool and catalog-tool components exist in
   `@oal/tools`; the runner refuses runs that request them until the bridge

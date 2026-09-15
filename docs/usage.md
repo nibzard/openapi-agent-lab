@@ -368,7 +368,11 @@ contracts, build workspaces, or grade results.
 This build constructs two selectors without a configuration file:
 
 - `mock-agent`: an in-process scripted agent. It costs nothing and serves as
-  the pipeline check.
+  the pipeline check. Pass `--agent-script <file>` to give it a strict-JSON
+  participant script: it sends the scripted requests, captures returned
+  values into `{{variables}}`, and reports the rendered final report. Only
+  this selector reads a script; another selector with a script exits with
+  code `4`.
 - `codex-cli`: launches the Codex CLI against a model. Paid runs require
   `--yes` or an interactive confirmation.
 

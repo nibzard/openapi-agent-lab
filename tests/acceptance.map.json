@@ -1691,11 +1691,22 @@
     "group": "review",
     "claim": "A scripted participant completes the corrected webclip errand through the public run command against a stateful scenario backend, reading returned identifiers and sending real Accept headers; trace, report, final state, and score agree, a second trial proves isolation, a repeated seed proves determinism, an injected backend failure proves rollback and cleanup, and a failing scripted participant stays failed.",
     "milestone": "review-remediation",
-    "status": "missing",
-    "tests": [],
+    "status": "partial",
+    "tests": [
+      "apps/cli/src/run.test.ts > completes the webclip scenario errand through the public command",
+      "apps/cli/src/run.test.ts > commits no state when the scripted participant fails",
+      "packages/testkit/src/webclip-behavior.test.ts > answers the two-clip errand request-dependently",
+      "packages/testkit/src/webclip-behavior.test.ts > replays identically from a fresh backend with identical services"
+    ],
     "requires_live": true,
+    "deviation": {
+      "summary": "The happy path, the failing control, and the stateful backend run as durable tests. Isolation across a two-trial batch, seed-level determinism across two workspaces, and injected backend failure rollback were proven live on 2026-09-15 through the oal bin and are not yet durable tests.",
+      "spec_ref": "docs/review-fix-plan.md item F5",
+      "enforced": "The public run command drives the scripted participant to disposition completed with score 1, state revision 6, and the six semantic events; the failing script drives agent_failed with revision 0 and an empty event log"
+    },
+    "evidence": "constructed",
     "deferred": {
-      "summary": "Acceptance control of the review fix plan; no test enforces it yet.",
+      "summary": "Isolation across a two-trial batch, seed-level determinism across two workspaces, and injected backend failure rollback were proven live through the oal bin on 2026-09-15 and stay live-only until they become durable tests.",
       "owner": "F5"
     }
   },

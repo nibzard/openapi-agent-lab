@@ -34,7 +34,7 @@ that owns the behavior.
 | Capability | MVP status | Implementation |
 | --- | --- | --- |
 | Contract mode | Required | `@oal/gateway` without pack code |
-| Scenario module | Required for approved packs | `@oal/behavior-runtime` child process; component tested, not wired to `oal serve` or `oal run` (plan F5) |
+| Scenario module | Required for approved packs | `@oal/behavior-runtime` child process behind `oal run`; proven live by the scripted webclip errand (plan F5) |
 | Raw HTTP exposure | Required MVP | `@oal/gateway` server |
 | Documentation facade | Phase 6 | `@oal/documentation-facade` |
 | No-complete-contract treatment | Phase 6 | Planned in runner |
