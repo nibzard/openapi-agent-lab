@@ -515,18 +515,38 @@ function clipHeaderRecords(
 }
 
 /**
+ * Deadline of the pre-write self-check.
+ *
+ * The operator deadline bounds one contract-supplied schema against one
+ * message, and is sized for that. This gate reads a whole assembled
+ * document instead, against a schema that ships with the tool, so its
+ * cost follows the document size. A probe of a large batch fills the
+ * results rows up to their cap, and reading those rows costs more than
+ * the operator value allows on a busy machine. The probe then refuses
+ * to write a document that is in fact correct.
+ *
+ * The value is generous because it bounds a stuck worker only: the
+ * schema is fixed and the document size already has two bounds above
+ * it, the results cap and the worker message bound.
+ */
+const SELF_CHECK_DEADLINE_MS = 15_000;
+
+/**
  * Schema errors of one assembled conformance document. The probe runs
  * this gate immediately before it writes, so no document that fails
  * schemas/conformance.v1.schema.json (section 10.4) reaches the out
  * directory. Live-service answers fill the document, so its evaluation
- * runs inside the bounded schema-worker boundary.
+ * runs inside the bounded schema-worker boundary, under the deadline of
+ * the self-check rather than the operator deadline.
  */
 export async function conformanceSchemaErrors(
   document: Json
 ): Promise<readonly SchemaViolation[]> {
   const schemaFile = path.join(defaultSchemaDir(), CONFORMANCE_SCHEMA);
   const schema = JSON.parse(await readFile(schemaFile, "utf8")) as Json;
-  return validateSchemaInstance(schema, document);
+  return validateSchemaInstance(schema, document, {
+    deadlineMs: SELF_CHECK_DEADLINE_MS
+  });
 }
 
 /** Terminal projection of one conformance document. */

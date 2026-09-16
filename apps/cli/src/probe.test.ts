@@ -18,6 +18,8 @@ import {
   EXIT_UNSUPPORTED,
   SchemaValidator,
   canonicalJson,
+  closeSchemaWorker,
+  configureSchemaWorker,
   type Json
 } from "@oal/core";
 
@@ -1414,6 +1416,47 @@ describe("oal probe", () => {
     expect(document.counts.skipped).toBe(20001);
     expect(document.extensions.truncation).toEqual({ results: 1 });
     expect(io.stderrText()).toContain(ProbeCliCode.DocumentTruncated);
+  });
+
+  it("keeps the pre-write self-check off the operator deadline", async () => {
+    // The operator deadline bounds the evaluation of one
+    // contract-supplied schema against one message. The self-check
+    // reads a whole assembled document instead, so it carries its own
+    // deadline. A document that the probe wrote must therefore still
+    // pass the gate under an operator deadline no such read can meet.
+    const cwd = await newWorkspace();
+    const events = Array.from({ length: 4 }, (_, index) =>
+      recordedExchange({
+        sequence: index + 1,
+        method: "POST",
+        path: "/widgets",
+        operationId: "createWidget",
+        operationKey: "path:POST /widgets",
+        contentType: "application/json",
+        body: { name: "beta" }
+      })
+    );
+    const batchDir = await writeBatch(cwd, { events });
+    const out = path.join(cwd, "probe-out");
+    const { code } = await runProbe(cwd, [
+      batchDir,
+      "--base-url",
+      "http://127.0.0.1:1",
+      "--operations",
+      "createWidget",
+      "--out",
+      out
+    ]);
+    expect(code).toBe(EXIT_OK);
+    const document = await readDocument(out);
+    configureSchemaWorker({ deadlineMs: 1 });
+    try {
+      await expect(
+        conformanceSchemaErrors(document as unknown as Json)
+      ).resolves.toEqual([]);
+    } finally {
+      closeSchemaWorker();
+    }
   });
 
   it("writes nothing when the assembled document fails the schema", async () => {
