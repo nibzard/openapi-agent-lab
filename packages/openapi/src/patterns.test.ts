@@ -78,6 +78,23 @@ describe("hostilePatternDiagnostics", () => {
     expect(findings).toEqual([]);
   });
 
+  it("does not charge worker start-up to the probe budget", async () => {
+    // A cold boundary must start a worker thread before any probe can
+    // answer. That start-up is infrastructure cost, not regex cost, so
+    // it may not count against the probe deadline: a benign pattern
+    // answers a warm boundary in well under a millisecond, while the
+    // start-up alone runs tens of milliseconds.
+    closeSchemaWorker();
+    const findings = await hostilePatternDiagnostics(
+      contractWith([
+        schemaWith("sch_ok", "^[a-z][a-z0-9_]{2,31}$"),
+        schemaWith("sch_plain", "^\\d{4}-\\d{2}-\\d{2}$")
+      ]),
+      { deadlineMs: 10 }
+    );
+    expect(findings).toEqual([]);
+  });
+
   it("probes a repeated pattern once", async () => {
     const one = schemaWith("sch_first", "^(a+)+$");
     const two = schemaWith("sch_second", "^(a+)+$");

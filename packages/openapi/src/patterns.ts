@@ -12,6 +12,11 @@
  * catastrophic-backtracking shape trips. A pattern that passes can
  * still be hostile; a pattern that fails the probe is hostile with
  * near certainty, because benign patterns answer in microseconds.
+ *
+ * The probe measures regex cost only. A cold boundary must start a
+ * worker thread first, which costs tens of milliseconds and would
+ * consume the probe deadline on its own. The battery thus warms the
+ * boundary before it times a pattern.
  */
 
 import {
@@ -32,6 +37,17 @@ const PROBE_DEADLINE_MS = 100;
 
 /** Candidate lengths; each step roughly doubles the explored tree. */
 const PROBE_LENGTHS = [16, 24, 32] as const;
+
+/**
+ * Deadline of the warm-up probe. It must accept a worker start on a
+ * loaded machine, because a missed warm-up gives the battery a cold
+ * boundary again. It is not a measurement, so it stays generous.
+ */
+const WARMUP_DEADLINE_MS = 10_000;
+
+/** A pattern and a candidate that any live worker answers at once. */
+const WARMUP_PATTERN = "^a$";
+const WARMUP_CANDIDATE = "a";
 
 export interface HostilePatternOptions {
   /**
@@ -141,6 +157,10 @@ async function patternIsHostile(
   options: HostilePatternOptions
 ): Promise<boolean> {
   const deadlineMs = options.deadlineMs ?? PROBE_DEADLINE_MS;
+  // A hostile pattern leaves the boundary cold: the parent terminates
+  // the thread that missed the deadline. Warm it per pattern, so that
+  // the pattern after a hostile one gets a live worker too.
+  await warmBoundary();
   for (const candidate of candidatesOf(pattern)) {
     try {
       await patternAcceptsInWorker(pattern, candidate, { deadlineMs });
@@ -154,4 +174,19 @@ async function patternIsHostile(
     }
   }
   return false;
+}
+
+/**
+ * Run one trivial probe so that the boundary holds a started worker.
+ * It is best effort: when the boundary cannot answer even this, the
+ * battery reports what the boundary does under its own deadline.
+ */
+async function warmBoundary(): Promise<void> {
+  try {
+    await patternAcceptsInWorker(WARMUP_PATTERN, WARMUP_CANDIDATE, {
+      deadlineMs: WARMUP_DEADLINE_MS
+    });
+  } catch {
+    // Intentionally ignored; see the note above.
+  }
 }
