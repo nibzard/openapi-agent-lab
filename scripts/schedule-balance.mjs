@@ -106,7 +106,7 @@ async function run() {
   );
 
   const failures = [];
-  const study = fixtureStudy();
+  const study = await fixtureStudy();
   const build = (ir, seed) => {
     const result = buildAssignmentSchedule({
       study_run_id: STUDY_RUN_ID,
@@ -151,7 +151,7 @@ async function run() {
   for (let index = 0; index < SHUFFLED_ORDERS; index += 1) {
     const nextFloat = lehmer(0x5eed0000 + index);
     const members = new Map(shuffled([...baseMembers()], nextFloat));
-    const compiled = compileStudy(protocol, {
+    const compiled = await compileStudy(protocol, {
       schema: loadSchema("study-ir.v1.schema.json"),
       members
     });
