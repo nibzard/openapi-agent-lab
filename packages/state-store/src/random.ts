@@ -51,6 +51,32 @@ export class DeterministicPrng {
     return mix64(this.state);
   }
 
+  /**
+   * The algorithm identity of this stream. Serialized positions carry
+   * it so a restored stream cannot silently change its sequence.
+   */
+  static readonly ALGORITHM = "splitmix64-v1";
+
+  /**
+   * The full internal position of the stream as 16 lowercase hex
+   * digits. Restoring this value reproduces every later draw.
+   */
+  exportState(): string {
+    return this.state.toString(16).padStart(16, "0");
+  }
+
+  /** Restore one stream from an exported position. */
+  static fromState(state: string): DeterministicPrng {
+    if (!/^[0-9a-f]{16}$/u.test(state)) {
+      throw new Error(
+        `PRNG state must be 16 lowercase hex digits, got ${JSON.stringify(state)}.`
+      );
+    }
+    const prng = new DeterministicPrng("0".repeat(64));
+    prng.state = BigInt(`0x${state}`);
+    return prng;
+  }
+
   /** Next unsigned 32-bit integer in `[0, 4294967295]`. */
   nextUint32(): number {
     return Number(this.nextUint64() >> 32n);

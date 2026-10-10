@@ -17,7 +17,8 @@ export type {
   Json,
   InitializeContext,
   InitializeResult,
-  MultipartPart
+  MultipartPart,
+  ServicePositions
 } from "./types.ts";
 export { BehaviorHttpError } from "./error.ts";
 export type { BehaviorHttpErrorInit } from "./error.ts";

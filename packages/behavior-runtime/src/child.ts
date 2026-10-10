@@ -8,6 +8,7 @@
 import { createInterface } from "node:readline";
 import { join } from "node:path";
 import type {
+  ServicePositions,
   BackendFactoryContext,
   BackendModule,
   BehaviorBackend,
@@ -16,7 +17,11 @@ import type {
   BehaviorResult,
   HandleContext
 } from "@oal/behavior-api";
-import { createNamespacePrng, VirtualClock } from "@oal/state-store";
+import {
+  createNamespacePrng,
+  DeterministicPrng,
+  VirtualClock
+} from "@oal/state-store";
 import {
   clockAdapter,
   fileBlobStore,
@@ -133,10 +138,12 @@ export async function runBehaviorChild(
             selectedRequestMediaType: wire.selectedRequestMediaType,
             acceptedResponseMediaTypes: wire.acceptedResponseMediaTypes
           };
-          const result = await target.handle(
-            request,
-            rebuildContext(message.context)
-          );
+          const context = rebuildContext(message.context);
+          const result = await target.handle(request, context);
+          const advanced = context.advanced();
+          if (advanced !== undefined) {
+            result.services = advanced;
+          }
           const encoded = encodeResult(result);
           reply({ id: message.id, ok: true, result: encoded });
           break;
@@ -222,9 +229,43 @@ export async function runBehaviorChild(
  * namespaced by request so unrelated requests never perturb one
  * another, and the shared digest-addressed blob directory.
  */
-function rebuildContext(wire: WireHandleContext): HandleContext {
+function rebuildContext(wire: WireHandleContext): HandleContext & {
+  /** Advanced positions of the staged services, after the call. */
+  advanced(): ServicePositions | undefined;
+} {
   const clock = new VirtualClock({ initialMs: wire.nowMs });
-  return {
+  if (wire.services !== undefined) {
+    // Transaction-scoped services: the ids and random the backend
+    // draws from are staged copies of the committed positions, and the
+    // advanced positions ride back on the result for the caller to
+    // publish only on commit.
+    const prng = DeterministicPrng.fromState(wire.services.random.state);
+    const ids = idsAdapter(wire.services.ids);
+    const context: HandleContext = {
+      runId: wire.runId,
+      requestId: wire.requestId,
+      state: wire.state,
+      clock: clockAdapter(clock),
+      ids,
+      random: randomAdapter(prng),
+      blobs: fileBlobStore(join(wire.packRoot, ".oal", "blobs")),
+      services: {
+        ids: { ...wire.services.ids },
+        random: { ...wire.services.random }
+      }
+    };
+    return {
+      ...context,
+      advanced: (): ServicePositions => ({
+        ids: ids.snapshot(),
+        random: {
+          algorithm: "splitmix64-v1",
+          state: prng.exportState()
+        }
+      })
+    };
+  }
+  const context: HandleContext = {
     runId: wire.runId,
     requestId: wire.requestId,
     state: wire.state,
@@ -235,6 +276,7 @@ function rebuildContext(wire: WireHandleContext): HandleContext {
     ),
     blobs: fileBlobStore(join(wire.packRoot, ".oal", "blobs"))
   };
+  return { ...context, advanced: () => undefined };
 }
 
 /** Encode a behavior result for the wire, keeping optionals absent. */
@@ -262,6 +304,9 @@ function encodeResult(result: BehaviorResult): WireBehaviorResult {
   }
   if (result.semanticEvents !== undefined) {
     encoded.semanticEvents = result.semanticEvents;
+  }
+  if (result.services !== undefined) {
+    encoded.services = result.services;
   }
   return encoded;
 }

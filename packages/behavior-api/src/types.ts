@@ -131,6 +131,28 @@ export interface HandleContext {
   readonly ids: DeterministicIds;
   readonly random: DeterministicRandom;
   readonly blobs: BlobStore;
+  /**
+   * Committed service positions of the world. Present when the caller
+   * runs transaction-scoped services; the ids and random above are
+   * then staged copies the backend may consume freely.
+   */
+  readonly services?: ServicePositions;
+}
+
+/**
+ * Serializable positions of the deterministic services. One world owns
+ * them; a transaction stages an advanced copy and publishes it only
+ * when the exchange commits, so a rolled-back request leaves every
+ * later draw and identifier exactly where it was.
+ */
+export interface ServicePositions {
+  /** Committed counter position per ID prefix. */
+  readonly ids: Readonly<Record<string, number>>;
+  /** The full internal position of the world's random stream. */
+  readonly random: {
+    readonly algorithm: "splitmix64-v1";
+    readonly state: string;
+  };
 }
 
 export interface BehaviorResult {
@@ -143,6 +165,12 @@ export interface BehaviorResult {
   nextState?: Json;
   effects?: string[];
   observations?: Json;
+  /**
+   * Advanced service positions after this call. Present when the
+   * caller seeded the services through {@link ServicePositions}; the
+   * caller publishes them only on commit.
+   */
+  services?: ServicePositions;
   semanticEvents?: Array<{
     name: string;
     eventVersion: number;

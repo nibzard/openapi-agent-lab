@@ -38,7 +38,8 @@ import {
   type BackendDescription,
   type BehaviorRequest,
   type ExecuteOutcome,
-  type RegisteredEvent
+  type RegisteredEvent,
+  type ServicePositions
 } from "@oal/behavior-api";
 import {
   BehaviorModuleHost,
@@ -49,6 +50,7 @@ import {
 } from "@oal/behavior-runtime";
 import {
   createNamespacePrng,
+  DeterministicPrng,
   StateStore,
   VirtualClock
 } from "@oal/state-store";
@@ -109,6 +111,13 @@ export interface EnvironmentRecords {
 export interface EnvironmentLimits {
   /** Per-call behavior timeout in milliseconds. Default 10 000. */
   readonly behaviorTimeoutMs?: number;
+  /** Executor bound on serialized next-state bytes. */
+  readonly maxStateBytes?: number;
+  /**
+   * Store bound on persisted state bytes. A value below the executor
+   * bound leaves a window where only the database commit fails.
+   */
+  readonly maxPersistedStateBytes?: number;
 }
 
 /** Options of {@link openEnvironment}; trial plans never cross this. */
@@ -188,6 +197,8 @@ export interface EnvironmentManifest {
 
 /** The live environment of one world. */
 export interface Environment {
+  /** The frozen contract inputs this environment serves. */
+  readonly contract: EnvironmentContractInputs;
   /** Gateway handle of the behavior child. */
   readonly backend: ScenarioBackend;
   /** Store-backed state the gateway commits through. */
@@ -200,6 +211,12 @@ export interface Environment {
   readonly description: BackendDescription;
   /** Projection of committed world records; see {@link EnvironmentManifest}. */
   manifest(): EnvironmentManifest;
+  /**
+   * The manifest as an `environment.v1` JSON document. The projection
+   * of committed records, never an independent source of truth, and
+   * free of private paths and credentials.
+   */
+  manifestDocument(): JsonObject;
   /**
    * Operator world inspection. Controls arrive with the world
    * lifecycle milestone; until then every control refuses.
@@ -374,18 +391,43 @@ class StoreGatewayState implements GatewayState {
   private stagedEffect: string | null = null;
   private rollbackCount = 0;
   private readonly applied: string[] = [];
+  /**
+   * Services advanced by the staged transaction. Published into the
+   * committed positions only at commit; a rollback drops them, so a
+   * failed exchange leaves identifiers and draws exactly where they
+   * were (section 48.2).
+   */
+  private stagedServices: ServicePositions | null = null;
 
   private readonly store: StateStore;
   private readonly commitHook: (
     events: readonly CommittedSemanticEvent[]
   ) => void;
+  private readonly services: {
+    positions: ServicePositions;
+  };
 
   constructor(
     store: StateStore,
-    commitHook: (events: readonly CommittedSemanticEvent[]) => void
+    commitHook: (events: readonly CommittedSemanticEvent[]) => void,
+    services: { positions: ServicePositions }
   ) {
     this.store = store;
     this.commitHook = commitHook;
+    this.services = services;
+  }
+
+  /** The committed service positions of the world. */
+  get servicePositions(): ServicePositions {
+    return {
+      ids: { ...this.services.positions.ids },
+      random: { ...this.services.positions.random }
+    };
+  }
+
+  /** Stage the advanced positions of one exchange's services. */
+  stageServices(positions: ServicePositions): void {
+    this.stagedServices = positions;
   }
 
   /** The open request allocation, for the backend handle. */
@@ -468,6 +510,10 @@ class StoreGatewayState implements GatewayState {
     if (transition !== undefined) {
       this.applied.push(...transition.effects);
     }
+    if (this.stagedServices !== null) {
+      this.services.positions = this.stagedServices;
+      this.stagedServices = null;
+    }
     this.commitHook(committed);
     this.stagedEffect = null;
   }
@@ -480,6 +526,7 @@ class StoreGatewayState implements GatewayState {
     });
     this.rollbackCount += 1;
     this.stagedEffect = null;
+    this.stagedServices = null;
   }
 
   private takeAllocation(): { sequence: number; requestId: string } {
@@ -578,7 +625,14 @@ export async function openEnvironment(
     clock: new VirtualClock({
       initialMs: declaration.clock.initialMs,
       tickMs: declaration.clock.tickMs
-    })
+    }),
+    ...(options.limits?.maxPersistedStateBytes === undefined
+      ? {}
+      : {
+          limits: {
+            maxPersistedStateBytes: options.limits.maxPersistedStateBytes
+          }
+        })
   });
   try {
     description = await host.describe();
@@ -662,9 +716,26 @@ export async function openEnvironment(
   }
 
   const allEvents: CommittedSemanticEvent[] = [];
-  const gatewayState = new StoreGatewayState(store, (events) => {
-    allEvents.push(...events);
-  });
+  // The world's deterministic services: one random stream and one ID
+  // counter set, seeded from the world seed. Every exchange draws from
+  // a staged copy; only a committed exchange publishes the advanced
+  // positions, so a rollback restores them exactly (section 48.2).
+  const worldServices: { positions: ServicePositions } = {
+    positions: {
+      ids: {},
+      random: {
+        algorithm: "splitmix64-v1",
+        state: createNamespacePrng(seed, "world:services").exportState()
+      }
+    }
+  };
+  const gatewayState = new StoreGatewayState(
+    store,
+    (events) => {
+      allEvents.push(...events);
+    },
+    worldServices
+  );
 
   const backend: ScenarioBackend = {
     name: packBehaviorName(pack),
@@ -675,26 +746,33 @@ export async function openEnvironment(
       const allocation = gatewayState.request;
       const requestId = allocation?.requestId ?? gatewayRequestId;
       const snapshot = store.getState();
+      const services = gatewayState.servicePositions;
       const outcome = await executeBehaviorRequest({
         backend: host,
         request,
         runId: worldId,
         requestId,
         state: snapshot?.state ?? initialState,
-        // The host forwards only the clock snapshot; the child rebuilds
-        // these services from the same seed and request id, so both
-        // sides derive identical streams (section 16.5).
         clock: clockAdapter(store.clock),
-        ids: idsAdapter(),
+        // The adapters below are controller-side stand-ins: the child
+        // rebuilds its own staged copies from the committed positions
+        // on the wire and reports the advanced copy on the result
+        // (section 16.5, 48.2).
+        ids: idsAdapter(services.ids),
         random: randomAdapter(
-          createNamespacePrng(seed, `request:${requestId}`)
+          DeterministicPrng.fromState(services.random.state)
         ),
         blobs: fileBlobStore(blobRoot),
         stateSchema: declaration.stateSchema,
-        maxStateBytes: store.limits.maxPersistedStateBytes,
+        maxStateBytes:
+          options.limits?.maxStateBytes ?? store.limits.maxPersistedStateBytes,
         eventRegistry,
-        timeoutMs
+        timeoutMs,
+        services
       });
+      if (outcome.ok) {
+        gatewayState.stageServices(outcome.result.services ?? services);
+      }
       return scenarioOutcomeOf(outcome);
     }
   };
@@ -739,12 +817,14 @@ export async function openEnvironment(
 
   let closed = false;
   return {
+    contract,
     backend,
     state: gatewayState,
     backendSha256: declaration.entrypoint.sha256,
     isolationLevel: host.isolationLevel,
     description,
     manifest,
+    manifestDocument: (): JsonObject => manifestDocumentOf(manifest()),
     inspect: () => unavailable("world inspect"),
     checkpoint: () => unavailable("checkpoint"),
     reset: () => unavailable("reset"),
@@ -777,6 +857,41 @@ export async function openEnvironment(
         // leaves the final state itself as the exported projection.
         return null;
       }
+    }
+  };
+}
+
+/** The `environment.v1` wire form of one manifest projection. */
+function manifestDocumentOf(manifest: EnvironmentManifest): JsonObject {
+  return {
+    schema_version: 1,
+    kind: manifest.kind,
+    world_id: manifest.worldId,
+    generation: manifest.generation,
+    parent_checkpoint_id: manifest.parentCheckpointId,
+    pack: {
+      id: manifest.pack.id,
+      version: manifest.pack.version,
+      pack_sha256: manifest.pack.packSha256
+    },
+    scenario_id: manifest.scenarioId,
+    behavior_sha256: manifest.behaviorSha256,
+    runtime_name: manifest.runtimeName,
+    behavior_closure: {
+      identity: manifest.behaviorClosure.identity,
+      entry_path: manifest.behaviorClosure.entryPath,
+      file_count: manifest.behaviorClosure.fileCount
+    },
+    seed: manifest.seed,
+    revision: manifest.revision,
+    virtual_time: manifest.virtualTime,
+    isolation_level: manifest.isolationLevel,
+    capabilities: {
+      checkpoint: manifest.capabilities.checkpoint,
+      reset: manifest.capabilities.reset,
+      advance_time: manifest.capabilities.advanceTime,
+      fork: manifest.capabilities.fork,
+      scheduled_work: manifest.capabilities.scheduledWork
     }
   };
 }

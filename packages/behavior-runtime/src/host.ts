@@ -176,7 +176,15 @@ export class BehaviorModuleHost implements BehaviorBackend {
       state: context.state as Json,
       nowMs: context.clock.nowMs(),
       runSeed: this.options.runSeed,
-      packRoot: this.options.context.packRoot
+      packRoot: this.options.context.packRoot,
+      ...(context.services === undefined
+        ? {}
+        : {
+            services: {
+              ids: { ...context.services.ids },
+              random: { ...context.services.random }
+            }
+          })
     };
     const wire: WireBehaviorRequest = {
       operation: request.operation,
@@ -206,6 +214,9 @@ export class BehaviorModuleHost implements BehaviorBackend {
     }
     if (result.nextState !== undefined) {
       behaviorResult.nextState = result.nextState;
+    }
+    if (result.services !== undefined) {
+      behaviorResult.services = result.services;
     }
     if (result.effects !== undefined) {
       behaviorResult.effects = result.effects;

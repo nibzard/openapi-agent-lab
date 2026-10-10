@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "kind": "EnvironmentManifest",
+  "world_id": "environment-test",
+  "generation": 1,
+  "parent_checkpoint_id": null,
+  "pack": {
+    "id": "webclip",
+    "version": "0.4.0",
+    "pack_sha256": "1da397f6f2c20e7d4a3f6262236b572209f031a2dfa6ff51c3230ed081d48598"
+  },
+  "scenario_id": "baseline",
+  "behavior_sha256": "a38e64b622fce75d4778a127cf11b7d0681820b78f83fa3678e261ecf315f975",
+  "runtime_name": "@oal/environment",
+  "behavior_closure": {
+    "identity": "310e63f8784acf1fbdcb103ac2c4fb81d0b67fc1f5f70046a235825d1cd3dec1",
+    "entry_path": "behavior/index.ts",
+    "file_count": 46
+  },
+  "seed": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "revision": 0,
+  "virtual_time": "2000-01-01T00:00:00.000Z",
+  "isolation_level": "trusted-local",
+  "capabilities": {
+    "checkpoint": "unavailable",
+    "reset": "unavailable",
+    "advance_time": "unavailable",
+    "fork": "unavailable",
+    "scheduled_work": "unsupported"
+  }
+}

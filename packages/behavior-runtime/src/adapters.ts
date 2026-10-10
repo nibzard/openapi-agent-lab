@@ -26,12 +26,20 @@ export function clockAdapter(clock: VirtualClock): DeterministicClock {
 
 /**
  * Deterministic IDs: one monotonic counter per prefix, formatted the
- * way sequence IDs are elsewhere in the run.
+ * way sequence IDs are elsewhere in the run. An initial position
+ * restores committed counters for a transaction-scoped stream.
  */
-export function idsAdapter(): DeterministicIds & {
+export function idsAdapter(
+  initial?: Readonly<Record<string, number>>
+): DeterministicIds & {
   snapshot(): Record<string, number>;
 } {
-  const counters = new Map<string, number>();
+  const counters = new Map<string, number>(
+    Object.entries(initial ?? {}).map(([prefix, position]) => [
+      prefix,
+      position
+    ])
+  );
   return {
     next(prefix: string): string {
       const current = counters.get(prefix) ?? 0;

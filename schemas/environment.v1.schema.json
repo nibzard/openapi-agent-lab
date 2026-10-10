@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/environment.v1.json",
+  "title": "Environment manifest",
+  "description": "The projection of one stateful environment's committed records (SPEC section 48.2). The manifest is a view, never an independent source of truth; it omits private paths and credentials.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "world_id",
+    "generation",
+    "parent_checkpoint_id",
+    "pack",
+    "scenario_id",
+    "behavior_sha256",
+    "runtime_name",
+    "behavior_closure",
+    "seed",
+    "revision",
+    "virtual_time",
+    "isolation_level",
+    "capabilities"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "kind": { "const": "EnvironmentManifest" },
+    "world_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identity of this world; evidence lineages scope by it."
+    },
+    "generation": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "World generation; a reset starts the next one."
+    },
+    "parent_checkpoint_id": {
+      "type": ["string", "null"],
+      "description": "Checkpoint this world forked from, or null at creation."
+    },
+    "pack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "pack_sha256"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "pack_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "scenario_id": { "type": "string", "minLength": 1 },
+    "behavior_sha256": {
+      "$ref": "#/$defs/sha256",
+      "description": "Digest of the pack's behavior entrypoint bytes."
+    },
+    "runtime_name": { "type": "string", "minLength": 1 },
+    "behavior_closure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "entry_path", "file_count"],
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/sha256",
+          "description": "Digest over the frozen dependency closure."
+        },
+        "entry_path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Pack-relative entrypoint the closure froze."
+        },
+        "file_count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Files in the frozen closure, packages included."
+        }
+      }
+    },
+    "seed": {
+      "$ref": "#/$defs/sha256",
+      "description": "World seed every deterministic service derives from."
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Committed state revision at projection time."
+    },
+    "virtual_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Virtual clock position as RFC 3339."
+    },
+    "isolation_level": { "const": "trusted-local" },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checkpoint",
+        "reset",
+        "advance_time",
+        "fork",
+        "scheduled_work"
+      ],
+      "properties": {
+        "checkpoint": { "enum": ["unavailable", "available"] },
+        "reset": { "enum": ["unavailable", "available"] },
+        "advance_time": { "enum": ["unavailable", "available"] },
+        "fork": { "enum": ["unavailable", "available"] },
+        "scheduled_work": { "const": "unsupported" }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Lowercase SHA-256 digest."
+    }
+  }
+}

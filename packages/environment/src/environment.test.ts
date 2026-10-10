@@ -24,6 +24,7 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { loadPack, type LoadedPack } from "@oal/pack";
 import type { ContractIR } from "@oal/contract-ir";
+import { SchemaValidator, type Json } from "@oal/core";
 
 import {
   EnvironmentCode,
@@ -154,6 +155,20 @@ describe("the environment owner", () => {
       expect(manifest.behaviorClosure.identity).toMatch(/^[0-9a-f]{64}$/u);
       expect(manifest.behaviorClosure.entryPath).toBe("behavior/index.ts");
       expect(manifest.behaviorClosure.fileCount).toBeGreaterThan(1);
+      // The manifest document validates against environment.v1.
+      const schema = JSON.parse(
+        await readFile(
+          path.resolve(
+            moduleDir,
+            "../../../schemas/environment.v1.schema.json"
+          ),
+          "utf8"
+        )
+      ) as Json;
+      const violations = new SchemaValidator(schema).errors(
+        environment.manifestDocument()
+      );
+      expect(violations).toEqual([]);
       expect(manifest.capabilities).toEqual({
         checkpoint: "unavailable",
         reset: "unavailable",

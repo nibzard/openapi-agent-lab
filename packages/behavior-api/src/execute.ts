@@ -21,6 +21,7 @@ import {
   DEFAULT_BEHAVIOR_TIMEOUT_MS
 } from "./error.ts";
 import type {
+  ServicePositions,
   BehaviorBackend,
   BehaviorRequest,
   BehaviorResult,
@@ -53,6 +54,12 @@ export interface ExecuteOptions {
   timeoutMs?: number;
   /** Semantic-event registry from the backend description. */
   eventRegistry: ReadonlyMap<string, RegisteredEvent>;
+  /**
+   * Committed positions of the world's deterministic services. The
+   * backend draws from a copy staged at these positions and reports
+   * the advanced copy on the result; publish it only on commit.
+   */
+  services?: ServicePositions;
 }
 
 export type ExecuteOutcome =
@@ -108,7 +115,15 @@ export async function executeBehaviorRequest(
         clock: options.clock,
         ids: options.ids,
         random: options.random,
-        blobs: options.blobs
+        blobs: options.blobs,
+        ...(options.services === undefined
+          ? {}
+          : {
+              services: {
+                ids: { ...options.services.ids },
+                random: { ...options.services.random }
+              }
+            })
       }),
       timeoutMs
     );

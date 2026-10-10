@@ -43,6 +43,12 @@ export interface WireHandleContext {
   nowMs: number;
   runSeed: string;
   packRoot: string;
+  /** Transaction-scoped service positions; absent keeps the legacy
+   * per-request streams. */
+  services?: {
+    ids: Record<string, number>;
+    random: { algorithm: "splitmix64-v1"; state: string };
+  };
 }
 
 /**
@@ -107,6 +113,7 @@ export interface WireBehaviorResult {
   effects?: string[] | undefined;
   observations?: BehaviorResult["observations"] | undefined;
   semanticEvents?: BehaviorResult["semanticEvents"] | undefined;
+  services?: NonNullable<BehaviorResult["services"]> | undefined;
 }
 
 export function encodeBody(body: Body): WireBody {
