@@ -298,11 +298,22 @@
       "id": "SE-P4-03",
       "phase": "P4",
       "requirement": "SPEC 48.6 \u00b7 plan P4",
-      "status": "pending",
-      "tests": [],
-      "evidence": null,
-      "depends_on": ["SE-P4-02"],
-      "remaining": "Add duplicate-effect and incorrect-rollback doubles and complete error classifications in corpus reports."
+      "status": "complete",
+      "tests": [
+        "packages/testkit/src/idem-doubles.test.ts > passes every case against the honest double",
+        "packages/testkit/src/idem-doubles.test.ts > detects a duplicate effect under promised idempotency",
+        "packages/testkit/src/idem-doubles.test.ts > detects an incorrect rollback after a committed response is lost",
+        "packages/testkit/src/idem-doubles.test.ts > marks an expected service error without failing the case",
+        "packages/testkit/src/idem-doubles.test.ts > classifies an assertion failure",
+        "packages/testkit/src/idem-doubles.test.ts > classifies a provider failure and ends the case",
+        "packages/testkit/src/idem-doubles.test.ts > classifies a runtime error from a thrown target",
+        "packages/testkit/src/idem-doubles.test.ts > never reads a lost response as rollback evidence"
+      ],
+      "evidence": {
+        "commit": "6a8ac6b",
+        "command": "pnpm exec vitest run packages/testkit/src/idem-doubles.test.ts tests/schemas.test.ts"
+      },
+      "depends_on": ["SE-P4-02"]
     },
     {
       "id": "SE-P5-01",
