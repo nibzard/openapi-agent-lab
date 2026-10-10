@@ -57,6 +57,34 @@ describe("documented commands match the CLI surface", () => {
   });
 });
 
+describe("the external pack tutorial", () => {
+  it("documents only commands the installed executable runs", async () => {
+    const tutorial = await doc("tutorial-external-pack.md");
+    // Every command below is exercised by an automated check; the
+    // wording cannot drift ahead of the behavior.
+    expect(tutorial).toContain("pnpm run archives");
+    expect(tutorial).toContain("npm install --offline --no-audit --no-fund");
+    expect(tutorial).toContain("oal pack validate ./external-demo");
+    expect(tutorial).toContain("oal corpus run ./external-demo");
+    expect(tutorial).toContain("--corpus demo-core");
+    expect(tutorial).toContain("oal serve ./external-demo --mode scenario");
+    expect(tutorial).toContain("oal world checkpoint --world");
+    expect(tutorial).toContain("oal world fork ./checkpoint");
+    expect(tutorial).toContain("oal run ./external-demo --eval smoke");
+    expect(tutorial).toContain("--agent mock-agent");
+    // The tutorial must keep naming the honest failure modes.
+    expect(tutorial).toContain("exit");
+    expect(tutorial).toContain("assertion failure");
+  });
+
+  it("keeps the limitations document explicit about the blockers", async () => {
+    const limitations = await doc("stateful-limitations.md");
+    expect(limitations).toContain("has not run");
+    expect(limitations).toContain("No practitioner trial is recorded");
+    expect(limitations).toContain("advisory");
+  });
+});
+
 describe("the webclip repair claim", () => {
   it("limits the claim to the recorded observations", async () => {
     const text = await packReadme();
