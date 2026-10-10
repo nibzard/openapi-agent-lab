@@ -50,7 +50,8 @@ export type PackReferenceRole =
   | "rubric"
   | "behavior_entrypoint"
   | "payload_schema"
-  | "corpus";
+  | "corpus"
+  | "fidelity";
 
 /** How the bytes behind a reference are interpreted. */
 export type PackReferenceParse = "document" | "text" | "none";
@@ -297,6 +298,12 @@ export async function loadPack(
     diagnostics
   );
   await validateCorporaReferences(manifest, references, schemaSet, diagnostics);
+  await validateFidelityReferences(
+    manifest,
+    references,
+    schemaSet,
+    diagnostics
+  );
   const semanticEventRegistry = await loadSemanticRegistry(
     root,
     manifest,
@@ -528,6 +535,11 @@ export function collectDeclaredReferences(
       corpus["source"],
       "document"
     );
+  }
+
+  const fidelity = obj(manifest["fidelity"]);
+  if (fidelity !== null) {
+    push("fidelity", "/fidelity/source", fidelity["source"], "document");
   }
 
   return declared;
@@ -774,6 +786,62 @@ async function validateCorporaReferences(
               path: reference.path,
               document: documentId,
               manifest: declared
+            }
+          }
+        )
+      );
+    }
+  }
+}
+
+/**
+ * Validate the fidelity claims document a pack declares (section
+ * 48.7): it schema-validates and its pack id matches the manifest.
+ */
+async function validateFidelityReferences(
+  manifest: JsonObject,
+  references: readonly PackReference[],
+  schemaSet: PackSchemaSet,
+  diagnostics: Diagnostic[]
+): Promise<void> {
+  const packId = str(obj(manifest["metadata"])?.["id"] ?? null);
+  for (const reference of references) {
+    if (reference.role !== "fidelity") {
+      continue;
+    }
+    const document = obj(reference.document);
+    if (document === null) {
+      continue;
+    }
+    for (const violation of await validateSchemaInstance(
+      schemaSet.document("fidelity"),
+      document
+    )) {
+      diagnostics.push(
+        error(DiagnosticCode.PackSchemaInvalid, violation.message, {
+          pointer: reference.pointer,
+          uri: reference.path,
+          details: { path: reference.path }
+        })
+      );
+    }
+    const declaredPackId = str(document["pack_id"]);
+    if (
+      packId !== null &&
+      declaredPackId !== null &&
+      packId !== declaredPackId
+    ) {
+      diagnostics.push(
+        error(
+          PackCode.FidelityPackMismatch,
+          `Fidelity document declares pack id ${declaredPackId}, manifest declares ${packId}.`,
+          {
+            pointer: reference.pointer,
+            uri: reference.path,
+            details: {
+              path: reference.path,
+              document: declaredPackId,
+              manifest: packId
             }
           }
         )

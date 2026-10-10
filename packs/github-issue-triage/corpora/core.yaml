@@ -1,0 +1,328 @@
+# The github-issue-triage behavioral corpus (SPEC section 48.7): the
+# eight fixed core cases every target must run. Assertions select the
+# created issue by its repository-scoped number; list results may
+# include pull-request entries carrying the pull_request key, which
+# the number-based selection ignores by construction. Expected
+# statuses are pinned from the endpoint documentation of the pinned
+# provider API version 2026-03-10.
+api_version: 1
+id: issue-triage-core
+version: 1.0.0
+scenario: default
+inputs:
+  - name: owner
+  - name: repository
+cases:
+  - id: create-read
+    claim_ids: [issue-create, issue-read]
+    scope: black_box
+    steps:
+      - id: create
+        request:
+          operation_id: create_issue
+          parameters:
+            path:
+              owner: { input: owner }
+              repo: { input: repository }
+          body:
+            title: Corpus create-read
+            body: Created by the issue-triage corpus.
+        bind:
+          number: { source: body, pointer: /number }
+        assert:
+          - op: status
+            expected: 201
+          - op: exists
+            actual: { source: body, pointer: /number }
+      - id: read
+        request:
+          operation_id: get_issue
+          parameters:
+            path:
+              owner: { input: owner }
+              repo: { input: repository }
+              issue_number: { binding: create.number }
+        assert:
+          - op: status
+            expected: 200
+          - op: equals
+            actual: { source: body, pointer: /number }
+            expected: { binding: create.number }
+          - op: equals
+            actual: { source: body, pointer: /state }
+            expected: open
+  - id: create-list
+    claim_ids: [issue-create, issue-list]
+    scope: black_box
+    steps:
+      - id: create
+        request:
+          operation_id: create_issue
+          parameters:
+            path:
+              owner: { input: owner }
+              repo: { input: repository }
+          body:
+            title: Corpus create-list
+        bind:
+          number: { source: body, pointer: /number }
+        assert:
+          - op: status
+            expected: 201
+      - id: list-open
+        request:
+          operation_id: list_issues
+          parameters:
+            path:
+              owner: { input: owner }
+              repo: { input: repository }
+            query:
+              state: open
+              per_page: 100
+        assert:
+          - op: status
+            expected: 200
+          - op: contains
+            actual: { source: body, pointer: "" }
+            expected:
+              number: { binding: create.number }
+  - id: two-distinct-creations
+    claim_ids: [issue-create]
+    scope: black_box
+    steps:
+      - id: first
+        request:
+          operation_id: create_issue
+          parameters:
+            path:
+              owner: { input: owner }
+              repo: { input: repository }
+          body:
+            title: Corpus distinct first
+        bind:
+          number: { source: body, pointer: /number }
+        assert:
+          - op: status
+            expected: 201
+      - id: second
+        request:
+          operation_id: create_issue
+          parameters:
+            path:
+              owner: { input: owner }
+              repo: { input: repository }
+          body:
+            title: Corpus distinct second
+        bind:
+          number: { source: body, pointer: /number }
+        assert:
+          - op: status
+            expected: 201
+          - op: not_equals
+            actual: { source: body, pointer: /number }
+            expected: { binding: first.number }
+      - id: read-second
+        request:
+          operation_id: get_issue
+          parameters:
+            path:
+              owner: { input: owner }
+              repo: { input: repository }
+              issue_number: { binding: second.number }
+        assert:
+          - op: status
+            expected: 200
+          - op: equals
+            actual: { source: body, pointer: /number }
+            expected: { binding: second.number }
+  - id: add-label-read
+    claim_ids: [issue-label]
+    scope: black_box
+    steps:
+      - id: create
+        request:
+          operation_id: create_issue
+          parameters:
+            path:
+              owner: { input: owner }
+              repo: { input: repository }
+          body:
+            title: Corpus add-label
+        bind:
+          number: { source: body, pointer: /number }
+        assert:
+          - op: status
+            expected: 201
+      - id: add
+        request:
+          operation_id: add_labels
+          parameters:
+            path:
+              owner: { input: owner }
+              repo: { input: repository }
+              issue_number: { binding: create.number }
+          body:
+            labels: [oal-triage]
+        assert:
+          - op: status
+            expected: 200
+          - op: contains
+            actual: { source: body, pointer: "" }
+            expected:
+              name: oal-triage
+      - id: read
+        request:
+          operation_id: get_issue
+          parameters:
+            path:
+              owner: { input: owner }
+              repo: { input: repository }
+              issue_number: { binding: create.number }
+        assert:
+          - op: status
+            expected: 200
+          - op: contains
+            actual: { source: body, pointer: /labels }
+            expected:
+              name: oal-triage
+  - id: close-read
+    claim_ids: [issue-close]
+    scope: black_box
+    steps:
+      - id: create
+        request:
+          operation_id: create_issue
+          parameters:
+            path:
+              owner: { input: owner }
+              repo: { input: repository }
+          body:
+            title: Corpus close-read
+        bind:
+          number: { source: body, pointer: /number }
+        assert:
+          - op: status
+            expected: 201
+      - id: close
+        request:
+          operation_id: update_issue
+          parameters:
+            path:
+              owner: { input: owner }
+              repo: { input: repository }
+              issue_number: { binding: create.number }
+          body:
+            state: closed
+        assert:
+          - op: status
+            expected: 200
+          - op: equals
+            actual: { source: body, pointer: /state }
+            expected: closed
+      - id: read
+        request:
+          operation_id: get_issue
+          parameters:
+            path:
+              owner: { input: owner }
+              repo: { input: repository }
+              issue_number: { binding: create.number }
+        assert:
+          - op: status
+            expected: 200
+          - op: equals
+            actual: { source: body, pointer: /state }
+            expected: closed
+  - id: open-list-exclusion-closed-list-inclusion
+    claim_ids: [issue-list, issue-close]
+    scope: black_box
+    steps:
+      - id: create
+        request:
+          operation_id: create_issue
+          parameters:
+            path:
+              owner: { input: owner }
+              repo: { input: repository }
+          body:
+            title: Corpus list exclusion
+        bind:
+          number: { source: body, pointer: /number }
+        assert:
+          - op: status
+            expected: 201
+      - id: close
+        request:
+          operation_id: update_issue
+          parameters:
+            path:
+              owner: { input: owner }
+              repo: { input: repository }
+              issue_number: { binding: create.number }
+          body:
+            state: closed
+        assert:
+          - op: status
+            expected: 200
+      - id: list-open
+        request:
+          operation_id: list_issues
+          parameters:
+            path:
+              owner: { input: owner }
+              repo: { input: repository }
+            query:
+              state: open
+              per_page: 100
+        assert:
+          - op: status
+            expected: 200
+      - id: list-closed
+        request:
+          operation_id: list_issues
+          parameters:
+            path:
+              owner: { input: owner }
+              repo: { input: repository }
+            query:
+              state: closed
+              per_page: 100
+        assert:
+          - op: status
+            expected: 200
+          - op: contains
+            actual: { source: body, pointer: "" }
+            expected:
+              number: { binding: create.number }
+              state: closed
+  - id: nonexistent-issue-read
+    claim_ids: [issue-read]
+    scope: black_box
+    steps:
+      - id: read-missing
+        request:
+          operation_id: get_issue
+          parameters:
+            path:
+              owner: { input: owner }
+              repo: { input: repository }
+              issue_number: 999999
+        assert:
+          - op: status
+            expected: 404
+  - id: invalid-create-without-title
+    claim_ids: [issue-create]
+    scope: black_box
+    steps:
+      - id: create-missing-title
+        request:
+          operation_id: create_issue
+          parameters:
+            path:
+              owner: { input: owner }
+              repo: { input: repository }
+          body:
+            body: A create with no title must fail validation.
+        assert:
+          - op: status
+            expected: 422

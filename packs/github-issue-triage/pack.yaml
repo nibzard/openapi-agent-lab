@@ -1,0 +1,92 @@
+apiVersion: agentlab.dev/v1
+kind: Pack
+
+metadata:
+  id: github-issue-triage
+  name: github-issue-triage
+  # 0.1.0 is the first provider-fidelity pack (SPEC section 48.7).
+  # The provider API version is pinned to 2026-03-10 and was
+  # rechecked against the endpoint documentation on 2026-10-10. A
+  # changed provider version requires a new recorded decision and
+  # updated cases, never a silent substitution.
+  version: 0.1.0
+  description: >-
+    The GitHub Issues triage surface: create, read, list, label, and
+    close, with a portable corpus and explicit fidelity claims.
+
+requires:
+  agentlab: ">=0.1.0 <0.2.0"
+  backend_api: 1
+  rubric_api: 1
+
+contract:
+  entrypoint: contract/openapi.json
+  # Scenario mode owns the issue lifecycle locally. The contract pins
+  # the provider shapes: number and id stay distinct, list results
+  # may include pull-request entries, and every modeled error has a
+  # declared body.
+
+server:
+  host: 127.0.0.1
+  port: 0
+  request_body_limit_bytes: 1048576
+  request_timeout_ms: 30000
+  response_validation: error
+  request_validation: error
+  concurrency: serial
+
+behavior:
+  mode: scenario
+  completeness: exact
+  fallback: none
+  backend:
+    kind: module
+    entrypoint: behavior/index.ts
+    export: backend
+  state_schema: schemas/scenario-state.schema.json
+  state_schema_version: 1
+  clock:
+    kind: virtual
+    initial: "2000-01-01T00:00:00.000Z"
+    tick_ms: 1
+
+security:
+  enforce: false
+  credentials: []
+  base_url_environment: OAL_BASE_URL
+
+redaction:
+  header_names:
+    - authorization
+  key_patterns:
+    - "(?i)api.?key"
+    - "(?i)token"
+    - "(?i)secret"
+  capture_binary_blobs: false
+  max_text_capture_bytes: 65536
+
+participant:
+  environment:
+    inherit: none
+    allow:
+      - PATH
+      - HOME
+      - TMPDIR
+      - OAL_BASE_URL
+      - OAL_AUTH_BEARER
+
+prompt_sets: []
+
+evals: []
+
+scenarios:
+  - id: default
+
+corpora:
+  - id: issue-triage-core
+    source: corpora/core.yaml
+
+fidelity:
+  source: fidelity/claims.json
+
+extensions: {}

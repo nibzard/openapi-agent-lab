@@ -106,6 +106,16 @@ export function loadWebclipPack(root = findRepoRoot()): Promise<PackForTest> {
   return loadPackFromRepo(WEBCLIP_PACK_ID, root);
 }
 
+/** The provider-fidelity pack of specification section 48.7. */
+export const GITHUB_TRIAGE_PACK_ID = "github-issue-triage";
+
+/** Load and validate the github-issue-triage pack. */
+export function loadGithubTriagePack(
+  root = findRepoRoot()
+): Promise<PackForTest> {
+  return loadPackFromRepo(GITHUB_TRIAGE_PACK_ID, root);
+}
+
 /**
  * The labeled synthetic runtime pack for idempotency keys and virtual
  * expiry (specification sections 17.3 and 48.6). It models no real

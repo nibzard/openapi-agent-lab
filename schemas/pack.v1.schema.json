@@ -515,6 +515,18 @@
         }
       }
     },
+    "fidelity": {
+      "type": "object",
+      "description": "Optional provider fidelity claims (SPEC section 48.7). Packs that model no provider stay valid without it.",
+      "additionalProperties": false,
+      "required": ["source"],
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/relativePath",
+          "description": "Fidelity claims document path relative to the pack root; a fidelity.v1 document."
+        }
+      }
+    },
     "extensions": {
       "type": "object"
     }

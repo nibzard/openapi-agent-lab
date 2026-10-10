@@ -24,6 +24,7 @@ export const PackCode = {
   RegistryPackMismatch: "OAL-PACK-REGISTRY-PACK-MISMATCH",
   RegistryDigestMismatch: "OAL-PACK-REGISTRY-DIGEST-MISMATCH",
   CorpusIdMismatch: "OAL-PACK-CORPUS-ID-MISMATCH",
+  FidelityPackMismatch: "OAL-PACK-FIDELITY-PACK-MISMATCH",
   CompletenessConflict: "OAL-PACK-COMPLETENESS-CONFLICT",
   IsolationAdvisory: "OAL-PACK-ISOLATION-ADVISORY",
   DigestUnstable: "OAL-PACK-DIGEST-UNSTABLE",

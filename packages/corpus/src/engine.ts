@@ -293,6 +293,21 @@ function resolveOperand(
   context: CaseContext
 ): ResolvedOperand {
   if (operand.kind === "literal") {
+    // Typed references nest freely inside value trees, so a literal
+    // operand resolves its interior references too - a subset
+    // expectation like {number: {binding: create.number}} names the
+    // created issue rather than the reference form itself.
+    if (isJsonObject(operand.value) || Array.isArray(operand.value)) {
+      const resolved = resolveValue(operand.value, context);
+      if (resolved.reason !== undefined) {
+        return {
+          kind: "missing",
+          reason: resolved.reason,
+          ...(resolved.code === undefined ? {} : { code: resolved.code })
+        };
+      }
+      return { kind: "value", value: resolved.value };
+    }
     return { kind: "value", value: operand.value };
   }
   if (operand.kind === "input") {

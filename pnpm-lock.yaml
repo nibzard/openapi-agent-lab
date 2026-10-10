@@ -536,6 +536,15 @@ importers:
         specifier: workspace:*
         version: link:../core
 
+  packs/github-issue-triage:
+    dependencies:
+      '@oal/behavior-api':
+        specifier: workspace:*
+        version: link:../../packages/behavior-api
+      '@oal/behavior-runtime':
+        specifier: workspace:*
+        version: link:../../packages/behavior-runtime
+
   packs/idem-runtime:
     dependencies:
       '@oal/behavior-api':

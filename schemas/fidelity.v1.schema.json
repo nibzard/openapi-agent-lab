@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/fidelity.v1.json",
+  "title": "Provider fidelity claims",
+  "type": "object",
+  "description": "Claims a pack makes about how faithfully it models a provider API (specification section 48.7). Every claim names its evidence class and its source; documentation review is never live behavioral verification.",
+  "required": ["schema_version", "kind", "pack_id", "provider", "claims"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "kind": { "const": "FidelityClaims" },
+    "pack_id": {
+      "$ref": "#/$defs/safeId",
+      "description": "Pack these claims belong to."
+    },
+    "provider": {
+      "type": "object",
+      "description": "The provider API the pack models.",
+      "required": ["name", "api_version"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Provider name, for example github."
+        },
+        "api_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Pinned provider API version, for example 2026-03-10."
+        },
+        "base_url": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Provider base URL the claims were read from."
+        }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/claim" },
+      "description": "One claim per modeled behavior; ids stay stable across pack versions."
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$"
+    },
+    "claim": {
+      "type": "object",
+      "description": "One fidelity claim.",
+      "required": [
+        "id",
+        "classification",
+        "operations",
+        "references",
+        "source_url",
+        "retrieved_at",
+        "limitations"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/safeId",
+          "description": "Stable claim identifier."
+        },
+        "classification": {
+          "type": "string",
+          "enum": ["documented", "observed", "synthetic", "unsupported"],
+          "description": "documented: the provider documents it. observed: a recorded live run verified it. synthetic: the emulator provides it without a provider guarantee. unsupported: outside the modeled surface."
+        },
+        "operations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Operation keys the claim covers; the corpus case or assertion references below name the checks."
+        },
+        "references": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Case ids, assertion ids, or claim text anchors this claim backs."
+        },
+        "source_url": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where the claim was read from. Synthetic claims cite the pack's own corpus."
+        },
+        "retrieved_at": {
+          "$ref": "#/$defs/date",
+          "description": "Date the source was read."
+        },
+        "provider_version": {
+          "$ref": "#/$defs/date",
+          "description": "Provider API version the source described, when it differs from the pin."
+        },
+        "last_verified_at": {
+          "$ref": "#/$defs/date",
+          "description": "Date a live run last verified the claim; absent means never."
+        },
+        "report_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of the verification report that observed the claim."
+        },
+        "limitations": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What the claim does not cover."
+        }
+      }
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "description": "Calendar date, ISO 8601 extended."
+    }
+  }
+}

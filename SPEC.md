@@ -920,6 +920,7 @@ openapi-agent-lab/
     checkpoint.v1.schema.json
     corpus.v1.schema.json
     corpus-report.v1.schema.json
+    fidelity.v1.schema.json
 
   packs/
     steel-computer/

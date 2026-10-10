@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "kind": "FidelityClaims",
+  "pack_id": "github-issue-triage",
+  "provider": {
+    "name": "github",
+    "api_version": "2026-03-10",
+    "base_url": "https://api.github.com"
+  },
+  "claims": [
+    {
+      "id": "create-issue-201",
+      "classification": "documented",
+      "operations": ["path:POST /repos/{owner}/{repo}/issues"],
+      "references": ["case:create-read", "case:create-list", "case:two-distinct-creations", "case:add-label-read", "case:close-read", "case:open-list-exclusion-closed-list-inclusion", "case:invalid-create-without-title"],
+      "source_url": "https://docs.github.com/en/rest/issues/issues#create-an-issue",
+      "retrieved_at": "2026-10-10",
+      "limitations": "The documented success status is 201. The provider also documents 400, 403, 404, 410, 422, and 503; only 422 and 404 shapes are modeled."
+    },
+    {
+      "id": "create-issue-422-without-title",
+      "classification": "documented",
+      "operations": ["path:POST /repos/{owner}/{repo}/issues"],
+      "references": ["case:invalid-create-without-title"],
+      "source_url": "https://docs.github.com/en/rest/issues/issues#create-an-issue",
+      "retrieved_at": "2026-10-10",
+      "limitations": "The provider documents 422 for validation failure. The error body shape is reduced to a message and documentation URL."
+    },
+    {
+      "id": "get-issue-200-404",
+      "classification": "documented",
+      "operations": ["path:GET /repos/{owner}/{repo}/issues/{issue_number}"],
+      "references": ["case:create-read", "case:nonexistent-issue-read", "case:add-label-read", "case:close-read"],
+      "source_url": "https://docs.github.com/en/rest/issues/issues#get-an-issue",
+      "retrieved_at": "2026-10-10",
+      "limitations": "The provider also documents 301 for transferred issues and 410 for deleted issues; neither redirect behavior is modeled."
+    },
+    {
+      "id": "list-issues-includes-pull-requests",
+      "classification": "documented",
+      "operations": ["path:GET /repos/{owner}/{repo}/issues"],
+      "references": ["case:create-list", "case:open-list-exclusion-closed-list-inclusion"],
+      "source_url": "https://docs.github.com/en/rest/issues/issues#list-issues-in-a-repository",
+      "retrieved_at": "2026-10-10",
+      "limitations": "The provider considers every pull request an issue; list entries carrying the pull_request key are pull requests. The local emulator seeds one such entry so selection by number stays honest. Redirect and spam-filter deviations of the provider are not modeled."
+    },
+    {
+      "id": "list-issues-state-and-pagination-explicit",
+      "classification": "documented",
+      "operations": ["path:GET /repos/{owner}/{repo}/issues"],
+      "references": ["case:open-list-exclusion-closed-list-inclusion"],
+      "source_url": "https://docs.github.com/en/rest/issues/issues#list-issues-in-a-repository",
+      "retrieved_at": "2026-10-10",
+      "limitations": "The provider defaults state to open and per_page to 30; the corpus passes both explicitly and never relies on provider defaults. Page sizes stay within the documented bound of 100."
+    },
+    {
+      "id": "add-labels-200-merge",
+      "classification": "documented",
+      "operations": ["path:POST /repos/{owner}/{repo}/issues/{issue_number}/labels"],
+      "references": ["case:add-label-read"],
+      "source_url": "https://docs.github.com/en/rest/issues/labels#add-labels-to-an-issue",
+      "retrieved_at": "2026-10-10",
+      "limitations": "The provider documents 200 with the merged label list and recommends passing an object with a labels key. Label administration and label creation are outside the modeled surface; only the pre-existing oal-triage label is admitted."
+    },
+    {
+      "id": "close-via-patch-state-closed",
+      "classification": "documented",
+      "operations": ["path:PATCH /repos/{owner}/{repo}/issues/{issue_number}"],
+      "references": ["case:close-read", "case:open-list-exclusion-closed-list-inclusion"],
+      "source_url": "https://docs.github.com/en/rest/issues/issues#update-an-issue",
+      "retrieved_at": "2026-10-10",
+      "limitations": "The provider documents 200 with the updated issue and closing by state closed. Reopening, state_reason, title and body edits, and label replacement through the same endpoint are outside the modeled surface."
+    },
+    {
+      "id": "issue-number-distinct-from-id",
+      "classification": "documented",
+      "operations": [
+        "path:POST /repos/{owner}/{repo}/issues",
+        "path:GET /repos/{owner}/{repo}/issues/{issue_number}"
+      ],
+      "references": ["case:create-read", "case:two-distinct-creations"],
+      "source_url": "https://docs.github.com/en/rest/issues/issues",
+      "retrieved_at": "2026-10-10",
+      "limitations": "The number is the repository-scoped handle used in paths; the id is the global identity. The corpus binds number for paths and never substitutes id. The local emulator draws the two from distinct counters so an alias can never pass silently."
+    },
+    {
+      "id": "rate-limit-and-retry-behavior",
+      "classification": "synthetic",
+      "operations": [
+        "path:POST /repos/{owner}/{repo}/issues",
+        "path:GET /repos/{owner}/{repo}/issues"
+      ],
+      "references": ["section:48.7-request-rules"],
+      "source_url": "https://docs.github.com/en/rest/issues/issues",
+      "retrieved_at": "2026-10-10",
+      "limitations": "Rate-limit waits, Retry-After honoring, and read-only bounded retries are target-adapter behavior, not emulator behavior. They stay synthetic until a live run observes them and are excluded from the core fidelity claim."
+    },
+    {
+      "id": "lost-response-reconciliation",
+      "classification": "synthetic",
+      "operations": ["path:POST /repos/{owner}/{repo}/issues"],
+      "references": ["section:48.7-cleanup-uncertainty"],
+      "source_url": "https://docs.github.com/en/rest/issues/issues",
+      "retrieved_at": "2026-10-10",
+      "limitations": "A missing create response can leave an unidentified resource; the target records uncertainty and searches bounded issue-list pages for the run marker. No provider guarantee covers this recovery, so it stays synthetic."
+    },
+    {
+      "id": "label-administration-comments-search-webhooks",
+      "classification": "unsupported",
+      "operations": [
+        "path:POST /repos/{owner}/{repo}/labels",
+        "path:POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+        "path:GET /search/issues"
+      ],
+      "references": ["section:48.7-scope"],
+      "source_url": "https://docs.github.com/en/rest/issues",
+      "retrieved_at": "2026-10-10",
+      "limitations": "Label administration, comments, search, webhooks, pull-request behavior, and broad permission emulation are outside the modeled surface. The emulator answers unsupported input combinations with 422 capability diagnostics rather than emulating them."
+    }
+  ]
+}

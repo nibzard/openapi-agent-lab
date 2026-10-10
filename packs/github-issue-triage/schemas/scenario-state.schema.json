@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/packs/github-issue-triage/schemas/scenario-state.schema.json",
+  "title": "github-issue-triage scenario state",
+  "description": "Domain state of the local issue emulator. Issues are keyed by their repository-scoped number; the global id lives inside each record and never aliases the key. One seeded pull-request entry keeps list results shaped like the provider's.",
+  "type": "object",
+  "properties": {
+    "issues": {
+      "type": "object",
+      "description": "Live issues keyed by number as text.",
+      "additionalProperties": { "$ref": "#/$defs/issue" }
+    },
+    "order": {
+      "type": "array",
+      "description": "Issue numbers as text, in insertion order.",
+      "items": { "type": "string", "pattern": "^[0-9]+$" },
+      "uniqueItems": true
+    },
+    "labels": {
+      "type": "object",
+      "description": "Pre-existing labels keyed by name.",
+      "additionalProperties": { "$ref": "#/$defs/label" }
+    }
+  },
+  "required": ["issues", "order", "labels"],
+  "additionalProperties": false,
+  "$defs": {
+    "label": {
+      "type": "object",
+      "description": "One pre-existing label.",
+      "properties": {
+        "id": { "type": "integer", "description": "Label identity." },
+        "name": { "type": "string", "minLength": 1 },
+        "description": {
+          "type": ["string", "null"],
+          "description": "Label description; nullable."
+        }
+      },
+      "required": ["id", "name", "description"],
+      "additionalProperties": false
+    },
+    "issue": {
+      "type": "object",
+      "description": "One issue or seeded pull-request entry.",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "description": "Global identity; never equal to number."
+        },
+        "number": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Repository-scoped handle; equals the record key as text."
+        },
+        "title": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "body": { "type": ["string", "null"], "maxLength": 2000 },
+        "state": { "type": "string", "enum": ["open", "closed"] },
+        "labels": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/label" }
+        },
+        "pullRequest": {
+          "type": "boolean",
+          "description": "True exactly when the entry is a pull request."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation time from the deterministic clock."
+        }
+      },
+      "required": [
+        "id",
+        "number",
+        "title",
+        "body",
+        "state",
+        "labels",
+        "pullRequest",
+        "created_at"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

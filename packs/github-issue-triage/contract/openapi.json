@@ -1,0 +1,413 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "github-issue-triage",
+    "version": "1.0.0",
+    "description": "The modeled surface of the GitHub Issues API for triage: create, read, list, add one pre-existing label, and close. The provider pins API version 2026-03-10. The number of an issue is its repository-scoped handle; the id is its global identity, and the two never substitute. List results may include pull requests; entries carrying the pull_request key are pull requests. Label administration, comments, search, webhooks, and pull-request behavior are outside the modeled surface.",
+    "license": { "name": "Apache-2.0", "identifier": "Apache-2.0" }
+  },
+  "servers": [
+    {
+      "url": "https://api.github.com",
+      "description": "Provider endpoint. The lab serves a local emulator for ordinary runs."
+    }
+  ],
+  "security": [{ "bearerAuth": [] }],
+  "paths": {
+    "/repos/{owner}/{repo}/issues": {
+      "post": {
+        "operationId": "create_issue",
+        "summary": "Create an issue",
+        "description": "Creates an issue with a title and an optional body. Answers 201 with the issue; 422 when the title is missing or empty; 404 when the repository is unknown.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 }
+          },
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/IssueCreate" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The issue was created.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Issue" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "422": {
+            "description": "Validation failed; the title is missing or empty.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "list_issues",
+        "summary": "List repository issues",
+        "description": "Lists issues of one state with bounded pagination. Results include pull requests; every pull-request entry carries the pull_request key. Filter by the created issue's number, never by position.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 }
+          },
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": true,
+            "description": "Explicit issue state; the provider default is never relied on.",
+            "schema": { "type": "string", "enum": ["open", "closed", "all"] }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": true,
+            "description": "Page size bound; the provider default is never relied on.",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100 }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One bounded page of issues and pull requests.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Issue" }
+                }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/issues/{issue_number}": {
+      "get": {
+        "operationId": "get_issue",
+        "summary": "Get an issue",
+        "description": "Reads one issue by its repository-scoped number. Answers 404 when no issue has this number.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 }
+          },
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 }
+          },
+          {
+            "name": "issue_number",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The issue.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Issue" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "patch": {
+        "operationId": "update_issue",
+        "summary": "Update an issue",
+        "description": "Closes an issue with state closed. Answers 200 with the updated issue; 404 when no issue has this number; 422 for any other state value.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 }
+          },
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 }
+          },
+          {
+            "name": "issue_number",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 1 }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/IssueUpdate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated issue.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Issue" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "422": {
+            "description": "Validation failed; the state value is outside the modeled surface.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/issues/{issue_number}/labels": {
+      "post": {
+        "operationId": "add_labels",
+        "summary": "Add labels to an issue",
+        "description": "Adds pre-existing labels to an issue; new labels merge with the existing set. The modeled surface admits the pre-existing label oal-triage only. Answers 200 with the full label list; 404 when no issue has this number; 422 when a label is not pre-existing.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 }
+          },
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 }
+          },
+          {
+            "name": "issue_number",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 1 }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LabelAdd" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The merged label list of the issue.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Label" }
+                }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "422": {
+            "description": "Validation failed; the label is not pre-existing.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "A token restricted to a disposable repository with Issues read and write."
+      }
+    },
+    "responses": {
+      "NotFound": {
+        "description": "No resource has this identifier.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Problem" }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "IssueCreate": {
+        "type": "object",
+        "description": "The create request body.",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Issue title; required."
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Issue description; optional."
+          }
+        },
+        "required": ["title"],
+        "additionalProperties": false
+      },
+      "IssueUpdate": {
+        "type": "object",
+        "description": "The update request body.",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": ["closed"],
+            "description": "Only closing is modeled."
+          }
+        },
+        "required": ["state"],
+        "additionalProperties": false
+      },
+      "LabelAdd": {
+        "type": "object",
+        "description": "The add-labels request body.",
+        "properties": {
+          "labels": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": { "type": "string", "minLength": 1 },
+            "description": "Label names to add; the modeled surface admits oal-triage."
+          }
+        },
+        "required": ["labels"],
+        "additionalProperties": false
+      },
+      "Label": {
+        "type": "object",
+        "description": "One label of the repository.",
+        "properties": {
+          "id": { "type": "integer", "description": "Label identity." },
+          "name": {
+            "type": "string",
+            "description": "Label name, unique in the repository."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Label description; nullable."
+          }
+        },
+        "required": ["id", "name", "description"],
+        "additionalProperties": false
+      },
+      "Issue": {
+        "type": "object",
+        "description": "One issue, or one pull request inside a list result.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Global issue identity; never equal to number."
+          },
+          "number": {
+            "type": "integer",
+            "description": "Repository-scoped handle used in paths."
+          },
+          "title": { "type": "string", "description": "Issue title." },
+          "body": {
+            "type": ["string", "null"],
+            "description": "Issue description; nullable."
+          },
+          "state": {
+            "type": "string",
+            "enum": ["open", "closed"],
+            "description": "Issue state."
+          },
+          "labels": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Label" },
+            "description": "Labels attached to the issue."
+          },
+          "pull_request": {
+            "type": "object",
+            "description": "Present exactly when the entry is a pull request.",
+            "additionalProperties": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation time."
+          }
+        },
+        "required": ["id", "number", "title", "state", "labels", "created_at"],
+        "additionalProperties": false
+      },
+      "Problem": {
+        "type": "object",
+        "description": "One provider error body.",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Provider error text."
+          },
+          "documentation_url": {
+            "type": "string",
+            "description": "Where the provider explains the error."
+          }
+        },
+        "required": ["message"],
+        "additionalProperties": false
+      }
+    }
+  }
+}
