@@ -278,11 +278,21 @@
       "id": "SE-P4-02",
       "phase": "P4",
       "requirement": "SPEC 48.6 \u00b7 plan P4",
-      "status": "pending",
-      "tests": [],
-      "evidence": null,
-      "depends_on": ["SE-P4-01"],
-      "remaining": "Add the labeled synthetic runtime pack for idempotency keys and virtual expiry, and extend checkpoint coverage."
+      "status": "complete",
+      "tests": [
+        "packages/testkit/src/runtime-corpus.test.ts > replays the sealed response without running behavior again",
+        "packages/testkit/src/runtime-corpus.test.ts > answers a reused key with a different body as a conflict",
+        "packages/testkit/src/runtime-corpus.test.ts > separates the caches of two verified principals",
+        "packages/testkit/src/runtime-corpus.test.ts > expires entries on virtual time without sleeping",
+        "packages/testkit/src/runtime-corpus.test.ts > replays a response the transport already lost",
+        "packages/testkit/src/runtime-corpus.test.ts > continues the fault sequence and the replay store after restart and in both forks",
+        "apps/cli/src/idem-corpus.test.ts > passes every case over real HTTP"
+      ],
+      "evidence": {
+        "commit": "9fe61fe",
+        "command": "pnpm exec vitest run packages/testkit/src/runtime-corpus.test.ts apps/cli/src/idem-corpus.test.ts"
+      },
+      "depends_on": ["SE-P4-01"]
     },
     {
       "id": "SE-P4-03",
