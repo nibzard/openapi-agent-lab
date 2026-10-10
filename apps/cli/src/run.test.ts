@@ -1,6 +1,7 @@
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -48,6 +49,47 @@ async function newWorkspace(): Promise<string> {
 async function exists(target: string): Promise<boolean> {
   const stats = await stat(target).catch(() => null);
   return stats !== null;
+}
+
+/**
+ * Copy the webclip pack and inject a backend failure into the copy:
+ * the third behavior request throws before the domain handler runs.
+ * The copy rewrites the pack's repository-relative imports to absolute
+ * file URLs so it runs from any temporary directory. The third request
+ * of the site-errand script is the first render, so a correct run
+ * commits exactly the two creates before the failure.
+ */
+async function writeBackendFailureFixture(
+  webclipRoot: string
+): Promise<string> {
+  const root = await mkdtemp(path.join(tmpdir(), "oal-webclip-failure-"));
+  scratchDirectories.push(root);
+  await cp(webclipRoot, root, { recursive: true });
+  // behavior/index.ts sits three directories below the root that
+  // the pack's repository-relative imports resolve against.
+  const repositoryRoot = path.dirname(path.dirname(webclipRoot));
+  const packagesUrl = `${
+    pathToFileURL(path.join(repositoryRoot, "packages")).href
+  }/`;
+  const entry = path.join(root, "behavior", "index.ts");
+  let source = await readFile(entry, "utf8");
+  source = source.replaceAll("../../../packages/", packagesUrl);
+  const injected = source.replace(
+    "      return handler(request, state, domain);",
+    [
+      "      globalThis.__oalFixtureCalls =",
+      "        (globalThis.__oalFixtureCalls ?? 0) + 1;",
+      "      if (globalThis.__oalFixtureCalls === 3) {",
+      '        throw new Error("Injected backend failure for the rollback fixture.");',
+      "      }",
+      "      return handler(request, state, domain);"
+    ].join("\n")
+  );
+  if (injected === source) {
+    throw new Error("The failure injection marker is absent from the copy.");
+  }
+  await writeFile(entry, injected, "utf8");
+  return root;
 }
 
 /** One terminal trial outcome with every field a mapping test needs. */
@@ -677,11 +719,6 @@ describe("oal run", () => {
     // The harness worked; the evaluation threshold failed because the
     // participant never reported (section 23.18).
     expect(code).toBe(EXIT_EVAL_THRESHOLD);
-    const summary = JSON.parse(io.stdoutChunks.join("\n")) as Record<
-      string,
-      unknown
-    >;
-    expect(summary.dispositions).toMatchObject({ agent_failed: 1 });
     const trialDir = path.join(
       cwd,
       ".oal",
@@ -710,4 +747,217 @@ describe("oal run", () => {
       )
     ).toBe("");
   }, 60_000);
+
+  it("isolates state across two trials of one batch", async () => {
+    const pack = await loadWebclipPack();
+    const cwd = await newWorkspace();
+    const io = new MemoryIo();
+    const code = await main(
+      [
+        "run",
+        pack.root,
+        "--eval",
+        "site-errand",
+        "--agent",
+        "mock-agent",
+        "--agent-script",
+        path.join(pack.root, "evals", "site-errand", "mock-participant.json"),
+        "--batch",
+        "cli-scenario-two",
+        "--count",
+        "2",
+        "--format",
+        "json"
+      ],
+      io,
+      { cwd }
+    );
+    expect(code).toBe(EXIT_OK);
+    const summary = JSON.parse(io.stdoutChunks.join("\n")) as Record<
+      string,
+      unknown
+    >;
+    expect(summary.dispositions).toMatchObject({ completed: 2 });
+    // Independent stores: each trial restarts the clip counters and
+    // reaches the same committed state. Shared state would carry the
+    // first trial's revision and clip identifiers into the second.
+    for (const trialId of [
+      "cli-scenario-two-run-01",
+      "cli-scenario-two-run-02"
+    ]) {
+      const trialDir = path.join(
+        cwd,
+        ".oal",
+        "runs",
+        "cli-scenario-two",
+        "trials",
+        trialId
+      );
+      const state = JSON.parse(
+        await readFile(path.join(trialDir, "state.final.json"), "utf8")
+      ) as Record<string, never>;
+      expect(state["revision"]).toBe(6);
+      const committed = state["state"] as unknown as {
+        clips: Record<string, unknown>;
+        order: string[];
+      };
+      expect(Object.keys(committed.clips)).toEqual(["clip_00000002"]);
+      const events = (
+        await readFile(
+          path.join(trialDir, "semantic-events.redacted.jsonl"),
+          "utf8"
+        )
+      )
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as Record<string, unknown>);
+      expect(events.map((event) => event["name"])).toEqual([
+        "clip.created",
+        "clip.created",
+        "clip.rendered",
+        "clip.rendered",
+        "clip.extracted",
+        "clip.deleted"
+      ]);
+      expect(await exists(path.join(trialDir, "state.sqlite"))).toBe(true);
+    }
+  }, 120_000);
+
+  it("replays equivalent domain outcomes from repeated seeds", async () => {
+    const pack = await loadWebclipPack();
+    const first = await newWorkspace();
+    const second = await newWorkspace();
+    const runIn = async (cwd: string): Promise<void> => {
+      const io = new MemoryIo();
+      const code = await main(
+        [
+          "run",
+          pack.root,
+          "--eval",
+          "site-errand",
+          "--agent",
+          "mock-agent",
+          "--agent-script",
+          path.join(pack.root, "evals", "site-errand", "mock-participant.json"),
+          "--batch",
+          "cli-scenario-replay",
+          "--format",
+          "json"
+        ],
+        io,
+        { cwd }
+      );
+      expect(code).toBe(EXIT_OK);
+    };
+    await runIn(first);
+    await runIn(second);
+    const trialOf = (cwd: string): string =>
+      path.join(
+        cwd,
+        ".oal",
+        "runs",
+        "cli-scenario-replay",
+        "trials",
+        "cli-scenario-replay-run-01"
+      );
+    // The batch identifier derives the trial seed, so both workspaces
+    // hold byte-identical domain state and semantic evidence; virtual
+    // timestamps and domain identifiers repeat, not just the outcome.
+    expect(
+      await readFile(path.join(trialOf(first), "state.final.json"), "utf8")
+    ).toBe(
+      await readFile(path.join(trialOf(second), "state.final.json"), "utf8")
+    );
+    expect(
+      await readFile(
+        path.join(trialOf(first), "semantic-events.redacted.jsonl"),
+        "utf8"
+      )
+    ).toBe(
+      await readFile(
+        path.join(trialOf(second), "semantic-events.redacted.jsonl"),
+        "utf8"
+      )
+    );
+  }, 120_000);
+
+  it("rolls back and cleans up an injected backend failure", async () => {
+    const pack = await loadWebclipPack();
+    const fixtureRoot = await writeBackendFailureFixture(pack.root);
+    const cwd = await newWorkspace();
+    const io = new MemoryIo();
+    const code = await main(
+      [
+        "run",
+        fixtureRoot,
+        "--eval",
+        "site-errand",
+        "--agent",
+        "mock-agent",
+        "--agent-script",
+        path.join(pack.root, "evals", "site-errand", "mock-participant.json"),
+        "--batch",
+        "cli-scenario-rollback",
+        "--format",
+        "json"
+      ],
+      io,
+      { cwd }
+    );
+    // The participant met a 500 on the first render and failed; the
+    // harness itself stayed healthy.
+    expect(code).toBe(EXIT_EVAL_THRESHOLD);
+    const summary = JSON.parse(io.stdoutChunks.join("\n")) as Record<
+      string,
+      unknown
+    >;
+    expect(summary.dispositions).toMatchObject({ agent_failed: 1 });
+    const trialDir = path.join(
+      cwd,
+      ".oal",
+      "runs",
+      "cli-scenario-rollback",
+      "trials",
+      "cli-scenario-rollback-run-01"
+    );
+    // The failed third exchange rolled back: only the two committed
+    // creates remain, with no partial render transition.
+    const state = JSON.parse(
+      await readFile(path.join(trialDir, "state.final.json"), "utf8")
+    ) as Record<string, never>;
+    expect(state["revision"]).toBe(2);
+    const committed = state["state"] as unknown as {
+      clips: Record<string, unknown>;
+    };
+    expect(Object.keys(committed.clips).sort()).toEqual([
+      "clip_00000001",
+      "clip_00000002"
+    ]);
+    const events = (
+      await readFile(
+        path.join(trialDir, "semantic-events.redacted.jsonl"),
+        "utf8"
+      )
+    )
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(events.map((event) => event["name"])).toEqual([
+      "clip.created",
+      "clip.created"
+    ]);
+    const stateSummary = JSON.parse(
+      await readFile(path.join(trialDir, "state.summary.json"), "utf8")
+    ) as Record<string, unknown>;
+    expect(stateSummary["counts"]).toEqual({
+      api_requests: 3,
+      semantic_events: 2
+    });
+    // Cleanup ran: the trial finalized its evidence after the failure.
+    const completed = JSON.parse(
+      await readFile(path.join(trialDir, "run.completed.json"), "utf8")
+    ) as Record<string, unknown>;
+    expect(completed["evidence_integrity"]).toBe("intact");
+    expect(completed["disposition"]).toBe("agent_failed");
+  }, 120_000);
 });
