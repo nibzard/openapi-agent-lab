@@ -37,3 +37,55 @@ describe("the nightly workflow", () => {
     expect(text).toMatch(/cron:\s*"/u);
   });
 });
+
+describe("the package-boundary check", () => {
+  it("rejects an environment import of the runner", async () => {
+    const { execFile } = await import("node:child_process");
+    const { mkdtemp, mkdir, writeFile, rm } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { promisify } = await import("node:util");
+    const run = promisify(execFile);
+    const script = path.join(
+      import.meta.dirname,
+      "..",
+      "scripts",
+      "check-package-boundaries.mjs"
+    );
+    const tree = await mkdtemp(path.join(tmpdir(), "oal-boundaries-"));
+    try {
+      await mkdir(path.join(tree, "packages", "environment", "src"), {
+        recursive: true
+      });
+      await mkdir(path.join(tree, "apps"), { recursive: true });
+      await writeFile(
+        path.join(tree, "packages", "environment", "package.json"),
+        JSON.stringify({
+          name: "@oal/environment",
+          exports: { ".": "./src/index.ts" }
+        }),
+        "utf8"
+      );
+      await writeFile(
+        path.join(tree, "packages", "environment", "src", "index.ts"),
+        'import type { FrozenPlan } from "@oal/runner";\n',
+        "utf8"
+      );
+      const result = await run("node", [script], { cwd: tree }).then(
+        (ok) => ({ code: 0, output: ok.stderr }),
+        (error: unknown) => {
+          const failure = error as { code?: number; stderr?: string };
+          return {
+            code: failure.code ?? -1,
+            output: typeof failure.stderr === "string" ? failure.stderr : ""
+          };
+        }
+      );
+      expect(result.output).toContain(
+        "packages/environment imports @oal/runner"
+      );
+      expect(result.code).not.toBe(0);
+    } finally {
+      await rm(tree, { recursive: true, force: true });
+    }
+  });
+});

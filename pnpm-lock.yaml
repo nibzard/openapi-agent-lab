@@ -199,6 +199,30 @@ importers:
         specifier: workspace:*
         version: link:../evidence
 
+  packages/environment:
+    dependencies:
+      '@oal/behavior-api':
+        specifier: workspace:*
+        version: link:../behavior-api
+      '@oal/behavior-runtime':
+        specifier: workspace:*
+        version: link:../behavior-runtime
+      '@oal/contract-ir':
+        specifier: workspace:*
+        version: link:../contract-ir
+      '@oal/core':
+        specifier: workspace:*
+        version: link:../core
+      '@oal/gateway':
+        specifier: workspace:*
+        version: link:../gateway
+      '@oal/pack':
+        specifier: workspace:*
+        version: link:../pack
+      '@oal/state-store':
+        specifier: workspace:*
+        version: link:../state-store
+
   packages/evaluator:
     dependencies:
       '@oal/core':
@@ -332,6 +356,9 @@ importers:
       '@oal/documentation-facade':
         specifier: workspace:*
         version: link:../documentation-facade
+      '@oal/environment':
+        specifier: workspace:*
+        version: link:../environment
       '@oal/evaluator':
         specifier: workspace:*
         version: link:../evaluator

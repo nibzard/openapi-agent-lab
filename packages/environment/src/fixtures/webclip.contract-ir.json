@@ -1,0 +1,1417 @@
+{
+  "$schema": "https://agentlab.dev/schemas/contract-ir.v1.json",
+  "api": {
+    "description": "webclip captures a live web page as a clip, renders it, extracts its text, and exports the capture. A new clip starts in the pending status. Rendering moves it to rendered or failed. Extraction works only on a rendered clip and moves it to extracted. The content endpoint serves the captured representation, guided by the clip's format and the Accept header. Every request needs a bearer token.",
+    "servers": [
+      {
+        "description": "Public endpoint. The lab serves a local mock instead.",
+        "url": "https://api.webclip.example.com",
+        "variables": {}
+      }
+    ],
+    "title": "webclip",
+    "version": "1.0.0"
+  },
+  "compiler": { "name": "@oal/openapi", "version": "0.1.0" },
+  "diagnostics": [
+    {
+      "code": "OAL-CAP-MEDIA-UNSUPPORTED",
+      "details": {
+        "level": "approximated",
+        "reason_codes": ["media:application/xml"]
+      },
+      "document_uri": "contract/openapi.json",
+      "json_pointer": "#/paths/~1v1~1clips~1{clipId}~1content/get/responses/200/content/image~1svg+xml",
+      "message": "Media type 'image/svg+xml' is approximated.",
+      "operation_key": "path:GET /v1/clips/{clipId}/content",
+      "phase": "compile",
+      "related": [],
+      "retryable": false,
+      "severity": "info"
+    }
+  ],
+  "extensions": {},
+  "kind": "ContractIR",
+  "operations": [
+    {
+      "callbacks": [],
+      "deprecated": false,
+      "description": "Deletes the clip with the given identifier. The response has no body. A deleted clip returns 404 on every later read.",
+      "extensions": {},
+      "key": "path:DELETE /v1/clips/{clipId}",
+      "method": "DELETE",
+      "operation_id": "delete_clip",
+      "parameters": [
+        {
+          "allow_reserved": false,
+          "content": null,
+          "deprecated": false,
+          "description": "Identifier of the clip.",
+          "examples": [],
+          "explode": false,
+          "location": "path",
+          "name": "clipId",
+          "required": true,
+          "schema_ref": "sch_2cf1977ef228",
+          "source_pointer": "#/paths/~1v1~1clips~1{clipId}/parameters/0",
+          "style": "simple",
+          "support": "supported",
+          "support_reason_codes": []
+        }
+      ],
+      "path_template": "/v1/clips/{clipId}",
+      "request_body": null,
+      "responses": [
+        {
+          "content": [],
+          "description": "The clip was deleted. The response has no body.",
+          "headers": [],
+          "selector": "204",
+          "selector_kind": "exact",
+          "source_pointer": "#/paths/~1v1~1clips~1{clipId}/delete/responses/204",
+          "status": 204
+        },
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_a389cf892a55",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "No clip has this identifier.",
+          "headers": [],
+          "selector": "404",
+          "selector_kind": "exact",
+          "source_pointer": "#/components/responses/NotFound",
+          "status": 404
+        }
+      ],
+      "route_segments": [
+        { "kind": "literal", "value": "v1" },
+        { "kind": "literal", "value": "clips" },
+        { "kind": "parameter", "value": "clipId" }
+      ],
+      "security": {
+        "alternatives": [
+          { "schemes": [{ "name": "bearerAuth", "scopes": [] }] }
+        ],
+        "anonymous": false
+      },
+      "servers": [
+        {
+          "description": "Public endpoint. The lab serves a local mock instead.",
+          "url": "https://api.webclip.example.com",
+          "variables": {}
+        }
+      ],
+      "source_pointer": "#/paths/~1v1~1clips~1{clipId}/delete",
+      "summary": "Delete one clip",
+      "support": { "diagnostic_codes": [], "level": "supported" },
+      "surface": "path",
+      "tags": ["clips"],
+      "tool_name": "delete_clip",
+      "uid": "op_e163578d11ac"
+    },
+    {
+      "callbacks": [],
+      "deprecated": false,
+      "description": "Returns the calling account, its plan, and how many clips of the plan limit it used. Every created clip counts against the limit; a deleted clip frees its slot on the next read.",
+      "extensions": {},
+      "key": "path:GET /v1/account",
+      "method": "GET",
+      "operation_id": "get_account",
+      "parameters": [],
+      "path_template": "/v1/account",
+      "request_body": null,
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_a7e30540f8a6",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "The account and its quota state.",
+          "headers": [],
+          "selector": "200",
+          "selector_kind": "exact",
+          "source_pointer": "#/paths/~1v1~1account/get/responses/200",
+          "status": 200
+        },
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_a389cf892a55",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "The bearer token is missing or not valid.",
+          "headers": [],
+          "selector": "401",
+          "selector_kind": "exact",
+          "source_pointer": "#/components/responses/Unauthorized",
+          "status": 401
+        }
+      ],
+      "route_segments": [
+        { "kind": "literal", "value": "v1" },
+        { "kind": "literal", "value": "account" }
+      ],
+      "security": {
+        "alternatives": [
+          { "schemes": [{ "name": "bearerAuth", "scopes": [] }] }
+        ],
+        "anonymous": false
+      },
+      "servers": [
+        {
+          "description": "Public endpoint. The lab serves a local mock instead.",
+          "url": "https://api.webclip.example.com",
+          "variables": {}
+        }
+      ],
+      "source_pointer": "#/paths/~1v1~1account/get",
+      "summary": "Read the account quota",
+      "support": { "diagnostic_codes": [], "level": "supported" },
+      "surface": "path",
+      "tags": ["account"],
+      "tool_name": "get_account",
+      "uid": "op_ec8a724edec3"
+    },
+    {
+      "callbacks": [],
+      "deprecated": false,
+      "description": "Returns one page of clips, newest first. Pass the nextCursor value from one response as the cursor of the next request. An empty nextCursor means the last page.",
+      "extensions": {},
+      "key": "path:GET /v1/clips",
+      "method": "GET",
+      "operation_id": "list_clips",
+      "parameters": [
+        {
+          "allow_reserved": false,
+          "content": null,
+          "default_value": 20,
+          "deprecated": false,
+          "description": "Clips per page. The maximum is 100.",
+          "examples": [{ "name": "limit", "value": 20 }],
+          "explode": true,
+          "location": "query",
+          "name": "limit",
+          "required": false,
+          "schema_ref": "sch_7032f9387a1b",
+          "source_pointer": "#/paths/~1v1~1clips/get/parameters/0",
+          "style": "form",
+          "support": "supported",
+          "support_reason_codes": []
+        },
+        {
+          "allow_reserved": false,
+          "content": null,
+          "deprecated": false,
+          "description": "Opaque page cursor returned by a previous list response. Send it back unchanged.",
+          "examples": [{ "name": "cursor", "value": "cur_9x2m1b4q" }],
+          "explode": true,
+          "location": "query",
+          "name": "cursor",
+          "required": false,
+          "schema_ref": "sch_9ac136edb99a",
+          "source_pointer": "#/paths/~1v1~1clips/get/parameters/1",
+          "style": "form",
+          "support": "supported",
+          "support_reason_codes": []
+        }
+      ],
+      "path_template": "/v1/clips",
+      "request_body": null,
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [
+                {
+                  "name": "one-page",
+                  "summary": "One clip and the cursor of the next page",
+                  "value": {
+                    "items": [
+                      {
+                        "created_at": "2026-08-29T09:14:00Z",
+                        "format": "markdown",
+                        "id": "clip_01h8x9k4m2",
+                        "status": "pending",
+                        "url": "https://example.com/essay"
+                      }
+                    ],
+                    "nextCursor": "cur_9x2m1b4q"
+                  }
+                }
+              ],
+              "media_type": "application/json",
+              "schema_ref": "sch_6869b1b31b77",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "One page of clips.",
+          "headers": [],
+          "selector": "200",
+          "selector_kind": "exact",
+          "source_pointer": "#/paths/~1v1~1clips/get/responses/200",
+          "status": 200
+        },
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_a389cf892a55",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "The bearer token is missing or not valid.",
+          "headers": [],
+          "selector": "401",
+          "selector_kind": "exact",
+          "source_pointer": "#/components/responses/Unauthorized",
+          "status": 401
+        }
+      ],
+      "route_segments": [
+        { "kind": "literal", "value": "v1" },
+        { "kind": "literal", "value": "clips" }
+      ],
+      "security": {
+        "alternatives": [
+          { "schemes": [{ "name": "bearerAuth", "scopes": [] }] }
+        ],
+        "anonymous": false
+      },
+      "servers": [
+        {
+          "description": "Public endpoint. The lab serves a local mock instead.",
+          "url": "https://api.webclip.example.com",
+          "variables": {}
+        }
+      ],
+      "source_pointer": "#/paths/~1v1~1clips/get",
+      "summary": "List clips",
+      "support": { "diagnostic_codes": [], "level": "supported" },
+      "surface": "path",
+      "tags": ["clips"],
+      "tool_name": "list_clips",
+      "uid": "op_0e568f604988"
+    },
+    {
+      "callbacks": [],
+      "deprecated": false,
+      "description": "Returns the clip with the given identifier, including its current status.",
+      "extensions": {},
+      "key": "path:GET /v1/clips/{clipId}",
+      "method": "GET",
+      "operation_id": "get_clip",
+      "parameters": [
+        {
+          "allow_reserved": false,
+          "content": null,
+          "deprecated": false,
+          "description": "Identifier of the clip.",
+          "examples": [],
+          "explode": false,
+          "location": "path",
+          "name": "clipId",
+          "required": true,
+          "schema_ref": "sch_2cf1977ef228",
+          "source_pointer": "#/paths/~1v1~1clips~1{clipId}/parameters/0",
+          "style": "simple",
+          "support": "supported",
+          "support_reason_codes": []
+        }
+      ],
+      "path_template": "/v1/clips/{clipId}",
+      "request_body": null,
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_6f2b3dc6b24d",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "The clip.",
+          "headers": [],
+          "selector": "200",
+          "selector_kind": "exact",
+          "source_pointer": "#/paths/~1v1~1clips~1{clipId}/get/responses/200",
+          "status": 200
+        },
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_a389cf892a55",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "No clip has this identifier.",
+          "headers": [],
+          "selector": "404",
+          "selector_kind": "exact",
+          "source_pointer": "#/components/responses/NotFound",
+          "status": 404
+        }
+      ],
+      "route_segments": [
+        { "kind": "literal", "value": "v1" },
+        { "kind": "literal", "value": "clips" },
+        { "kind": "parameter", "value": "clipId" }
+      ],
+      "security": {
+        "alternatives": [
+          { "schemes": [{ "name": "bearerAuth", "scopes": [] }] }
+        ],
+        "anonymous": false
+      },
+      "servers": [
+        {
+          "description": "Public endpoint. The lab serves a local mock instead.",
+          "url": "https://api.webclip.example.com",
+          "variables": {}
+        }
+      ],
+      "source_pointer": "#/paths/~1v1~1clips~1{clipId}/get",
+      "summary": "Read one clip",
+      "support": { "diagnostic_codes": [], "level": "supported" },
+      "surface": "path",
+      "tags": ["clips"],
+      "tool_name": "get_clip",
+      "uid": "op_219b8b367042"
+    },
+    {
+      "callbacks": [],
+      "deprecated": false,
+      "description": "Serves the captured representation of one clip. The served representation depends on the clip's format and the Accept header. A markdown or html clip serves text/markdown. An image clip serves image/svg+xml. Send the Accept header that names the representation you want. When the Accept header names no representation the clip can serve, the service answers 406.",
+      "extensions": {},
+      "key": "path:GET /v1/clips/{clipId}/content",
+      "method": "GET",
+      "operation_id": "get_clip_content",
+      "parameters": [
+        {
+          "allow_reserved": false,
+          "content": null,
+          "deprecated": false,
+          "description": "Identifier of the clip to export.",
+          "examples": [],
+          "explode": false,
+          "location": "path",
+          "name": "clipId",
+          "required": true,
+          "schema_ref": "sch_2cf1977ef228",
+          "source_pointer": "#/paths/~1v1~1clips~1{clipId}~1content/get/parameters/0",
+          "style": "simple",
+          "support": "supported",
+          "support_reason_codes": []
+        }
+      ],
+      "path_template": "/v1/clips/{clipId}/content",
+      "request_body": null,
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [
+                {
+                  "name": null,
+                  "summary": null,
+                  "value": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1440\" height=\"900\"><rect width=\"1440\" height=\"900\" fill=\"#f5f2ea\"/><text x=\"72\" y=\"96\" font-family=\"Georgia\" font-size=\"36\">Example Dashboard</text></svg>"
+                }
+              ],
+              "media_type": "image/svg+xml",
+              "schema_ref": null,
+              "support": "approximated",
+              "support_reason_codes": ["media:application/xml"]
+            },
+            {
+              "examples": [],
+              "media_type": "text/markdown",
+              "schema_ref": "sch_5e5682ed53f6",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "The captured representation. The served media type follows the clip's format and the Accept header: image clips serve image/svg+xml, markdown and html clips serve text/markdown. Ask with Accept, because the two representations carry different schemas.",
+          "headers": [],
+          "selector": "200",
+          "selector_kind": "exact",
+          "source_pointer": "#/paths/~1v1~1clips~1{clipId}~1content/get/responses/200",
+          "status": 200
+        },
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_a389cf892a55",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "No clip has this identifier.",
+          "headers": [],
+          "selector": "404",
+          "selector_kind": "exact",
+          "source_pointer": "#/components/responses/NotFound",
+          "status": 404
+        },
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_a389cf892a55",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "The Accept header names no representation this clip can serve.",
+          "headers": [],
+          "selector": "406",
+          "selector_kind": "exact",
+          "source_pointer": "#/components/responses/NotAcceptable",
+          "status": 406
+        }
+      ],
+      "route_segments": [
+        { "kind": "literal", "value": "v1" },
+        { "kind": "literal", "value": "clips" },
+        { "kind": "parameter", "value": "clipId" },
+        { "kind": "literal", "value": "content" }
+      ],
+      "security": {
+        "alternatives": [
+          { "schemes": [{ "name": "bearerAuth", "scopes": [] }] }
+        ],
+        "anonymous": false
+      },
+      "servers": [
+        {
+          "description": "Public endpoint. The lab serves a local mock instead.",
+          "url": "https://api.webclip.example.com",
+          "variables": {}
+        }
+      ],
+      "source_pointer": "#/paths/~1v1~1clips~1{clipId}~1content/get",
+      "summary": "Fetch the captured representation",
+      "support": {
+        "diagnostic_codes": ["OAL-CAP-MEDIA-UNSUPPORTED"],
+        "level": "approximated"
+      },
+      "surface": "path",
+      "tags": ["clips"],
+      "tool_name": "get_clip_content",
+      "uid": "op_0e7feb6207e0"
+    },
+    {
+      "callbacks": [],
+      "deprecated": false,
+      "description": "Creates one clip of a single web page and returns it in the pending status. The format field fixes the captured representation for the clip's lifetime: markdown serves extracted text, html serves the cleaned page, image serves a rendered picture. Rendering and extraction are separate steps; creation only records the request.",
+      "extensions": {},
+      "key": "path:POST /v1/clips",
+      "method": "POST",
+      "operation_id": "create_clip",
+      "parameters": [],
+      "path_template": "/v1/clips",
+      "request_body": {
+        "content": [
+          {
+            "examples": [
+              {
+                "name": "image-clip",
+                "summary": "An image clip without notes",
+                "value": {
+                  "format": "image",
+                  "url": "https://example.com/dashboard"
+                }
+              },
+              {
+                "name": "markdown-clip",
+                "summary": "A markdown clip with a note",
+                "value": {
+                  "format": "markdown",
+                  "notes": "Source for the weekly digest",
+                  "url": "https://example.com/essay"
+                }
+              }
+            ],
+            "media_type": "application/json",
+            "schema_ref": "sch_1964b06ef9b2",
+            "support": "supported",
+            "support_reason_codes": ["media:supported"]
+          }
+        ],
+        "description": null,
+        "required": true,
+        "source_pointer": "#/paths/~1v1~1clips/post/requestBody"
+      },
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_6f2b3dc6b24d",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "The clip was created. It starts in the pending status.",
+          "headers": [],
+          "selector": "201",
+          "selector_kind": "exact",
+          "source_pointer": "#/paths/~1v1~1clips/post/responses/201",
+          "status": 201
+        },
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_a389cf892a55",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "The request body is not valid JSON or cannot be parsed.",
+          "headers": [],
+          "selector": "400",
+          "selector_kind": "exact",
+          "source_pointer": "#/components/responses/BadRequest",
+          "status": 400
+        },
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_3670dc7eb85f",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "The request body parsed but failed validation. Read details for the invalid fields.",
+          "headers": [],
+          "selector": "422",
+          "selector_kind": "exact",
+          "source_pointer": "#/components/responses/Unprocessable",
+          "status": 422
+        }
+      ],
+      "route_segments": [
+        { "kind": "literal", "value": "v1" },
+        { "kind": "literal", "value": "clips" }
+      ],
+      "security": {
+        "alternatives": [
+          { "schemes": [{ "name": "bearerAuth", "scopes": [] }] }
+        ],
+        "anonymous": false
+      },
+      "servers": [
+        {
+          "description": "Public endpoint. The lab serves a local mock instead.",
+          "url": "https://api.webclip.example.com",
+          "variables": {}
+        }
+      ],
+      "source_pointer": "#/paths/~1v1~1clips/post",
+      "summary": "Create a clip",
+      "support": { "diagnostic_codes": [], "level": "supported" },
+      "surface": "path",
+      "tags": ["clips"],
+      "tool_name": "create_clip",
+      "uid": "op_ee204432a601"
+    },
+    {
+      "callbacks": [],
+      "deprecated": false,
+      "description": "Extracts the visible text of the stored render and counts its words. The clip must be rendered before extraction; a pending or failed clip answers 409. The request body is optional; without it the service keeps hyperlink text and drops the link targets.",
+      "extensions": {},
+      "key": "path:POST /v1/clips/{clipId}/extract",
+      "method": "POST",
+      "operation_id": "extract_text",
+      "parameters": [
+        {
+          "allow_reserved": false,
+          "content": null,
+          "deprecated": false,
+          "description": "Identifier of the clip to extract.",
+          "examples": [],
+          "explode": false,
+          "location": "path",
+          "name": "clipId",
+          "required": true,
+          "schema_ref": "sch_2cf1977ef228",
+          "source_pointer": "#/paths/~1v1~1clips~1{clipId}~1extract/post/parameters/0",
+          "style": "simple",
+          "support": "supported",
+          "support_reason_codes": []
+        }
+      ],
+      "path_template": "/v1/clips/{clipId}/extract",
+      "request_body": {
+        "content": [
+          {
+            "examples": [
+              {
+                "name": "keep-links",
+                "summary": "Keep hyperlink targets in the text",
+                "value": { "include_links": true }
+              }
+            ],
+            "media_type": "application/json",
+            "schema_ref": "sch_f6b702bc6685",
+            "support": "supported",
+            "support_reason_codes": ["media:supported"]
+          }
+        ],
+        "description": null,
+        "required": false,
+        "source_pointer": "#/paths/~1v1~1clips~1{clipId}~1extract/post/requestBody"
+      },
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_d5d1ec5d4d3b",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "The extraction finished and returned the text.",
+          "headers": [],
+          "selector": "200",
+          "selector_kind": "exact",
+          "source_pointer": "#/paths/~1v1~1clips~1{clipId}~1extract/post/responses/200",
+          "status": 200
+        },
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_a389cf892a55",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "No clip has this identifier.",
+          "headers": [],
+          "selector": "404",
+          "selector_kind": "exact",
+          "source_pointer": "#/components/responses/NotFound",
+          "status": 404
+        },
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_a389cf892a55",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "The clip is not rendered yet. Render the clip first, then extract its text.",
+          "headers": [],
+          "selector": "409",
+          "selector_kind": "exact",
+          "source_pointer": "#/components/responses/Conflict",
+          "status": 409
+        }
+      ],
+      "route_segments": [
+        { "kind": "literal", "value": "v1" },
+        { "kind": "literal", "value": "clips" },
+        { "kind": "parameter", "value": "clipId" },
+        { "kind": "literal", "value": "extract" }
+      ],
+      "security": {
+        "alternatives": [
+          { "schemes": [{ "name": "bearerAuth", "scopes": [] }] }
+        ],
+        "anonymous": false
+      },
+      "servers": [
+        {
+          "description": "Public endpoint. The lab serves a local mock instead.",
+          "url": "https://api.webclip.example.com",
+          "variables": {}
+        }
+      ],
+      "source_pointer": "#/paths/~1v1~1clips~1{clipId}~1extract/post",
+      "summary": "Extract the text of one clip",
+      "support": { "diagnostic_codes": [], "level": "supported" },
+      "surface": "path",
+      "tags": ["clips"],
+      "tool_name": "extract_text",
+      "uid": "op_c346051744bc"
+    },
+    {
+      "callbacks": [],
+      "deprecated": false,
+      "description": "Loads the clipped page in a headless browser and stores the rendered artifact. The request body is optional; without it the service renders with its default viewport and waits for the load event. A clip must exist before it can render.",
+      "extensions": {},
+      "key": "path:POST /v1/clips/{clipId}/render",
+      "method": "POST",
+      "operation_id": "render_clip",
+      "parameters": [
+        {
+          "allow_reserved": false,
+          "content": null,
+          "deprecated": false,
+          "description": "Identifier of the clip to render.",
+          "examples": [],
+          "explode": false,
+          "location": "path",
+          "name": "clipId",
+          "required": true,
+          "schema_ref": "sch_2cf1977ef228",
+          "source_pointer": "#/paths/~1v1~1clips~1{clipId}~1render/post/parameters/0",
+          "style": "simple",
+          "support": "supported",
+          "support_reason_codes": []
+        }
+      ],
+      "path_template": "/v1/clips/{clipId}/render",
+      "request_body": {
+        "content": [
+          {
+            "examples": [
+              {
+                "name": "desktop-viewport",
+                "summary": "A desktop viewport that waits for network idle",
+                "value": {
+                  "viewport": { "height": 900, "width": 1440 },
+                  "wait_for": "networkidle"
+                }
+              }
+            ],
+            "media_type": "application/json",
+            "schema_ref": "sch_165e2fb8b7d7",
+            "support": "supported",
+            "support_reason_codes": ["media:supported"]
+          }
+        ],
+        "description": null,
+        "required": false,
+        "source_pointer": "#/paths/~1v1~1clips~1{clipId}~1render/post/requestBody"
+      },
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_054485bc81f1",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "The render finished. Read status to learn whether it succeeded.",
+          "headers": [],
+          "selector": "200",
+          "selector_kind": "exact",
+          "source_pointer": "#/paths/~1v1~1clips~1{clipId}~1render/post/responses/200",
+          "status": 200
+        },
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_a389cf892a55",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "No clip has this identifier.",
+          "headers": [],
+          "selector": "404",
+          "selector_kind": "exact",
+          "source_pointer": "#/components/responses/NotFound",
+          "status": 404
+        },
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema_ref": "sch_3670dc7eb85f",
+              "support": "supported",
+              "support_reason_codes": ["media:supported"]
+            }
+          ],
+          "description": "The request body parsed but failed validation. Read details for the invalid fields.",
+          "headers": [],
+          "selector": "422",
+          "selector_kind": "exact",
+          "source_pointer": "#/components/responses/Unprocessable",
+          "status": 422
+        }
+      ],
+      "route_segments": [
+        { "kind": "literal", "value": "v1" },
+        { "kind": "literal", "value": "clips" },
+        { "kind": "parameter", "value": "clipId" },
+        { "kind": "literal", "value": "render" }
+      ],
+      "security": {
+        "alternatives": [
+          { "schemes": [{ "name": "bearerAuth", "scopes": [] }] }
+        ],
+        "anonymous": false
+      },
+      "servers": [
+        {
+          "description": "Public endpoint. The lab serves a local mock instead.",
+          "url": "https://api.webclip.example.com",
+          "variables": {}
+        }
+      ],
+      "source_pointer": "#/paths/~1v1~1clips~1{clipId}~1render/post",
+      "summary": "Render one clip",
+      "support": { "diagnostic_codes": [], "level": "supported" },
+      "surface": "path",
+      "tags": ["clips"],
+      "tool_name": "render_clip",
+      "uid": "op_f499f8cf029f"
+    }
+  ],
+  "schema_version": 1,
+  "schemas": {
+    "sch_054485bc81f1": {
+      "document_uri": "contract/openapi.json",
+      "schema": {
+        "additionalProperties": false,
+        "description": "Outcome of one render.",
+        "example": {
+          "clipId": "clip_01h8x9k4m2",
+          "duration_ms": 812,
+          "status": "rendered"
+        },
+        "properties": {
+          "clipId": {
+            "description": "Clip identifier. It starts with clip_ followed by lower case letters and digits.",
+            "examples": ["clip_01h8x9k4m2"],
+            "pattern": "^clip_[0-9a-z]+$",
+            "type": "string"
+          },
+          "duration_ms": {
+            "description": "Wall-clock time the render took, in milliseconds.",
+            "examples": [812],
+            "minimum": 0,
+            "type": "integer"
+          },
+          "status": {
+            "description": "Whether the render stored an artifact.",
+            "enum": ["failed", "rendered"],
+            "examples": ["rendered"],
+            "type": "string"
+          }
+        },
+        "required": ["clipId", "status", "duration_ms"],
+        "type": "object"
+      },
+      "source_pointer": "#/components/schemas/RenderResult",
+      "uid": "sch_054485bc81f1"
+    },
+    "sch_165e2fb8b7d7": {
+      "document_uri": "contract/openapi.json",
+      "schema": {
+        "additionalProperties": false,
+        "description": "Optional render options. Omitted fields take the service defaults.",
+        "example": {
+          "viewport": { "height": 900, "width": 1440 },
+          "wait_for": "networkidle"
+        },
+        "properties": {
+          "viewport": {
+            "additionalProperties": false,
+            "description": "Browser viewport for one render.",
+            "example": { "height": 900, "width": 1440 },
+            "properties": {
+              "height": {
+                "description": "Viewport height in pixels.",
+                "examples": [900],
+                "maximum": 2160,
+                "minimum": 240,
+                "type": "integer"
+              },
+              "width": {
+                "description": "Viewport width in pixels.",
+                "examples": [1440],
+                "maximum": 3840,
+                "minimum": 320,
+                "type": "integer"
+              }
+            },
+            "required": ["width", "height"],
+            "type": "object"
+          },
+          "wait_for": {
+            "description": "Browser event the render waits for before it captures the page.",
+            "enum": ["domcontentloaded", "load", "networkidle"],
+            "examples": ["networkidle"],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "source_pointer": "#/components/schemas/RenderRequest",
+      "uid": "sch_165e2fb8b7d7"
+    },
+    "sch_1964b06ef9b2": {
+      "document_uri": "contract/openapi.json",
+      "schema": {
+        "additionalProperties": false,
+        "description": "Data for a new clip.",
+        "properties": {
+          "format": {
+            "description": "Captured representation of the clip. The value is fixed at creation.",
+            "enum": ["html", "image", "markdown"],
+            "examples": ["markdown"],
+            "type": "string"
+          },
+          "notes": {
+            "description": "Free-form note stored with the clip. The service never parses it.",
+            "examples": ["Source for the weekly digest"],
+            "maxLength": 500,
+            "type": "string"
+          },
+          "url": {
+            "description": "The page to clip. It must be an absolute http or https URL.",
+            "examples": ["https://example.com/essay"],
+            "format": "uri",
+            "maxLength": 2048,
+            "minLength": 8,
+            "type": "string"
+          }
+        },
+        "required": ["url", "format"],
+        "type": "object"
+      },
+      "source_pointer": "#/components/schemas/ClipRequest",
+      "uid": "sch_1964b06ef9b2"
+    },
+    "sch_2cf1977ef228": {
+      "document_uri": "contract/openapi.json",
+      "schema": {
+        "description": "Clip identifier. It starts with clip_ followed by lower case letters and digits.",
+        "examples": ["clip_01h8x9k4m2"],
+        "pattern": "^clip_[0-9a-z]+$",
+        "type": "string"
+      },
+      "source_pointer": "#/components/schemas/ClipId",
+      "uid": "sch_2cf1977ef228"
+    },
+    "sch_3670dc7eb85f": {
+      "document_uri": "contract/openapi.json",
+      "schema": {
+        "additionalProperties": false,
+        "description": "The ErrorResponse the API returns for 422. The details array is always present and never empty.",
+        "example": {
+          "code": "validation_failed",
+          "details": [
+            {
+              "field": "/format",
+              "issue": "must be one of markdown, html, image"
+            }
+          ],
+          "message": "The request body failed validation."
+        },
+        "properties": {
+          "code": {
+            "description": "Stable machine-readable error code, in snake case.",
+            "examples": ["validation_failed"],
+            "type": "string"
+          },
+          "details": {
+            "description": "One entry per invalid field.",
+            "items": {
+              "additionalProperties": false,
+              "description": "One invalid field of a request.",
+              "example": {
+                "field": "/format",
+                "issue": "must be one of markdown, html, image"
+              },
+              "properties": {
+                "field": {
+                  "description": "JSON Pointer of the field the issue is about.",
+                  "examples": ["/format"],
+                  "type": "string"
+                },
+                "issue": {
+                  "description": "What is wrong with the field.",
+                  "examples": ["must be one of markdown, html, image"],
+                  "type": "string"
+                }
+              },
+              "required": ["field", "issue"],
+              "type": "object"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "message": {
+            "description": "Human-readable explanation of the failure.",
+            "examples": ["The request body failed validation."],
+            "type": "string"
+          }
+        },
+        "required": ["code", "message", "details"],
+        "type": "object"
+      },
+      "source_pointer": "#/components/schemas/ValidationErrorResponse",
+      "uid": "sch_3670dc7eb85f"
+    },
+    "sch_5e5682ed53f6": {
+      "document_uri": "contract/openapi.json",
+      "schema": {
+        "description": "Markdown text of the captured page.",
+        "example": "# Example Essay\n\nThe page opens with a thesis statement.\n\n## Section\n\nThe argument follows in three steps.\n",
+        "type": "string"
+      },
+      "source_pointer": "#/paths/~1v1~1clips~1{clipId}~1content/get/responses/200/content/text~1markdown/schema",
+      "uid": "sch_5e5682ed53f6"
+    },
+    "sch_6869b1b31b77": {
+      "document_uri": "contract/openapi.json",
+      "schema": {
+        "description": "One page of clips.",
+        "properties": {
+          "items": {
+            "description": "Clips on this page, newest first.",
+            "items": {
+              "description": "One stored clip.",
+              "example": {
+                "created_at": "2026-08-29T09:14:00Z",
+                "format": "markdown",
+                "id": "clip_01h8x9k4m2",
+                "status": "pending",
+                "url": "https://example.com/essay"
+              },
+              "properties": {
+                "created_at": {
+                  "description": "RFC 3339 date and time in UTC.",
+                  "examples": ["2026-08-29T09:14:00Z"],
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "format": {
+                  "description": "Captured representation of the clip. The value is fixed at creation.",
+                  "enum": ["html", "image", "markdown"],
+                  "examples": ["markdown"],
+                  "type": "string"
+                },
+                "id": {
+                  "description": "Clip identifier. It starts with clip_ followed by lower case letters and digits.",
+                  "examples": ["clip_01h8x9k4m2"],
+                  "pattern": "^clip_[0-9a-z]+$",
+                  "type": "string"
+                },
+                "status": {
+                  "description": "Lifecycle status of the clip.",
+                  "enum": ["extracted", "failed", "pending", "rendered"],
+                  "examples": ["pending"],
+                  "type": "string"
+                },
+                "url": {
+                  "description": "The clipped page.",
+                  "examples": ["https://example.com/essay"],
+                  "format": "uri",
+                  "type": "string"
+                }
+              },
+              "required": ["id", "url", "format", "status", "created_at"],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "description": "Opaque cursor of the next page. It is empty on the last page.",
+            "examples": ["cur_9x2m1b4q"],
+            "type": "string"
+          }
+        },
+        "required": ["items", "nextCursor"],
+        "type": "object"
+      },
+      "source_pointer": "#/components/schemas/ClipList",
+      "uid": "sch_6869b1b31b77"
+    },
+    "sch_6f2b3dc6b24d": {
+      "document_uri": "contract/openapi.json",
+      "schema": {
+        "description": "One stored clip.",
+        "example": {
+          "created_at": "2026-08-29T09:14:00Z",
+          "format": "markdown",
+          "id": "clip_01h8x9k4m2",
+          "status": "pending",
+          "url": "https://example.com/essay"
+        },
+        "properties": {
+          "created_at": {
+            "description": "RFC 3339 date and time in UTC.",
+            "examples": ["2026-08-29T09:14:00Z"],
+            "format": "date-time",
+            "type": "string"
+          },
+          "format": {
+            "description": "Captured representation of the clip. The value is fixed at creation.",
+            "enum": ["html", "image", "markdown"],
+            "examples": ["markdown"],
+            "type": "string"
+          },
+          "id": {
+            "description": "Clip identifier. It starts with clip_ followed by lower case letters and digits.",
+            "examples": ["clip_01h8x9k4m2"],
+            "pattern": "^clip_[0-9a-z]+$",
+            "type": "string"
+          },
+          "status": {
+            "description": "Lifecycle status of the clip.",
+            "enum": ["extracted", "failed", "pending", "rendered"],
+            "examples": ["pending"],
+            "type": "string"
+          },
+          "url": {
+            "description": "The clipped page.",
+            "examples": ["https://example.com/essay"],
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": ["id", "url", "format", "status", "created_at"],
+        "type": "object"
+      },
+      "source_pointer": "#/components/schemas/Clip",
+      "uid": "sch_6f2b3dc6b24d"
+    },
+    "sch_7032f9387a1b": {
+      "document_uri": "contract/openapi.json",
+      "schema": {
+        "default": 20,
+        "maximum": 100,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "source_pointer": "#/paths/~1v1~1clips/get/parameters/0/schema",
+      "uid": "sch_7032f9387a1b"
+    },
+    "sch_9ac136edb99a": {
+      "document_uri": "contract/openapi.json",
+      "schema": { "minLength": 1, "type": "string" },
+      "source_pointer": "#/paths/~1v1~1clips/get/parameters/1/schema",
+      "uid": "sch_9ac136edb99a"
+    },
+    "sch_a389cf892a55": {
+      "document_uri": "contract/openapi.json",
+      "schema": {
+        "additionalProperties": false,
+        "description": "Error response body.",
+        "example": {
+          "code": "not_found",
+          "message": "No clip has this identifier."
+        },
+        "properties": {
+          "code": {
+            "description": "Stable machine-readable error code, in snake case.",
+            "examples": ["not_found"],
+            "type": "string"
+          },
+          "details": {
+            "description": "One entry per field the failure names. Absent when the failure names no field.",
+            "items": {
+              "additionalProperties": false,
+              "description": "One invalid field of a request.",
+              "example": {
+                "field": "/format",
+                "issue": "must be one of markdown, html, image"
+              },
+              "properties": {
+                "field": {
+                  "description": "JSON Pointer of the field the issue is about.",
+                  "examples": ["/format"],
+                  "type": "string"
+                },
+                "issue": {
+                  "description": "What is wrong with the field.",
+                  "examples": ["must be one of markdown, html, image"],
+                  "type": "string"
+                }
+              },
+              "required": ["field", "issue"],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "message": {
+            "description": "Human-readable explanation of the failure.",
+            "examples": ["No clip has this identifier."],
+            "type": "string"
+          }
+        },
+        "required": ["code", "message"],
+        "type": "object"
+      },
+      "source_pointer": "#/components/schemas/ErrorResponse",
+      "uid": "sch_a389cf892a55"
+    },
+    "sch_a7e30540f8a6": {
+      "document_uri": "contract/openapi.json",
+      "schema": {
+        "additionalProperties": false,
+        "description": "The calling account and its quota state.",
+        "example": {
+          "account_id": "acct_7d2m01",
+          "clips_limit": 100,
+          "clips_used": 3,
+          "plan": "free"
+        },
+        "properties": {
+          "account_id": {
+            "description": "Stable identifier of the account.",
+            "examples": ["acct_7d2m01"],
+            "pattern": "^acct_[0-9a-z]+$",
+            "type": "string"
+          },
+          "clips_limit": {
+            "description": "Clips the plan allows in total.",
+            "examples": [100],
+            "minimum": 0,
+            "type": "integer"
+          },
+          "clips_used": {
+            "description": "Clips counted against the plan limit right now.",
+            "examples": [3],
+            "minimum": 0,
+            "type": "integer"
+          },
+          "plan": {
+            "description": "Account plan.",
+            "enum": ["free", "pro"],
+            "examples": ["free"],
+            "type": "string"
+          }
+        },
+        "required": ["account_id", "plan", "clips_used", "clips_limit"],
+        "type": "object"
+      },
+      "source_pointer": "#/components/schemas/Account",
+      "uid": "sch_a7e30540f8a6"
+    },
+    "sch_d5d1ec5d4d3b": {
+      "document_uri": "contract/openapi.json",
+      "schema": {
+        "additionalProperties": false,
+        "description": "Text extracted from one render.",
+        "example": {
+          "clipId": "clip_01h8x9k4m2",
+          "text": "Example Essay\n\nThe page opens with a thesis statement.",
+          "word_count": 42
+        },
+        "properties": {
+          "clipId": {
+            "description": "Clip identifier. It starts with clip_ followed by lower case letters and digits.",
+            "examples": ["clip_01h8x9k4m2"],
+            "pattern": "^clip_[0-9a-z]+$",
+            "type": "string"
+          },
+          "text": {
+            "description": "Visible text of the rendered page.",
+            "examples": [
+              "Example Essay\n\nThe page opens with a thesis statement."
+            ],
+            "type": "string"
+          },
+          "word_count": {
+            "description": "Number of words in the extracted text.",
+            "examples": [42],
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": ["clipId", "text", "word_count"],
+        "type": "object"
+      },
+      "source_pointer": "#/components/schemas/ExtractResult",
+      "uid": "sch_d5d1ec5d4d3b"
+    },
+    "sch_f6b702bc6685": {
+      "document_uri": "contract/openapi.json",
+      "schema": {
+        "additionalProperties": false,
+        "description": "Optional extraction options.",
+        "example": { "include_links": true },
+        "properties": {
+          "include_links": {
+            "default": false,
+            "description": "Keep hyperlink targets in the extracted text. The default is false.",
+            "examples": [true],
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "source_pointer": "#/components/schemas/ExtractRequest",
+      "uid": "sch_f6b702bc6685"
+    }
+  },
+  "security_schemes": {
+    "bearerAuth": {
+      "bearer_format": null,
+      "description": "Use the bearer token issued with the account. Send it as the Authorization: Bearer header.",
+      "flows": null,
+      "location": null,
+      "name": "bearerAuth",
+      "open_id_connect_url": null,
+      "scheme": "bearer",
+      "source_pointer": "#/components/securitySchemes/bearerAuth",
+      "support": "supported",
+      "support_reason_codes": [],
+      "type": "http",
+      "wire_name": null
+    }
+  },
+  "source": {
+    "documents": [
+      {
+        "sha256": "147a878419df85366fd88235e6c9324fbbcf7f52f3717bfac5a95baed0fc3841",
+        "uri": "contract/openapi.json"
+      }
+    ],
+    "entrypoint": "contract/openapi.json",
+    "execution_sha256": "30862ef707c22f17f8df6b9703ea941bc113d948a6042b47911c43bae0cf496b",
+    "media_type": "application/json",
+    "openapi_version": "3.1.0",
+    "semantic_sha256": "ec35f98fbd716bcedce8d62e7457b9819770cfcddee8ed4b214f8e42d3a7338b",
+    "sha256": "147a878419df85366fd88235e6c9324fbbcf7f52f3717bfac5a95baed0fc3841"
+  },
+  "webhooks": []
+}

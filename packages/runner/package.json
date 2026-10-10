@@ -16,6 +16,7 @@
     "@oal/contract-ir": "workspace:*",
     "@oal/core": "workspace:*",
     "@oal/documentation-facade": "workspace:*",
+    "@oal/environment": "workspace:*",
     "@oal/evaluator": "workspace:*",
     "@oal/evidence": "workspace:*",
     "@oal/gateway": "workspace:*",

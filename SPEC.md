@@ -851,6 +851,7 @@ openapi-agent-lab/
     statistics/
     report/
     runner/
+    environment/
     agent-adapter/
     agent-codex/
     agent-generic/
