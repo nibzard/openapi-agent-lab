@@ -30,8 +30,8 @@ const ENVIRONMENT_ALLOWED_IMPORTS = new Set([
 const ENVIRONMENT_FORBIDDEN_PATTERN =
   /^@oal\/(?:runner|agent-adapter|agent-codex|agent-generic|evaluator|mock-adapter|study|study-ir|scheduler|tools|report|statistics|cli)$/u;
 
-/** The one package allowed to import the environment owner. */
-const ENVIRONMENT_CONSUMERS = new Set(["packages/runner", "apps"]);
+/** The packages allowed to import the environment owner. */
+const ENVIRONMENT_CONSUMERS = new Set(["packages/runner", "apps/cli"]);
 
 /** Collect every workspace specifier imported by the files of one tree. */
 async function importedWorkspaceSpecifiers(sourceDir) {

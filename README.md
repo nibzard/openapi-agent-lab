@@ -30,11 +30,13 @@ The execution surface splits into three states:
 - **Implemented components, not connected.** The direct-tool and
   catalog-tool surfaces and the study scheduler exist as tested packages.
   The run commands do not drive them yet.
-- **Refused by the command-line interface.** `oal serve --mode scenario`,
-  `oal run --exposure direct-tools|catalog-tools`, and participant launch in
-  `oal study run` exit with code `4` and a diagnostic. The
+- **Refused by the command-line interface.** `oal run --exposure
+  direct-tools|catalog-tools` and participant launch in `oal study run` exit
+  with code `4` and a diagnostic. The
   [review fix plan](docs/review-fix-plan.md) tracks the work that connects
-  them.
+  them. `oal serve --mode scenario` now serves a pack's scenario behavior
+  through the shared environment owner: the same validation, transaction,
+  and shutdown path `oal run` uses.
 
 ## What the lab does
 

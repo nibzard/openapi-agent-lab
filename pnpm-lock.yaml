@@ -56,6 +56,9 @@ importers:
       '@oal/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@oal/environment':
+        specifier: workspace:*
+        version: link:../../packages/environment
       '@oal/evaluator':
         specifier: workspace:*
         version: link:../../packages/evaluator

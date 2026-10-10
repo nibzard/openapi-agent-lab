@@ -288,58 +288,73 @@ describe("environment transactions", () => {
     }
   }, 30_000);
 
-  const failureModes: readonly string[] = [
-    "invalid-response",
-    "invalid-state",
-    "timeout",
-    "oversize"
-  ];
+  /**
+   * One failure-mode case: a committed exchange, the failing exchange,
+   * and the next committed exchange. The failing exchange must leave
+   * the state, the counters, and the stream where the first one ended.
+   * Each mode has its own literal test so the acceptance map can name
+   * every title.
+   */
+  async function failureModeCase(
+    mode: string,
+    options: {
+      readonly behaviorTimeoutMs?: number;
+      readonly maxStateBytes?: number;
+      readonly maxPersistedStateBytes?: number;
+    } = {},
+    expectedRollbacks = 1
+  ): Promise<void> {
+    const environment = await openFixtureEnvironment(mode, options);
+    try {
+      const first = await request(environment, "GET", "/v1/account");
+      expect(first.status).toBe(200);
+      expect(environment.finalState()?.revision).toBe(1);
 
-  for (const mode of failureModes) {
-    it(`restores state, identifiers, and draws after ${mode}`, async () => {
-      const environment = await openFixtureEnvironment(
-        mode,
-        mode === "timeout"
-          ? { behaviorTimeoutMs: 200 }
-          : mode === "oversize"
-            ? {
-                maxStateBytes: 2 * 1024 * 1024,
-                maxPersistedStateBytes: 512 * 1024
-              }
-            : {}
-      );
-      try {
-        const first = await request(environment, "GET", "/v1/account");
-        expect(first.status).toBe(200);
-        const revisionAfterFirst = environment.finalState()?.revision;
-        expect(revisionAfterFirst).toBe(1);
+      // The failing exchange must not mutate anything the next
+      // request can observe.
+      const failed = await request(environment, "GET", "/v1/account");
+      expect(failed.status).toBeGreaterThanOrEqual(500);
+      expect(environment.finalState()?.revision).toBe(1);
+      expect(environment.finalState()?.state).toEqual({ calls: 1 });
 
-        // The failing exchange must not mutate anything the next
-        // request can observe.
-        const failed = await request(environment, "GET", "/v1/account");
-        expect(failed.status).toBeGreaterThanOrEqual(500);
-        expect(environment.finalState()?.revision).toBe(1);
-        expect(environment.finalState()?.state).toEqual({ calls: 1 });
+      // The next committed exchange continues exactly where the
+      // last committed one ended: the next identifier and the next
+      // draw show no gap and no repetition.
+      const third = await request(environment, "GET", "/v1/account");
+      expect(third.status).toBe(200);
+      const thirdBody = third.body as { id: string; draw: number };
+      expect(thirdBody.id).toBe("thing_00000002");
 
-        // The next committed exchange continues exactly where the
-        // last committed one ended: the next identifier and the next
-        // draw show no gap and no repetition.
-        const third = await request(environment, "GET", "/v1/account");
-        expect(third.status).toBe(200);
-        const thirdBody = third.body as { id: string; draw: number };
-        expect(thirdBody.id).toBe("thing_00000002");
-
-        // The failure evidence stays distinguishable from the
-        // committed evidence: two committed exchanges plus one failed
-        // request row. A failed database commit is not a rollback -
-        // the store refused the whole transaction - while the other
-        // modes roll back explicitly.
-        expect(environment.semanticEvents().length).toBe(0);
-        expect(environment.state.rollbacks).toBe(mode === "oversize" ? 0 : 1);
-        expect(environment.state.appliedEffects).toEqual(["echo", "echo"]);
-      } finally {
-        await environment.close();
-      }
-    }, 30_000);
+      // The failure evidence stays distinguishable from the
+      // committed evidence: two committed exchanges plus one failed
+      // request row. A failed database commit is not a rollback -
+      // the store refused the whole transaction - while the other
+      // modes roll back explicitly.
+      expect(environment.semanticEvents().length).toBe(0);
+      expect(environment.state.rollbacks).toBe(expectedRollbacks);
+      expect(environment.state.appliedEffects).toEqual(["echo", "echo"]);
+    } finally {
+      await environment.close();
+    }
   }
+
+  it("restores state, identifiers, and draws after invalid-response", async () => {
+    await failureModeCase("invalid-response");
+  }, 30_000);
+
+  it("restores state, identifiers, and draws after invalid-state", async () => {
+    await failureModeCase("invalid-state");
+  }, 30_000);
+
+  it("restores state, identifiers, and draws after timeout", async () => {
+    await failureModeCase("timeout", { behaviorTimeoutMs: 200 }, 1);
+  }, 30_000);
+
+  it("restores state, identifiers, and draws after oversize", async () => {
+    await failureModeCase(
+      "oversize",
+      { maxStateBytes: 2 * 1024 * 1024, maxPersistedStateBytes: 512 * 1024 },
+      0
+    );
+  }, 30_000);
 });

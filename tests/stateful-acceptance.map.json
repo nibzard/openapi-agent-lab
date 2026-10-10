@@ -31,9 +31,7 @@
         "commit": "7d6740a",
         "command": "pnpm exec vitest run tests/stateful-acceptance.test.ts tests/schemas.test.ts"
       },
-      "depends_on": [
-        "SE-P0-01"
-      ]
+      "depends_on": ["SE-P0-01"]
     },
     {
       "id": "SE-P0-03",
@@ -49,9 +47,7 @@
         "commit": "5645ad6",
         "command": "pnpm exec vitest run apps/cli/src/run.test.ts"
       },
-      "depends_on": [
-        "SE-P0-02"
-      ]
+      "depends_on": ["SE-P0-02"]
     },
     {
       "id": "SE-P1-01",
@@ -67,9 +63,7 @@
         "commit": "0c85d3d",
         "command": "pnpm exec vitest run packages/environment tests/ci-gates.test.ts apps/cli/src/run.test.ts"
       },
-      "depends_on": [
-        "SE-P0-03"
-      ]
+      "depends_on": ["SE-P0-03"]
     },
     {
       "id": "SE-P1-02",
@@ -87,9 +81,7 @@
         "commit": "c738d53",
         "command": "pnpm exec vitest run packages/pack packages/environment apps/cli/src/run.test.ts"
       },
-      "depends_on": [
-        "SE-P1-01"
-      ]
+      "depends_on": ["SE-P1-01"]
     },
     {
       "id": "SE-P1-03",
@@ -107,9 +99,7 @@
         "commit": "e674361",
         "command": "pnpm exec vitest run packages/environment tests/schemas.test.ts"
       },
-      "depends_on": [
-        "SE-P1-02"
-      ]
+      "depends_on": ["SE-P1-02"]
     },
     {
       "id": "SE-P1-04",
@@ -118,9 +108,7 @@
       "status": "pending",
       "tests": [],
       "evidence": null,
-      "depends_on": [
-        "SE-P1-03"
-      ],
+      "depends_on": ["SE-P1-03"],
       "remaining": "Implement pack-based scenario serving through the shared environment with lifecycle evidence and shutdown handling."
     },
     {
@@ -130,9 +118,7 @@
       "status": "pending",
       "tests": [],
       "evidence": null,
-      "depends_on": [
-        "SE-P1-04"
-      ],
+      "depends_on": ["SE-P1-04"],
       "remaining": "Define checkpoint.v1 and explicit export/import for clock, IDs, random streams, fault counters, and idempotency scope."
     },
     {
@@ -142,9 +128,7 @@
       "status": "pending",
       "tests": [],
       "evidence": null,
-      "depends_on": [
-        "SE-P2-01"
-      ],
+      "depends_on": ["SE-P2-01"],
       "remaining": "Implement the private operator socket, control protocol, queue limits, durable control IDs, and world inspect."
     },
     {
@@ -154,9 +138,7 @@
       "status": "pending",
       "tests": [],
       "evidence": null,
-      "depends_on": [
-        "SE-P2-02"
-      ],
+      "depends_on": ["SE-P2-02"],
       "remaining": "Implement atomic checkpoint directories, private key retention, restore validation, and foreground world fork."
     },
     {
@@ -166,9 +148,7 @@
       "status": "pending",
       "tests": [],
       "evidence": null,
-      "depends_on": [
-        "SE-P2-03"
-      ],
+      "depends_on": ["SE-P2-03"],
       "remaining": "Implement reset and advance-time with generation checks, control result replay, and preserved evidence."
     },
     {
@@ -178,9 +158,7 @@
       "status": "pending",
       "tests": [],
       "evidence": null,
-      "depends_on": [
-        "SE-P1-04"
-      ],
+      "depends_on": ["SE-P1-04"],
       "remaining": "Add the corpus schema, parser, typed bindings, assertion definitions, bounded polling validation, and golden files."
     },
     {
@@ -190,9 +168,7 @@
       "status": "pending",
       "tests": [],
       "evidence": null,
-      "depends_on": [
-        "SE-P3-01"
-      ],
+      "depends_on": ["SE-P3-01"],
       "remaining": "Create @oal/corpus with the local target, target interface, corpus-report.v1, and public validate/run commands."
     },
     {
@@ -202,9 +178,7 @@
       "status": "pending",
       "tests": [],
       "evidence": null,
-      "depends_on": [
-        "SE-P3-02"
-      ],
+      "depends_on": ["SE-P3-02"],
       "remaining": "Add Webclip corpus cases for lifecycle, ordering, distinct resources, deletion, quota, and representation, with negative doubles."
     },
     {
@@ -214,10 +188,7 @@
       "status": "pending",
       "tests": [],
       "evidence": null,
-      "depends_on": [
-        "SE-P2-04",
-        "SE-P3-03"
-      ],
+      "depends_on": ["SE-P2-04", "SE-P3-03"],
       "remaining": "Version fault phases and wire the pre-behavior, corrupt-candidate, and post-commit disconnect fixtures."
     },
     {
@@ -227,9 +198,7 @@
       "status": "pending",
       "tests": [],
       "evidence": null,
-      "depends_on": [
-        "SE-P4-01"
-      ],
+      "depends_on": ["SE-P4-01"],
       "remaining": "Add the labeled synthetic runtime pack for idempotency keys and virtual expiry, and extend checkpoint coverage."
     },
     {
@@ -239,9 +208,7 @@
       "status": "pending",
       "tests": [],
       "evidence": null,
-      "depends_on": [
-        "SE-P4-02"
-      ],
+      "depends_on": ["SE-P4-02"],
       "remaining": "Add duplicate-effect and incorrect-rollback doubles and complete error classifications in corpus reports."
     },
     {
@@ -251,10 +218,7 @@
       "status": "pending",
       "tests": [],
       "evidence": null,
-      "depends_on": [
-        "SE-P3-03",
-        "SE-P4-03"
-      ],
+      "depends_on": ["SE-P3-03", "SE-P4-03"],
       "remaining": "Build packs/github-issue-triage with the five operations, eight cases, capability limits, sources, and fidelity.v1 claims."
     },
     {
@@ -264,9 +228,7 @@
       "status": "pending",
       "tests": [],
       "evidence": null,
-      "depends_on": [
-        "SE-P5-01"
-      ],
+      "depends_on": ["SE-P5-01"],
       "remaining": "Implement the GitHub target with explicit writes, preflight, serial bounded requests, run markers, and the cleanup ledger."
     },
     {
@@ -277,9 +239,7 @@
       "tests": [],
       "evidence": null,
       "requires_live_provider": true,
-      "depends_on": [
-        "SE-P5-02"
-      ],
+      "depends_on": ["SE-P5-02"],
       "remaining": "Run the eight black-box cases on the dedicated repository and save redacted corpus and fidelity reports."
     },
     {
@@ -289,9 +249,7 @@
       "status": "pending",
       "tests": [],
       "evidence": null,
-      "depends_on": [
-        "SE-P5-03"
-      ],
+      "depends_on": ["SE-P5-03"],
       "remaining": "Complete public authoring exports, compatibility checks, and installable archives for the CLI and required packages."
     },
     {
@@ -301,9 +259,7 @@
       "status": "pending",
       "tests": [],
       "evidence": null,
-      "depends_on": [
-        "SE-P6-01"
-      ],
+      "depends_on": ["SE-P6-01"],
       "remaining": "Add the external pack template and tutorial, and update quickstart and capabilities for proven commands only."
     },
     {
@@ -313,9 +269,7 @@
       "status": "pending",
       "tests": [],
       "evidence": null,
-      "depends_on": [
-        "SE-P6-02"
-      ],
+      "depends_on": ["SE-P6-02"],
       "remaining": "Run phase and milestone gates, record practitioner trials, and prepare release artifacts without publishing."
     }
   ]

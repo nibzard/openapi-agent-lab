@@ -16,10 +16,12 @@ The local product covers the initial release scope:
 - Isolated per-run workspaces and immutable artifacts.
 - Honest reporting of the isolation level that was actually reached.
 
-Stateful scenario serving is not part of this build. `oal serve --mode
-scenario` and `oal run --exposure direct-tools|catalog-tools` refuse with
-exit code `4`. See the [review fix plan](review-fix-plan.md) for the work
-that connects those paths.
+`oal serve --mode scenario` serves a pack's scenario behavior through
+the shared environment owner, so a standalone world runs the same
+validation, transaction, and shutdown path as `oal run`. `oal run --exposure
+direct-tools|catalog-tools` still refuses with exit code `4`; see the
+[review fix plan](review-fix-plan.md) for the work that connects those
+paths.
 
 ## Ingestion and the capability report
 
@@ -73,16 +75,27 @@ The `@oal/gateway` package routes requests, validates input, emulates
 authentication, and generates responses.
 
 Contract mode serves schema-valid responses with no claimed business
-behavior. Packs add static response fixtures on top of contract mode. A
-stateful scenario backend is not connected in this build:
+behavior. Packs add static response fixtures on top of contract mode:
 
 ```sh
 oal serve examples/quickstart.json --port 4010 --run-seed 42
 ```
 
-`--mode scenario` exists as a flag but refuses to serve. The run engine has
-no scenario backend to start yet, so the command exits with code `4` before
-it binds a port.
+Scenario mode serves the behavior of a pack that declares it. Pass the pack
+directory and `--mode scenario`; `--scenario` selects one of the pack's
+declared scenarios when it declares more than one:
+
+```sh
+oal serve packs/webclip --mode scenario --port 4010
+```
+
+The scenario serve opens one world: it freezes the behavior dependency
+closure, spawns the behavior child, and serves every validated request
+through the store-backed state. The readiness record carries the scenario
+id and the environment manifest path. On `SIGINT` or `SIGTERM` the serve
+exports the environment manifest, the final state, and the committed
+semantic events under its run directory, then releases the port and the
+behavior child.
 
 The server:
 

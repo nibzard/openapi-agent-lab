@@ -26,10 +26,11 @@ async function packReadme(): Promise<string> {
 }
 
 describe("documented commands match the CLI surface", () => {
-  it("documents scenario serving as refused", async () => {
+  it("documents scenario serving through the shared owner", async () => {
     const usage = await doc("usage.md");
     expect(usage).toContain("--mode scenario");
-    expect(usage).toContain("refuses to serve");
+    expect(usage).toContain("shared environment owner");
+    expect(usage).toContain("exports the environment manifest");
   });
 
   it("documents the tool exposure refusal", async () => {

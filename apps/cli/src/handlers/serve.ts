@@ -9,6 +9,7 @@ import { mkdir, open, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  isJsonObject,
   closeSchemaWorker,
   EXIT_INVALID,
   EXIT_OK,
@@ -21,7 +22,6 @@ import {
   sha256Hex,
   stableJsonStringify,
   unsupported,
-  type Diagnostic,
   type Json,
   type JsonObject
 } from "@oal/core";
@@ -57,6 +57,8 @@ import {
 } from "@oal/runner";
 
 import type { CommandHandler } from "../commands.ts";
+import { openEnvironment, type Environment } from "@oal/environment";
+
 import { emitDiagnostics } from "../diagnostics.ts";
 import { resolveSourceArgument } from "../source.ts";
 import { missingArgument, tooManyArguments } from "../usage.ts";
@@ -170,6 +172,29 @@ export function deriveServeRunSeed(
     backendSha256: sha256Hex(
       `contract-backend:${contract.source.semantic_sha256}`
     )
+  });
+}
+
+/**
+ * Derive the scenario serve seed: the scenario identity and the
+ * behavior entrypoint digest join the inputs, so a pack edit that
+ * changes behavior moves the seed with the world it would serve.
+ */
+export function deriveScenarioRunSeed(
+  contract: ContractIR,
+  pack: LoadedPack,
+  scenarioId: string,
+  runId: string
+): string {
+  const entrypoint = pack.references.find(
+    (reference) => reference.role === "behavior_entrypoint"
+  );
+  return deriveManualRunSeed({
+    runId,
+    contractExecutionSha256: contract.source.execution_sha256,
+    packSha256: packSha256Of(pack),
+    scenarioSha256: sha256Hex(scenarioId),
+    backendSha256: entrypoint?.sha256 ?? sha256Hex("scenario-backend:none")
   });
 }
 
@@ -367,6 +392,23 @@ export interface ServeRunRecord {
  * contract-backend and implementation bundles, the seed, and the state
  * schema version.
  */
+export function scenarioRunIdentity(
+  contract: ContractIR,
+  pack: LoadedPack,
+  scenarioId: string,
+  runSeed: string
+): RunMetaInput {
+  const entrypoint = pack.references.find(
+    (reference) => reference.role === "behavior_entrypoint"
+  );
+  return {
+    ...serveRunIdentity(contract, pack, runSeed),
+    scenarioSha256: sha256Hex(scenarioId),
+    backendSha256: entrypoint?.sha256 ?? sha256Hex("scenario-backend:none"),
+    implementationSha256: sha256Hex("oal-serve:scenario:1")
+  };
+}
+
 export function serveRunIdentity(
   contract: ContractIR,
   pack: LoadedPack | null,
@@ -463,6 +505,12 @@ export interface ServeSession {
   readonly controlDir: string;
   /** Absolute evidence directory for redacted request artifacts. */
   readonly evidenceDir: string;
+  /**
+   * The stateful environment of scenario mode; null in contract mode.
+   * Shutdown must close it so the behavior child and the world store
+   * never outlive the listener (section 48.2).
+   */
+  readonly environment: Environment | null;
 }
 
 /**
@@ -488,6 +536,14 @@ export async function startServe(options: {
   readonly identity: RunMetaInput;
   /** True when this call resumes an interrupted serve. */
   readonly resumed: boolean;
+  /**
+   * Scenario selection. Present only in scenario mode: the pack must
+   * declare scenario behavior and the environment owns the world.
+   */
+  readonly scenario?: {
+    readonly scenarioId: string;
+    readonly pack: LoadedPack;
+  };
   /**
    * Resource limits of the serve. The schema worker boundary serves the
    * contract's patterns under the configured deadline and queue bounds;
@@ -524,6 +580,34 @@ export async function startServe(options: {
     "doc",
     (await eventCount(documentationPath)) + 1
   );
+  // Scenario mode opens the shared environment owner before the
+  // listener: the exposure routes every validated request through the
+  // behavior backend and the store-backed world state (section 48.2).
+  let environment: Environment | null = null;
+  if (options.scenario !== undefined) {
+    environment = await openEnvironment({
+      pack: options.scenario.pack,
+      contract: {
+        ir: options.contract,
+        semanticSha256: options.contract.source.semantic_sha256,
+        executionSha256: options.contract.source.execution_sha256
+      },
+      scenarioId: options.scenario.scenarioId,
+      seed: options.runSeed,
+      worldId: options.runId,
+      databasePath: path.join(options.controlDir, "world.sqlite"),
+      records: {
+        batchId: "manual",
+        packSha256: options.identity.packSha256 ?? "",
+        implementationSha256: options.identity.implementationSha256
+      },
+      now: (): number => Date.now()
+    });
+    await writeFile(
+      path.join(evidenceDir, "environment.json"),
+      `${stableJsonStringify(environment.manifestDocument())}\n`
+    );
+  }
   const minted = mintRunCredentials(options.contract, options.runSeed);
   const limits = options.limits ?? LIMIT_DEFAULTS;
   const handle = await createRawHttpExposure({
@@ -557,7 +641,13 @@ export async function startServe(options: {
       minted.bearer
     ],
     sensitiveHeaderNames: ["authorization"],
-    sensitiveKeyPatterns: []
+    sensitiveKeyPatterns: [],
+    ...(environment === null
+      ? {}
+      : {
+          backend: environment.backend,
+          scenarioState: environment.state
+        })
   });
   const credentials = buildManualCredentials(
     options.contract,
@@ -606,7 +696,7 @@ export async function startServe(options: {
   const readiness: JsonObject = {
     schema_version: 1,
     status: "ready",
-    mode: "contract",
+    mode: environment === null ? "contract" : "scenario",
     baseUrl: handle.baseUrl,
     runId: options.runId,
     contractSha256: options.contract.source.semantic_sha256,
@@ -614,7 +704,14 @@ export async function startServe(options: {
     supportedOperationCount: supported,
     capabilitiesPath,
     credentialsPath:
-      credentials.alternatives.length > 0 ? credentialsPath : null
+      credentials.alternatives.length > 0 ? credentialsPath : null,
+    ...(environment === null
+      ? {}
+      : {
+          scenarioId:
+            options.scenario === undefined ? null : options.scenario.scenarioId,
+          environmentPath: path.join(evidenceDir, "environment.json")
+        })
   };
   return {
     handle,
@@ -625,8 +722,52 @@ export async function startServe(options: {
     readiness,
     store,
     controlDir: options.controlDir,
-    evidenceDir
+    evidenceDir,
+    environment
   };
+}
+
+/**
+ * Export the terminal evidence of one scenario serve: the final domain
+ * state and every committed semantic event, in the forms the trial
+ * runner exports, so a served world leaves the same inspectable trail
+ * a run leaves (section 48.2).
+ */
+export async function exportScenarioEvidence(
+  environment: Environment,
+  evidenceDir: string
+): Promise<void> {
+  const finalState = environment.finalState();
+  if (finalState !== null) {
+    await writeFile(
+      path.join(evidenceDir, "state.final.json"),
+      `${stableJsonStringify({
+        schema_version: 1,
+        state: finalState.state,
+        revision: finalState.revision
+      } as Json)}\n`
+    );
+  }
+  const events = environment.semanticEvents();
+  if (events.length > 0) {
+    // One compact JSON object per line: the events file is JSONL like
+    // the trial export, not a pretty-printed document.
+    const lines = events.map(
+      (event) =>
+        `${JSON.stringify({
+          event_id: event.eventId,
+          name: event.name,
+          event_version: event.eventVersion,
+          payload: event.payload,
+          logical_time: event.logicalTime,
+          state_revision_after: event.revisionAfter
+        } as Json)}\n`
+    );
+    await writeFile(
+      path.join(evidenceDir, "semantic-events.jsonl"),
+      lines.join("")
+    );
+  }
 }
 
 /**
@@ -672,22 +813,18 @@ export const serveCommand: CommandHandler = async (args, io) => {
     ["contract", "scenario"] as const,
     "contract"
   );
-  const scenario = args.flags.string("scenario");
-  const unsupportedFindings: Diagnostic[] = [];
-  if (mode === "scenario" || scenario !== undefined) {
-    unsupportedFindings.push(
+  const scenarioFlag = args.flags.string("scenario");
+  if (mode === "contract" && scenarioFlag !== undefined) {
+    emitDiagnostics(io, args.context, [
       diagnostic({
         severity: "error",
         phase: "preflight",
         code: ServeCliCode.ModeUnsupported,
         message:
-          "Scenario mode needs a pack scenario backend, which this build " +
-          "does not serve. Serve the contract in contract mode instead."
+          "--scenario selects the pack scenario of --mode scenario; it " +
+          "has no meaning in contract mode."
       })
-    );
-  }
-  if (unsupportedFindings.length > 0) {
-    emitDiagnostics(io, args.context, unsupportedFindings);
+    ]);
     return EXIT_UNSUPPORTED;
   }
 
@@ -804,12 +941,101 @@ export const serveCommand: CommandHandler = async (args, io) => {
     );
   }
 
+  // A scenario serve needs a pack manifest; refuse before any
+  // compilation work so the diagnostic names the mode, not the source.
+  if (mode === "scenario") {
+    const absoluteSource = path.resolve(args.context.cwd, source);
+    const hasManifest =
+      (await stat(path.join(absoluteSource, "pack.yaml")).catch(() => null)) !==
+        null ||
+      (await stat(path.join(absoluteSource, "pack.json")).catch(() => null)) !==
+        null;
+    if (!hasManifest) {
+      emitDiagnostics(io, args.context, [
+        diagnostic({
+          severity: "error",
+          phase: "preflight",
+          code: ServeCliCode.ModeUnsupported,
+          message:
+            "Scenario mode serves the behavior of a pack; pass a pack " +
+            "directory, not a bare document or arbitrary path."
+        })
+      ]);
+      return EXIT_UNSUPPORTED;
+    }
+  }
   const compiledSource = await compileServeSource(
     source,
     args.context.cwd,
     args.context.maxSourceBytes
   );
   const contract = compiledSource.contract;
+  // Scenario mode needs a pack that declares scenario behavior, and
+  // the scenario id must be one the pack declares.
+  let scenarioSelection: { scenarioId: string; pack: LoadedPack } | undefined;
+  if (mode === "scenario") {
+    if (compiledSource.pack === null) {
+      emitDiagnostics(io, args.context, [
+        diagnostic({
+          severity: "error",
+          phase: "preflight",
+          code: ServeCliCode.ModeUnsupported,
+          message:
+            "Scenario mode serves the behavior of a pack; pass a pack " +
+            "directory, not a bare OpenAPI document."
+        })
+      ]);
+      return EXIT_UNSUPPORTED;
+    }
+    const behavior = compiledSource.pack.manifest["behavior"];
+    const behaviorMode =
+      behavior !== undefined && isJsonObject(behavior)
+        ? behavior["mode"]
+        : undefined;
+    if (behaviorMode !== "scenario") {
+      emitDiagnostics(io, args.context, [
+        diagnostic({
+          severity: "error",
+          phase: "preflight",
+          code: ServeCliCode.ModeUnsupported,
+          message:
+            "The pack declares no scenario behavior; serve it in " +
+            "contract mode instead."
+        })
+      ]);
+      return EXIT_UNSUPPORTED;
+    }
+    const scenarios = Array.isArray(compiledSource.pack.manifest["scenarios"])
+      ? compiledSource.pack.manifest["scenarios"].filter(isJsonObject)
+      : [];
+    const selected =
+      scenarioFlag === undefined
+        ? scenarios[0]
+        : scenarios.find((candidate) => candidate["id"] === scenarioFlag);
+    const scenarioId =
+      selected !== undefined && typeof selected["id"] === "string"
+        ? selected["id"]
+        : null;
+    if (scenarioId === null) {
+      emitDiagnostics(io, args.context, [
+        diagnostic({
+          severity: "error",
+          phase: "preflight",
+          code: ServeCliCode.ModeUnsupported,
+          message:
+            scenarioFlag === undefined
+              ? "The pack declares no scenario to serve."
+              : `The pack declares no scenario ${scenarioFlag}.`
+        })
+      ]);
+      return EXIT_UNSUPPORTED;
+    }
+    scenarioSelection = {
+      scenarioId,
+      pack: compiledSource.pack
+    };
+  }
+
   const unsupportedOperations = contract.operations.filter(
     (operation) => operation.support.level !== "supported"
   );
@@ -832,7 +1058,14 @@ export const serveCommand: CommandHandler = async (args, io) => {
   const runSeed =
     resumed?.run_seed ??
     args.flags.string("run-seed") ??
-    deriveServeRunSeed(contract, compiledSource.pack, runId);
+    (scenarioSelection === undefined
+      ? deriveServeRunSeed(contract, compiledSource.pack, runId)
+      : deriveScenarioRunSeed(
+          contract,
+          scenarioSelection.pack,
+          scenarioSelection.scenarioId,
+          runId
+        ));
 
   const runDirFlag = args.flags.string("run-dir");
   const evidenceDir =
@@ -854,7 +1087,15 @@ export const serveCommand: CommandHandler = async (args, io) => {
     );
   }
 
-  const identity = serveRunIdentity(contract, compiledSource.pack, runSeed);
+  const identity =
+    scenarioSelection === undefined
+      ? serveRunIdentity(contract, compiledSource.pack, runSeed)
+      : scenarioRunIdentity(
+          contract,
+          scenarioSelection.pack,
+          scenarioSelection.scenarioId,
+          runSeed
+        );
   let session: ServeSession;
   try {
     session = await startServe({
@@ -869,7 +1110,10 @@ export const serveCommand: CommandHandler = async (args, io) => {
       evidenceDir,
       credentialsOut,
       identity,
-      resumed: resumed !== null
+      resumed: resumed !== null,
+      ...(scenarioSelection === undefined
+        ? {}
+        : { scenario: scenarioSelection })
     });
   } catch (error) {
     if (
@@ -902,11 +1146,17 @@ export const serveCommand: CommandHandler = async (args, io) => {
     );
   }
   await awaitInterruption(args.context.abortSignal);
+  if (session.environment !== null) {
+    // The listener stopped admitting requests; export the world's
+    // terminal evidence, then release the child and the store.
+    await exportScenarioEvidence(session.environment, evidenceDir);
+  }
   await finalizeServeControl(controlDir);
   if (session.credentialsPath !== null) {
     await rm(session.credentialsPath, { force: true }).catch(() => undefined);
   }
   await session.handle.close();
+  await session.environment?.close();
   session.store.close();
   // The schema worker threads served this process alone; stop them so a
   // finished serve leaves no workers behind.

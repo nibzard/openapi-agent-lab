@@ -117,7 +117,7 @@ async function awaitReadiness(
     }
     if (Date.now() > deadline) {
       throw new Error(
-        `serve printed no readiness record: ${io.stdoutChunks.join("")}`
+        `serve printed no readiness record: ${io.stdoutChunks.join("")} stderr: ${io.stderrText()}`
       );
     }
     await new Promise((resolve) => {

@@ -977,13 +977,21 @@ function scenarioOutcomeOf(outcome: ExecuteOutcome): ScenarioOutcome {
     };
   }
   if (outcome.kind === "http_error") {
+    // A modeled error carries its body's media type so the gateway's
+    // negotiation sees the domain answer, not a framework refusal:
+    // a deleted clip reads 404, not 406.
+    const body = outcome.error.behaviorBody;
     return {
       kind: "served",
       response: {
         status: outcome.error.status,
-        ...(outcome.error.behaviorBody === undefined
+        ...(body === undefined
           ? {}
-          : { body: outcome.error.behaviorBody })
+          : {
+              body,
+              mediaType:
+                body.kind === "text" ? "text/plain" : "application/json"
+            })
       }
     };
   }
