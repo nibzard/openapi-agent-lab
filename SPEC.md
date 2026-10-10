@@ -8,8 +8,8 @@ harness, and evaluation system.
 | Product name             | OpenAPI Agent Lab               |
 | CLI executable           | **oal**                         |
 | Document status          | Implementation specification    |
-| Specification version    | 0.2                             |
-| Date                     | 2026-08-27                      |
+| Specification version    | 0.3                             |
+| Date                     | 2026-10-10                      |
 | Reference implementation | TypeScript, Node.js 24 LTS, ESM |
 | Initial deployment       | Local CLI                       |
 | First high-fidelity pack | Steel Computer                  |
@@ -6907,6 +6907,7 @@ Rules:
   a keyed internal integrity tag, never an unkeyed digest.
 - Encrypt domain state and replayable idempotency responses with authenticated
   encryption before they reach SQLite, including WAL pages.
+- Section 48.4 defines separate key retention for operator checkpoints.
 - Keep the per-run data-encryption key in the private control directory with
   mode 0600, never in participant or finalized evidence. Destroy it after
   evaluation/finalization. Crash recovery is possible only while that private
@@ -8145,3 +8146,412 @@ The key architectural boundary is simple:
 Keeping those concerns separate is what makes the Steel experiment reusable for
 other APIs without pretending that an OpenAPI document contains behavior,
 research intent, or causal evidence it does not.
+
+## 48. Stateful environments milestone
+
+### 48.1 Authority and scope
+
+This section defines the next stateful environments milestone. It is normative
+for new environment, checkpoint, corpus, and provider verification interfaces.
+It does not claim that those interfaces are implemented. The task ledger is
+[the stateful environments plan](docs/stateful-environments-plan.md).
+
+For this milestone, this section overrides conflicting roadmap priorities in
+sections 39 through 43. Steel remains a historical reference pack. Webclip is
+the runtime reference. `github-issue-triage` is the first external fidelity pack.
+World checkpoints are operator artifacts, unrelated to Steel checkpoint routes.
+
+The release scope is local execution, raw HTTP, one world per process, and serial
+operations. Hosted execution, automatic behavior generation, multiple services,
+and general event scheduling remain outside this milestone. Existing pack and
+report versions retain their original meaning.
+
+Section 5's exclusion of upstream credentials remains in force for mocks and
+participants. The explicit provider adapter in section 48.7 is the only new
+exception. Section 48.4 defines an exception to section 38.1's key destruction
+rule for operator checkpoints. Ordinary trial finalization remains unchanged.
+
+Code generation does not establish fidelity. A generated behavior module MUST
+pass independently specified corpus cases and negative controls. Implementers
+MUST NOT weaken a case to accommodate their implementation without recording a
+requirement change. Prefer small declarative formats, public package boundaries,
+and executable examples over additional orchestration frameworks.
+
+### 48.2 Shared environment owner
+
+Create `@oal/environment` in `packages/environment`. Move environment ownership
+from `packages/runner/src/scenario-runtime.ts` into this package. Both `serve`
+and `run` MUST use it. The runner retains trial planning, participant execution,
+and scoring. The environment owns behavior startup, the state store, request
+serialization, evidence export, state projection, controls, and shutdown.
+
+The package MAY depend on core, pack, behavior, gateway, state-store, and evidence
+packages. It MUST NOT depend on runner, agent adapters, evaluator, or CLI code.
+Lower-level packages MUST NOT import environment. Extend the boundary check to
+enforce these directions. Move shared input types out of `FrozenPlan`; do not
+pass trial plans through the new interface.
+
+The public interface MUST provide `openEnvironment(options)`, returning gateway
+handles plus `manifest()`, `inspect()`, `checkpoint()`, `reset()`, `advanceTime()`,
+and idempotent `close()`. Controls can remain unavailable until P2. Options carry
+frozen pack inputs, scenario ID, seed, evidence directory, private directory,
+injected observation clock, and execution limits. Fork opens a new owner from a
+checkpoint; it does not replace a running world's state.
+
+The versioned `environment.v1` manifest MUST contain world ID, generation,
+parent checkpoint ID, pack and scenario identities, complete behavior digest,
+runtime digest, seed, current revision, virtual time, isolation profile, data
+address, and capability statuses. Public exports MUST omit private paths and
+credentials. Mutable manifests are projections of committed records.
+
+Each accepted operation uses one transaction for state, domain ID allocations,
+random positions, idempotency entries, fault counters, and committed evidence.
+Response and next-state validation MUST finish before commit. Invalid candidates,
+behavior exceptions, timeouts, and failed database commits leave no partial
+domain change. Record the failure separately after rollback. Evidence sequence
+numbers can advance for failures; domain counters cannot advance accidentally.
+
+A modeled error response is a valid outcome, subject to the declared contract.
+It can consume fault counters without mutating domain state. A state revision
+increments once when the backend commits a state change, including an equal-value
+replacement. Read-only operations do not increment the state revision.
+
+Shutdown stops admission, drains the active operation within its existing
+deadline, exports committed evidence, and closes the listener, child, and store.
+An interrupted operation rolls back. Evidence export failure produces an
+infrastructure failure and preserves the committed store for recovery.
+
+### 48.3 Commands and operator protocol
+
+The following command signatures are the target interface, not current support:
+
+```sh
+oal serve PACK --mode scenario --scenario ID --run-seed SEED --port 0 --out DIR
+oal world inspect --world DIR --format json
+oal world checkpoint --world DIR --out CHECKPOINT_DIR
+oal world reset --world DIR --expect-generation N
+oal world advance-time --world DIR --by-ms N --expect-generation N
+oal world fork CHECKPOINT_DIR --out NEW_DIR --port 0
+oal corpus validate PACK
+oal corpus run PACK --corpus ID --target local --out DIR
+oal corpus run PACK --corpus ID --target github --allow-live-writes \
+  --repository OWNER/REPO --out DIR
+```
+
+Keep the existing contract `serve` invocation unchanged. Scenario selection is
+mandatory when more than one scenario exists. Output directories MUST be new;
+never replace evidence implicitly. `world fork` serves the restored world in the
+foreground until shutdown, like `serve`. There is no in-place restore command.
+A checkpoint remains restorable after its source process exits.
+
+Use HTTP over a Unix domain socket in a private operator directory, mode 0700,
+with socket and credential files restricted to the owner. Other platforms MUST
+return `OAL-WORLD-CONTROL-UNSUPPORTED` until equivalent isolation is implemented.
+Do not expose operator routes on the participant listener. Require a random
+operator bearer credential for every socket request. Never inject its address
+or credential into participant inputs. Preserve the declared trusted-local
+isolation limitation; filesystem permissions alone do not isolate hostile code
+running as the same operating-system user.
+
+Protocol v1 endpoints are `GET /v1/world`, `POST /v1/checkpoints`,
+`POST /v1/reset`, and `POST /v1/advance-time`. Requests and replies use JSON.
+Mutation requests contain a unique `control_id`; reset and advance also require
+`expect_generation`. Advance contains `by_ms`. Checkpoint contains a new local
+output path. The protocol accepts no executable expressions.
+
+Use the same serial queue for data requests and controls. A control observes the
+last completed operation. Limit the queue to 128 entries; overflow returns 503
+with `OAL-WORLD-BUSY` before admission. A generation mismatch returns 409 with
+`OAL-WORLD-GENERATION-MISMATCH`. Unauthenticated controls return 401. Domain
+requests queued before reset MUST finish before reset. Later requests use the
+new generation.
+
+A repeated `control_id` with the same payload returns the recorded result;
+a changed payload returns 409 with `OAL-WORLD-CONTROL-CONFLICT`. Persist control
+results across generations. Checkpoint creation uses a durable intent and atomic
+rename; recovery completes or removes an incomplete staging directory before
+serving controls. Each control records its order, input, generation, revision,
+time, and result without entering agent request counts or task scores.
+
+Command JSON results use `schema_version`, `status`, `result`, `diagnostics`, and
+`artifacts`. Reuse existing CLI exit categories: success, invalid input,
+unsupported capability, infrastructure failure, and evaluation threshold failure.
+Corpus assertion failure uses the evaluation threshold category. A required
+skipped provider check returns non-success, never a passing verification.
+
+### 48.4 Checkpoint and generation semantics
+
+Checkpoints use `checkpoint.v1` metadata and an encrypted payload. Create them
+only at a transaction boundary. The payload MUST contain:
+
+- Domain state, schema version, revision, and baseline seed and fixture identity.
+- Virtual time, epoch, tick policy, domain ID allocator positions, and every
+  pseudorandom stream's algorithm version and full internal position.
+- Idempotency scope, entries, replayable responses, expiry, and required keyed
+  identity material; fault rules, occurrence counters, and random positions.
+- Frozen contract, pack, scenario, runtime, and complete behavior identities,
+  with the frozen files needed to execute without the original checkout.
+- All referenced blob bytes and their integrity metadata, including private
+  blobs needed for future responses.
+- Source world, generation, checkpoint ID, commit position, and evidence lineage.
+
+An absent required component is an error, not an empty default. Initial formats
+MUST declare scheduled work unsupported. Reject a pack requiring it before
+startup. Do not serialize sockets, processes, or ambient host state.
+
+Write the checkpoint under a new private directory. Re-encrypt retained data
+under a fresh checkpoint key, stored in `private/key` with mode 0600. Retain this
+key until the operator removes the checkpoint. The source world's key can then
+be destroyed normally. Checkpoint directories are private recovery artifacts;
+ordinary evidence exports MUST exclude their keys and secret-bearing payloads.
+No remote export or automatic retention policy is introduced in this milestone.
+
+Authenticate metadata with the encrypted payload. Validate file paths, all
+component integrity tags, schema versions, algorithm versions, and exact runtime
+compatibility before opening a listener or changing any world. Initial restore
+supports exact runtime and behavior identities only; no implicit migrations.
+Failures use `OAL-CHECKPOINT-INCOMPLETE`, `OAL-CHECKPOINT-INTEGRITY`, or
+`OAL-CHECKPOINT-INCOMPATIBLE`. Partial writes never become valid checkpoints.
+
+Fork creates a new world ID, evidence namespace, operator credential, encryption
+key, and participant credential. Preserve logical principal identity for
+idempotency scope. Remap authentication at the gateway; do not change cached
+response bytes. Domain IDs and all behavior streams continue from the checkpoint.
+Infrastructure identities MUST use a separate source of randomness. A fork's
+evidence starts with an origin record; it does not duplicate parent API events.
+Cross-world references include world ID and generation.
+
+Reset increments generation and recreates the original baseline state, seed,
+clock, counters, idempotency store, and fault state. It preserves previous
+evidence and control results. Credentials stay valid within the same world.
+Reset of a fork returns to the declared scenario baseline, not its checkpoint.
+
+Advance accepts only nonnegative safe integer milliseconds and rejects clock
+overflow. It changes virtual time without changing domain revision. Preserve the
+pack's existing tick per committed exchange. Time predicates read virtual time;
+expiry is evaluated on access. Wall-clock deadlines limit runtime execution but
+MUST NOT drive domain transitions. No background scheduler is introduced.
+
+### 48.5 Portable behavioral corpus
+
+Define `corpus.v1.schema.json` and a `corpora` list in the next compatible pack
+format. Old packs remain valid without a corpus. Put parsing and validation in
+pack-ir/pack, execution in new `@oal/corpus`, and target doubles in testkit.
+Corpus execution MUST NOT depend on the runner or agent evaluator.
+
+A corpus has `api_version`, `id`, `version`, `scenario`, `inputs`, and `cases`.
+Each case has a stable ID, claim IDs, scope (`black_box` or `emulator_only`),
+setup, ordered steps, and cleanup. Run cases in declaration order, with a fresh
+local world per case. Live cases use unique resources in the dedicated repository.
+Do not permit arbitrary scripts, shell commands, or general expression languages.
+
+A request step has an ID, operation ID, path/query/header parameters, optional
+body, bindings, and assertions. Inputs and bindings use typed reference objects:
+`{ "input": "repository" }` and `{ "binding": "created.number" }`. Bind values
+from response status, headers, or body using JSON Pointer. Missing bindings,
+forward references, duplicate IDs, and type mismatches fail explicitly. Headers
+are case-insensitive; JSON property names are case-sensitive. Bound path values
+are encoded as one path component. No text interpolation executes code.
+
+Version 1 assertions are `status`, `exists`, `equals`, `not_equals`, `contains`,
+`length`, and `matches_schema`. Operands are literals, inputs, bindings, or
+response pointers. `contains` supports a declared object subset for list members.
+Schema assertions reference frozen local schemas. Equality compares JSON values;
+object key order is irrelevant and array order matters unless a case explicitly
+selects set comparison. Use bindings to test resource relationships.
+
+The following YAML fragment fixes the request and binding syntax. The schema
+MUST accept it when its input and operation declarations are present:
+
+```yaml
+steps:
+  - id: create
+    request:
+      operation_id: createIssue
+      parameters:
+        path:
+          owner: { input: owner }
+          repo: { input: repository }
+      body:
+        title: Corpus issue
+        body: { input: run_marker }
+    bind:
+      number: { source: body, pointer: /number }
+    assert:
+      - op: status
+        expected: 201
+  - id: read
+    request:
+      operation_id: getIssue
+      parameters:
+        path:
+          owner: { input: owner }
+          repo: { input: repository }
+          issue_number: { binding: create.number }
+    assert:
+      - op: equals
+        actual: { source: body, pointer: /number }
+        expected: { binding: create.number }
+```
+
+Bindings become available after the response is decoded, before assertions.
+This allows cleanup to use an identifier even when a later assertion fails.
+References to a response pointer are scoped to the current step. The example's
+operation IDs are local pack choices, not a claim about provider operation IDs.
+
+A `poll` step repeats only a read operation. Its required limits are attempts,
+interval milliseconds, and total deadline. Defaults are forbidden. The local
+adapter advances virtual time; the provider adapter waits by wall clock. Record
+every attempt and wait. Exhaustion fails the assertion; it is not a skip.
+A provider rate-limit delay that exceeds the deadline ends the case as a provider
+failure. Polling is a harness tolerance, never an inferred service guarantee.
+
+An `operator` step is allowed only in emulator-only cases. It can inspect, reset,
+checkpoint, fork, advance time, or install declared fault fixtures. A service
+adapter MUST reject this scope before setup. Its results cannot contribute to
+cross-target fidelity. Cleanup always runs after setup begins, using only
+bindings that were established. Record cleanup failures and resource identifiers
+without replacing the primary case result.
+
+`CorpusTarget` exposes `prepare`, `request`, `wait`, and `cleanup`, plus explicit
+capabilities. The local target uses the public HTTP listener and separate
+operator controls. The GitHub target uses provider HTTP directly. Neither target
+may synthesize a missing provider response to make a case pass.
+
+The `corpus-report.v1` artifact records corpus and target identities, case and
+claim IDs, binding provenance, attempts, assertion results, cleanup results,
+redacted exchanges, and diagnostics. Case statuses are `passed`, `failed`,
+`skipped`, and `error`. Keep contract conformance, behavioral conformance, and
+agent success as separate fields; an absent assessment is `not_evaluated`.
+Existing `probe` reports and historical scores MUST remain unchanged.
+
+For run/serve equivalence, compare canonical domain state, status, declared
+headers, bodies, and semantic event names/payloads after the same seeded sequence.
+Exclude only listed observational fields: world/run IDs, evidence IDs, wall-clock
+observations, credentials, and listener origins. Preserve virtual timestamps,
+domain IDs, ordering, errors, and resource relationships. For cross-target
+comparison, independently execute the same assertions with target-local bindings.
+Never compare concrete GitHub IDs to local IDs. Any additional normalization
+requires a versioned path, reason, and assertion preserving the relevant relation.
+
+### 48.6 Faults and independent checks
+
+Version the fault contract before changing the existing `after_behavior` meaning.
+Support these three fixtures first:
+
+| Fixture | Commit behavior | Participant outcome |
+| --- | --- | --- |
+| `before_behavior/response` | Commit the matched fault counter and evidence; leave domain state unchanged | Declared 429 or 503 response |
+| `before_commit/corrupt_candidate` | Roll back the candidate and domain counters; commit fault consumption in the failure record | Response validation failure |
+| `after_commit/disconnect` | Commit the valid response, state, counters, and semantic events before closing the socket | No response bytes |
+
+Fault consumption after rollback is an explicit separate failure transaction,
+not a partial domain commit. The serial queue prevents another request from
+observing an intermediate outcome. If that failure transaction cannot commit,
+stop the world as an infrastructure failure. Preserve the durable state for
+inspection. Unsupported phases and actions fail preflight.
+
+Keep delivery evidence separate from the committed response candidate. A crash
+after commit but before confirmed delivery records delivery as `unknown`.
+Never claim that the participant received a response because the store committed.
+Checkpoint tests MUST prove that fault occurrence and next random selection
+continue correctly after restart.
+
+Use a separate synthetic pack for idempotency keys and expiry. It MUST cover
+same-key/same-request replay, same-key/different-request conflict, principal
+separation, expiry, rollback, and replay after a committed response is lost.
+GitHub issue creation has no assumed idempotency-key guarantee. Do not add one.
+A live adapter MUST NOT automatically retry a mutating request after an ambiguous
+transport failure. Record uncertainty and attempt bounded read reconciliation.
+
+Require fixed negative doubles: stateless create/list, reused IDs, incorrect
+resource linkage, ignored deletion, duplicate effects under promised idempotency,
+and rollback after committed response loss. Each applicable corpus MUST fail
+against its corresponding double. Golden updates require review; a model's
+explanation is not acceptance evidence.
+
+### 48.7 GitHub workflow and fidelity evidence
+
+Freeze pack ID `github-issue-triage` and provider API version `2026-03-10` for the
+first corpus. Recheck that version before P5 implementation. A changed version
+requires a new recorded decision and updated cases, never a silent substitution.
+
+The modeled surface is these five operations, under `/repos/{owner}/{repo}`:
+
+| Method and path | Core use |
+| --- | --- |
+| `POST /issues` | Create an issue with title and body |
+| `GET /issues/{issue_number}` | Read its identity and current state |
+| `GET /issues` | List with explicit state and bounded pagination |
+| `POST /issues/{issue_number}/labels` | Add a pre-existing label |
+| `PATCH /issues/{issue_number}` | Close with `state: closed` |
+
+Bind `number` from creation for issue paths. Preserve its distinction from `id`.
+List checks select the created issues and exclude entries containing
+`pull_request`. Require pre-existing label `oal-triage`; label administration,
+comments, search, webhooks, pull-request behavior, and broad permission emulation
+are outside scope. Unsupported input combinations produce capability diagnostics.
+
+The fixed core cases are create/read, create/list, two distinct creations,
+add-label/read, close/read, open-list exclusion with closed-list inclusion,
+nonexistent-issue read, and invalid create without a title. Expected status codes
+and schemas MUST be pinned from the endpoint documentation before coding cases.
+All eight cases are required on both targets. Any narrowing requires an explicit
+specification amendment naming the removed case and its reason.
+
+The live adapter requires `--allow-live-writes`, an explicit `--repository`, and
+`GITHUB_TOKEN` restricted to a disposable repository with Issues read/write.
+Credentials never enter pack files, participant environments, or reports. Reject
+an absent repository or token before writes. Send the pinned API version and
+recommended JSON media type. Keep requests serial. Honor `Retry-After`; use
+bounded retries for reads only. Do not deliberately exhaust provider rate limits.
+These request rules follow GitHub's [API guidance](https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api).
+
+Use a unique run marker in issue titles and bodies. Record returned issue numbers
+immediately. Cleanup closes created issues; it does not claim to delete them or
+restore repository counters. A missing create response can leave an unidentified
+resource. Record that uncertainty and search only bounded issue-list pages for
+the run marker. Cleanup MUST NOT close unrelated resources. Failed cleanup
+produces a non-success result with a removal list.
+
+Store `fidelity.v1` claims with stable ID, operation, assertion/case references,
+classification (`documented`, `observed`, `synthetic`, or `unsupported`), source
+URL and retrieval date, provider version, last verification date, report digest,
+and limitations. Missing credentials produce skipped verification, not a pass.
+Run provider verification only through a separate opt-in job. Ordinary continuous
+integration (CI) uses local doubles. Rate limits and lost-response scenarios stay
+synthetic unless separately observed; exclude them from the core fidelity claim.
+
+Provider sources checked on 2026-10-10 are the [issue endpoints](https://docs.github.com/en/rest/issues/issues)
+and [label endpoints](https://docs.github.com/en/rest/issues/labels). Documentation
+review is not live behavioral verification. No live verification is recorded by
+this specification amendment.
+
+### 48.8 External authoring and release gate
+
+Support external TypeScript packs through documented `@oal/behavior-api` exports
+and a published CLI distribution. Produce installable package archives in P6;
+publication remains a separate release action. An external fixture MUST install
+those archives outside the workspace, without repository aliases or source paths.
+Declare and test the supported Node.js version and transitive package exports.
+
+Freeze the complete behavior dependency closure before starting its child.
+Version 1 supports static imports of local pack files and declared public OAL
+packages. Reject dynamic imports, ambient dependency resolution, and files outside
+the allowed closure. Hash source bytes, resolved graph, package versions,
+compiler settings when applicable, and runtime identity. Execute frozen copies.
+A helper edit MUST change behavior identity. Identity freezing does not claim to
+sandbox trusted-local code.
+
+Pack compatibility covers manifest, behavior API, state schema, corpus, and
+runtime versions. Fail unsupported versions before execution. Additive optional
+manifest fields retain old-pack support. Breaking semantics require a new format
+or pack version. Never rewrite historical inputs or scores.
+
+The release requires public CLI tests for serving, reset, forks, time, corpus
+execution, and external authoring. It also requires all eight live core cases,
+complete cleanup evidence, and a dated fidelity report. Use task IDs `SE-P0-01`
+through `SE-P6-03` in the plan as the milestone acceptance namespace. P0 adds a
+separate machine-readable acceptance map and readiness gate; do not relabel
+existing AC-001 through AC-127. Missing or partial tasks block this milestone's
+release, even when existing CI passes.
