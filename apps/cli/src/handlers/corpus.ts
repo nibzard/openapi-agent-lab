@@ -31,6 +31,7 @@ import {
   type CorpusDocument
 } from "@oal/pack";
 import {
+  GithubTarget,
   runCorpus,
   type CorpusOperatorCommand,
   type CorpusReport,
@@ -185,17 +186,31 @@ export async function corpusRunCommand(
     );
   }
 
-  const compiled = await compileServeSource(
-    packDir,
-    args.context.cwd,
-    args.context.maxSourceBytes
-  );
   const packRoot = path.resolve(args.context.cwd, packDir);
-  const target = new LocalCorpusTarget({
-    packDir: packRoot,
-    cwd: args.context.cwd,
-    contract: compiled.contract
-  });
+  const targetFlag = args.flags.string("target") ?? "local";
+  if (targetFlag !== "local" && targetFlag !== "github") {
+    throw invalidInput(
+      "OAL-CORPUS-TARGET-UNKNOWN",
+      `Unknown target ${JSON.stringify(targetFlag)}; choose local or github.`
+    );
+  }
+  const target: CorpusTarget =
+    targetFlag === "github"
+      ? new GithubTarget({
+          token: environmentValue("GITHUB_TOKEN"),
+          repository: args.flags.string("repository") ?? null,
+          runMarker: `oal-${new Date().toISOString().replace(/[:.]/g, "-")}`,
+          allowLiveWrites: args.flags.has("allow-live-writes")
+        })
+      : new LocalCorpusTarget({
+          packDir: packRoot,
+          cwd: args.context.cwd,
+          contract: await compileServeSource(
+            packDir,
+            args.context.cwd,
+            args.context.maxSourceBytes
+          ).then((compiled) => compiled.contract)
+        });
   let report: CorpusReport;
   try {
     report = await runCorpus(corpus.document, target, {
@@ -203,7 +218,20 @@ export async function corpusRunCommand(
       loadSchema: schemaLoaderOf(packRoot)
     });
   } finally {
-    await target.close();
+    await closeTarget(target);
+  }
+
+  /** Read one environment variable without leaking it anywhere. */
+  function environmentValue(name: string): string | null {
+    const value = process.env[name];
+    return value === undefined || value.length === 0 ? null : value;
+  }
+
+  /** Stop the world a target owns; provider targets need nothing. */
+  async function closeTarget(chosen: CorpusTarget): Promise<void> {
+    if (chosen instanceof LocalCorpusTarget) {
+      await chosen.close();
+    }
   }
 
   const outFlag = args.flags.string("out");

@@ -19,3 +19,14 @@ export {
   type CorpusTargetRequest,
   type CorpusTargetResponse
 } from "./target.ts";
+
+export {
+  GITHUB_API_VERSION,
+  GithubTarget,
+  GithubTargetError
+} from "./github.ts";
+export type {
+  CleanupLedgerEntry,
+  CleanupResult,
+  GithubTargetOptions
+} from "./github.ts";

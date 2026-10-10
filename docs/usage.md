@@ -195,6 +195,24 @@ oal corpus run PACK --corpus webclip-core \
   --input clip_url=https://example.com/essay --out corpus-report.json
 ```
 
+The default target is the local emulator. The provider target drives
+GitHub directly and never runs a world of its own:
+
+```sh
+oal corpus run packs/github-issue-triage --corpus issue-triage-core   --input owner=octocat --input repository=disposable-triage   --target github --allow-live-writes   --repository octocat/disposable-triage --out corpus-report.json
+```
+
+The provider target requires `--allow-live-writes`, an explicit
+`--repository`, and a `GITHUB_TOKEN` restricted to a disposable
+repository; preflight rejects the run before any write leaves the
+process. Requests run serially under an explicit budget with the
+pinned API version, and every create carries a unique run marker.
+A mutating request is never retried automatically. A missing create
+response stays uncertain: the target searches bounded issue-list
+pages for the run marker, feeds the cleanup ledger, and never
+synthesizes a response. Cleanup closes the created issues and
+reports a removal list when a close fails.
+
 Every declared input needs a `--input NAME=VALUE` flag; a value parses as
 JSON when possible and stays a string otherwise. The command writes one
 `corpus-report.v1` document: case and claim identities, binding
