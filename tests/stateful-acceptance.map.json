@@ -336,11 +336,23 @@
       "id": "SE-P5-02",
       "phase": "P5",
       "requirement": "SPEC 48.7 \u00b7 plan P5",
-      "status": "pending",
-      "tests": [],
-      "evidence": null,
-      "depends_on": ["SE-P5-01"],
-      "remaining": "Implement the GitHub target with explicit writes, preflight, serial bounded requests, run markers, and the cleanup ledger."
+      "status": "complete",
+      "tests": [
+        "packages/corpus/src/github.test.ts > sends the credential, media, and version headers on every request",
+        "packages/corpus/src/github.test.ts > rejects missing writes permission, repository, or token before any request",
+        "packages/corpus/src/github.test.ts > stamps the run marker into every create",
+        "packages/corpus/src/github.test.ts > sends list queries explicitly and bounds the page size",
+        "packages/corpus/src/github.test.ts > waits a rate limit and retries reads only",
+        "packages/corpus/src/github.test.ts > records an uncertain creation and reconciles boundedly",
+        "packages/corpus/src/github.test.ts > fails cleanup when a close is refused",
+        "packages/corpus/src/github.test.ts > serves requests serially with no overlap",
+        "packages/corpus/src/github.test.ts > stops as a provider failure when the budget is exhausted"
+      ],
+      "evidence": {
+        "commit": "edca4f6",
+        "command": "pnpm exec vitest run packages/corpus/src/github.test.ts"
+      },
+      "depends_on": ["SE-P5-01"]
     },
     {
       "id": "SE-P5-03",
