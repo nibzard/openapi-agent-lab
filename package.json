@@ -23,7 +23,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "readiness": "node scripts/release-readiness.mjs",
-    "readiness:stateful": "node scripts/stateful-readiness.mjs"
+    "readiness:stateful": "node scripts/stateful-readiness.mjs",
+    "release:candidate": "node scripts/build-release-candidate.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",
