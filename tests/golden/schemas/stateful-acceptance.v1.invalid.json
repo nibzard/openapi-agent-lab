@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "kind": "StatefulAcceptanceMap",
+  "milestone": "stateful-environments",
+  "tasks": [
+    {
+      "phase": "P1",
+      "requirement": "SPEC 48.2 · plan P1",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "remaining": "The task identifier is missing, so this map is invalid."
+    }
+  ]
+}

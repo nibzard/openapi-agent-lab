@@ -21,7 +21,8 @@
     "scan:secrets": "node scripts/secret-scan.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "readiness": "node scripts/release-readiness.mjs"
+    "readiness": "node scripts/release-readiness.mjs",
+    "readiness:stateful": "node scripts/stateful-readiness.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",

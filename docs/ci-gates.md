@@ -85,6 +85,13 @@ pending. Every gate below names its local command where one exists.
   readiness gate fails while required behavior is missing. Covered by
   `tests/release-readiness.test.ts`, which pins the gate semantics and
   the command-line exit.
+- Stateful milestone completeness: run `pnpm run readiness:stateful`.
+  The command reads `tests/stateful-acceptance.map.json` and exits `1`
+  while any task SE-P0-01 through SE-P6-03 is pending or partial, or
+  while a task that requires live provider verification was completed
+  without a recorded live pass. Continuous integration does not run it
+  on purpose; `tests/stateful-acceptance.test.ts` verifies that the map
+  is honest instead.
 - No unwaived critical or high vulnerability: run
   `pnpm audit --prod --audit-level=high`. The CI job reports it. The
   waiver list is pending, owner: release engineering.

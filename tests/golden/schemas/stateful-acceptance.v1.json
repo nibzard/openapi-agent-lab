@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "kind": "StatefulAcceptanceMap",
+  "milestone": "stateful-environments",
+  "tasks": [
+    {
+      "id": "SE-P0-01",
+      "phase": "P0",
+      "requirement": "SPEC 48.1 · plan P0",
+      "status": "complete",
+      "tests": [
+        "apps/cli/src/run.test.ts > completes the webclip scenario errand through the public command"
+      ],
+      "evidence": {
+        "commit": "7f0b48a",
+        "command": "pnpm exec vitest run apps/cli/src/run.test.ts packages/testkit/src/webclip-behavior.test.ts",
+        "artifact": "docs/evidence/stateful-baseline.v1.json"
+      }
+    },
+    {
+      "id": "SE-P0-02",
+      "phase": "P0",
+      "requirement": "SPEC 48.8 · plan P0",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "remaining": "Add the acceptance map, schema, tests, and readiness gate."
+    },
+    {
+      "id": "SE-P5-03",
+      "phase": "P5",
+      "requirement": "SPEC 48.7 · plan P5",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "requires_live_provider": true,
+      "depends_on": ["SE-P5-02"],
+      "remaining": "Run the eight core cases against the live repository."
+    }
+  ]
+}

@@ -914,6 +914,7 @@ openapi-agent-lab/
     resource-usage.v1.schema.json
     artifact-manifest.v1.schema.json
     conformance.v1.schema.json
+    stateful-acceptance.v1.schema.json
 
   packs/
     steel-computer/

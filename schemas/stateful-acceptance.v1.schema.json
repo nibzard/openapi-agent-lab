@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/stateful-acceptance.v1.json",
+  "title": "Stateful milestone acceptance map",
+  "description": "Tracks every stateful environments task (SPEC section 48, plan IDs SE-P0-01 through SE-P6-03) with status, enforcing tests, evidence, and remaining work. Conditional rules that JSON Schema cannot express here (a complete task must name tests and evidence; a pending task must name none) are enforced by tests/stateful-acceptance.test.ts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "milestone", "tasks"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "kind": { "const": "StatefulAcceptanceMap" },
+    "milestone": { "const": "stateful-environments" },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "phase",
+          "requirement",
+          "status",
+          "tests",
+          "evidence"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^SE-P[0-6]-0[1-4]$",
+            "description": "Plan task identifier, for example SE-P1-04."
+          },
+          "phase": {
+            "enum": ["P0", "P1", "P2", "P3", "P4", "P5", "P6"],
+            "description": "Plan delivery phase of the task."
+          },
+          "requirement": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Authoritative requirement, for example 'SPEC 48.4 · plan P2'."
+          },
+          "status": {
+            "enum": ["pending", "partial", "complete"],
+            "description": "Complete only when the task's named checks pass."
+          },
+          "tests": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "description": "Existing tests in 'file > title' form. Never a proposed path."
+          },
+          "evidence": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "required": ["commit"],
+            "properties": {
+              "commit": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{7,40}$",
+                "description": "Commit that carries the change and its verification."
+              },
+              "command": {
+                "type": "string",
+                "description": "Exact verification command that passed."
+              },
+              "artifact": {
+                "type": "string",
+                "description": "Repository path of the recorded evidence artifact."
+              },
+              "live_provider": {
+                "type": "boolean",
+                "description": "True only after the required live provider verification passed."
+              }
+            }
+          },
+          "remaining": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What is left; required on every non-complete task."
+          },
+          "requires_live_provider": {
+            "type": "boolean",
+            "description": "True when a live provider pass is required to complete."
+          },
+          "depends_on": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^SE-P[0-6]-0[1-4]$" },
+            "description": "Task IDs this task depends on."
+          }
+        }
+      }
+    }
+  }
+}

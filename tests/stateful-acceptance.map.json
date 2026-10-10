@@ -1,0 +1,245 @@
+{
+  "schema_version": 1,
+  "kind": "StatefulAcceptanceMap",
+  "milestone": "stateful-environments",
+  "tasks": [
+    {
+      "id": "SE-P0-01",
+      "phase": "P0",
+      "requirement": "SPEC 48.1 · plan P0",
+      "status": "complete",
+      "tests": [
+        "apps/cli/src/run.test.ts > completes the webclip scenario errand through the public command",
+        "apps/cli/src/run.test.ts > commits no state when the scripted participant fails"
+      ],
+      "evidence": {
+        "commit": "7f0b48a",
+        "command": "pnpm exec vitest run apps/cli/src/run.test.ts packages/testkit/src/webclip-behavior.test.ts",
+        "artifact": "docs/evidence/stateful-baseline.v1.json"
+      }
+    },
+    {
+      "id": "SE-P0-02",
+      "phase": "P0",
+      "requirement": "SPEC 48.8 · plan P0",
+      "status": "partial",
+      "tests": [
+        "tests/stateful-acceptance.test.ts > carries every stateful task with a valid record"
+      ],
+      "evidence": null,
+      "depends_on": ["SE-P0-01"],
+      "remaining": "Record the completing commit and evidence for the map and gate."
+    },
+    {
+      "id": "SE-P0-03",
+      "phase": "P0",
+      "requirement": "SPEC 48.2 · plan P0",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "depends_on": ["SE-P0-02"],
+      "remaining": "Promote AC-125 isolation, seed replay, and backend failure checks to durable public-run tests."
+    },
+    {
+      "id": "SE-P1-01",
+      "phase": "P1",
+      "requirement": "SPEC 48.2 · plan P1",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "depends_on": ["SE-P0-03"],
+      "remaining": "Create @oal/environment with the frozen input interface and move ownership from scenario-runtime."
+    },
+    {
+      "id": "SE-P1-02",
+      "phase": "P1",
+      "requirement": "SPEC 48.8 · plan P1",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "depends_on": ["SE-P1-01"],
+      "remaining": "Freeze the behavior dependency closure, execute frozen copies, and move Webclip imports to public packages."
+    },
+    {
+      "id": "SE-P1-03",
+      "phase": "P1",
+      "requirement": "SPEC 48.2 · plan P1",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "depends_on": ["SE-P1-02"],
+      "remaining": "Make deterministic services transaction-scoped and add the environment.v1 manifest."
+    },
+    {
+      "id": "SE-P1-04",
+      "phase": "P1",
+      "requirement": "SPEC 48.2 · plan P1",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "depends_on": ["SE-P1-03"],
+      "remaining": "Implement pack-based scenario serving through the shared environment with lifecycle evidence and shutdown handling."
+    },
+    {
+      "id": "SE-P2-01",
+      "phase": "P2",
+      "requirement": "SPEC 48.4 · plan P2",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "depends_on": ["SE-P1-04"],
+      "remaining": "Define checkpoint.v1 and explicit export/import for clock, IDs, random streams, fault counters, and idempotency scope."
+    },
+    {
+      "id": "SE-P2-02",
+      "phase": "P2",
+      "requirement": "SPEC 48.3 · plan P2",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "depends_on": ["SE-P2-01"],
+      "remaining": "Implement the private operator socket, control protocol, queue limits, durable control IDs, and world inspect."
+    },
+    {
+      "id": "SE-P2-03",
+      "phase": "P2",
+      "requirement": "SPEC 48.4 · plan P2",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "depends_on": ["SE-P2-02"],
+      "remaining": "Implement atomic checkpoint directories, private key retention, restore validation, and foreground world fork."
+    },
+    {
+      "id": "SE-P2-04",
+      "phase": "P2",
+      "requirement": "SPEC 48.4 · plan P2",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "depends_on": ["SE-P2-03"],
+      "remaining": "Implement reset and advance-time with generation checks, control result replay, and preserved evidence."
+    },
+    {
+      "id": "SE-P3-01",
+      "phase": "P3",
+      "requirement": "SPEC 48.5 · plan P3",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "depends_on": ["SE-P1-04"],
+      "remaining": "Add the corpus schema, parser, typed bindings, assertion definitions, bounded polling validation, and golden files."
+    },
+    {
+      "id": "SE-P3-02",
+      "phase": "P3",
+      "requirement": "SPEC 48.5 · plan P3",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "depends_on": ["SE-P3-01"],
+      "remaining": "Create @oal/corpus with the local target, target interface, corpus-report.v1, and public validate/run commands."
+    },
+    {
+      "id": "SE-P3-03",
+      "phase": "P3",
+      "requirement": "SPEC 48.5 · SPEC 48.6 · plan P3",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "depends_on": ["SE-P3-02"],
+      "remaining": "Add Webclip corpus cases for lifecycle, ordering, distinct resources, deletion, quota, and representation, with negative doubles."
+    },
+    {
+      "id": "SE-P4-01",
+      "phase": "P4",
+      "requirement": "SPEC 48.6 · plan P4",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "depends_on": ["SE-P2-04", "SE-P3-03"],
+      "remaining": "Version fault phases and wire the pre-behavior, corrupt-candidate, and post-commit disconnect fixtures."
+    },
+    {
+      "id": "SE-P4-02",
+      "phase": "P4",
+      "requirement": "SPEC 48.6 · plan P4",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "depends_on": ["SE-P4-01"],
+      "remaining": "Add the labeled synthetic runtime pack for idempotency keys and virtual expiry, and extend checkpoint coverage."
+    },
+    {
+      "id": "SE-P4-03",
+      "phase": "P4",
+      "requirement": "SPEC 48.6 · plan P4",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "depends_on": ["SE-P4-02"],
+      "remaining": "Add duplicate-effect and incorrect-rollback doubles and complete error classifications in corpus reports."
+    },
+    {
+      "id": "SE-P5-01",
+      "phase": "P5",
+      "requirement": "SPEC 48.7 · plan P5",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "depends_on": ["SE-P3-03", "SE-P4-03"],
+      "remaining": "Build packs/github-issue-triage with the five operations, eight cases, capability limits, sources, and fidelity.v1 claims."
+    },
+    {
+      "id": "SE-P5-02",
+      "phase": "P5",
+      "requirement": "SPEC 48.7 · plan P5",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "depends_on": ["SE-P5-01"],
+      "remaining": "Implement the GitHub target with explicit writes, preflight, serial bounded requests, run markers, and the cleanup ledger."
+    },
+    {
+      "id": "SE-P5-03",
+      "phase": "P5",
+      "requirement": "SPEC 48.7 · plan P5",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "requires_live_provider": true,
+      "depends_on": ["SE-P5-02"],
+      "remaining": "Run the eight black-box cases on the dedicated repository and save redacted corpus and fidelity reports."
+    },
+    {
+      "id": "SE-P6-01",
+      "phase": "P6",
+      "requirement": "SPEC 48.8 · plan P6",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "depends_on": ["SE-P5-03"],
+      "remaining": "Complete public authoring exports, compatibility checks, and installable archives for the CLI and required packages."
+    },
+    {
+      "id": "SE-P6-02",
+      "phase": "P6",
+      "requirement": "SPEC 48.8 · plan P6",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "depends_on": ["SE-P6-01"],
+      "remaining": "Add the external pack template and tutorial, and update quickstart and capabilities for proven commands only."
+    },
+    {
+      "id": "SE-P6-03",
+      "phase": "P6",
+      "requirement": "SPEC 48.8 · plan P6",
+      "status": "pending",
+      "tests": [],
+      "evidence": null,
+      "depends_on": ["SE-P6-02"],
+      "remaining": "Run phase and milestone gates, record practitioner trials, and prepare release artifacts without publishing."
+    }
+  ]
+}
