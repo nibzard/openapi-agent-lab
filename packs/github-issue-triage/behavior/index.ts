@@ -137,6 +137,12 @@ function issueJson(issue: IssueRecord): Json {
   return value as unknown as Json;
 }
 
+/** The integer counter tail of one issued identifier. */
+function counterOf(issued: string, prefix: string): number {
+  const value = Number(issued.slice(prefix.length + 1));
+  return Number.isInteger(value) && value >= 1 ? value : 1;
+}
+
 function pathInt(request: BehaviorRequest, name: string): number {
   const raw = request.parameters.path[name];
   const value = typeof raw === "number" ? raw : Number(raw);
@@ -193,13 +199,15 @@ function createIssue(
       ? null
       : String(body.body);
   // Numbers are repository-scoped handles; ids are global identities.
-  // Distinct counters keep them distinct forever.
-  let number = domain.ids.next("issue");
+  // Distinct counters keep them distinct forever. The ids service
+  // issues prefixed strings; the counter tail is the integer the
+  // wire form and the events carry.
+  let number = counterOf(domain.ids.next("issue"), "issue");
   while (state.issues[number.toString(10)] !== undefined) {
-    number = domain.ids.next("issue");
+    number = counterOf(domain.ids.next("issue"), "issue");
   }
   const issue: IssueRecord = {
-    id: domain.ids.next("issue-id") + 10_000,
+    id: counterOf(domain.ids.next("issue-id"), "issue-id") + 10_000,
     number,
     title,
     body: requestBody,
@@ -424,7 +432,7 @@ function triageBackend(
             // list assertions select by number and ignore entries
             // carrying the pull_request key (section 48.7).
             "1": {
-              id: 10_001,
+              id: 10_000,
               number: 1,
               title: "Seeded pull request entry",
               body: null,

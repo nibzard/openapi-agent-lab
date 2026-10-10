@@ -16,6 +16,7 @@ import {
   diagnostic,
   EXIT_INVALID,
   EXIT_OK,
+  EXIT_UNSUPPORTED,
   invalidInput,
   isJsonObject,
   sha256Hex,
@@ -124,6 +125,12 @@ function errorCodeOf(cause: unknown): string {
   return "OAL-CORPUS-INVALID";
 }
 
+/** Read one environment variable without leaking it anywhere. */
+function environmentValue(name: string): string | null {
+  const value = process.env[name];
+  return value === undefined || value.length === 0 ? null : value;
+}
+
 /** Parse one `--input name=value` flag value as JSON, or a string. */
 function parseInputValue(raw: string): Json {
   try {
@@ -133,11 +140,18 @@ function parseInputValue(raw: string): Json {
   }
 }
 
-/** `oal corpus run PACK [--corpus ID] [--input NAME=VALUE]...`. */
-export async function corpusRunCommand(
+/** The pack directory and selected corpus of one corpus command. */
+interface CorpusSelection {
+  readonly packRoot: string;
+  readonly corpus: NonNullable<Awaited<ReturnType<typeof corporaOfPack>>[0]>;
+  readonly inputs: Record<string, Json>;
+}
+
+/** Resolve the pack directory, one corpus, and every input value. */
+async function selectCorpus(
   args: CommandArgs,
   io: Io
-): Promise<ExitCode> {
+): Promise<CorpusSelection | null> {
   const packDir = args.positionals[0];
   if (packDir === undefined) {
     throw missingArgument(args.command.name, "pack");
@@ -166,7 +180,7 @@ export async function corpusRunCommand(
         ? `No corpus ${JSON.stringify(corpusFlag)} in this pack.`
         : "This pack declares no corpora."
     );
-    return EXIT_INVALID;
+    return null;
   }
   if (selected.length > 1) {
     throw invalidInput(
@@ -185,8 +199,19 @@ export async function corpusRunCommand(
       `Corpus ${JSON.stringify(corpus.document.id)} needs --input values for: ${missing.join(", ")}.`
     );
   }
+  return { packRoot: path.resolve(args.context.cwd, packDir), corpus, inputs };
+}
 
-  const packRoot = path.resolve(args.context.cwd, packDir);
+/** `oal corpus run PACK [--corpus ID] [--input NAME=VALUE]...`. */
+export async function corpusRunCommand(
+  args: CommandArgs,
+  io: Io
+): Promise<ExitCode> {
+  const selection = await selectCorpus(args, io);
+  if (selection === null) {
+    return EXIT_INVALID;
+  }
+  const { corpus, inputs, packRoot } = selection;
   const targetFlag = args.flags.string("target") ?? "local";
   if (targetFlag !== "local" && targetFlag !== "github") {
     throw invalidInput(
@@ -205,11 +230,13 @@ export async function corpusRunCommand(
       : new LocalCorpusTarget({
           packDir: packRoot,
           cwd: args.context.cwd,
-          contract: await compileServeSource(
-            packDir,
-            args.context.cwd,
-            args.context.maxSourceBytes
-          ).then((compiled) => compiled.contract)
+          contract: (
+            await compileServeSource(
+              packRoot,
+              args.context.cwd,
+              args.context.maxSourceBytes
+            )
+          ).contract
         });
   let report: CorpusReport;
   try {
@@ -219,12 +246,6 @@ export async function corpusRunCommand(
     });
   } finally {
     await closeTarget(target);
-  }
-
-  /** Read one environment variable without leaking it anywhere. */
-  function environmentValue(name: string): string | null {
-    const value = process.env[name];
-    return value === undefined || value.length === 0 ? null : value;
   }
 
   /** Stop the world a target owns; provider targets need nothing. */
@@ -246,6 +267,151 @@ export async function corpusRunCommand(
   }
   const troubled = report.summary.failed > 0 || report.summary.error > 0;
   return troubled ? EXIT_INVALID : EXIT_OK;
+}
+
+/**
+ * `oal corpus verify PACK --corpus ID --repository owner/name
+ * --allow-live-writes [--provider-url URL] [--input NAME=VALUE]...
+ * --out DIR`: the opt-in verification job of specification section
+ * 48.7. It runs the corpus on the local target, then on the
+ * provider, saves both redacted reports, and stamps the fidelity
+ * claims the run observed. Missing credentials record a skip, never
+ * a pass.
+ */
+export async function corpusVerifyCommand(
+  args: CommandArgs,
+  io: Io
+): Promise<ExitCode> {
+  const selection = await selectCorpus(args, io);
+  if (selection === null) {
+    return EXIT_INVALID;
+  }
+  const { corpus, inputs, packRoot } = selection;
+  const outFlag = args.flags.string("out");
+  if (outFlag === undefined || outFlag.length === 0) {
+    throw missingArgument(args.command.name, "--out");
+  }
+  const outDir = path.resolve(args.context.cwd, outFlag);
+  await mkdir(outDir, { recursive: true });
+  const repository = args.flags.string("repository") ?? null;
+  const allowLiveWrites = args.flags.has("allow-live-writes");
+  const token = environmentValue("GITHUB_TOKEN");
+
+  // The local run needs no credentials and gates the provider run.
+  const localTarget = new LocalCorpusTarget({
+    packDir: packRoot,
+    cwd: args.context.cwd,
+    contract: (
+      await compileServeSource(
+        packRoot,
+        args.context.cwd,
+        args.context.maxSourceBytes
+      )
+    ).contract
+  });
+  let localReport: CorpusReport;
+  try {
+    localReport = await runCorpus(corpus.document, localTarget, {
+      inputs,
+      loadSchema: schemaLoaderOf(packRoot)
+    });
+  } finally {
+    await localTarget.close();
+  }
+  await writeFile(
+    path.join(outDir, "corpus-local.json"),
+    `${stableJsonStringify(localReport as unknown as Json)}\n`
+  );
+  if (localReport.summary.failed > 0 || localReport.summary.error > 0) {
+    io.stderr("The local run failed; the provider run was not attempted.");
+    return EXIT_INVALID;
+  }
+
+  // Missing credentials record a skip, never a pass (section 48.7).
+  if (token === null) {
+    const skip = {
+      schema_version: 1,
+      kind: "VerificationSkip",
+      corpus: corpus.document.id,
+      reason: "GITHUB_TOKEN is not set",
+      recorded_at: new Date().toISOString(),
+      repository
+    };
+    await writeFile(
+      path.join(outDir, "skip.json"),
+      `${stableJsonStringify(skip as unknown as Json)}\n`
+    );
+    io.stderr(
+      "Provider verification skipped: GITHUB_TOKEN is not set. This blocks fidelity completion; it is not a pass."
+    );
+    return EXIT_UNSUPPORTED;
+  }
+
+  const providerUrl = args.flags.string("provider-url");
+  const providerTarget = new GithubTarget({
+    token,
+    repository,
+    runMarker: `oal-verify-${new Date().toISOString().replace(/[:.]/g, "-")}`,
+    allowLiveWrites,
+    ...(providerUrl === undefined ? {} : { baseUrl: providerUrl })
+  });
+  let providerReport: CorpusReport;
+  try {
+    providerReport = await runCorpus(corpus.document, providerTarget, {
+      inputs
+    });
+  } finally {
+    await providerTarget.cleanup().catch(() => undefined);
+  }
+  await writeFile(
+    path.join(outDir, "corpus-github.json"),
+    `${stableJsonStringify(providerReport as unknown as Json)}\n`
+  );
+
+  if (providerReport.summary.failed > 0 || providerReport.summary.error > 0) {
+    io.stderr("The provider run failed; the fidelity claims stay unverified.");
+    return EXIT_INVALID;
+  }
+
+  // Stamp the claims this run observed. The stamped document is an
+  // artifact for review; the pack's claims update through a reviewed
+  // commit, never automatically.
+  const claims = await fidelityClaimsOf(packRoot);
+  if (claims !== null) {
+    const digest = sha256Hex(
+      stableJsonStringify(providerReport as unknown as Json)
+    );
+    const today = new Date().toISOString().slice(0, 10);
+    const observed = JSON.parse(JSON.stringify(claims)) as JsonObject;
+    const entries = observed["claims"];
+    if (Array.isArray(entries)) {
+      for (const entry of entries) {
+        if (isJsonObject(entry) && entry["classification"] === "documented") {
+          entry["classification"] = "observed";
+          entry["last_verified_at"] = today;
+          entry["report_digest"] = digest;
+        }
+      }
+    }
+    await writeFile(
+      path.join(outDir, "fidelity-observed.json"),
+      `${stableJsonStringify(observed as unknown as Json)}\n`
+    );
+  }
+  io.stdout(
+    `Verification passed on both targets; reports and stamped claims live in ${outDir}`
+  );
+  return EXIT_OK;
+}
+
+/** The fidelity claims document a pack declares, or null. */
+async function fidelityClaimsOf(packRoot: string): Promise<JsonObject | null> {
+  const loaded = await loadPack(packRoot);
+  const reference = loaded.references.find(
+    (candidate) => candidate.role === "fidelity"
+  );
+  const document = reference?.document;
+  return isJsonObject(document) ? document : null;
 }
 
 /** One query or path value as wire text. */
@@ -340,8 +506,16 @@ export class LocalCorpusTarget implements CorpusTarget {
         "The local target already holds a world; clean it up first."
       );
     }
-    const runId = `corpus-${corpusCase.id}`;
-    const runSeed = sha256Hex(`oal-corpus:${runId}`);
+    // The run id must bound the Unix socket path of the operator
+    // control: long case ids would push control.sock past the path
+    // limit, so the id keeps a short slug plus a hash of the case id.
+    const slug = corpusCase.id
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 16);
+    const runId = `corpus-${slug}-${sha256Hex(corpusCase.id).slice(0, 8)}`;
+    const runSeed = sha256Hex(`oal-corpus:${corpusCase.id}`);
     const io = new MemoryIo();
     const guard = new TerminationGuard();
     const pending = main(

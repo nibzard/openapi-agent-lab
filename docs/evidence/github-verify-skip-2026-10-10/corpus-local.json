@@ -1,0 +1,1122 @@
+{
+  "cases": [
+    {
+      "agent_success": "not_evaluated",
+      "behavioral_conformance": "pass",
+      "claim_ids": [
+        "issue-create",
+        "issue-read"
+      ],
+      "cleanup": {
+        "status": "not_run",
+        "steps": 0
+      },
+      "contract_conformance": "not_evaluated",
+      "diagnostics": [],
+      "id": "create-read",
+      "scope": "black_box",
+      "status": "passed",
+      "steps": [
+        {
+          "assertions": [
+            {
+              "actual": 201,
+              "expected": 201,
+              "message": "",
+              "op": "status",
+              "passed": true
+            },
+            {
+              "actual": 2,
+              "expected": null,
+              "message": "",
+              "op": "exists",
+              "passed": true
+            }
+          ],
+          "attempts": [],
+          "bindings": [
+            {
+              "missing": false,
+              "name": "number",
+              "pointer": "/number",
+              "source": "body",
+              "step": "create",
+              "value": 2
+            }
+          ],
+          "exchange": {
+            "body": {
+              "body": "Created by the issue-triage corpus.",
+              "created_at": "2000-01-01T00:00:00.000Z",
+              "id": 10001,
+              "labels": [],
+              "number": 2,
+              "state": "open",
+              "title": "Corpus create-read"
+            },
+            "headers": {
+              "connection": "keep-alive",
+              "content-length": "164",
+              "content-type": "application/json; charset=utf-8",
+              "date": "Sat, 10 Oct 2026 15:32:50 GMT",
+              "keep-alive": "timeout=5"
+            },
+            "method": "POST",
+            "status": 201,
+            "url": "http://127.0.0.1:39855/repos/example/triage/issues"
+          },
+          "id": "create",
+          "operation_id": "create_issue",
+          "phase": "steps",
+          "status": "passed"
+        },
+        {
+          "assertions": [
+            {
+              "actual": 200,
+              "expected": 200,
+              "message": "",
+              "op": "status",
+              "passed": true
+            },
+            {
+              "actual": 2,
+              "expected": 2,
+              "message": "",
+              "op": "equals",
+              "passed": true
+            },
+            {
+              "actual": "open",
+              "expected": "open",
+              "message": "",
+              "op": "equals",
+              "passed": true
+            }
+          ],
+          "attempts": [],
+          "bindings": [],
+          "exchange": {
+            "body": {
+              "body": "Created by the issue-triage corpus.",
+              "created_at": "2000-01-01T00:00:00.000Z",
+              "id": 10001,
+              "labels": [],
+              "number": 2,
+              "state": "open",
+              "title": "Corpus create-read"
+            },
+            "headers": {
+              "connection": "keep-alive",
+              "content-length": "164",
+              "content-type": "application/json; charset=utf-8",
+              "date": "Sat, 10 Oct 2026 15:32:50 GMT",
+              "keep-alive": "timeout=5"
+            },
+            "method": "GET",
+            "status": 200,
+            "url": "http://127.0.0.1:39855/repos/example/triage/issues/2"
+          },
+          "id": "read",
+          "operation_id": "get_issue",
+          "phase": "steps",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "agent_success": "not_evaluated",
+      "behavioral_conformance": "pass",
+      "claim_ids": [
+        "issue-create",
+        "issue-list"
+      ],
+      "cleanup": {
+        "status": "not_run",
+        "steps": 0
+      },
+      "contract_conformance": "not_evaluated",
+      "diagnostics": [],
+      "id": "create-list",
+      "scope": "black_box",
+      "status": "passed",
+      "steps": [
+        {
+          "assertions": [
+            {
+              "actual": 201,
+              "expected": 201,
+              "message": "",
+              "op": "status",
+              "passed": true
+            }
+          ],
+          "attempts": [],
+          "bindings": [
+            {
+              "missing": false,
+              "name": "number",
+              "pointer": "/number",
+              "source": "body",
+              "step": "create",
+              "value": 2
+            }
+          ],
+          "exchange": {
+            "body": {
+              "body": null,
+              "created_at": "2000-01-01T00:00:00.000Z",
+              "id": 10001,
+              "labels": [],
+              "number": 2,
+              "state": "open",
+              "title": "Corpus create-list"
+            },
+            "headers": {
+              "connection": "keep-alive",
+              "content-length": "131",
+              "content-type": "application/json; charset=utf-8",
+              "date": "Sat, 10 Oct 2026 15:32:50 GMT",
+              "keep-alive": "timeout=5"
+            },
+            "method": "POST",
+            "status": 201,
+            "url": "http://127.0.0.1:42359/repos/example/triage/issues"
+          },
+          "id": "create",
+          "operation_id": "create_issue",
+          "phase": "steps",
+          "status": "passed"
+        },
+        {
+          "assertions": [
+            {
+              "actual": 200,
+              "expected": 200,
+              "message": "",
+              "op": "status",
+              "passed": true
+            },
+            {
+              "actual": [
+                {
+                  "body": null,
+                  "created_at": "2000-01-01T00:00:00.000Z",
+                  "id": 10000,
+                  "labels": [],
+                  "number": 1,
+                  "pull_request": {
+                    "url": "https://api.github.com/repos/example/triage/pulls/1"
+                  },
+                  "state": "open",
+                  "title": "Seeded pull request entry"
+                },
+                {
+                  "body": null,
+                  "created_at": "2000-01-01T00:00:00.000Z",
+                  "id": 10001,
+                  "labels": [],
+                  "number": 2,
+                  "state": "open",
+                  "title": "Corpus create-list"
+                }
+              ],
+              "expected": {
+                "number": 2
+              },
+              "message": "",
+              "op": "contains",
+              "passed": true
+            }
+          ],
+          "attempts": [],
+          "bindings": [],
+          "exchange": {
+            "body": [
+              {
+                "body": null,
+                "created_at": "2000-01-01T00:00:00.000Z",
+                "id": 10000,
+                "labels": [],
+                "number": 1,
+                "pull_request": {
+                  "url": "https://api.github.com/repos/example/triage/pulls/1"
+                },
+                "state": "open",
+                "title": "Seeded pull request entry"
+              },
+              {
+                "body": null,
+                "created_at": "2000-01-01T00:00:00.000Z",
+                "id": 10001,
+                "labels": [],
+                "number": 2,
+                "state": "open",
+                "title": "Corpus create-list"
+              }
+            ],
+            "headers": {
+              "connection": "keep-alive",
+              "content-length": "349",
+              "content-type": "application/json; charset=utf-8",
+              "date": "Sat, 10 Oct 2026 15:32:50 GMT",
+              "keep-alive": "timeout=5"
+            },
+            "method": "GET",
+            "status": 200,
+            "url": "http://127.0.0.1:42359/repos/example/triage/issues?state=open&per_page=100"
+          },
+          "id": "list-open",
+          "operation_id": "list_issues",
+          "phase": "steps",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "agent_success": "not_evaluated",
+      "behavioral_conformance": "pass",
+      "claim_ids": [
+        "issue-create"
+      ],
+      "cleanup": {
+        "status": "not_run",
+        "steps": 0
+      },
+      "contract_conformance": "not_evaluated",
+      "diagnostics": [],
+      "id": "two-distinct-creations",
+      "scope": "black_box",
+      "status": "passed",
+      "steps": [
+        {
+          "assertions": [
+            {
+              "actual": 201,
+              "expected": 201,
+              "message": "",
+              "op": "status",
+              "passed": true
+            }
+          ],
+          "attempts": [],
+          "bindings": [
+            {
+              "missing": false,
+              "name": "number",
+              "pointer": "/number",
+              "source": "body",
+              "step": "first",
+              "value": 2
+            }
+          ],
+          "exchange": {
+            "body": {
+              "body": null,
+              "created_at": "2000-01-01T00:00:00.000Z",
+              "id": 10001,
+              "labels": [],
+              "number": 2,
+              "state": "open",
+              "title": "Corpus distinct first"
+            },
+            "headers": {
+              "connection": "keep-alive",
+              "content-length": "134",
+              "content-type": "application/json; charset=utf-8",
+              "date": "Sat, 10 Oct 2026 15:32:51 GMT",
+              "keep-alive": "timeout=5"
+            },
+            "method": "POST",
+            "status": 201,
+            "url": "http://127.0.0.1:34571/repos/example/triage/issues"
+          },
+          "id": "first",
+          "operation_id": "create_issue",
+          "phase": "steps",
+          "status": "passed"
+        },
+        {
+          "assertions": [
+            {
+              "actual": 201,
+              "expected": 201,
+              "message": "",
+              "op": "status",
+              "passed": true
+            },
+            {
+              "actual": 3,
+              "expected": 2,
+              "message": "",
+              "op": "not_equals",
+              "passed": true
+            }
+          ],
+          "attempts": [],
+          "bindings": [
+            {
+              "missing": false,
+              "name": "number",
+              "pointer": "/number",
+              "source": "body",
+              "step": "second",
+              "value": 3
+            }
+          ],
+          "exchange": {
+            "body": {
+              "body": null,
+              "created_at": "2000-01-01T00:00:00.001Z",
+              "id": 10002,
+              "labels": [],
+              "number": 3,
+              "state": "open",
+              "title": "Corpus distinct second"
+            },
+            "headers": {
+              "connection": "keep-alive",
+              "content-length": "135",
+              "content-type": "application/json; charset=utf-8",
+              "date": "Sat, 10 Oct 2026 15:32:51 GMT",
+              "keep-alive": "timeout=5"
+            },
+            "method": "POST",
+            "status": 201,
+            "url": "http://127.0.0.1:34571/repos/example/triage/issues"
+          },
+          "id": "second",
+          "operation_id": "create_issue",
+          "phase": "steps",
+          "status": "passed"
+        },
+        {
+          "assertions": [
+            {
+              "actual": 200,
+              "expected": 200,
+              "message": "",
+              "op": "status",
+              "passed": true
+            },
+            {
+              "actual": 3,
+              "expected": 3,
+              "message": "",
+              "op": "equals",
+              "passed": true
+            }
+          ],
+          "attempts": [],
+          "bindings": [],
+          "exchange": {
+            "body": {
+              "body": null,
+              "created_at": "2000-01-01T00:00:00.001Z",
+              "id": 10002,
+              "labels": [],
+              "number": 3,
+              "state": "open",
+              "title": "Corpus distinct second"
+            },
+            "headers": {
+              "connection": "keep-alive",
+              "content-length": "135",
+              "content-type": "application/json; charset=utf-8",
+              "date": "Sat, 10 Oct 2026 15:32:51 GMT",
+              "keep-alive": "timeout=5"
+            },
+            "method": "GET",
+            "status": 200,
+            "url": "http://127.0.0.1:34571/repos/example/triage/issues/3"
+          },
+          "id": "read-second",
+          "operation_id": "get_issue",
+          "phase": "steps",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "agent_success": "not_evaluated",
+      "behavioral_conformance": "pass",
+      "claim_ids": [
+        "issue-label"
+      ],
+      "cleanup": {
+        "status": "not_run",
+        "steps": 0
+      },
+      "contract_conformance": "not_evaluated",
+      "diagnostics": [],
+      "id": "add-label-read",
+      "scope": "black_box",
+      "status": "passed",
+      "steps": [
+        {
+          "assertions": [
+            {
+              "actual": 201,
+              "expected": 201,
+              "message": "",
+              "op": "status",
+              "passed": true
+            }
+          ],
+          "attempts": [],
+          "bindings": [
+            {
+              "missing": false,
+              "name": "number",
+              "pointer": "/number",
+              "source": "body",
+              "step": "create",
+              "value": 2
+            }
+          ],
+          "exchange": {
+            "body": {
+              "body": null,
+              "created_at": "2000-01-01T00:00:00.000Z",
+              "id": 10001,
+              "labels": [],
+              "number": 2,
+              "state": "open",
+              "title": "Corpus add-label"
+            },
+            "headers": {
+              "connection": "keep-alive",
+              "content-length": "129",
+              "content-type": "application/json; charset=utf-8",
+              "date": "Sat, 10 Oct 2026 15:32:51 GMT",
+              "keep-alive": "timeout=5"
+            },
+            "method": "POST",
+            "status": 201,
+            "url": "http://127.0.0.1:36185/repos/example/triage/issues"
+          },
+          "id": "create",
+          "operation_id": "create_issue",
+          "phase": "steps",
+          "status": "passed"
+        },
+        {
+          "assertions": [
+            {
+              "actual": 200,
+              "expected": 200,
+              "message": "",
+              "op": "status",
+              "passed": true
+            },
+            {
+              "actual": [
+                {
+                  "description": "Triage runs of the lab",
+                  "id": 9001,
+                  "name": "oal-triage"
+                }
+              ],
+              "expected": {
+                "name": "oal-triage"
+              },
+              "message": "",
+              "op": "contains",
+              "passed": true
+            }
+          ],
+          "attempts": [],
+          "bindings": [],
+          "exchange": {
+            "body": [
+              {
+                "description": "Triage runs of the lab",
+                "id": 9001,
+                "name": "oal-triage"
+              }
+            ],
+            "headers": {
+              "connection": "keep-alive",
+              "content-length": "72",
+              "content-type": "application/json; charset=utf-8",
+              "date": "Sat, 10 Oct 2026 15:32:51 GMT",
+              "keep-alive": "timeout=5"
+            },
+            "method": "POST",
+            "status": 200,
+            "url": "http://127.0.0.1:36185/repos/example/triage/issues/2/labels"
+          },
+          "id": "add",
+          "operation_id": "add_labels",
+          "phase": "steps",
+          "status": "passed"
+        },
+        {
+          "assertions": [
+            {
+              "actual": 200,
+              "expected": 200,
+              "message": "",
+              "op": "status",
+              "passed": true
+            },
+            {
+              "actual": [
+                {
+                  "description": "Triage runs of the lab",
+                  "id": 9001,
+                  "name": "oal-triage"
+                }
+              ],
+              "expected": {
+                "name": "oal-triage"
+              },
+              "message": "",
+              "op": "contains",
+              "passed": true
+            }
+          ],
+          "attempts": [],
+          "bindings": [],
+          "exchange": {
+            "body": {
+              "body": null,
+              "created_at": "2000-01-01T00:00:00.000Z",
+              "id": 10001,
+              "labels": [
+                {
+                  "description": "Triage runs of the lab",
+                  "id": 9001,
+                  "name": "oal-triage"
+                }
+              ],
+              "number": 2,
+              "state": "open",
+              "title": "Corpus add-label"
+            },
+            "headers": {
+              "connection": "keep-alive",
+              "content-length": "199",
+              "content-type": "application/json; charset=utf-8",
+              "date": "Sat, 10 Oct 2026 15:32:51 GMT",
+              "keep-alive": "timeout=5"
+            },
+            "method": "GET",
+            "status": 200,
+            "url": "http://127.0.0.1:36185/repos/example/triage/issues/2"
+          },
+          "id": "read",
+          "operation_id": "get_issue",
+          "phase": "steps",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "agent_success": "not_evaluated",
+      "behavioral_conformance": "pass",
+      "claim_ids": [
+        "issue-close"
+      ],
+      "cleanup": {
+        "status": "not_run",
+        "steps": 0
+      },
+      "contract_conformance": "not_evaluated",
+      "diagnostics": [],
+      "id": "close-read",
+      "scope": "black_box",
+      "status": "passed",
+      "steps": [
+        {
+          "assertions": [
+            {
+              "actual": 201,
+              "expected": 201,
+              "message": "",
+              "op": "status",
+              "passed": true
+            }
+          ],
+          "attempts": [],
+          "bindings": [
+            {
+              "missing": false,
+              "name": "number",
+              "pointer": "/number",
+              "source": "body",
+              "step": "create",
+              "value": 2
+            }
+          ],
+          "exchange": {
+            "body": {
+              "body": null,
+              "created_at": "2000-01-01T00:00:00.000Z",
+              "id": 10001,
+              "labels": [],
+              "number": 2,
+              "state": "open",
+              "title": "Corpus close-read"
+            },
+            "headers": {
+              "connection": "keep-alive",
+              "content-length": "130",
+              "content-type": "application/json; charset=utf-8",
+              "date": "Sat, 10 Oct 2026 15:32:51 GMT",
+              "keep-alive": "timeout=5"
+            },
+            "method": "POST",
+            "status": 201,
+            "url": "http://127.0.0.1:45439/repos/example/triage/issues"
+          },
+          "id": "create",
+          "operation_id": "create_issue",
+          "phase": "steps",
+          "status": "passed"
+        },
+        {
+          "assertions": [
+            {
+              "actual": 200,
+              "expected": 200,
+              "message": "",
+              "op": "status",
+              "passed": true
+            },
+            {
+              "actual": "closed",
+              "expected": "closed",
+              "message": "",
+              "op": "equals",
+              "passed": true
+            }
+          ],
+          "attempts": [],
+          "bindings": [],
+          "exchange": {
+            "body": {
+              "body": null,
+              "created_at": "2000-01-01T00:00:00.000Z",
+              "id": 10001,
+              "labels": [],
+              "number": 2,
+              "state": "closed",
+              "title": "Corpus close-read"
+            },
+            "headers": {
+              "connection": "keep-alive",
+              "content-length": "132",
+              "content-type": "application/json; charset=utf-8",
+              "date": "Sat, 10 Oct 2026 15:32:51 GMT",
+              "keep-alive": "timeout=5"
+            },
+            "method": "PATCH",
+            "status": 200,
+            "url": "http://127.0.0.1:45439/repos/example/triage/issues/2"
+          },
+          "id": "close",
+          "operation_id": "update_issue",
+          "phase": "steps",
+          "status": "passed"
+        },
+        {
+          "assertions": [
+            {
+              "actual": 200,
+              "expected": 200,
+              "message": "",
+              "op": "status",
+              "passed": true
+            },
+            {
+              "actual": "closed",
+              "expected": "closed",
+              "message": "",
+              "op": "equals",
+              "passed": true
+            }
+          ],
+          "attempts": [],
+          "bindings": [],
+          "exchange": {
+            "body": {
+              "body": null,
+              "created_at": "2000-01-01T00:00:00.000Z",
+              "id": 10001,
+              "labels": [],
+              "number": 2,
+              "state": "closed",
+              "title": "Corpus close-read"
+            },
+            "headers": {
+              "connection": "keep-alive",
+              "content-length": "132",
+              "content-type": "application/json; charset=utf-8",
+              "date": "Sat, 10 Oct 2026 15:32:51 GMT",
+              "keep-alive": "timeout=5"
+            },
+            "method": "GET",
+            "status": 200,
+            "url": "http://127.0.0.1:45439/repos/example/triage/issues/2"
+          },
+          "id": "read",
+          "operation_id": "get_issue",
+          "phase": "steps",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "agent_success": "not_evaluated",
+      "behavioral_conformance": "pass",
+      "claim_ids": [
+        "issue-list",
+        "issue-close"
+      ],
+      "cleanup": {
+        "status": "not_run",
+        "steps": 0
+      },
+      "contract_conformance": "not_evaluated",
+      "diagnostics": [],
+      "id": "open-list-exclusion-closed-list-inclusion",
+      "scope": "black_box",
+      "status": "passed",
+      "steps": [
+        {
+          "assertions": [
+            {
+              "actual": 201,
+              "expected": 201,
+              "message": "",
+              "op": "status",
+              "passed": true
+            }
+          ],
+          "attempts": [],
+          "bindings": [
+            {
+              "missing": false,
+              "name": "number",
+              "pointer": "/number",
+              "source": "body",
+              "step": "create",
+              "value": 2
+            }
+          ],
+          "exchange": {
+            "body": {
+              "body": null,
+              "created_at": "2000-01-01T00:00:00.000Z",
+              "id": 10001,
+              "labels": [],
+              "number": 2,
+              "state": "open",
+              "title": "Corpus list exclusion"
+            },
+            "headers": {
+              "connection": "keep-alive",
+              "content-length": "134",
+              "content-type": "application/json; charset=utf-8",
+              "date": "Sat, 10 Oct 2026 15:32:52 GMT",
+              "keep-alive": "timeout=5"
+            },
+            "method": "POST",
+            "status": 201,
+            "url": "http://127.0.0.1:38019/repos/example/triage/issues"
+          },
+          "id": "create",
+          "operation_id": "create_issue",
+          "phase": "steps",
+          "status": "passed"
+        },
+        {
+          "assertions": [
+            {
+              "actual": 200,
+              "expected": 200,
+              "message": "",
+              "op": "status",
+              "passed": true
+            }
+          ],
+          "attempts": [],
+          "bindings": [],
+          "exchange": {
+            "body": {
+              "body": null,
+              "created_at": "2000-01-01T00:00:00.000Z",
+              "id": 10001,
+              "labels": [],
+              "number": 2,
+              "state": "closed",
+              "title": "Corpus list exclusion"
+            },
+            "headers": {
+              "connection": "keep-alive",
+              "content-length": "136",
+              "content-type": "application/json; charset=utf-8",
+              "date": "Sat, 10 Oct 2026 15:32:52 GMT",
+              "keep-alive": "timeout=5"
+            },
+            "method": "PATCH",
+            "status": 200,
+            "url": "http://127.0.0.1:38019/repos/example/triage/issues/2"
+          },
+          "id": "close",
+          "operation_id": "update_issue",
+          "phase": "steps",
+          "status": "passed"
+        },
+        {
+          "assertions": [
+            {
+              "actual": 200,
+              "expected": 200,
+              "message": "",
+              "op": "status",
+              "passed": true
+            }
+          ],
+          "attempts": [],
+          "bindings": [],
+          "exchange": {
+            "body": [
+              {
+                "body": null,
+                "created_at": "2000-01-01T00:00:00.000Z",
+                "id": 10000,
+                "labels": [],
+                "number": 1,
+                "pull_request": {
+                  "url": "https://api.github.com/repos/example/triage/pulls/1"
+                },
+                "state": "open",
+                "title": "Seeded pull request entry"
+              }
+            ],
+            "headers": {
+              "connection": "keep-alive",
+              "content-length": "217",
+              "content-type": "application/json; charset=utf-8",
+              "date": "Sat, 10 Oct 2026 15:32:52 GMT",
+              "keep-alive": "timeout=5"
+            },
+            "method": "GET",
+            "status": 200,
+            "url": "http://127.0.0.1:38019/repos/example/triage/issues?state=open&per_page=100"
+          },
+          "id": "list-open",
+          "operation_id": "list_issues",
+          "phase": "steps",
+          "status": "passed"
+        },
+        {
+          "assertions": [
+            {
+              "actual": 200,
+              "expected": 200,
+              "message": "",
+              "op": "status",
+              "passed": true
+            },
+            {
+              "actual": [
+                {
+                  "body": null,
+                  "created_at": "2000-01-01T00:00:00.000Z",
+                  "id": 10001,
+                  "labels": [],
+                  "number": 2,
+                  "state": "closed",
+                  "title": "Corpus list exclusion"
+                }
+              ],
+              "expected": {
+                "number": 2,
+                "state": "closed"
+              },
+              "message": "",
+              "op": "contains",
+              "passed": true
+            }
+          ],
+          "attempts": [],
+          "bindings": [],
+          "exchange": {
+            "body": [
+              {
+                "body": null,
+                "created_at": "2000-01-01T00:00:00.000Z",
+                "id": 10001,
+                "labels": [],
+                "number": 2,
+                "state": "closed",
+                "title": "Corpus list exclusion"
+              }
+            ],
+            "headers": {
+              "connection": "keep-alive",
+              "content-length": "138",
+              "content-type": "application/json; charset=utf-8",
+              "date": "Sat, 10 Oct 2026 15:32:52 GMT",
+              "keep-alive": "timeout=5"
+            },
+            "method": "GET",
+            "status": 200,
+            "url": "http://127.0.0.1:38019/repos/example/triage/issues?state=closed&per_page=100"
+          },
+          "id": "list-closed",
+          "operation_id": "list_issues",
+          "phase": "steps",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "agent_success": "not_evaluated",
+      "behavioral_conformance": "pass",
+      "claim_ids": [
+        "issue-read"
+      ],
+      "cleanup": {
+        "status": "not_run",
+        "steps": 0
+      },
+      "contract_conformance": "not_evaluated",
+      "diagnostics": [],
+      "id": "nonexistent-issue-read",
+      "scope": "black_box",
+      "status": "passed",
+      "steps": [
+        {
+          "assertions": [
+            {
+              "actual": 404,
+              "expected": 404,
+              "message": "",
+              "op": "status",
+              "passed": true
+            }
+          ],
+          "attempts": [],
+          "bindings": [],
+          "exchange": {
+            "body": {
+              "documentation_url": "https://docs.github.com/en/rest/issues/issues",
+              "message": "Not found: no issue has this number."
+            },
+            "headers": {
+              "connection": "keep-alive",
+              "content-length": "118",
+              "content-type": "application/json; charset=utf-8",
+              "date": "Sat, 10 Oct 2026 15:32:52 GMT",
+              "keep-alive": "timeout=5"
+            },
+            "method": "GET",
+            "status": 404,
+            "url": "http://127.0.0.1:42537/repos/example/triage/issues/999999"
+          },
+          "id": "read-missing",
+          "operation_id": "get_issue",
+          "phase": "steps",
+          "service_error": true,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "agent_success": "not_evaluated",
+      "behavioral_conformance": "pass",
+      "claim_ids": [
+        "issue-create"
+      ],
+      "cleanup": {
+        "status": "not_run",
+        "steps": 0
+      },
+      "contract_conformance": "not_evaluated",
+      "diagnostics": [],
+      "id": "invalid-create-without-title",
+      "scope": "black_box",
+      "status": "passed",
+      "steps": [
+        {
+          "assertions": [
+            {
+              "actual": 422,
+              "expected": 422,
+              "message": "",
+              "op": "status",
+              "passed": true
+            }
+          ],
+          "attempts": [],
+          "bindings": [],
+          "exchange": {
+            "body": {
+              "code": "request_schema_invalid",
+              "detail": "The request violates the declared contract.",
+              "request_id": "req_00000001",
+              "status": 422,
+              "title": "The request does not match its schema.",
+              "type": "https://agentlab.dev/problems/request_schema_invalid",
+              "violations": [
+                {
+                  "code": "required",
+                  "location": "body",
+                  "message": "Required property \"title\" is missing.",
+                  "pointer": ""
+                }
+              ]
+            },
+            "headers": {
+              "connection": "keep-alive",
+              "content-type": "application/problem+json",
+              "date": "Sat, 10 Oct 2026 15:32:53 GMT",
+              "keep-alive": "timeout=5",
+              "transfer-encoding": "chunked"
+            },
+            "method": "POST",
+            "status": 422,
+            "url": "http://127.0.0.1:41829/repos/example/triage/issues"
+          },
+          "id": "create-missing-title",
+          "operation_id": "create_issue",
+          "phase": "steps",
+          "service_error": true,
+          "status": "passed"
+        }
+      ]
+    }
+  ],
+  "corpus": {
+    "id": "issue-triage-core",
+    "scenario": "default",
+    "version": "1.0.0"
+  },
+  "diagnostics": [],
+  "generated_at": "2026-10-10T15:32:53.211Z",
+  "inputs": {
+    "owner": "example",
+    "repository": "triage"
+  },
+  "kind": "CorpusReport",
+  "schema_version": 1,
+  "summary": {
+    "error": 0,
+    "failed": 0,
+    "passed": 8,
+    "skipped": 0
+  },
+  "target": {
+    "capabilities": {
+      "operators": true,
+      "virtual_time": true
+    },
+    "id": "local",
+    "version": "0.1.0"
+  }
+}

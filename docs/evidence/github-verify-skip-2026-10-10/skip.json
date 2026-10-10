@@ -1,0 +1,8 @@
+{
+  "corpus": "issue-triage-core",
+  "kind": "VerificationSkip",
+  "reason": "GITHUB_TOKEN is not set",
+  "recorded_at": "2026-10-10T15:32:53.215Z",
+  "repository": "example/triage",
+  "schema_version": 1
+}

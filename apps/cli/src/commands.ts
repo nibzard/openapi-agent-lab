@@ -24,7 +24,11 @@ import {
   worldForkCommand,
   worldInspectCommand
 } from "./handlers/world.ts";
-import { corpusRunCommand, corpusValidateCommand } from "./handlers/corpus.ts";
+import {
+  corpusRunCommand,
+  corpusValidateCommand,
+  corpusVerifyCommand
+} from "./handlers/corpus.ts";
 import { traceImportCommand } from "./handlers/trace-import.ts";
 import { studyAnalyzeCommand } from "./handlers/study-analyze.ts";
 import { studyInitCommand } from "./handlers/study-init.ts";
@@ -199,7 +203,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   },
   {
     name: "corpus run",
-    summary: "Run one behavioral corpus against the local target.",
+    summary: "Run one behavioral corpus against a target.",
     arguments: [{ name: "pack", description: "Pack directory." }],
     options: [
       value(
@@ -209,9 +213,46 @@ export const COMMANDS: readonly CommandSpec[] = [
       value(
         "input",
         "Input value as NAME=VALUE, repeatable; VALUE parses as JSON when possible."
+      ),
+      value("target", "Target to run against: local (default) or github."),
+      value(
+        "repository",
+        "Repository as owner/name; required for the github target."
+      ),
+      flag(
+        "allow-live-writes",
+        "Permit the github target to write; never implied."
       )
     ],
     handler: corpusRunCommand
+  },
+  {
+    name: "corpus verify",
+    summary: "Run one corpus on both targets and stamp observed fidelity.",
+    arguments: [{ name: "pack", description: "Pack directory." }],
+    options: [
+      value(
+        "corpus",
+        "Corpus id to verify; required when the pack declares several."
+      ),
+      value(
+        "input",
+        "Input value as NAME=VALUE, repeatable; VALUE parses as JSON when possible."
+      ),
+      value(
+        "repository",
+        "Repository as owner/name; required for the provider run."
+      ),
+      flag(
+        "allow-live-writes",
+        "Permit the provider run to write; never implied."
+      ),
+      value(
+        "provider-url",
+        "Provider base URL; defaults to the public endpoint."
+      )
+    ],
+    handler: corpusVerifyCommand
   },
   {
     name: "pack init",
