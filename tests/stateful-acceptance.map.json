@@ -219,11 +219,21 @@
       "id": "SE-P3-02",
       "phase": "P3",
       "requirement": "SPEC 48.5 \u00b7 plan P3",
-      "status": "pending",
-      "tests": [],
-      "evidence": null,
-      "depends_on": ["SE-P3-01"],
-      "remaining": "Create @oal/corpus with the local target, target interface, corpus-report.v1, and public validate/run commands."
+      "status": "complete",
+      "tests": [
+        "apps/cli/src/corpus.test.ts > runs the corpus through real HTTP and reports every behavior",
+        "apps/cli/src/corpus.test.ts > validates a pack with a declared corpus",
+        "apps/cli/src/corpus.test.ts > writes the report to the --out file",
+        "packages/corpus/src/engine.test.ts > records every poll attempt and fails exhaustion",
+        "packages/corpus/src/engine.test.ts > fails a missing binding explicitly and still attempts cleanup",
+        "packages/corpus/src/engine.test.ts > skips emulator-only cases before setup without operator controls",
+        "packages/corpus/src/engine.test.ts > captures bindings before assertions and keeps cleanup usable"
+      ],
+      "evidence": {
+        "commit": "2f62243",
+        "command": "pnpm exec vitest run packages/corpus apps/cli/src/corpus.test.ts"
+      },
+      "depends_on": ["SE-P3-01"]
     },
     {
       "id": "SE-P3-03",
