@@ -141,11 +141,23 @@
       "id": "SE-P2-02",
       "phase": "P2",
       "requirement": "SPEC 48.3 \u00b7 plan P2",
-      "status": "pending",
-      "tests": [],
-      "evidence": null,
-      "depends_on": ["SE-P2-01"],
-      "remaining": "Implement the private operator socket, control protocol, queue limits, durable control IDs, and world inspect."
+      "status": "complete",
+      "tests": [
+        "packages/environment/src/control.test.ts > serves the world view behind the operator bearer",
+        "packages/environment/src/control.test.ts > serves no data routes on the control socket",
+        "packages/environment/src/control.test.ts > serializes controls in submission order",
+        "packages/environment/src/control.test.ts > replays a repeated control id and refuses a changed payload",
+        "packages/environment/src/control.test.ts > refuses a stale generation",
+        "packages/environment/src/control.test.ts > rejects malformed control payloads",
+        "packages/environment/src/control.test.ts > refuses platforms without private sockets",
+        "packages/environment/src/control.test.ts > answers busy before admission when the queue is full",
+        "apps/cli/src/serve-scenario.test.ts > releases the port and the child on shutdown"
+      ],
+      "evidence": {
+        "commit": "1330b83",
+        "command": "pnpm exec vitest run packages/environment apps/cli/src/serve-scenario.test.ts"
+      },
+      "depends_on": ["SE-P2-01"]
     },
     {
       "id": "SE-P2-03",
