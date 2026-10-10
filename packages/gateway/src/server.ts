@@ -70,6 +70,43 @@ export interface GatewayResponse {
   approximation: string | null;
   /** Framework error code when a framework error was served. */
   frameworkCode: string | null;
+  /**
+   * Bytes to write before the transport drops the connection
+   * (section 48.6 after_commit/disconnect). The response, state,
+   * counters, and semantic events are already committed.
+   */
+  disconnectAfterBytes?: number;
+}
+
+/** What one fault query knows about the request it rides on. */
+export interface GatewayFaultQuery {
+  /** Ingress sequence of the request. */
+  readonly sequence: number;
+  readonly operationKey: string;
+  /** Deserialized parameter values keyed by parameter name. */
+  readonly parameters: Readonly<Record<string, Json>>;
+  readonly body: Json | undefined;
+}
+
+/** A declared response a before_behavior fault serves instead of behavior. */
+export interface GatewayFaultResponse {
+  readonly status: number;
+  readonly headers?: Record<string, string>;
+  readonly body?: Json;
+}
+
+/**
+ * Fault injection the world runtime backs with persisted counters and
+ * streams (section 48.6). The pipeline consults it at the three
+ * commit boundaries; a null or false answer runs the normal path.
+ */
+export interface GatewayFaults {
+  /** Serve this response without running behavior or mutating state. */
+  beforeBehavior(query: GatewayFaultQuery): GatewayFaultResponse | null;
+  /** True when the staged response candidate must fail validation. */
+  corruptCandidate(query: GatewayFaultQuery): boolean;
+  /** Drop the transport after this many bytes post-commit. */
+  afterCommit(query: GatewayFaultQuery): { readonly afterBytes: number } | null;
 }
 
 export interface GatewayOptions {
@@ -86,6 +123,11 @@ export interface GatewayOptions {
    * request through it instead of contract selection.
    */
   backend?: ScenarioBackend;
+  /**
+   * Declared faults the world runtime wired (section 48.6). Each hook
+   * commits its own consumption; the pipeline only obeys the answer.
+   */
+  faults?: GatewayFaults;
 }
 
 const HOP_BY_HOP = new Set([
@@ -407,6 +449,38 @@ async function pipeline(
   // worker-bound failure rolls the transaction back, so a timeout
   // never mutates state.
   options.state?.stage(operation.key);
+  const faultQuery: GatewayFaultQuery = {
+    sequence,
+    operationKey: operation.key,
+    parameters: parameterResult.parameters,
+    body: request.body
+  };
+  // Section 48.6 before_behavior: a matched fault serves its declared
+  // response without running behavior. The fault commits its own
+  // consumption; the exchange records with no domain transition.
+  const faultResponse = options.faults?.beforeBehavior(faultQuery) ?? null;
+  if (faultResponse !== null) {
+    options.state?.commit();
+    const faultHeaders: Record<string, string> = {
+      ...(faultResponse.headers ?? {})
+    };
+    const faultBody =
+      faultResponse.body === undefined
+        ? undefined
+        : canonicalJson(faultResponse.body);
+    if (faultBody !== undefined && faultHeaders["content-type"] === undefined) {
+      faultHeaders["content-type"] = "application/json; charset=utf-8";
+    }
+    return {
+      status: faultResponse.status,
+      headers: faultHeaders,
+      body: faultBody,
+      requestId,
+      provenance: null,
+      approximation: null,
+      frameworkCode: null
+    };
+  }
   let selected: SelectedResponse;
   let scenarioTransaction: ScenarioTransaction | undefined;
   if (options.backend !== undefined) {
@@ -469,6 +543,15 @@ async function pipeline(
       },
       ...(candidate.commit === undefined ? {} : { commit: candidate.commit })
     };
+    // Section 48.6 before_commit: the staged candidate is declared
+    // corrupt. The transaction rolls back - candidate, state, and
+    // domain counters - and the fault commits its consumption in a
+    // separate failure transaction. The participant sees the bounded
+    // response-validation failure.
+    if (options.faults?.corruptCandidate(faultQuery) === true) {
+      options.state?.rollback();
+      return framework(FRAMEWORK_ERRORS.mockResponseInvalid, requestId);
+    }
   } else {
     // Contract mode. A generated id must satisfy the strictest pattern
     // any path parameter of the served operation's family declares, so
@@ -573,6 +656,11 @@ async function pipeline(
   } catch {
     return framework(FRAMEWORK_ERRORS.stateCommitFailed, requestId);
   }
+  // Section 48.6 after_commit: the response, state, counters, and
+  // semantic events are durable; the fault now chooses to cut the
+  // transport. Delivery evidence stays separate from the committed
+  // response candidate.
+  const disconnect = options.faults?.afterCommit(faultQuery) ?? null;
   return {
     status: selected.status,
     headers: safeHeaders,
@@ -580,7 +668,10 @@ async function pipeline(
     requestId,
     provenance: selected.provenance,
     approximation: selected.approximation,
-    frameworkCode: null
+    frameworkCode: null,
+    ...(disconnect === null
+      ? {}
+      : { disconnectAfterBytes: disconnect.afterBytes })
   };
 }
 

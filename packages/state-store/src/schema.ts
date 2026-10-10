@@ -12,7 +12,7 @@ import { runInTransaction } from "./database.ts";
 import { schemaVersionUnsupported } from "./errors.ts";
 
 /** Highest schema version this build understands. */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export interface Migration {
   /** Schema version after this migration applies. */
@@ -207,13 +207,45 @@ CREATE TABLE control_results (
 `;
 
 /**
+ * Version 4 persists the fault engine and separates delivery evidence
+ * from the committed response candidate (section 48.6): the fault
+ * counters and stream position survive restarts and forks, every
+ * consumption is its own durable row, and a delivery outcome is
+ * written only once the transport settles. No delivery row means
+ * delivery is unknown, never delivered.
+ */
+const V4 = `
+CREATE TABLE fault_state (
+  singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+  counters_json TEXT NOT NULL,
+  prng_state TEXT NOT NULL
+);
+
+CREATE TABLE fault_consumptions (
+  sequence INTEGER NOT NULL,
+  rule_id TEXT NOT NULL,
+  occurrence INTEGER NOT NULL,
+  phase TEXT NOT NULL,
+  action TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE delivery (
+  sequence INTEGER PRIMARY KEY,
+  outcome TEXT NOT NULL CHECK (outcome IN ('delivered', 'lost')),
+  recorded_at TEXT NOT NULL
+);
+`;
+
+/**
  * Ordered migrations. The `export_status` table is required by section 17.1
  * but has no column list in section 38.1; version 1 uses the shape below.
  */
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, name: "state-store-v1", sql: V1 },
   { version: 2, name: "world-state-v2", sql: V2 },
-  { version: 3, name: "control-results-v3", sql: V3 }
+  { version: 3, name: "control-results-v3", sql: V3 },
+  { version: 4, name: "faults-and-delivery-v4", sql: V4 }
 ];
 
 export const SCHEMA_META_VERSION_KEY = "schema_version";

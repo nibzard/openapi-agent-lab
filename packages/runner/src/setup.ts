@@ -34,6 +34,7 @@ import {
 } from "@oal/evidence";
 import {
   mintRunCredentials,
+  type GatewayFaults,
   type GatewayState,
   type RunCredentials,
   type ScenarioBackend
@@ -191,6 +192,11 @@ export interface ExposureRequest {
    * pipeline commits each served exchange through it.
    */
   readonly scenarioState?: GatewayState;
+  /**
+   * Declared faults of the served world (section 48.6); present only
+   * with scenario state that wired rules.
+   */
+  readonly scenarioFaults?: GatewayFaults;
 }
 
 /** Builds one exposure treatment per trial. Injected; never a socket. */

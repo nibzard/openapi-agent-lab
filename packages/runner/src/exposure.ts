@@ -814,7 +814,12 @@ async function startRawHttpExposure(
           fixtures,
           runSeed: request.trialSeed,
           state: request.scenarioState ?? gatewayState,
-          ...(request.backend === undefined ? {} : { backend: request.backend })
+          ...(request.backend === undefined
+            ? {}
+            : { backend: request.backend }),
+          ...(request.scenarioFaults === undefined
+            ? {}
+            : { faults: request.scenarioFaults })
         },
         reserved.sequence,
         { method, target, headers, body: bytes }

@@ -252,6 +252,26 @@ export async function startGatewayListener(
             })
           );
         }
+        // Section 48.6 after_commit/disconnect: the committed response
+        // writes at most the declared prefix, then the transport cuts.
+        // Delivery is known lost, never unknown.
+        if (candidate.disconnectAfterBytes !== undefined) {
+          const prefix =
+            candidate.body === undefined
+              ? ""
+              : candidate.body.slice(0, candidate.disconnectAfterBytes);
+          outgoing.writeHead(candidate.status, writable.headers);
+          options.gateway.state?.deliver?.("lost");
+          transportError = {
+            code: "OAL-TRANSPORT-DISCONNECT-FIRED",
+            message:
+              "A declared after_commit fault cut the transport after the response committed."
+          };
+          outgoing.write(prefix);
+          outgoing.destroy();
+          record();
+          return;
+        }
         outgoing.writeHead(candidate.status, writable.headers);
         outgoing.end(candidate.body);
       } catch {
@@ -286,6 +306,7 @@ export async function startGatewayListener(
         }
       }
       outgoing.on("finish", () => {
+        options.gateway.state?.deliver?.("delivered");
         record();
       });
     };

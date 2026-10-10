@@ -11,6 +11,7 @@ import {
   assertSafeId,
   canonicalJson,
   canonicalJsonSha256,
+  isJsonObject,
   jsonEquals,
   parseRfc3339,
   sha256Hex,
@@ -45,7 +46,8 @@ import {
   checkpointIncomplete,
   limitReached,
   runIdentityMismatch,
-  stateCommitFailed
+  stateCommitFailed,
+  stateCorruption
 } from "./errors.ts";
 import { resolveStateStoreLimits, type StateStoreLimits } from "./limits.ts";
 import {
@@ -1828,6 +1830,139 @@ export class StateStore {
         }
       );
     }
+  }
+
+  /** Persisted fault engine position: counters and stream state. */
+  readFaultState(): { counters: JsonObject; prngState: string } | null {
+    const row = this.db
+      .prepare(
+        "SELECT counters_json, prng_state FROM fault_state WHERE singleton = 1"
+      )
+      .get();
+    if (row === undefined) {
+      return null;
+    }
+    const counters = JSON.parse(String(row["counters_json"])) as Json;
+    const prngState = String(row["prng_state"]);
+    if (!isJsonObject(counters)) {
+      throw stateCorruption("The persisted fault counters are not an object.");
+    }
+    return { counters, prngState };
+  }
+
+  /** Persist the fault engine position inside one transaction. */
+  writeFaultState(state: {
+    readonly counters: Readonly<Record<string, number>>;
+    readonly prngState: string;
+  }): void {
+    this.transaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO fault_state (singleton, counters_json, prng_state)
+           VALUES (1, ?, ?)
+           ON CONFLICT(singleton) DO UPDATE SET
+             counters_json = excluded.counters_json,
+             prng_state = excluded.prng_state`
+        )
+        .run(canonicalJson(state.counters), state.prngState);
+    });
+  }
+
+  /** One durable fault consumption row (section 48.6). */
+  appendFaultConsumption(input: {
+    readonly sequence: number;
+    readonly ruleId: string;
+    readonly occurrence: number;
+    readonly phase: string;
+    readonly action: string;
+    readonly createdAt: string;
+  }): void {
+    this.db
+      .prepare(
+        `INSERT INTO fault_consumptions
+           (sequence, rule_id, occurrence, phase, action, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        input.sequence,
+        input.ruleId,
+        input.occurrence,
+        input.phase,
+        input.action,
+        input.createdAt
+      );
+  }
+
+  /** Every fault consumption in order. */
+  listFaultConsumptions(): readonly {
+    readonly sequence: number;
+    readonly ruleId: string;
+    readonly occurrence: number;
+    readonly phase: string;
+    readonly action: string;
+  }[] {
+    const rows = this.db
+      .prepare(
+        "SELECT sequence, rule_id, occurrence, phase, action FROM fault_consumptions ORDER BY rowid"
+      )
+      .all();
+    return rows.map((row) => ({
+      sequence: Number(row["sequence"]),
+      ruleId: String(row["rule_id"]),
+      occurrence: Number(row["occurrence"]),
+      phase: String(row["phase"]),
+      action: String(row["action"])
+    }));
+  }
+
+  /**
+   * Delivery evidence, written only once the transport settles
+   * (section 48.6). No row means unknown, never delivered.
+   */
+  recordDelivery(input: {
+    readonly sequence: number;
+    readonly outcome: "delivered" | "lost";
+  }): void {
+    this.db
+      .prepare(
+        `INSERT INTO delivery (sequence, outcome, recorded_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(sequence) DO UPDATE SET
+           outcome = excluded.outcome,
+           recorded_at = excluded.recorded_at`
+      )
+      .run(input.sequence, input.outcome, this.clock.now());
+  }
+
+  /** Every recorded delivery outcome in request order. */
+  listDeliveries(): readonly {
+    readonly sequence: number;
+    readonly outcome: "delivered" | "lost";
+  }[] {
+    const rows = this.db
+      .prepare("SELECT sequence, outcome FROM delivery ORDER BY sequence")
+      .all();
+    return rows.map((row) => {
+      const outcome = String(row["outcome"]);
+      return {
+        sequence: Number(row["sequence"]),
+        ...(outcome === "delivered"
+          ? { outcome: "delivered" }
+          : { outcome: "lost" })
+      };
+    });
+  }
+
+  /** The recorded delivery outcome of one request, or null when unknown. */
+  readDelivery(sequence: number): "delivered" | "lost" | null {
+    const row = this.db
+      .prepare("SELECT outcome FROM delivery WHERE sequence = ?")
+      .get(sequence);
+    if (row === undefined) {
+      return null;
+    }
+    const outcome = String(row["outcome"]);
+    return outcome === "delivered" || outcome === "lost" ? outcome : null;
   }
 
   private assertEventBudget(canonical: string): void {

@@ -664,7 +664,10 @@ export async function startServe(options: {
       ? {}
       : {
           backend: environment.backend,
-          scenarioState: environment.state
+          scenarioState: environment.state,
+          ...(environment.faults === null
+            ? {}
+            : { scenarioFaults: environment.faults })
         })
   });
   const credentials = buildManualCredentials(
@@ -827,7 +830,10 @@ export async function startForkServe(options: {
     sensitiveHeaderNames: ["authorization"],
     sensitiveKeyPatterns: [],
     backend: environment.backend,
-    scenarioState: environment.state
+    scenarioState: environment.state,
+    ...(environment.faults === null
+      ? {}
+      : { scenarioFaults: environment.faults })
   });
   const credentials = buildManualCredentials(
     options.contract,

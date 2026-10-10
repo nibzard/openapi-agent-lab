@@ -7,6 +7,9 @@ export const packageName = "@oal/gateway";
 
 export {
   handleGatewayRequest,
+  type GatewayFaultQuery,
+  type GatewayFaultResponse,
+  type GatewayFaults,
   type GatewayOptions,
   type GatewayResponse,
   type RawRequest

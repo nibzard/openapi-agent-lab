@@ -23,6 +23,17 @@ export function schemaVersionUnsupported(
   );
 }
 
+/** Durable state exists but does not decode into the shape this build wrote. */
+export function stateCorruption(message: string, details?: Json): OalError {
+  return new OalError({
+    code: DiagnosticCode.StateCommitFailed,
+    message,
+    category: "persistence",
+    exitCode: EXIT_INFRASTRUCTURE,
+    ...(details === undefined ? {} : { details })
+  });
+}
+
 /**
  * Optimistic-concurrency failure or any other state-commit failure. The spec
  * classifies this code under mock infrastructure failure.

@@ -39,6 +39,7 @@ import {
   type BackendDescription,
   type BehaviorRequest,
   type ExecuteOutcome,
+  type FaultRule,
   type RegisteredEvent,
   type ServicePositions
 } from "@oal/behavior-api";
@@ -83,6 +84,7 @@ import {
   writeCheckpointDirectory,
   type ReadCheckpoint
 } from "./checkpoint-dir.ts";
+import { faultRuleProblem, WorldFaultInjector } from "./faults.ts";
 
 /** Stable failure codes of the environment owner. */
 export const EnvironmentCode = {
@@ -96,7 +98,8 @@ export const EnvironmentCode = {
   ControlUnavailable: "OAL-ENVIRONMENT-CONTROL-UNAVAILABLE",
   CheckpointIncomplete: "OAL-CHECKPOINT-INCOMPLETE",
   CheckpointIntegrity: "OAL-CHECKPOINT-INTEGRITY",
-  CheckpointIncompatible: "OAL-CHECKPOINT-INCOMPATIBLE"
+  CheckpointIncompatible: "OAL-CHECKPOINT-INCOMPATIBLE",
+  FaultInvalid: "OAL-FAULT-INVALID"
 } as const;
 
 /** An environment defect from before or during the run. */
@@ -157,6 +160,12 @@ export interface EnvironmentOptions {
   readonly evidenceDirectory?: string;
   /** Private control directory of this world; reserved for controls. */
   readonly privateDirectory?: string;
+  /**
+   * Declared fault rules the world wires at its commit boundaries
+   * (section 48.6). Unsupported phases and actions fail before the
+   * world starts.
+   */
+  readonly faultRules?: readonly FaultRule[];
 }
 
 /** One checkpoint the environment wrote. */
@@ -227,6 +236,11 @@ export interface Environment {
   readonly backend: ScenarioBackend;
   /** Store-backed state the gateway commits through. */
   readonly state: GatewayState;
+  /**
+   * The wired fault engine (section 48.6), or null when the world
+   * declared no rules. Serves pass this to the gateway.
+   */
+  readonly faults: WorldFaultInjector | null;
   /** SHA-256 of the frozen behavior entrypoint bytes. */
   readonly backendSha256: string;
   /** Isolation level the report must label (section 16.5). */
@@ -246,6 +260,11 @@ export interface Environment {
    * committed counters, free of private paths and credentials.
    */
   inspect(): JsonObject;
+  /**
+   * Recorded delivery outcomes in request order (section 48.6). An
+   * entry is absent exactly when delivery stayed unknown.
+   */
+  deliveries(): readonly { sequence: number; outcome: "delivered" | "lost" }[];
   /**
    * Write one checkpoint directory at `out` from the committed
    * position: the sealed payload, the key, the blobs, the frozen
@@ -437,6 +456,7 @@ class StoreGatewayState implements GatewayState {
   private allocation: { sequence: number; requestId: string } | null = null;
   private stagedEffect: string | null = null;
   private rollbackCount = 0;
+  private lastCommitted: number | null = null;
   private readonly applied: string[] = [];
   /**
    * Services advanced by the staged transaction. Published into the
@@ -495,6 +515,7 @@ class StoreGatewayState implements GatewayState {
 
   commit(scenario?: ScenarioTransaction): void {
     const allocation = this.takeAllocation();
+    this.lastCommitted = allocation.sequence;
     const transition = scenario?.commit;
     const snapshot = this.store.getState();
     const before = snapshot?.revision ?? 0;
@@ -574,6 +595,22 @@ class StoreGatewayState implements GatewayState {
     this.rollbackCount += 1;
     this.stagedEffect = null;
     this.stagedServices = null;
+    this.lastCommitted = null;
+  }
+
+  /**
+   * Record the delivery outcome of the last committed response,
+   * separately from the committed response candidate (section 48.6).
+   * A world that dies between commit and this call leaves no row, and
+   * absence reads as unknown, never delivered.
+   */
+  deliver(outcome: "delivered" | "lost"): void {
+    if (this.lastCommitted === null) {
+      return;
+    }
+    const sequence = this.lastCommitted;
+    this.lastCommitted = null;
+    this.store.recordDelivery({ sequence, outcome });
   }
 
   private takeAllocation(): { sequence: number; requestId: string } {
@@ -633,6 +670,8 @@ interface WorldEffects {
   readonly fixtures: readonly Json[];
   readonly services: MutableWorldServices;
   readonly blobRoot: string;
+  /** The fault engine, when the world declared rules (section 48.6). */
+  readonly faults: WorldFaultInjector | null;
 }
 
 /**
@@ -671,6 +710,11 @@ async function resetWorldEffect(
       algorithm: "splitmix64-v1",
       state: createNamespacePrng(world.seed, "world:services").exportState()
     };
+    if (world.faults !== null) {
+      world.faults.reset(
+        createNamespacePrng(world.seed, "faults").exportState()
+      );
+    }
     const snapshot = world.store.getState();
     world.store.putState({
       state: baseline,
@@ -852,6 +896,21 @@ export async function openEnvironment(
     );
   }
 
+  // Section 48.6: declared faults must pass preflight before the
+  // world serves anything.
+  if (options.faultRules !== undefined) {
+    const problem = faultRuleProblem(options.faultRules);
+    if (problem !== null) {
+      store.close();
+      await host.close().catch(() => undefined);
+      throw new EnvironmentError(EnvironmentCode.FaultInvalid, problem);
+    }
+  }
+  const faults =
+    options.faultRules === undefined || options.faultRules.length === 0
+      ? null
+      : new WorldFaultInjector(store, options.faultRules, seed, null);
+
   const eventRegistry = new Map<string, RegisteredEvent>();
   for (const event of description.semanticEvents ?? []) {
     eventRegistry.set(event.name, {
@@ -967,7 +1026,8 @@ export async function openEnvironment(
     seed,
     fixtures: [...declaration.fixtures],
     services: worldServices,
-    blobRoot
+    blobRoot,
+    faults
   };
   const writeCheckpoint = async (out: string): Promise<CheckpointWritten> => {
     const checkpointId = `chk_${(store.countControls() + 1)
@@ -1001,14 +1061,24 @@ export async function openEnvironment(
             state: positions.random.state
           }
         ],
-        faults: {
-          counters: {},
-          random: {
-            namespace: "faults",
-            algorithm: DeterministicPrng.ALGORITHM,
-            state: createNamespacePrng(seed, "faults").exportState()
-          }
-        }
+        faults:
+          faults === null
+            ? {
+                counters: {},
+                random: {
+                  namespace: "faults",
+                  algorithm: DeterministicPrng.ALGORITHM,
+                  state: createNamespacePrng(seed, "faults").exportState()
+                }
+              }
+            : {
+                counters: faults.state().counters,
+                random: {
+                  namespace: "faults",
+                  algorithm: DeterministicPrng.ALGORITHM,
+                  state: faults.state().prngState
+                }
+              }
       }
     });
     const written = await writeCheckpointDirectory({
@@ -1028,6 +1098,7 @@ export async function openEnvironment(
     contract,
     backend,
     state: gatewayState,
+    faults,
     backendSha256: declaration.entrypoint.sha256,
     isolationLevel: host.isolationLevel,
     description,
@@ -1038,6 +1109,7 @@ export async function openEnvironment(
       request_count: store.countRequests(),
       control_count: store.countControls()
     }),
+    deliveries: () => store.listDeliveries(),
     checkpoint: writeCheckpoint,
     reset: () => resetWorldEffect(worldEffects),
     advanceTime: (byMs: number): Promise<{ virtualTime: string }> =>
@@ -1357,6 +1429,12 @@ export interface RestoreEnvironmentOptions {
   readonly limits?: EnvironmentLimits;
   /** Injected observation clock in epoch milliseconds. */
   readonly now: () => number;
+  /**
+   * Declared fault rules the restored world keeps wiring (section
+   * 48.6). Occurrence counters and the random stream continue from the
+   * checkpoint position.
+   */
+  readonly faultRules?: readonly FaultRule[];
 }
 
 /**
@@ -1475,6 +1553,24 @@ export async function openRestoredEnvironment(
     );
   }
 
+  // Section 48.6: declared faults must pass preflight before the
+  // world serves anything.
+  if (options.faultRules !== undefined) {
+    const problem = faultRuleProblem(options.faultRules);
+    if (problem !== null) {
+      store.close();
+      await host.close().catch(() => undefined);
+      throw new EnvironmentError(EnvironmentCode.FaultInvalid, problem);
+    }
+  }
+  const faults =
+    options.faultRules === undefined || options.faultRules.length === 0
+      ? null
+      : new WorldFaultInjector(store, options.faultRules, seed, {
+          counters: { ...document.faults.counters },
+          prngState: document.faults.random.state
+        });
+
   const eventRegistry = new Map<string, RegisteredEvent>();
   for (const event of description.semanticEvents ?? []) {
     eventRegistry.set(event.name, {
@@ -1590,6 +1686,7 @@ export async function openRestoredEnvironment(
     worldId,
     seed,
     fixtures: [],
+    faults,
     services: worldServices,
     blobRoot: checkpoint.blobRoot
   };
@@ -1617,10 +1714,20 @@ export async function openRestoredEnvironment(
             state: positions.random.state
           }
         ],
-        faults: {
-          counters: { ...document.faults.counters },
-          random: { ...document.faults.random }
-        }
+        faults:
+          faults === null
+            ? {
+                counters: { ...document.faults.counters },
+                random: { ...document.faults.random }
+              }
+            : {
+                counters: faults.state().counters,
+                random: {
+                  namespace: "faults",
+                  algorithm: DeterministicPrng.ALGORITHM,
+                  state: faults.state().prngState
+                }
+              }
       }
     });
     const written = await writeCheckpointDirectory({
@@ -1640,6 +1747,7 @@ export async function openRestoredEnvironment(
     contract,
     backend,
     state: gatewayState,
+    faults,
     backendSha256: document.frozen.behavior_sha256,
     isolationLevel: host.isolationLevel,
     description,
@@ -1650,6 +1758,7 @@ export async function openRestoredEnvironment(
       request_count: store.countRequests(),
       control_count: store.countControls()
     }),
+    deliveries: () => store.listDeliveries(),
     checkpoint: writeRestoredCheckpoint,
     reset: () => resetWorldEffect(restoredEffects),
     advanceTime: (byMs: number): Promise<{ virtualTime: string }> =>

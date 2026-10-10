@@ -11,6 +11,14 @@ export interface GatewayState {
   /** Stage one domain effect inside the open transaction. */
   stage(effect: string): void;
   /**
+   * Record the delivery outcome of the last committed response,
+   * separately from the committed response candidate (section 48.6).
+   * Absent implementations treat delivery as untracked; a world that
+   * crashes between commit and delivery leaves no record, which reads
+   * as unknown rather than delivered.
+   */
+  deliver?(outcome: "delivered" | "lost"): void;
+  /**
    * Apply the open transaction and bump the revision. A scenario
    * transaction carries the state transition and semantic events to
    * persist; the in-memory implementation ignores it. A persistent

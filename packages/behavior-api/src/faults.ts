@@ -6,7 +6,22 @@
 
 import type { Json } from "@oal/core";
 
-export type FaultPhase = "before_behavior" | "after_behavior";
+/**
+ * Fault phases (specification sections 16.6 and 48.6). The version 1
+ * phases keep their meaning; version 2 adds the commit-boundary
+ * phases the world runtime wires: `before_commit` acts on the staged
+ * response candidate before validation commits it, and `after_commit`
+ * acts only after the response, state, counters, and semantic events
+ * are durable.
+ */
+export type FaultPhase =
+  | "before_behavior"
+  | "after_behavior"
+  | "before_commit"
+  | "after_commit";
+
+/** The fault contract version this build speaks. */
+export const FAULT_CONTRACT_VERSION = 2;
 
 export interface FaultPredicate {
   /** Request parameter equality, keyed by parameter name. */
@@ -63,6 +78,11 @@ export interface FaultEvaluation {
   rule: FaultRule;
   /** Occurrence count for the rule after this evaluation. */
   occurrence: number;
+}
+
+/** The counter surface matching consults; FaultCounters implements it. */
+export interface FaultCounterSource {
+  next(ruleId: string): number;
 }
 
 /** Per-run, per-rule occurrence counters. */
@@ -185,7 +205,7 @@ function matchesPredicate(
 export function matchFault(
   rules: readonly FaultRule[],
   input: FaultMatchInput,
-  counters: FaultCounters
+  counters: FaultCounterSource
 ): FaultEvaluation | null {
   for (const rule of rules) {
     if (rule.operation !== input.operation || rule.phase !== input.phase) {
@@ -261,6 +281,23 @@ export function validateFaultRules(rules: readonly FaultRule[]): string | null {
     const window = rule.match.windowMs;
     if (window !== undefined && window.from > window.to) {
       return `fault ${rule.id} declares an inverted time window`;
+    }
+    // The commit-boundary phases carry exactly the actions section
+    // 48.6 names; anything else fails before the world starts.
+    if (
+      rule.phase === "before_commit" &&
+      rule.action.kind !== "corrupt_candidate"
+    ) {
+      return `fault ${rule.id} runs before_commit with ${JSON.stringify(rule.action.kind)}; only corrupt_candidate is supported there`;
+    }
+    if (rule.phase === "after_commit" && rule.action.kind !== "disconnect") {
+      return `fault ${rule.id} runs after_commit with ${JSON.stringify(rule.action.kind)}; only disconnect is supported there`;
+    }
+    if (
+      (rule.phase === "before_behavior" || rule.phase === "after_behavior") &&
+      rule.action.kind === "corrupt_candidate"
+    ) {
+      return `fault ${rule.id} runs ${rule.phase} with corrupt_candidate; that action belongs to before_commit`;
     }
   }
   return null;
