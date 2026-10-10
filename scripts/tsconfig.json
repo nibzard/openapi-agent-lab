@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": true
+  },
+  "include": [
+    "build-archives.mjs",
+    "build-release-candidate.mjs",
+    "stateful-readiness.mjs"
+  ]
+}

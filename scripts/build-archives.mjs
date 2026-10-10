@@ -50,6 +50,11 @@ export const ArchiveCode = {
 
 /** A refusal raised by the compatibility checks. */
 export class ArchiveBuildError extends Error {
+  /**
+   * @param {string} code
+   * @param {string} sourcePath
+   * @param {string} message
+   */
   constructor(code, sourcePath, message) {
     super(message);
     this.code = code;
@@ -58,9 +63,16 @@ export class ArchiveBuildError extends Error {
   }
 }
 
-/** Every static import specifier of one module source. */
+/**
+ * Every static import specifier of one module source.
+ *
+ * @param {string} source
+ * @returns {string[]}
+ */
 export function staticImportsOf(source) {
+  /** @type {string[]} */
   const found = [];
+  /** @param {string | undefined} specifier */
   const push = (specifier) => {
     if (specifier !== undefined) {
       found.push(specifier);
@@ -84,8 +96,14 @@ export function staticImportsOf(source) {
   return found;
 }
 
-/** The dynamic import and require call sites of one source, if any. */
+/**
+ * The dynamic import and require call sites of one source, if any.
+ *
+ * @param {string} source
+ * @returns {string[]}
+ */
 export function dynamicCallsOf(source) {
+  /** @type {string[]} */
   const found = [];
   for (const match of source.matchAll(/\bimport\s*\(/gu)) {
     found.push(match[0]);
@@ -107,6 +125,13 @@ const NODE_BUILTINS = new Set(builtinModules);
  * Classify one import of one archived source. Relative imports must
  * stay inside their unit and resolve; everything else must be a node
  * builtin or the bare public name of an archived package.
+ */
+/**
+ * @param {string} specifier
+ * @param {ArchiveUnit} unit
+ * @param {string} fromFile
+ * @param {string} srcRoot
+ * @param {ReadonlySet<string>} archivedNames
  */
 export function checkImport(specifier, unit, fromFile, srcRoot, archivedNames) {
   if (specifier.startsWith(".")) {
@@ -162,7 +187,13 @@ export function checkImport(specifier, unit, fromFile, srcRoot, archivedNames) {
   );
 }
 
-/** Read a unit manifest. */
+/**
+ * Read one unit manifest.
+ *
+ * @param {string} directory
+ * @returns {{name: string, version: string, description?: string,
+ *   license?: string, dependencies?: Record<string, string>}}
+ */
 function manifestOf(directory) {
   return JSON.parse(readFileSync(path.join(directory, "package.json"), "utf8"));
 }
@@ -176,7 +207,7 @@ export async function archiveUnits() {
   const queue = [CLI_DIR];
   while (queue.length > 0) {
     const directory = queue.shift();
-    if (units.has(directory)) {
+    if (directory === undefined || units.has(directory)) {
       continue;
     }
     const manifest = manifestOf(directory);
@@ -213,6 +244,10 @@ export async function archiveUnits() {
  * a prose string that merely looks like a relative TypeScript path,
  * or a URL literal loaded outside the import system, keeps its text.
  */
+/**
+ * @param {string} source
+ * @returns {string}
+ */
 export function compileSource(source) {
   const shebang = source.startsWith("#!")
     ? source.slice(0, source.indexOf("\n"))
@@ -223,13 +258,12 @@ export function compileSource(source) {
       (specifier) => specifier.startsWith(".") && specifier.endsWith(".ts")
     )
   );
-  const rewritten = body.replace(
-    /(["'])(\.\.?\/[^"'\n]+)\1/gu,
-    (whole, quote, value) =>
-      specifiers.has(value)
-        ? `${quote}${value.replace(/\.ts$/u, ".js")}${quote}`
-        : whole
-  );
+  /** @param {string} whole @param {string} quote @param {string} value */
+  const rewriteOne = (whole, quote, value) =>
+    specifiers.has(value)
+      ? `${quote}${value.replace(/\.ts$/u, ".js")}${quote}`
+      : whole;
+  const rewritten = body.replace(/(["'])(\.\.?\/[^"'\n]+)\1/gu, rewriteOne);
   const result = ts.transpileModule(rewritten, {
     compilerOptions: {
       module: ts.ModuleKind.ESNext,
@@ -244,6 +278,11 @@ export function compileSource(source) {
 /**
  * Resolve one relative import of one unit file to its file path, or
  * null when it resolves to nothing on disk.
+ */
+/**
+ * @param {string} fromFile
+ * @param {string} specifier
+ * @returns {string | null}
  */
 function resolveRelativeTs(fromFile, specifier) {
   const base = path.resolve(path.dirname(fromFile), specifier);
@@ -263,6 +302,11 @@ function resolveRelativeTs(fromFile, specifier) {
  * an installable manifest. Every file the entry cannot reach stays
  * out of the archive, so test helpers never ship.
  */
+/**
+ * @param {ArchiveUnit} unit
+ * @param {readonly ArchiveUnit[]} units
+ * @param {string} stageRoot
+ */
 async function stageUnit(unit, units, stageRoot) {
   const names = new Set(units.map((entry) => entry.name));
   const srcDir = path.join(unit.directory, "src");
@@ -273,6 +317,9 @@ async function stageUnit(unit, units, stageRoot) {
   const queue = [entryFile];
   while (queue.length > 0) {
     const file = queue.shift();
+    if (file === undefined) {
+      break;
+    }
     const relative = path.relative(srcDir, file);
     if (sources.has(relative)) {
       continue;
@@ -306,7 +353,11 @@ async function stageUnit(unit, units, stageRoot) {
     for (const match of source.matchAll(
       /new\s+URL\(\s*["'](\.[^"']*\.ts)["']\s*,\s*import\.meta\.url\s*\)/gu
     )) {
-      const resolved = resolveRelativeTs(file, match[1]);
+      const target = match[1];
+      if (target === undefined) {
+        continue;
+      }
+      const resolved = resolveRelativeTs(file, target);
       if (resolved !== null) {
         queue.push(resolved);
       }
@@ -343,6 +394,7 @@ async function stageUnit(unit, units, stageRoot) {
     }
   }
   const manifest = manifestOf(unit.directory);
+  /** @type {Record<string, string>} */
   const dependencies = {};
   for (const [name, range] of Object.entries(manifest.dependencies ?? {})) {
     if (!name.startsWith("@oal/")) {
@@ -351,6 +403,7 @@ async function stageUnit(unit, units, stageRoot) {
     const provider = units.find((candidate) => candidate.name === name);
     dependencies[name] = provider === undefined ? range : provider.version;
   }
+  /** @type {Record<string, unknown>} */
   const staged = {
     name: unit.name,
     version: unit.version,
@@ -374,6 +427,9 @@ async function stageUnit(unit, units, stageRoot) {
 /**
  * Build every archive. Returns the staged directories and the packed
  * tarball names.
+ */
+/**
+ * @param {string} outDir
  */
 export async function buildArchives(outDir) {
   const units = await archiveUnits();
@@ -401,9 +457,10 @@ export async function buildArchives(outDir) {
 
 async function main() {
   const outIndex = process.argv.indexOf("--out");
+  const outFlag = outIndex === -1 ? undefined : process.argv[outIndex + 1];
   const outDir =
-    outIndex !== -1 && process.argv[outIndex + 1] !== undefined
-      ? path.resolve(process.argv[outIndex + 1])
+    outFlag !== undefined
+      ? path.resolve(outFlag)
       : path.join(ROOT, "dist", "archives");
   const { units, tarballs } = await buildArchives(outDir);
   process.stdout.write(

@@ -21,16 +21,28 @@ import { buildArchives } from "./build-archives.mjs";
 const run = promisify(execFile);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Digest one file. */
+/**
+ * Digest one file.
+ *
+ * @param {string} file
+ * @returns {Promise<string>}
+ */
 async function sha256Of(file) {
   return createHash("sha256")
     .update(await readFile(file))
     .digest("hex");
 }
 
-/** Every file below one directory, relative to it. */
+/**
+ * Every file below one directory, relative to it.
+ *
+ * @param {string} dir
+ * @returns {Promise<string[]>}
+ */
 async function filesBelow(dir) {
+  /** @type {string[]} */
   const found = [];
+  /** @param {string} current */
   const walk = async (current) => {
     for (const entry of await readdir(current, { withFileTypes: true })) {
       const target = path.join(current, entry.name);
@@ -48,6 +60,9 @@ async function filesBelow(dir) {
 /**
  * Assemble the candidate. Returns the manifest document and the
  * output directory.
+ */
+/**
+ * @param {string} outDir
  */
 export async function buildReleaseCandidate(outDir) {
   await rm(outDir, { recursive: true, force: true });
@@ -72,11 +87,15 @@ export async function buildReleaseCandidate(outDir) {
   // candidate never claims a milestone it has not reached.
   const readiness = await run("node", [
     path.join(ROOT, "scripts", "stateful-readiness.mjs")
-  ]).catch((cause) => {
-    const stderr = String(cause.stderr ?? "");
-    const stdout = String(cause.stdout ?? cause.message);
-    return { stdout: `${stdout}\n${stderr}`, failed: true };
-  });
+  ]).then(
+    (ok) => ({ stdout: ok.stdout, failed: false }),
+    (cause) => ({
+      stdout: `${String(cause.stdout ?? "")}\n${String(
+        cause.stderr ?? cause.message
+      )}`,
+      failed: true
+    })
+  );
   await writeFile(
     path.join(outDir, "readiness.txt"),
     `${readiness.stdout.trim()}\n${readiness.failed === true ? "gate exit: 1\n" : ""}`
@@ -119,9 +138,10 @@ export async function buildReleaseCandidate(outDir) {
 
 async function main() {
   const outIndex = process.argv.indexOf("--out");
+  const outFlag = outIndex === -1 ? undefined : process.argv[outIndex + 1];
   const outDir =
-    outIndex !== -1 && process.argv[outIndex + 1] !== undefined
-      ? path.resolve(process.argv[outIndex + 1])
+    outFlag !== undefined
+      ? path.resolve(outFlag)
       : path.join(ROOT, "dist", "release-candidate");
   const { manifest } = await buildReleaseCandidate(outDir);
   process.stdout.write(

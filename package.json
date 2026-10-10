@@ -21,7 +21,7 @@
     "probe:schedule": "node scripts/schedule-balance.mjs",
     "scan:secrets": "node scripts/secret-scan.mjs",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p scripts/tsconfig.json",
     "readiness": "node scripts/release-readiness.mjs",
     "readiness:stateful": "node scripts/stateful-readiness.mjs",
     "release:candidate": "node scripts/build-release-candidate.mjs"

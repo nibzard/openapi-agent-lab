@@ -30,6 +30,7 @@ const VALID_STATUSES = new Set(["pending", "partial", "complete"]);
  */
 export function evaluateStatefulReadiness(tasks) {
   const blocking = [];
+  /** @type {Record<string, number>} */
   const counts = {};
   for (const entry of tasks) {
     const task = /** @type {any} */ (entry);
