@@ -1465,6 +1465,34 @@ export class StateStore {
       }));
   }
 
+  /**
+   * Advance the world generation. Reset uses this; control results
+   * survive the bump (section 48.4).
+   */
+  bumpGeneration(): number {
+    return this.transaction(() => {
+      const current = this.readWorld();
+      if (current === null) {
+        throw stateCommitFailed(
+          "The database records no world identity to advance.",
+          {}
+        );
+      }
+      const next = current.generation + 1;
+      this.db
+        .prepare("UPDATE world_state SET generation = ? WHERE singleton = 1")
+        .run(next);
+      return next;
+    });
+  }
+
+  /** Drop every idempotency replay entry; the sidecar cascades. */
+  clearIdempotency(): void {
+    this.transaction(() => {
+      this.db.exec("DELETE FROM idempotency");
+    });
+  }
+
   /** Number of recorded controls; they never enter request counts. */
   countControls(): number {
     return this.scalarInteger("SELECT COUNT(*) AS n FROM control_results");

@@ -218,11 +218,8 @@ describe("the operator socket", () => {
     );
     const answers = await Promise.all(submissions);
     for (const answer of answers) {
-      expect(answer.status).toBe(501);
-      expect(answer.body["status"]).toBe("unsupported");
-      expect(firstCode(answer.body)).toBe(
-        "OAL-ENVIRONMENT-CONTROL-UNAVAILABLE"
-      );
+      expect(answer.status).toBe(200);
+      expect(answer.body["status"]).toBe("ok");
     }
     const orders = answers.map((answer) => resultOf(answer.body)["order"]);
     expect(orders).toEqual([1, 2, 3]);
@@ -244,12 +241,12 @@ describe("the operator socket", () => {
       credential: control.credential,
       body: payload
     });
-    expect(first.status).toBe(501);
+    expect(first.status).toBe(200);
     const repeated = await controlCall(control, "POST", "/v1/advance-time", {
       credential: control.credential,
       body: payload
     });
-    expect(repeated.status).toBe(501);
+    expect(repeated.status).toBe(200);
     expect(resultOf(repeated.body)).toEqual(resultOf(first.body));
 
     const changed = await controlCall(control, "POST", "/v1/advance-time", {
@@ -272,7 +269,7 @@ describe("the operator socket", () => {
       credential: control.credential,
       body: { control_id: "reset-current", expect_generation: 1 }
     });
-    expect(current.status).toBe(501);
+    expect(current.status).toBe(200);
   });
 
   it("rejects malformed control payloads", async () => {

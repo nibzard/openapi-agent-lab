@@ -98,6 +98,16 @@ export class VirtualClock {
     return formatRfc3339(this.currentMs);
   }
 
+  /**
+   * Move logical time back to a baseline. Only reset uses this: it
+   * recreates the declared initial clock (section 48.4), which the
+   * append-only `set` refuses by design.
+   */
+  resetTo(ms: number): string {
+    this.currentMs = requireIntegerMs(ms, "ms");
+    return formatRfc3339(this.currentMs);
+  }
+
   snapshot(): VirtualClockSnapshot {
     return {
       nowMs: this.currentMs,

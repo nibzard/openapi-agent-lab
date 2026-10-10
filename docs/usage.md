@@ -121,18 +121,23 @@ control route, and the credential never enters a participant input.
 Protocol v1 serves four routes over that socket:
 
 - `GET /v1/world` returns the world inspection.
-- `POST /v1/checkpoints` records a checkpoint intent.
-- `POST /v1/reset` records a reset intent.
-- `POST /v1/advance-time` records a time intent.
+- `POST /v1/checkpoints` writes one checkpoint directory.
+- `POST /v1/reset` restores the declared scenario baseline.
+- `POST /v1/advance-time` moves the virtual clock forward.
 
 Every mutation carries a `control_id`, and reset plus advance-time also
-carry `expect_generation`. The world effects of checkpoints, reset, and
-advance-time arrive with the world lifecycle milestone; until then those
-routes answer `OAL-ENVIRONMENT-CONTROL-UNAVAILABLE` and record the control
-id, so a retry replays the recorded result instead of running twice. A
-changed payload for a recorded id answers `OAL-WORLD-CONTROL-CONFLICT`, a
-stale generation answers `OAL-WORLD-GENERATION-MISMATCH`, and a full queue
-answers `OAL-WORLD-BUSY`.
+carry `expect_generation`. A repeated id with the same payload replays the
+recorded result, so retrying a reset never resets twice; a changed payload
+answers `OAL-WORLD-CONTROL-CONFLICT`, a stale generation answers
+`OAL-WORLD-GENERATION-MISMATCH`, and a full queue answers
+`OAL-WORLD-BUSY`.
+
+Reset starts the next generation and recreates the declared baseline
+state, clock, counters, random streams, and idempotency store. Previous
+evidence and control results survive, and the credentials stay valid.
+Advance-time moves the virtual clock without changing the domain
+revision; it accepts nonnegative safe-integer milliseconds and rejects
+overflow beyond the timestamp form.
 
 Read one world at rest with `world inspect`; it needs no socket and reads
 no credentials:

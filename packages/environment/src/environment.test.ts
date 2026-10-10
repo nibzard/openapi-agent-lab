@@ -28,7 +28,6 @@ import { SchemaValidator, type Json } from "@oal/core";
 
 import {
   EnvironmentCode,
-  EnvironmentError,
   openEnvironment,
   type Environment
 } from "./environment.ts";
@@ -171,8 +170,8 @@ describe("the environment owner", () => {
       expect(violations).toEqual([]);
       expect(manifest.capabilities).toEqual({
         checkpoint: "available",
-        reset: "unavailable",
-        advanceTime: "unavailable",
+        reset: "available",
+        advanceTime: "available",
         fork: "available",
         scheduledWork: "unsupported"
       });
@@ -396,7 +395,7 @@ describe("the environment owner", () => {
 });
 
 describe("environment controls", () => {
-  it("inspects the world and refuses unavailable controls", async () => {
+  it("inspects the world and refuses an overflowing advance", async () => {
     const environment = await openWebclipEnvironment();
     try {
       // World inspection is live: the manifest projection plus the
@@ -405,20 +404,15 @@ describe("environment controls", () => {
       expect(inspection["world_id"]).toBeDefined();
       expect(inspection["control_count"]).toBe(0);
       expect(JSON.stringify(inspection)).not.toContain("credential");
-      for (const control of [
-        () => environment.reset(),
-        () => environment.advanceTime()
-      ]) {
-        try {
-          control();
-          expect.unreachable("The control must refuse before the milestone.");
-        } catch (error) {
-          expect(error).toBeInstanceOf(EnvironmentError);
-          expect((error as EnvironmentError).code).toBe(
-            EnvironmentCode.ControlUnavailable
-          );
-        }
-      }
+
+      // Time advances without touching the revision; overflow refuses.
+      const revision = environment.finalState()?.revision;
+      const advanced = await environment.advanceTime(5);
+      expect(advanced.virtualTime).toBeDefined();
+      expect(environment.finalState()?.revision).toBe(revision);
+      await expect(environment.advanceTime(253402300799999)).rejects.toThrow(
+        /overflow/
+      );
     } finally {
       await environment.close();
     }

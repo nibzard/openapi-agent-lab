@@ -76,7 +76,6 @@ import {
   startWorldControl,
   type ControlEffect,
   type ControlOutcome,
-  type ControlRoute,
   type WorldControlServer
 } from "./control.ts";
 import {
@@ -253,10 +252,20 @@ export interface Environment {
    * tree, and the compiled contract (section 48.4).
    */
   checkpoint(out: string): Promise<CheckpointWritten>;
-  /** Operator reset control; unavailable in this milestone phase. */
-  reset(): never;
-  /** Operator time control; unavailable in this milestone phase. */
-  advanceTime(): never;
+  /**
+   * Reset the world: the next generation, the declared baseline
+   * state, clock, counters, and idempotency store, with evidence and
+   * control results preserved (section 48.4).
+   */
+  reset(): Promise<{
+    readonly generation: number;
+    readonly virtualTime: string;
+  }>;
+  /**
+   * Advance virtual time by `byMs` without changing the domain
+   * revision; the clock only moves forward and rejects overflow.
+   */
+  advanceTime(byMs: number): Promise<{ readonly virtualTime: string }>;
   /**
    * Start the private operator socket for this world. The socket
    * serves protocol v1 over the returned Unix domain socket; its
@@ -604,37 +613,90 @@ function packIdOf(pack: LoadedPack): string {
   return typeof metadata?.["id"] === "string" ? metadata["id"] : "";
 }
 
-function unavailable(name: string): never {
-  throw new EnvironmentError(
-    EnvironmentCode.ControlUnavailable,
-    `The ${name} control is unavailable in this build; it arrives with the world lifecycle milestone.`
-  );
+/** Latest virtual instant the RFC 3339 form carries: year 9999. */
+const MAX_VIRTUAL_MS = 253402300799999;
+
+/** The mutable holder the world services reset through. */
+interface MutableWorldServices {
+  positions: {
+    ids: Record<string, number>;
+    random: { algorithm: "splitmix64-v1"; state: string };
+  };
+}
+
+/** Everything a reset or advance effect needs from one live world. */
+interface WorldEffects {
+  readonly store: StateStore;
+  readonly host: BehaviorModuleHost;
+  readonly worldId: string;
+  readonly seed: string;
+  readonly fixtures: readonly Json[];
+  readonly services: MutableWorldServices;
+  readonly blobRoot: string;
 }
 
 /**
- * Serve one protocol route whose world effect lands with a later
- * milestone: the control id stays durable and replayable, and the
- * recorded result reports the capability honestly instead of
- * pretending an effect ran.
+ * Reset one world (section 48.4): the next generation, the declared
+ * baseline state from a fresh initialize, the baseline clock and
+ * counters, and an empty idempotency store. Evidence rows and control
+ * results survive; credentials stay valid.
  */
-async function unavailableControl(
-  route: ControlRoute,
-  payload: JsonObject,
-  store: StateStore
-): Promise<ControlOutcome> {
-  return runControl(store, {
-    route,
-    payload,
-    effect: (): ControlOutcome => ({
-      httpStatus: 501,
-      envelope: controlEnvelope("unsupported", null, [
-        controlDiagnostic(
-          EnvironmentCode.ControlUnavailable,
-          `The ${route} world effect arrives with the world lifecycle milestone; the control id is recorded and replays this result.`
-        )
-      ])
-    })
+async function resetWorldEffect(
+  world: WorldEffects
+): Promise<{ generation: number; virtualTime: string }> {
+  const generation = world.store.bumpGeneration();
+  const initialized = await world.host.initialize({
+    runId: world.worldId,
+    fixtures: [...world.fixtures],
+    clock: clockAdapter(world.store.clock),
+    ids: idsAdapter(),
+    random: randomAdapter(
+      createNamespacePrng(world.seed, `initialize:${world.worldId}`)
+    ),
+    blobs: fileBlobStore(world.blobRoot)
   });
+  if (!isJsonObject(initialized.state)) {
+    throw new EnvironmentError(
+      EnvironmentCode.InitializeFailed,
+      "The behavior backend reset to a non-object state."
+    );
+  }
+  const baseline = initialized.state;
+  return world.store.transaction(() => {
+    // The declared baseline: clock, counters, streams, replay store.
+    world.store.clock.resetTo(VIRTUAL_EPOCH_MS);
+    world.store.clearIdempotency();
+    world.services.positions.ids = {};
+    world.services.positions.random = {
+      algorithm: "splitmix64-v1",
+      state: createNamespacePrng(world.seed, "world:services").exportState()
+    };
+    const snapshot = world.store.getState();
+    world.store.putState({
+      state: baseline,
+      expectedRevision: snapshot?.revision ?? null
+    });
+    return { generation, virtualTime: world.store.clock.now() };
+  });
+}
+
+/**
+ * Advance virtual time (section 48.4): a nonnegative safe integer
+ * moves the clock forward only, leaves the domain revision alone, and
+ * refuses the overflow beyond the timestamp form.
+ */
+function advanceWorldEffect(
+  world: WorldEffects,
+  byMs: number
+): { virtualTime: string } {
+  const target = world.store.clock.nowMs() + byMs;
+  if (!Number.isSafeInteger(target) || target > MAX_VIRTUAL_MS) {
+    throw new EnvironmentError(
+      EnvironmentCode.ClockUnsupported,
+      `Advancing by ${byMs.toString(10)} milliseconds overflows the virtual clock.`
+    );
+  }
+  return { virtualTime: world.store.clock.set(target) };
 }
 
 /**
@@ -752,7 +814,7 @@ export async function openEnvironment(
     // checkpoint can export its lineage (section 48.4).
     store.initializeWorld({
       worldId,
-      generation: 1,
+      generation: store.readWorld()?.generation ?? 1,
       originCheckpointId: null,
       createdAt: formatRfc3339(options.now())
     });
@@ -803,7 +865,7 @@ export async function openEnvironment(
   // counter set, seeded from the world seed. Every exchange draws from
   // a staged copy; only a committed exchange publishes the advanced
   // positions, so a rollback restores them exactly (section 48.2).
-  const worldServices: { positions: ServicePositions } = {
+  const worldServices: MutableWorldServices = {
     positions: {
       ids: {},
       random: {
@@ -868,7 +930,7 @@ export async function openEnvironment(
     return {
       kind: "EnvironmentManifest",
       worldId,
-      generation: 1,
+      generation: store.readWorld()?.generation ?? 1,
       parentCheckpointId: null,
       pack: {
         id: typeof metadata?.["id"] === "string" ? metadata["id"] : "",
@@ -890,14 +952,23 @@ export async function openEnvironment(
       isolationLevel: host.isolationLevel,
       capabilities: {
         checkpoint: "available",
-        reset: "unavailable",
-        advanceTime: "unavailable",
+        reset: "available",
+        advanceTime: "available",
         fork: "available",
         scheduledWork: "unsupported"
       }
     };
   };
 
+  const worldEffects: WorldEffects = {
+    store,
+    host,
+    worldId,
+    seed,
+    fixtures: [...declaration.fixtures],
+    services: worldServices,
+    blobRoot
+  };
   const writeCheckpoint = async (out: string): Promise<CheckpointWritten> => {
     const checkpointId = `chk_${(store.countControls() + 1)
       .toString(10)
@@ -968,8 +1039,9 @@ export async function openEnvironment(
       control_count: store.countControls()
     }),
     checkpoint: writeCheckpoint,
-    reset: () => unavailable("reset"),
-    advanceTime: () => unavailable("advance-time"),
+    reset: () => resetWorldEffect(worldEffects),
+    advanceTime: (byMs: number): Promise<{ virtualTime: string }> =>
+      Promise.resolve().then(() => advanceWorldEffect(worldEffects, byMs)),
     openControl: (socketOptions) =>
       startWorldControl({
         operatorDirectory: socketOptions.operatorDirectory,
@@ -1030,10 +1102,59 @@ export async function openEnvironment(
                 }
               }
             }),
-          reset: async (payload): Promise<ControlOutcome> =>
-            unavailableControl("/v1/reset", payload, store),
-          advanceTime: async (payload): Promise<ControlOutcome> =>
-            unavailableControl("/v1/advance-time", payload, store)
+          reset: (payload): ControlEffect =>
+            runControl(store, {
+              route: "/v1/reset",
+              payload,
+              effect: async (): Promise<ControlOutcome> => {
+                const result = await resetWorldEffect(worldEffects);
+                return {
+                  httpStatus: 200,
+                  envelope: controlEnvelope("ok", {
+                    generation: result.generation,
+                    virtual_time: result.virtualTime
+                  })
+                };
+              }
+            }),
+          advanceTime: (payload): ControlEffect =>
+            runControl(store, {
+              route: "/v1/advance-time",
+              payload,
+              effect: (): ControlOutcome => {
+                const byMs = payload["by_ms"];
+                if (typeof byMs !== "number") {
+                  return {
+                    httpStatus: 400,
+                    envelope: controlEnvelope("invalid", null, [
+                      controlDiagnostic(
+                        "OAL-WORLD-CONTROL-BODY",
+                        "advance-time requires by_ms as a nonnegative safe integer."
+                      )
+                    ])
+                  };
+                }
+                try {
+                  const result = advanceWorldEffect(worldEffects, byMs);
+                  return {
+                    httpStatus: 200,
+                    envelope: controlEnvelope("ok", {
+                      virtual_time: result.virtualTime
+                    })
+                  };
+                } catch (error) {
+                  return {
+                    httpStatus: 400,
+                    envelope: controlEnvelope("invalid", null, [
+                      controlDiagnostic(
+                        "OAL-WORLD-TIME-OVERFLOW",
+                        error instanceof Error ? error.message : String(error)
+                      )
+                    ])
+                  };
+                }
+              }
+            })
         }
       }),
     async close(): Promise<void> {
@@ -1375,7 +1496,7 @@ export async function openRestoredEnvironment(
       "The checkpoint carries no world services stream."
     );
   }
-  const worldServices: { positions: ServicePositions } = {
+  const worldServices: MutableWorldServices = {
     positions: {
       ids: { ...document.ids.positions },
       random: {
@@ -1434,7 +1555,7 @@ export async function openRestoredEnvironment(
     return {
       kind: "EnvironmentManifest",
       worldId,
-      generation: 1,
+      generation: store.readWorld()?.generation ?? 1,
       parentCheckpointId: document.checkpoint_id,
       pack: {
         id: document.frozen.pack_id,
@@ -1455,14 +1576,23 @@ export async function openRestoredEnvironment(
       isolationLevel: host.isolationLevel,
       capabilities: {
         checkpoint: "available",
-        reset: "unavailable",
-        advanceTime: "unavailable",
+        reset: "available",
+        advanceTime: "available",
         fork: "available",
         scheduledWork: "unsupported"
       }
     };
   };
 
+  const restoredEffects: WorldEffects = {
+    store,
+    host,
+    worldId,
+    seed,
+    fixtures: [],
+    services: worldServices,
+    blobRoot: checkpoint.blobRoot
+  };
   const writeRestoredCheckpoint = async (
     out: string
   ): Promise<CheckpointWritten> => {
@@ -1521,8 +1651,9 @@ export async function openRestoredEnvironment(
       control_count: store.countControls()
     }),
     checkpoint: writeRestoredCheckpoint,
-    reset: () => unavailable("reset"),
-    advanceTime: () => unavailable("advance-time"),
+    reset: () => resetWorldEffect(restoredEffects),
+    advanceTime: (byMs: number): Promise<{ virtualTime: string }> =>
+      Promise.resolve().then(() => advanceWorldEffect(restoredEffects, byMs)),
     openControl: (socketOptions) =>
       startWorldControl({
         operatorDirectory: socketOptions.operatorDirectory,
@@ -1572,9 +1703,58 @@ export async function openRestoredEnvironment(
               }
             }),
           reset: (payload): ControlEffect =>
-            unavailableControl("/v1/reset", payload, store),
+            runControl(store, {
+              route: "/v1/reset",
+              payload,
+              effect: async (): Promise<ControlOutcome> => {
+                const result = await resetWorldEffect(restoredEffects);
+                return {
+                  httpStatus: 200,
+                  envelope: controlEnvelope("ok", {
+                    generation: result.generation,
+                    virtual_time: result.virtualTime
+                  })
+                };
+              }
+            }),
           advanceTime: (payload): ControlEffect =>
-            unavailableControl("/v1/advance-time", payload, store)
+            runControl(store, {
+              route: "/v1/advance-time",
+              payload,
+              effect: (): ControlOutcome => {
+                const byMs = payload["by_ms"];
+                if (typeof byMs !== "number") {
+                  return {
+                    httpStatus: 400,
+                    envelope: controlEnvelope("invalid", null, [
+                      controlDiagnostic(
+                        "OAL-WORLD-CONTROL-BODY",
+                        "advance-time requires by_ms as a nonnegative safe integer."
+                      )
+                    ])
+                  };
+                }
+                try {
+                  const result = advanceWorldEffect(restoredEffects, byMs);
+                  return {
+                    httpStatus: 200,
+                    envelope: controlEnvelope("ok", {
+                      virtual_time: result.virtualTime
+                    })
+                  };
+                } catch (error) {
+                  return {
+                    httpStatus: 400,
+                    envelope: controlEnvelope("invalid", null, [
+                      controlDiagnostic(
+                        "OAL-WORLD-TIME-OVERFLOW",
+                        error instanceof Error ? error.message : String(error)
+                      )
+                    ])
+                  };
+                }
+              }
+            })
         }
       }),
     async close(): Promise<void> {

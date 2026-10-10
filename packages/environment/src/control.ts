@@ -527,20 +527,23 @@ export async function runControl(
   // and the committed revision all ride the envelope and the stored
   // evidence as one form.
   const state = store.getState();
+  // The effect's own fields win: a reset reports the generation it
+  // produced, not the one it consumed. The record stamps the rest.
+  const effect = outcome.envelope["result"];
+  const effectResult: JsonObject =
+    typeof effect === "object" && effect !== null && !Array.isArray(effect)
+      ? (effect as JsonObject)
+      : {};
   const withRecord: JsonObject = {
     ...outcome.envelope,
     result: {
-      ...(typeof outcome.envelope["result"] === "object" &&
-      outcome.envelope["result"] !== null &&
-      !Array.isArray(outcome.envelope["result"])
-        ? (outcome.envelope["result"] as JsonObject)
-        : {}),
-      control_id: controlId,
-      route: input.route,
-      order: store.countControls() + 1,
       generation,
       revision: state?.revision ?? 0,
-      virtual_time: store.clock.now()
+      virtual_time: store.clock.now(),
+      ...effectResult,
+      control_id: controlId,
+      route: input.route,
+      order: store.countControls() + 1
     }
   };
   const recordable = store.recordControl({
