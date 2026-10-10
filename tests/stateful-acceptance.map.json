@@ -363,7 +363,7 @@
       "evidence": null,
       "requires_live_provider": true,
       "depends_on": ["SE-P5-02"],
-      "remaining": "Run the eight black-box cases on the dedicated repository and save redacted corpus and fidelity reports."
+      "remaining": "External dependency: no GITHUB_TOKEN and no dedicated repository exist in this environment. The verification job is built and covered by apps/cli/src/corpus-verify.test.ts; the local half passes eight of eight and the recorded skip lives in docs/evidence/github-verify-skip-2026-10-10. Completion needs one run with a token restricted to a disposable repository."
     },
     {
       "id": "SE-P6-01",
