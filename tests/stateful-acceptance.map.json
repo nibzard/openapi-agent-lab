@@ -196,11 +196,24 @@
       "id": "SE-P3-01",
       "phase": "P3",
       "requirement": "SPEC 48.5 \u00b7 plan P3",
-      "status": "pending",
-      "tests": [],
-      "evidence": null,
-      "depends_on": ["SE-P1-04"],
-      "remaining": "Add the corpus schema, parser, typed bindings, assertion definitions, bounded polling validation, and golden files."
+      "status": "complete",
+      "tests": [
+        "packages/pack/src/corpus.test.ts > accepts old packs without a corpora list",
+        "packages/pack/src/corpus.test.ts > loads a declared corpus and keeps ids aligned",
+        "packages/pack/src/corpus.test.ts > parses the section 48.5 fragment with typed references",
+        "packages/pack/src/corpus.test.ts > a forward binding to a later step",
+        "packages/pack/src/corpus.test.ts > a duplicate step id across setup, steps, and cleanup",
+        "packages/pack/src/corpus.test.ts > an unsupported assertion operator",
+        "packages/pack/src/corpus.test.ts > a poll without a deadline",
+        "packages/pack/src/corpus.test.ts > a script field inside a request body",
+        "tests/schemas.test.ts > matches the SPEC.md section 10.4 listing exactly",
+        "tests/schemas.test.ts > contains the expected number of schemas"
+      ],
+      "evidence": {
+        "commit": "fa9bd2c",
+        "command": "pnpm exec vitest run packages/pack/src/corpus.test.ts tests/schemas.test.ts"
+      },
+      "depends_on": ["SE-P1-04"]
     },
     {
       "id": "SE-P3-02",
