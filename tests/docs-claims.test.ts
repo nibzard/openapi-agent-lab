@@ -55,6 +55,17 @@ describe("documented commands match the CLI surface", () => {
     const usage = await doc("usage.md");
     expect(usage).toContain("the final state stays empty");
   });
+
+  it("documents the corpus verify skip semantics", async () => {
+    const usage = await doc("usage.md");
+    expect(usage).toContain("oal corpus verify");
+    expect(usage).toContain("Missing credentials record a skip, never a pass");
+    expect(usage).toContain("VerificationSkip");
+    expect(usage).toContain("exits with code");
+    expect(usage).toContain("never automatically");
+    // The credential discipline stays stated where the command lives.
+    expect(usage).toContain("restricted to a disposable repository");
+  });
 });
 
 describe("the external pack tutorial", () => {

@@ -222,6 +222,29 @@ with code 2; skipped cases do not fail the run. An emulator-only case on a
 target without operator controls is skipped before setup and never counts
 as a pass.
 
+Verify one corpus on both targets in one job (SPEC section 48.7):
+
+```sh
+oal corpus verify packs/github-issue-triage --corpus issue-triage-core \
+  --input owner=octocat --input repository=disposable-triage \
+  --repository octocat/disposable-triage --allow-live-writes \
+  --out evidence/
+```
+
+The job runs the local target first; a local failure stops it before the
+provider is touched. A complete provider run writes
+`corpus-local.json`, `corpus-github.json`, and a stamped
+`fidelity-observed.json` beside the output directory: the claims the run
+observed carry the date and the report digest. The stamped document is a
+review artifact; the pack's claims update only through a reviewed commit,
+never automatically.
+
+Missing credentials record a skip, never a pass. Without `GITHUB_TOKEN`
+the job writes `skip.json` (kind `VerificationSkip`) and exits with code
+4. The skip blocks fidelity completion until one run succeeds with a
+token restricted to a disposable repository; the token never enters a
+pack file, a participant environment, or a report.
+
 ## Idempotency keys
 
 A pack declares idempotency policies in its manifest under
