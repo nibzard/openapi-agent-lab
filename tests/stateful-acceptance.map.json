@@ -181,11 +181,16 @@
       "id": "SE-P2-04",
       "phase": "P2",
       "requirement": "SPEC 48.4 \u00b7 plan P2",
-      "status": "pending",
-      "tests": [],
-      "evidence": null,
-      "depends_on": ["SE-P2-03"],
-      "remaining": "Implement reset and advance-time with generation checks, control result replay, and preserved evidence."
+      "status": "complete",
+      "tests": [
+        "apps/cli/src/world-control.test.ts > finishes queued data before reset and restores the baseline",
+        "apps/cli/src/world-control.test.ts > advances time monotonically without revision changes"
+      ],
+      "evidence": {
+        "commit": "df74699",
+        "command": "pnpm exec vitest run apps/cli/src/world-control.test.ts packages/environment"
+      },
+      "depends_on": ["SE-P2-03"]
     },
     {
       "id": "SE-P3-01",
