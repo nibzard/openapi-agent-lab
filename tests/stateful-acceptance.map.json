@@ -121,11 +121,21 @@
       "id": "SE-P2-01",
       "phase": "P2",
       "requirement": "SPEC 48.4 \u00b7 plan P2",
-      "status": "pending",
-      "tests": [],
-      "evidence": null,
-      "depends_on": ["SE-P1-04"],
-      "remaining": "Define checkpoint.v1 and explicit export/import for clock, IDs, random streams, fault counters, and idempotency scope."
+      "status": "complete",
+      "tests": [
+        "packages/state-store/src/checkpoint.test.ts > restores streams, identifiers, replays, and blobs",
+        "packages/state-store/src/checkpoint.test.ts > refuses a state-only snapshot",
+        "packages/state-store/src/checkpoint.test.ts > refuses each omitted component at build time",
+        "packages/state-store/src/checkpoint.test.ts > refuses incompatible document and stream versions",
+        "packages/state-store/src/checkpoint.test.ts > imports only into an empty world",
+        "packages/state-store/src/checkpoint.test.ts > migrates a version one database before startup",
+        "packages/state-store/src/checkpoint.test.ts > refuses a second world identity in one database"
+      ],
+      "evidence": {
+        "commit": "fb91e92",
+        "command": "pnpm exec vitest run packages/state-store tests/schemas.test.ts"
+      },
+      "depends_on": ["SE-P1-04"]
     },
     {
       "id": "SE-P2-02",
