@@ -53,7 +53,7 @@ function specListedSchemaFiles(): string[] {
   ).toBeGreaterThanOrEqual(0);
   const files: string[] = [];
   for (let i = start + 1; i < lines.length; i += 1) {
-    const line = lines[i];
+    const line = lines[i] ?? "";
     if (!line.startsWith("    ")) {
       if (line.trim() === "") {
         continue;

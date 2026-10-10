@@ -93,7 +93,7 @@ describe("the stateful acceptance map", () => {
     import.meta.dirname,
     "stateful-acceptance.map.json"
   );
-  const mapPromise = readJson(mapPath) as Promise<AcceptanceMap>;
+  const mapPromise = readJson(mapPath) as unknown as Promise<AcceptanceMap>;
 
   it("validates against the stateful-acceptance.v1 schema", async () => {
     const schema = await readJson(
@@ -171,7 +171,9 @@ describe("the stateful acceptance map", () => {
   it("names an existing test file for every mapped test", async () => {
     const { tasks } = await mapPromise;
     const referenced = new Set(
-      tasks.flatMap((task) => task.tests.map((test) => test.split(" > ")[0]))
+      tasks.flatMap((task) =>
+        task.tests.map((test) => test.split(" > ")[0] ?? "")
+      )
     );
     const absent: string[] = [];
     for (const file of referenced) {

@@ -53,6 +53,8 @@ paths:
 
 const unit = {
   name: "@oal/cli",
+  version: "0.0.0",
+  directory: "/workspace/apps/cli",
   isCli: true
 };
 

@@ -167,7 +167,9 @@ describe("the acceptance map", () => {
     const entries = await entriesPromise;
     const referenced = new Set(
       entries
-        .flatMap((entry) => entry.tests.map((test) => test.split(" > ")[0]))
+        .flatMap((entry) =>
+          entry.tests.map((test) => test.split(" > ")[0] ?? "")
+        )
         .filter((file) => file.length > 0)
     );
     const absent: string[] = [];
@@ -277,10 +279,10 @@ describe("the acceptance map", () => {
       if (match === null) {
         continue;
       }
-      const owner = match[1];
+      const owner = match[1] ?? "";
       seen.add(owner);
       const listed = new Set(
-        match[2]
+        (match[2] ?? "")
           .split(",")
           .map((id) => id.trim())
           .filter((id) => id.length > 0)
@@ -348,7 +350,7 @@ describe("the acceptance map", () => {
       ) {
         continue;
       }
-      const key = cells[1];
+      const key = cells[1] ?? "";
       seen.add(key);
       const expected = key === "total" ? total : computed.get(key);
       if (expected === undefined) {

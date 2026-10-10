@@ -135,7 +135,7 @@ async function problemOf(response: Response): Promise<JsonObject> {
   );
   const parsed = JSON.parse(await response.text()) as Json;
   expect(isJsonObject(parsed)).toBe(true);
-  return parsed;
+  return parsed as JsonObject;
 }
 
 /** Read every trace event the serve recorded. */

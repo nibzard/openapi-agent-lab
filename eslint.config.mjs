@@ -24,7 +24,10 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ["scripts/*.mjs", "scripts/*.d.mts"]
+          // The .d.mts declarations join the graph through the tests
+          // that import their scripts, so only the scripts themselves
+          // need the default-project allowance.
+          allowDefaultProject: ["scripts/*.mjs"]
         },
         tsconfigRootDir: import.meta.dirname
       }
