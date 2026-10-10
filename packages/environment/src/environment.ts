@@ -59,7 +59,13 @@ import type {
   ScenarioOutcome,
   ScenarioTransaction
 } from "@oal/gateway";
-import type { LoadedPack } from "@oal/pack";
+import {
+  BehaviorClosureError,
+  computeBehaviorClosure,
+  freezeBehaviorClosure,
+  type BehaviorClosure,
+  type LoadedPack
+} from "@oal/pack";
 
 /** Stable failure codes of the environment owner. */
 export const EnvironmentCode = {
@@ -69,6 +75,7 @@ export const EnvironmentCode = {
   StateSchemaInvalid: "OAL-SCENARIO-STATE-SCHEMA-INVALID",
   ClockUnsupported: "OAL-SCENARIO-CLOCK-UNSUPPORTED",
   InitializeFailed: "OAL-SCENARIO-INITIALIZE-FAILED",
+  ClosureInvalid: "OAL-SCENARIO-BEHAVIOR-CLOSURE-INVALID",
   ControlUnavailable: "OAL-ENVIRONMENT-CONTROL-UNAVAILABLE"
 } as const;
 
@@ -166,6 +173,12 @@ export interface EnvironmentManifest {
   readonly scenarioId: string;
   readonly behaviorSha256: string;
   readonly runtimeName: string;
+  /** Identity of the frozen behavior dependency closure (section 48.8). */
+  readonly behaviorClosure: {
+    readonly identity: string;
+    readonly entryPath: string;
+    readonly fileCount: number;
+  };
   readonly seed: string;
   readonly revision: number;
   readonly virtualTime: string;
@@ -517,8 +530,35 @@ export async function openEnvironment(
     options.limits?.behaviorTimeoutMs ?? DEFAULT_BEHAVIOR_TIMEOUT_MS;
   const blobRoot = join(pack.root, ".oal", "blobs");
 
+  // Freeze the complete behavior dependency closure before the child
+  // starts (section 48.8). The child executes the frozen copies, so
+  // edits to the pack sources after this point cannot change what a
+  // running world serves, and the closure identity names the exact
+  // graph in the environment manifest.
+  let closure: BehaviorClosure;
+  let frozenEntry: string;
+  try {
+    closure = await computeBehaviorClosure(declaration.entrypoint, pack.root);
+    frozenEntry = (
+      await freezeBehaviorClosure(
+        closure,
+        pack.root,
+        join(pack.root, ".oal", "frozen", closure.identity)
+      )
+    ).entryPath;
+  } catch (cause) {
+    if (cause instanceof BehaviorClosureError) {
+      throw new EnvironmentError(
+        EnvironmentCode.ClosureInvalid,
+        cause.message,
+        { cause }
+      );
+    }
+    throw cause;
+  }
+
   const host = new BehaviorModuleHost({
-    entry: declaration.entrypoint.absolutePath,
+    entry: frozenEntry,
     context: {
       contract: contract.ir,
       packRoot: pack.root,
@@ -678,6 +718,11 @@ export async function openEnvironment(
       scenarioId: options.scenarioId,
       behaviorSha256: declaration.entrypoint.sha256,
       runtimeName: "@oal/environment",
+      behaviorClosure: {
+        identity: closure.identity,
+        entryPath: closure.entryPath,
+        fileCount: closure.files.length
+      },
       seed,
       revision: snapshot?.revision ?? 0,
       virtualTime: store.clock.now(),

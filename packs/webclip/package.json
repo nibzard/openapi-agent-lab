@@ -1,0 +1,11 @@
+{
+  "name": "webclip-pack",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Pack manifest dependencies of the webclip behavior module.",
+  "type": "module",
+  "dependencies": {
+    "@oal/behavior-api": "workspace:*",
+    "@oal/behavior-runtime": "workspace:*"
+  }
+}

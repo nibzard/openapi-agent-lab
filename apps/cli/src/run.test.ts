@@ -1,7 +1,14 @@
-import { cp, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import {
+  cp,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  symlink,
+  writeFile
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -64,16 +71,20 @@ async function writeBackendFailureFixture(
 ): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), "oal-webclip-failure-"));
   scratchDirectories.push(root);
-  await cp(webclipRoot, root, { recursive: true });
-  // behavior/index.ts sits three directories below the root that
-  // the pack's repository-relative imports resolve against.
-  const repositoryRoot = path.dirname(path.dirname(webclipRoot));
-  const packagesUrl = `${
-    pathToFileURL(path.join(repositoryRoot, "packages")).href
-  }/`;
+  await cp(webclipRoot, root, {
+    recursive: true,
+    filter: (source) => !source.includes(`${path.sep}node_modules`)
+  });
+  await symlink(
+    path.join(webclipRoot, "node_modules"),
+    path.join(root, "node_modules"),
+    "dir"
+  );
+  // The recursive copy carries the pack's node_modules, so the
+  // declared public imports of the behavior module resolve inside the
+  // copy.
   const entry = path.join(root, "behavior", "index.ts");
-  let source = await readFile(entry, "utf8");
-  source = source.replaceAll("../../../packages/", packagesUrl);
+  const source = await readFile(entry, "utf8");
   const injected = source.replace(
     "      return handler(request, state, domain);",
     [

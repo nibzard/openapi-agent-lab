@@ -4,6 +4,13 @@ kind: Pack
 metadata:
   id: webclip
   name: webclip
+  # 0.4.0 moves the behavior module's imports to the declared public
+  # packages @oal/behavior-api and @oal/behavior-runtime through the
+  # pack's package manifest. Domain semantics are unchanged from
+  # 0.3.0, but the behavior bytes and the pack digest differ, so the
+  # frozen dependency closure identity changes with them. Evidence and
+  # scores recorded under 0.3.0 stay under 0.3.0.
+  #
   # 0.3.0 flips the pack to scenario behavior: the module under
   # behavior/ owns the clip lifecycle, so two creates return two
   # distinct clips, a deletion answers 404 on every later read, and
@@ -15,7 +22,7 @@ metadata:
   # full report cross-checks, and a non-scoring comprehension probe.
   # Evidence and scores recorded under 0.1.0 stay under 0.1.0; any
   # regrading of them is labeled derived.
-  version: 0.3.0
+  version: 0.4.0
   description: >-
     A greenfield pack that demonstrates the friction-measurement loop
     on a new API.

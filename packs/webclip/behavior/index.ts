@@ -10,10 +10,10 @@
  *
  * The module runs as plain TypeScript under Node type stripping, so it
  * stays erasable-syntax only. It imports the runtime values it needs,
- * the behavior error class and the child loop, by relative path: a
- * pack resolves no bare workspace specifiers, because the module
- * directory sits outside the workspace package graph and the module
- * process starts with a minimal environment.
+ * the behavior error class and the child loop, through the declared
+ * public packages: the pack declares @oal/behavior-api and
+ * @oal/behavior-runtime in its package manifest, the closure freezer
+ * resolves them, and the child executes the frozen copies.
  *
  * The behavior host spawns this file as a child process and marks the
  * environment (OAL_BEHAVIOR_CHILD); the file then serves the module
@@ -23,8 +23,8 @@
 
 import { createHash } from "node:crypto";
 
-import { runBehaviorChild } from "../../../packages/behavior-runtime/src/child.ts";
-import { BehaviorHttpError } from "../../../packages/behavior-api/src/error.ts";
+import { runBehaviorChild } from "@oal/behavior-runtime";
+import { BehaviorHttpError } from "@oal/behavior-api";
 import type {
   BackendDescription,
   BackendFactoryContext,
@@ -40,7 +40,7 @@ import type {
   InitializeContext,
   InitializeResult,
   Json
-} from "../../../packages/behavior-api/src/types.ts";
+} from "@oal/behavior-api";
 
 /** Free-plan clip quota; the account read serves it from state. */
 const CLIPS_LIMIT = 100;

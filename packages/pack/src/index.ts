@@ -53,3 +53,12 @@ export {
   type PackYamlErrorCode,
   type PackYamlOptions
 } from "./yaml.ts";
+export {
+  BEHAVIOR_CLOSURE_RUNTIME,
+  BehaviorClosureCode,
+  BehaviorClosureError,
+  computeBehaviorClosure,
+  freezeBehaviorClosure,
+  type BehaviorClosure,
+  type BehaviorClosureFile
+} from "./behavior-closure.ts";

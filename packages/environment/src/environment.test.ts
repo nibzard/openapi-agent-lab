@@ -9,11 +9,17 @@
  * pack's contract changes so the fixture is regenerated consciously.
  */
 
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  cp,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile
+} from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { loadPack, type LoadedPack } from "@oal/pack";
@@ -108,17 +114,20 @@ async function newScratch(): Promise<string> {
  */
 async function webclipCopy(): Promise<string> {
   const root = await newScratch();
-  await cp(webclipRoot, root, { recursive: true });
-  const repositoryRoot = path.resolve(webclipRoot, "..", "..");
-  const packagesUrl = `${
-    pathToFileURL(path.join(repositoryRoot, "packages")).href
-  }/`;
-  const entry = path.join(root, "behavior", "index.ts");
-  const source = (await readFile(entry, "utf8")).replaceAll(
-    "../../../packages/",
-    packagesUrl
+  await cp(webclipRoot, root, {
+    recursive: true,
+    // The linked package tree is skipped and re-linked below: a
+    // dereferenced copy loses the pnpm layout the closure resolves
+    // transitive dependencies through.
+    filter: (source) => !source.includes(`${path.sep}node_modules`)
+  });
+  await symlink(
+    path.join(webclipRoot, "node_modules"),
+    path.join(root, "node_modules"),
+    "dir"
   );
-  await writeFile(entry, source, "utf8");
+  // The recursive copy carries the pack's node_modules, so the
+  // declared public imports resolve inside the copy.
   return root;
 }
 
@@ -142,6 +151,9 @@ describe("the environment owner", () => {
       expect(manifest.scenarioId).toBe("baseline");
       expect(manifest.revision).toBe(0);
       expect(manifest.isolationLevel).toBe("trusted-local");
+      expect(manifest.behaviorClosure.identity).toMatch(/^[0-9a-f]{64}$/u);
+      expect(manifest.behaviorClosure.entryPath).toBe("behavior/index.ts");
+      expect(manifest.behaviorClosure.fileCount).toBeGreaterThan(1);
       expect(manifest.capabilities).toEqual({
         checkpoint: "unavailable",
         reset: "unavailable",

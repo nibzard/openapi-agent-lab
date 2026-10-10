@@ -515,6 +515,15 @@ importers:
         specifier: workspace:*
         version: link:../core
 
+  packs/webclip:
+    dependencies:
+      '@oal/behavior-api':
+        specifier: workspace:*
+        version: link:../../packages/behavior-api
+      '@oal/behavior-runtime':
+        specifier: workspace:*
+        version: link:../../packages/behavior-runtime
+
 packages:
 
   '@esbuild/aix-ppc64@0.28.2':
