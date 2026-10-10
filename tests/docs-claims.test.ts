@@ -65,6 +65,17 @@ describe("documented commands match the CLI surface", () => {
     expect(text).not.toContain("placeholder; not written yet");
   });
 
+  it("documents the live corpus surface in the network policy", async () => {
+    const security = await doc("security.md");
+    expect(security).toContain("Operator-authorized corpus runs");
+    expect(security).toContain("--allow-live-writes");
+    expect(security).toContain("restricted to a disposable repository");
+    expect(security).toContain("never retried automatically");
+    expect(security).toContain(
+      "never enters a pack file,\nthe participant environment, or any artifact"
+    );
+  });
+
   it("documents the corpus verify skip semantics", async () => {
     const usage = await doc("usage.md");
     expect(usage).toContain("oal corpus verify");

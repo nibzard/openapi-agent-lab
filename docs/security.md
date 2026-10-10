@@ -75,6 +75,22 @@ compares as a status and a write is never re-issued. The credential value is
 registered as a run secret before anything is written. See
 [usage](usage.md#live-conformance-probe) for the full command behavior.
 
+### Operator-authorized corpus runs
+
+The provider corpus target is the second operator-initiated exception.
+`oal corpus run --target github` and `oal corpus verify` send real traffic
+only after you pass `--allow-live-writes` and an explicit `--repository`,
+with a `GITHUB_TOKEN` restricted to a disposable repository in the
+environment. Preflight rejects the run before any write leaves the process
+when any of the three is missing.
+
+The discipline is fixed: requests run serially under an explicit budget,
+every create carries a unique run marker so cleanup never touches an
+unrelated resource, a mutating request is never retried automatically, and
+sensitive headers never enter a report. The token never enters a pack file,
+the participant environment, or any artifact. Missing credentials record a
+skip that blocks fidelity completion; they never become a pass.
+
 ## Filesystem and workspace policy
 
 Each trial receives distinct roots for inputs, workspace, output, state,
