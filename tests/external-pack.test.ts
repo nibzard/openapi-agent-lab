@@ -92,14 +92,21 @@ describe("the archive builder", () => {
     ]);
     expect(dynamicCallsOf('const r = require("fs");')).toEqual(["require("]);
     expect(staticImportsOf('import { a } from "./b.ts";')).toEqual(["./b.ts"]);
-    // A used import survives compilation with a rewritten specifier.
+    // A used import survives compilation with a rewritten specifier;
+    // prose and URL literals that merely look like paths keep their
+    // text.
     const compiled = compileSource(
-      '#!/usr/bin/env node\nimport { a } from "./b.ts";\nconsole.log(a);\nimport { c } from "../c/d.ts";\nconsole.log(c);\n'
+      "#!/usr/bin/env node\n" +
+        'import { a } from "./b.ts";\n' +
+        'console.log(a, "see ./docs/notes.ts", new URL("./worker-entry.ts", import.meta.url));\n' +
+        'import { c } from "../c/d.ts";\n' +
+        "console.log(c);\n"
     );
     expect(compiled.startsWith("#!/usr/bin/env node")).toBe(true);
     expect(compiled).toContain('"./b.js"');
     expect(compiled).toContain('"../c/d.js"');
-    expect(compiled).not.toContain('.ts"');
+    expect(compiled).toContain('"see ./docs/notes.ts"');
+    expect(compiled).toContain('"./worker-entry.ts"');
   });
 });
 

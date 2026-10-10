@@ -221,13 +221,29 @@ export async function archiveUnits() {
   return [...units.values()];
 }
 
-/** Transpile one source into JavaScript with `.js` specifiers. */
+/**
+ * Transpile one source into JavaScript with `.js` specifiers. Only
+ * strings that are actual import or export specifiers are rewritten:
+ * a prose string that merely looks like a relative TypeScript path,
+ * or a URL literal loaded outside the import system, keeps its text.
+ */
 export function compileSource(source) {
   const shebang = source.startsWith("#!")
     ? source.slice(0, source.indexOf("\n"))
     : "";
   const body = shebang === "" ? source : source.slice(source.indexOf("\n") + 1);
-  const rewritten = body.replace(/(["'])(\.\.?\/[^"']*?)\.ts\1/gu, "$1$2.js$1");
+  const specifiers = new Set(
+    staticImportsOf(body).filter(
+      (specifier) => specifier.startsWith(".") && specifier.endsWith(".ts")
+    )
+  );
+  const rewritten = body.replace(
+    /(["'])(\.\.?\/[^"'\n]+)\1/gu,
+    (whole, quote, value) =>
+      specifiers.has(value)
+        ? `${quote}${value.replace(/\.ts$/u, ".js")}${quote}`
+        : whole
+  );
   const result = ts.transpileModule(rewritten, {
     compilerOptions: {
       module: ts.ModuleKind.ESNext,
