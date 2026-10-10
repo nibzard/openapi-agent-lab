@@ -388,11 +388,18 @@
       "id": "SE-P6-02",
       "phase": "P6",
       "requirement": "SPEC 48.8 \u00b7 plan P6",
-      "status": "pending",
-      "tests": [],
+      "status": "partial",
+      "tests": [
+        "apps/cli/src/external-demo.test.ts > validates as a pack",
+        "apps/cli/src/external-demo.test.ts > executes its corpus, including the reset control",
+        "apps/cli/src/external-demo.test.ts > serves, checkpoints, and forks the template world",
+        "apps/cli/src/external-demo.test.ts > runs the scripted participant through the template eval",
+        "apps/cli/src/external-demo.test.ts > fails the corpus when the transition is broken",
+        "tests/external-pack.test.ts > runs the external template end to end through the installed executable"
+      ],
       "evidence": null,
       "depends_on": ["SE-P6-01"],
-      "remaining": "Add the external pack template and tutorial, and update quickstart and capabilities for proven commands only."
+      "remaining": "The template, tutorial, and quickstart/capability updates exist and are enforced by tests; completion stays blocked by the SE-P5-03 dependency (plan: P6 completion depends on P5)."
     },
     {
       "id": "SE-P6-03",
