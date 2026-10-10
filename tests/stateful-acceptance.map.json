@@ -259,11 +259,20 @@
       "id": "SE-P4-01",
       "phase": "P4",
       "requirement": "SPEC 48.6 \u00b7 plan P4",
-      "status": "pending",
-      "tests": [],
-      "evidence": null,
-      "depends_on": ["SE-P2-04", "SE-P3-03"],
-      "remaining": "Version fault phases and wire the pre-behavior, corrupt-candidate, and post-commit disconnect fixtures."
+      "status": "complete",
+      "tests": [
+        "packages/environment/src/faults.test.ts > serves before_behavior without mutating domain state",
+        "packages/environment/src/faults.test.ts > rolls the candidate back and commits consumption separately",
+        "packages/environment/src/faults.test.ts > commits everything before an after_commit disconnect",
+        "packages/environment/src/faults.test.ts > records unknown delivery when the world dies after commit",
+        "packages/environment/src/faults.test.ts > fails unsupported phases and actions before the world starts",
+        "packages/environment/src/faults.test.ts > continues occurrence numbering into a forked world"
+      ],
+      "evidence": {
+        "commit": "6256230",
+        "command": "pnpm exec vitest run packages/environment/src/faults.test.ts packages/state-store/src/checkpoint.test.ts"
+      },
+      "depends_on": ["SE-P2-04", "SE-P3-03"]
     },
     {
       "id": "SE-P4-02",
