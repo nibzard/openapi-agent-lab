@@ -1,0 +1,13 @@
+# Context
+
+## Why This Way
+Section 48 was written after the plan review accepted the
+implementation decisions. It is normative for new interfaces but
+claims nothing is implemented yet; the plan's task ledger
+(SE-P0-01..SE-P6-03) is the work order.
+
+## Gotchas
+- Section 48.4 grants an exception to 38.1 key destruction for
+  operator checkpoints only; trial finalization is unchanged.
+- github-issue-triage pins provider API version 2026-03-10; recheck
+  before P5 implementation.
