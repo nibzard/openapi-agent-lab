@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "kind": "CorpusReport",
+  "generated_at": "2026-10-10T12:00:00.000Z",
+  "corpus": {
+    "id": "issue-triage-core",
+    "version": "1.0.0",
+    "scenario": "default"
+  },
+  "target": {
+    "id": "local",
+    "version": "0.1.0",
+    "capabilities": {
+      "operators": true,
+      "virtual_time": true
+    }
+  },
+  "inputs": {
+    "owner": "octocat",
+    "repository": "disposable-triage",
+    "run_marker": "corpus-2026-10-10"
+  },
+  "summary": {
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "error": 0
+  },
+  "cases": [
+    {
+      "id": "create-read",
+      "claim_ids": ["issues-create", "issues-read"],
+      "scope": "black_box",
+      "status": "passed",
+      "contract_conformance": "not_evaluated",
+      "behavioral_conformance": "pass",
+      "agent_success": "not_evaluated",
+      "steps": [
+        {
+          "id": "create",
+          "phase": "steps",
+          "status": "passed",
+          "operation_id": "createIssue",
+          "exchange": {
+            "method": "POST",
+            "url": "https://api.example.invalid/repos/octocat/disposable-triage/issues",
+            "status": 201,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "body": {
+              "number": 7,
+              "title": "Corpus issue",
+              "state": "open"
+            }
+          },
+          "bindings": [
+            {
+              "name": "number",
+              "step": "create",
+              "source": "body",
+              "pointer": "/number",
+              "value": 7
+            }
+          ],
+          "assertions": [
+            {
+              "op": "status",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "id": "wait-list",
+          "phase": "steps",
+          "status": "passed",
+          "operation_id": "listIssues",
+          "attempts": [
+            {
+              "ordinal": 1,
+              "waited_ms": 0,
+              "exchange": {
+                "status": 200,
+                "body": [
+                  {
+                    "number": 7,
+                    "state": "open"
+                  }
+                ]
+              },
+              "assertions": [
+                {
+                  "op": "length",
+                  "passed": true
+                }
+              ],
+              "passed": true
+            }
+          ],
+          "assertions": [
+            {
+              "op": "length",
+              "passed": true
+            }
+          ]
+        },
+        {
+          "id": "close",
+          "phase": "cleanup",
+          "status": "passed",
+          "operation_id": "updateIssue",
+          "exchange": {
+            "method": "PATCH",
+            "status": 200,
+            "body": {
+              "number": 7,
+              "state": "closed"
+            }
+          },
+          "assertions": [
+            {
+              "op": "status",
+              "passed": true
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "status": "passed",
+        "steps": 1
+      }
+    }
+  ],
+  "diagnostics": []
+}

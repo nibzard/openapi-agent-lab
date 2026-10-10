@@ -919,6 +919,7 @@ openapi-agent-lab/
     environment.v1.schema.json
     checkpoint.v1.schema.json
     corpus.v1.schema.json
+    corpus-report.v1.schema.json
 
   packs/
     steel-computer/

@@ -56,6 +56,9 @@ importers:
       '@oal/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@oal/corpus':
+        specifier: workspace:*
+        version: link:../../packages/corpus
       '@oal/environment':
         specifier: workspace:*
         version: link:../../packages/environment
@@ -192,6 +195,15 @@ importers:
         version: link:../pack
 
   packages/core: {}
+
+  packages/corpus:
+    dependencies:
+      '@oal/core':
+        specifier: workspace:*
+        version: link:../core
+      '@oal/pack':
+        specifier: workspace:*
+        version: link:../pack
 
   packages/documentation-facade:
     dependencies:

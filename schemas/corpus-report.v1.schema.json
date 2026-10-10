@@ -1,0 +1,393 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/corpus-report.v1.json",
+  "title": "Corpus report",
+  "description": "Result of executing one behavioral corpus against one target (SPEC section 48.5): case and claim identities, binding provenance, poll attempts, assertion and cleanup results, redacted exchanges, and diagnostics. Contract conformance, behavioral conformance, and agent success stay separate; an absent assessment is not_evaluated.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "corpus", "target", "cases"],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "CorpusReport"
+    },
+    "generated_at": {
+      "$ref": "#/$defs/rfc3339"
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "scenario"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scenario": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "capabilities"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Target identity, for example local or github."
+        },
+        "version": {
+          "type": "string"
+        },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["operators", "virtual_time"],
+          "properties": {
+            "operators": {
+              "type": "boolean",
+              "description": "Whether the target accepts emulator-only scope and operator steps."
+            },
+            "virtual_time": {
+              "type": "boolean",
+              "description": "Whether waits advance a virtual clock instead of wall time."
+            }
+          }
+        }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "description": "Input values the run received, by name.",
+      "additionalProperties": true
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["passed", "failed", "skipped", "error"],
+      "properties": {
+        "passed": {
+          "$ref": "#/$defs/count"
+        },
+        "failed": {
+          "$ref": "#/$defs/count"
+        },
+        "skipped": {
+          "$ref": "#/$defs/count"
+        },
+        "error": {
+          "$ref": "#/$defs/count"
+        }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/case"
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/diagnostic"
+      }
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$"
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "rfc3339": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    },
+    "assessment": {
+      "type": "string",
+      "enum": ["pass", "fail", "not_evaluated"]
+    },
+    "caseStatus": {
+      "type": "string",
+      "enum": ["passed", "failed", "skipped", "error"]
+    },
+    "stepPhase": {
+      "type": "string",
+      "enum": ["setup", "steps", "cleanup"]
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string"
+        },
+        "case_id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "step_id": {
+          "$ref": "#/$defs/safeId"
+        }
+      }
+    },
+    "exchange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "method": {
+          "type": "string",
+          "description": "HTTP method when the target exposes one."
+        },
+        "url": {
+          "type": "string",
+          "description": "Redacted request URL when the target exposes one."
+        },
+        "status": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Redacted response headers, lowercased names."
+        },
+        "body": {
+          "description": "Decoded response body, when one came back."
+        }
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "step", "source"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "step": {
+          "$ref": "#/$defs/safeId",
+          "description": "Step that established the binding."
+        },
+        "source": {
+          "type": "string",
+          "enum": ["status", "headers", "body"]
+        },
+        "pointer": {
+          "type": ["string", "null"],
+          "description": "JSON Pointer the binding read; null for status."
+        },
+        "value": {
+          "description": "Captured value; absent when the pointer missed."
+        },
+        "missing": {
+          "type": "boolean",
+          "description": "True when the pointer found nothing."
+        }
+      }
+    },
+    "assertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "passed"],
+      "properties": {
+        "op": {
+          "type": "string",
+          "minLength": 1
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string",
+          "description": "Failure explanation; empty when passed."
+        },
+        "expected": {
+          "description": "Resolved expected operand, when recorded."
+        },
+        "actual": {
+          "description": "Resolved actual operand, when recorded."
+        }
+      }
+    },
+    "attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ordinal", "passed"],
+      "properties": {
+        "ordinal": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "waited_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Cumulative wait before this attempt ran."
+        },
+        "exchange": {
+          "$ref": "#/$defs/exchange"
+        },
+        "assertions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/assertion"
+          }
+        },
+        "passed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "phase", "status"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "phase": {
+          "$ref": "#/$defs/stepPhase"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["passed", "failed", "error", "skipped"]
+        },
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Operation the step exercised."
+        },
+        "operator": {
+          "description": "Operator command the step issued."
+        },
+        "operator_result": {
+          "description": "Result the operator control returned."
+        },
+        "exchange": {
+          "$ref": "#/$defs/exchange"
+        },
+        "bindings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/binding"
+          }
+        },
+        "attempts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/attempt"
+          },
+          "description": "One record per poll attempt, in order."
+        },
+        "assertions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/assertion"
+          }
+        },
+        "diagnostic": {
+          "$ref": "#/$defs/diagnostic",
+          "description": "The error that stopped this step, when one did."
+        }
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "claim_ids",
+        "scope",
+        "status",
+        "contract_conformance",
+        "behavioral_conformance",
+        "agent_success",
+        "steps",
+        "cleanup"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "claim_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "scope": {
+          "type": "string",
+          "enum": ["black_box", "emulator_only"]
+        },
+        "status": {
+          "$ref": "#/$defs/caseStatus"
+        },
+        "skip_reason": {
+          "type": "string",
+          "description": "Why an emulator-only case did not run on this target."
+        },
+        "contract_conformance": {
+          "$ref": "#/$defs/assessment"
+        },
+        "behavioral_conformance": {
+          "$ref": "#/$defs/assessment"
+        },
+        "agent_success": {
+          "$ref": "#/$defs/assessment"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/step"
+          },
+          "description": "Every executed step in order, across setup, steps, and cleanup."
+        },
+        "cleanup": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "steps"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["passed", "failed", "error", "not_run"]
+            },
+            "steps": {
+              "$ref": "#/$defs/count",
+              "description": "Cleanup steps that ran."
+            }
+          }
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diagnostic"
+          }
+        }
+      }
+    }
+  }
+}

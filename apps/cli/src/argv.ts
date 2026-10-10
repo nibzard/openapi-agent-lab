@@ -114,6 +114,11 @@ export class FlagView {
     return occurrences[occurrences.length - 1];
   }
 
+  /** Every occurrence of a value option, in order. */
+  all(name: string): readonly string[] {
+    return this.values.get(name) ?? [];
+  }
+
   requireString(name: string): string {
     const value = this.string(name);
     if (value === undefined) {

@@ -24,6 +24,7 @@ import {
   worldForkCommand,
   worldInspectCommand
 } from "./handlers/world.ts";
+import { corpusRunCommand, corpusValidateCommand } from "./handlers/corpus.ts";
 import { traceImportCommand } from "./handlers/trace-import.ts";
 import { studyAnalyzeCommand } from "./handlers/study-analyze.ts";
 import { studyInitCommand } from "./handlers/study-init.ts";
@@ -188,6 +189,29 @@ export const COMMANDS: readonly CommandSpec[] = [
       value("port", "Loopback TCP port; 0 picks a free port. Default 0.")
     ],
     handler: worldForkCommand
+  },
+  {
+    name: "corpus validate",
+    summary: "Validate every corpus a pack declares.",
+    arguments: [{ name: "pack", description: "Pack directory." }],
+    options: [],
+    handler: corpusValidateCommand
+  },
+  {
+    name: "corpus run",
+    summary: "Run one behavioral corpus against the local target.",
+    arguments: [{ name: "pack", description: "Pack directory." }],
+    options: [
+      value(
+        "corpus",
+        "Corpus id to run; required when the pack declares several."
+      ),
+      value(
+        "input",
+        "Input value as NAME=VALUE, repeatable; VALUE parses as JSON when possible."
+      )
+    ],
+    handler: corpusRunCommand
   },
   {
     name: "pack init",

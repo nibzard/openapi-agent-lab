@@ -1,0 +1,44 @@
+{
+  "schema_version": 2,
+  "kind": "CorpusRun",
+  "corpus": {
+    "id": "bad-id-with-spaces and more",
+    "version": ""
+  },
+  "target": {
+    "capabilities": {
+      "operators": "yes"
+    }
+  },
+  "cases": [
+    {
+      "id": "mixed-up",
+      "claim_ids": [],
+      "scope": "sometimes",
+      "status": "skipped-but-also-passed",
+      "contract_conformance": "maybe",
+      "behavioral_conformance": true,
+      "agent_success": "not_evaluated",
+      "steps": [
+        {
+          "id": "bad-step",
+          "phase": "teardown",
+          "status": "exploded",
+          "attempts": [
+            {
+              "ordinal": 0,
+              "waited_ms": -5,
+              "exchange": {
+                "status": 99999
+              },
+              "passed": false
+            }
+          ]
+        }
+      ],
+      "cleanup": {
+        "status": "passed"
+      }
+    }
+  ]
+}

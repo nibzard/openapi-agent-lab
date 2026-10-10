@@ -173,6 +173,37 @@ Identical inputs and seed produce identical response bytes. `oal replay`
 depends on this property. See [the quickstart](quickstart.md) for a served
 request example.
 
+## Behavioral corpora
+
+A corpus is a portable set of behavioral cases a pack declares under an
+optional `corpora` list. Cases carry typed inputs, ordered steps, JSON
+Pointer bindings, and assertions; they hold no scripts, shell commands, or
+expression languages. See SPEC section 48.5 for the format.
+
+Check every corpus a pack declares:
+
+```sh
+oal corpus validate PACK
+```
+
+Run one corpus against the local target. The target serves a fresh world
+per case on the public HTTP listener and reaches operator controls only
+for waits and operator steps:
+
+```sh
+oal corpus run PACK --corpus webclip-core \
+  --input clip_url=https://example.com/essay --out corpus-report.json
+```
+
+Every declared input needs a `--input NAME=VALUE` flag; a value parses as
+JSON when possible and stays a string otherwise. The command writes one
+`corpus-report.v1` document: case and claim identities, binding
+provenance, every poll attempt, assertion and cleanup results, redacted
+exchanges, and diagnostics. Cases whose assertions fail or that error exit
+with code 2; skipped cases do not fail the run. An emulator-only case on a
+target without operator controls is skipped before setup and never counts
+as a pass.
+
 ## Packs
 
 A pack is a versioned bundle. It holds a contract plus optional behavior,

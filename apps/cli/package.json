@@ -19,6 +19,7 @@
     "@oal/contract-ir": "workspace:*",
     "@oal/contract-variant": "workspace:*",
     "@oal/core": "workspace:*",
+    "@oal/corpus": "workspace:*",
     "@oal/environment": "workspace:*",
     "@oal/evaluator": "workspace:*",
     "@oal/evidence": "workspace:*",
