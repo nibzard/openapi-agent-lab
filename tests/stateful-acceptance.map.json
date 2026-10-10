@@ -369,11 +369,20 @@
       "id": "SE-P6-01",
       "phase": "P6",
       "requirement": "SPEC 48.8 \u00b7 plan P6",
-      "status": "pending",
-      "tests": [],
+      "status": "partial",
+      "tests": [
+        "packages/pack/src/behavior-closure.test.ts > changes identity when a helper edit changes semantics",
+        "packages/pack/src/behavior-closure.test.ts > refuses a dynamic import",
+        "packages/pack/src/behavior-closure.test.ts > refuses an import that escapes the pack root",
+        "packages/pack/src/behavior-closure.test.ts > refuses ambient dependency resolution",
+        "tests/external-pack.test.ts > classifies imports for public resolution only",
+        "tests/external-pack.test.ts > detects dynamic calls and rewrites specifiers on compile",
+        "tests/external-pack.test.ts > packs the CLI, its packages, their schemas, and worker entries",
+        "tests/external-pack.test.ts > installs outside the workspace and runs on public imports only"
+      ],
       "evidence": null,
       "depends_on": ["SE-P5-03"],
-      "remaining": "Complete public authoring exports, compatibility checks, and installable archives for the CLI and required packages."
+      "remaining": "The archives and both enforcing test files exist; completion stays blocked by the SE-P5-03 dependency (plan: P6 completion depends on P5)."
     },
     {
       "id": "SE-P6-02",
