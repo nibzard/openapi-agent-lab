@@ -405,11 +405,13 @@
       "id": "SE-P6-03",
       "phase": "P6",
       "requirement": "SPEC 48.8 \u00b7 plan P6",
-      "status": "pending",
-      "tests": [],
+      "status": "partial",
+      "tests": [
+        "tests/release-candidate.test.ts > assembles archives, evidence, readiness, and limitations"
+      ],
       "evidence": null,
       "depends_on": ["SE-P6-02"],
-      "remaining": "Run phase and milestone gates, record practitioner trials, and prepare release artifacts without publishing."
+      "remaining": "The release candidate assembly (pnpm run release:candidate) and the limitations document exist. Completion needs the SE-P5-03 provider run, a passing readiness:stateful gate, and the recorded practitioner trials with an agent developer and a service maintainer; no human trial has run yet."
     }
   ]
 }
