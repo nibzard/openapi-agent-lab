@@ -19,6 +19,7 @@ import { replayCommand } from "./handlers/replay.ts";
 import { reportCommand } from "./handlers/report.ts";
 import { runCommand } from "./handlers/run.ts";
 import { serveCommand } from "./handlers/serve.ts";
+import { worldInspectCommand } from "./handlers/world.ts";
 import { traceImportCommand } from "./handlers/trace-import.ts";
 import { studyAnalyzeCommand } from "./handlers/study-analyze.ts";
 import { studyInitCommand } from "./handlers/study-init.ts";
@@ -158,6 +159,13 @@ export const COMMANDS: readonly CommandSpec[] = [
       flag("allow-non-loopback", "Explicitly allow non-loopback binding.")
     ],
     handler: serveCommand
+  },
+  {
+    name: "world inspect",
+    summary: "Inspect one world directory at rest.",
+    arguments: [],
+    options: [value("world", "Control directory of the served world.")],
+    handler: worldInspectCommand
   },
   {
     name: "pack init",

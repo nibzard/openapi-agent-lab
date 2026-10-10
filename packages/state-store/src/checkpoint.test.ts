@@ -410,6 +410,8 @@ describe("checkpoint documents", () => {
     try {
       raw.exec("DROP TABLE world_state");
       raw.exec("DROP TABLE idempotency_identity");
+      raw.exec("DROP TABLE control_results");
+      raw.exec(`DELETE FROM schema_meta WHERE key = 'migration:3'`);
       raw
         .prepare(`UPDATE schema_meta SET value = ? WHERE key = ?`)
         .run("1", SCHEMA_META_VERSION_KEY);

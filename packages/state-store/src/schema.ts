@@ -12,7 +12,7 @@ import { runInTransaction } from "./database.ts";
 import { schemaVersionUnsupported } from "./errors.ts";
 
 /** Highest schema version this build understands. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export interface Migration {
   /** Schema version after this migration applies. */
@@ -187,12 +187,33 @@ CREATE TABLE idempotency_identity (
 `;
 
 /**
+ * Version 3 records operator control results. A repeated control id
+ * replays its recorded result and a changed payload conflicts, across
+ * generations (section 48.3).
+ */
+const V3 = `
+CREATE TABLE control_results (
+  control_id TEXT PRIMARY KEY,
+  route TEXT NOT NULL,
+  payload_sha256 TEXT NOT NULL,
+  control_sequence INTEGER NOT NULL UNIQUE,
+  generation INTEGER NOT NULL,
+  revision INTEGER NOT NULL,
+  virtual_time TEXT NOT NULL,
+  status INTEGER NOT NULL,
+  result_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+`;
+
+/**
  * Ordered migrations. The `export_status` table is required by section 17.1
  * but has no column list in section 38.1; version 1 uses the shape below.
  */
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, name: "state-store-v1", sql: V1 },
-  { version: 2, name: "world-state-v2", sql: V2 }
+  { version: 2, name: "world-state-v2", sql: V2 },
+  { version: 3, name: "control-results-v3", sql: V3 }
 ];
 
 export const SCHEMA_META_VERSION_KEY = "schema_version";
@@ -275,5 +296,6 @@ export const STATE_STORE_TABLES: readonly string[] = [
   "blobs",
   "export_status",
   "world_state",
-  "idempotency_identity"
+  "idempotency_identity",
+  "control_results"
 ];

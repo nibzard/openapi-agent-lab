@@ -1330,6 +1330,146 @@ export class StateStore {
   }
 
   /**
+   * Record one operator control result. A repeated control id with
+   * the same payload replays the recorded result; a changed payload
+   * conflicts. Results persist across generations (section 48.3).
+   */
+  recordControl(input: {
+    readonly controlId: string;
+    readonly route: string;
+    readonly payloadSha256: string;
+    readonly status: number;
+    readonly resultJson: string;
+    readonly createdAt: string;
+  }):
+    | {
+        readonly outcome: "recorded";
+        readonly sequence: number;
+        readonly generation: number;
+        readonly revision: number;
+        readonly virtualTime: string;
+      }
+    | {
+        readonly outcome: "replayed";
+        readonly status: number;
+        readonly resultJson: string;
+      }
+    | { readonly outcome: "conflict" } {
+    return this.transaction(() => {
+      const existing = this.lookupControl(input.controlId);
+      if (existing !== null) {
+        if (existing.payloadSha256 !== input.payloadSha256) {
+          return { outcome: "conflict" };
+        }
+        return {
+          outcome: "replayed",
+          status: existing.status,
+          resultJson: existing.resultJson
+        };
+      }
+      const world = this.readWorld();
+      const state = this.getState();
+      const sequence = this.countControls() + 1;
+      const generation = world?.generation ?? 1;
+      const revision = state?.revision ?? 0;
+      const virtualTime = this.clock.now();
+      this.db
+        .prepare(
+          `INSERT INTO control_results (
+             control_id, route, payload_sha256, control_sequence,
+             generation, revision, virtual_time, status, result_json,
+             created_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          input.controlId,
+          input.route,
+          input.payloadSha256,
+          sequence,
+          generation,
+          revision,
+          virtualTime,
+          input.status,
+          input.resultJson,
+          input.createdAt
+        );
+      return {
+        outcome: "recorded",
+        sequence,
+        generation,
+        revision,
+        virtualTime
+      };
+    });
+  }
+
+  /** The recorded control result, or null when the id never ran. */
+  lookupControl(controlId: string): {
+    readonly controlId: string;
+    readonly route: string;
+    readonly payloadSha256: string;
+    readonly sequence: number;
+    readonly generation: number;
+    readonly revision: number;
+    readonly virtualTime: string;
+    readonly status: number;
+    readonly resultJson: string;
+    readonly createdAt: string;
+  } | null {
+    const row = this.db
+      .prepare("SELECT * FROM control_results WHERE control_id = ?")
+      .get(controlId);
+    if (row === undefined) {
+      return null;
+    }
+    return {
+      controlId: requiredText(row, "control_id"),
+      route: requiredText(row, "route"),
+      payloadSha256: requiredText(row, "payload_sha256"),
+      sequence: requiredInteger(row, "control_sequence"),
+      generation: requiredInteger(row, "generation"),
+      revision: requiredInteger(row, "revision"),
+      virtualTime: requiredText(row, "virtual_time"),
+      status: requiredInteger(row, "status"),
+      resultJson: requiredText(row, "result_json"),
+      createdAt: requiredText(row, "created_at")
+    };
+  }
+
+  /** Recorded control results in execution order (section 48.3). */
+  listControls(): Array<{
+    readonly controlId: string;
+    readonly route: string;
+    readonly sequence: number;
+    readonly generation: number;
+    readonly revision: number;
+    readonly virtualTime: string;
+    readonly createdAt: string;
+  }> {
+    return this.db
+      .prepare(
+        `SELECT control_id, route, control_sequence, generation, revision,
+                virtual_time, created_at
+           FROM control_results ORDER BY control_sequence ASC`
+      )
+      .all()
+      .map((row) => ({
+        controlId: requiredText(row, "control_id"),
+        route: requiredText(row, "route"),
+        sequence: requiredInteger(row, "control_sequence"),
+        generation: requiredInteger(row, "generation"),
+        revision: requiredInteger(row, "revision"),
+        virtualTime: requiredText(row, "virtual_time"),
+        createdAt: requiredText(row, "created_at")
+      }));
+  }
+
+  /** Number of recorded controls; they never enter request counts. */
+  countControls(): number {
+    return this.scalarInteger("SELECT COUNT(*) AS n FROM control_results");
+  }
+
+  /**
    * Export one checkpoint document at the current transaction
    * boundary: the committed state, the world identity, the
    * idempotency replay entries with their plaintext identities, and

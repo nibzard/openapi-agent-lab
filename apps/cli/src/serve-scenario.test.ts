@@ -12,6 +12,7 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import net from "node:net";
+import { request } from "node:http";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 
@@ -86,6 +87,7 @@ interface StartedServe {
   readonly bearer: string;
   readonly evidenceDir: string;
   readonly controlDir: string;
+  readonly readiness: JsonObject;
   readonly stop: () => Promise<number>;
 }
 
@@ -120,6 +122,7 @@ async function startScenarioServe(
     bearer: await bearerOf(controlDir),
     evidenceDir,
     controlDir,
+    readiness,
     stop: async (): Promise<number> => {
       guard.handle("SIGINT");
       return pending;
@@ -383,6 +386,53 @@ describe("oal serve --mode scenario", () => {
     const cwd = await newWorkspace();
     const port = 4579;
     const serve = await startScenarioServe(cwd, { port });
+
+    // The operator socket exists beside the data listener, and the
+    // participant listener serves no control route (section 48.3).
+    const socketPath = serve.readiness["controlSocket"];
+    expect(typeof socketPath).toBe("string");
+    const operatorCredential = (
+      await readFile(
+        path.join(serve.controlDir, "operator", "operator-credential"),
+        "utf8"
+      )
+    ).trim();
+    const controlView = await new Promise<{
+      status: number;
+      body: JsonObject;
+    }>((resolve, reject) => {
+      const outgoing = request(
+        {
+          socketPath: typeof socketPath === "string" ? socketPath : "",
+          path: "/v1/world",
+          method: "GET",
+          headers: { authorization: `Bearer ${operatorCredential}` }
+        },
+        (incoming) => {
+          const chunks: Buffer[] = [];
+          incoming.on("data", (chunk: Buffer) => {
+            chunks.push(chunk);
+          });
+          incoming.on("end", () => {
+            resolve({
+              status: incoming.statusCode ?? 0,
+              body: JSON.parse(
+                Buffer.concat(chunks).toString("utf8")
+              ) as JsonObject
+            });
+          });
+        }
+      );
+      outgoing.on("error", reject);
+      outgoing.end();
+    });
+    expect(controlView.status).toBe(200);
+    expect(controlView.body["status"]).toBe("ok");
+    const dataRoute = await fetch(`${serve.baseUrl}/v1/world`, {
+      headers: { authorization: `Bearer ${serve.bearer}` }
+    });
+    expect(dataRoute.status).toBe(404);
+
     const code = await serve.stop();
     expect(code).toBe(130);
 
@@ -427,5 +477,20 @@ describe("oal serve --mode scenario", () => {
     );
     expect(resumeCode).toBe(4);
     expect(io.stderrText()).toContain("OAL-SERVE-RESUME-FINALIZED");
-  }, 60_000);
+
+    // The world stays inspectable at rest, with its control evidence.
+    const inspectIo = new MemoryIo();
+    const inspectCode = await main(
+      ["world", "inspect", "--world", serve.controlDir, "--format", "json"],
+      inspectIo,
+      { cwd }
+    );
+    expect(inspectCode).toBe(0);
+    const inspected = JSON.parse(inspectIo.stdoutChunks.join("\n")) as {
+      world_id: string;
+      control_count: number;
+    };
+    expect(inspected.world_id).toBe("serve-scenario-test");
+    expect(inspected.control_count).toBe(0);
+  }, 90_000);
 });

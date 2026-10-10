@@ -57,7 +57,11 @@ import {
 } from "@oal/runner";
 
 import type { CommandHandler } from "../commands.ts";
-import { openEnvironment, type Environment } from "@oal/environment";
+import {
+  openEnvironment,
+  type Environment,
+  type WorldControlServer
+} from "@oal/environment";
 
 import { emitDiagnostics } from "../diagnostics.ts";
 import { resolveSourceArgument } from "../source.ts";
@@ -511,6 +515,11 @@ export interface ServeSession {
    * never outlive the listener (section 48.2).
    */
   readonly environment: Environment | null;
+  /**
+   * The private operator socket of scenario mode; null in contract
+   * mode. Shutdown must close it with the environment (section 48.3).
+   */
+  readonly control: WorldControlServer | null;
 }
 
 /**
@@ -608,6 +617,15 @@ export async function startServe(options: {
       `${stableJsonStringify(environment.manifestDocument())}\n`
     );
   }
+  // The operator socket serves protocol v1 beside the data listener;
+  // its directory and credential stay private to the operator
+  // (section 48.3). Contract mode has no world to control.
+  const control =
+    environment === null
+      ? null
+      : await environment.openControl({
+          operatorDirectory: path.join(options.controlDir, "operator")
+        });
   const minted = mintRunCredentials(options.contract, options.runSeed);
   const limits = options.limits ?? LIMIT_DEFAULTS;
   const handle = await createRawHttpExposure({
@@ -711,7 +729,8 @@ export async function startServe(options: {
           scenarioId:
             options.scenario === undefined ? null : options.scenario.scenarioId,
           environmentPath: path.join(evidenceDir, "environment.json")
-        })
+        }),
+    ...(control === null ? {} : { controlSocket: control.socketPath })
   };
   return {
     handle,
@@ -723,7 +742,8 @@ export async function startServe(options: {
     store,
     controlDir: options.controlDir,
     evidenceDir,
-    environment
+    environment,
+    control
   };
 }
 
@@ -1156,6 +1176,7 @@ export const serveCommand: CommandHandler = async (args, io) => {
     await rm(session.credentialsPath, { force: true }).catch(() => undefined);
   }
   await session.handle.close();
+  await session.control?.close();
   await session.environment?.close();
   session.store.close();
   // The schema worker threads served this process alone; stop them so a

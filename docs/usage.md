@@ -108,6 +108,38 @@ The server:
 - Writes a new manual-run directory under `.oal/runs/`.
 - Writes synthetic credentials to a private file, or to the exact path you
   pass with `--credentials-out`.
+- Serves a private operator socket over a Unix domain socket; the
+  readiness record names its path under `controlSocket`.
+
+## Operator controls
+
+A scenario serve also listens on a private operator socket. The socket and
+its bearer credential live under `operator/` inside the control directory,
+with owner-only permissions. The participant listener never serves a
+control route, and the credential never enters a participant input.
+
+Protocol v1 serves four routes over that socket:
+
+- `GET /v1/world` returns the world inspection.
+- `POST /v1/checkpoints` records a checkpoint intent.
+- `POST /v1/reset` records a reset intent.
+- `POST /v1/advance-time` records a time intent.
+
+Every mutation carries a `control_id`, and reset plus advance-time also
+carry `expect_generation`. The world effects of checkpoints, reset, and
+advance-time arrive with the world lifecycle milestone; until then those
+routes answer `OAL-ENVIRONMENT-CONTROL-UNAVAILABLE` and record the control
+id, so a retry replays the recorded result instead of running twice. A
+changed payload for a recorded id answers `OAL-WORLD-CONTROL-CONFLICT`, a
+stale generation answers `OAL-WORLD-GENERATION-MISMATCH`, and a full queue
+answers `OAL-WORLD-BUSY`.
+
+Read one world at rest with `world inspect`; it needs no socket and reads
+no credentials:
+
+```sh
+oal world inspect --world .oal/control/serve/RUN_ID --format json
+```
 
 Identical inputs and seed produce identical response bytes. `oal replay`
 depends on this property. See [the quickstart](quickstart.md) for a served

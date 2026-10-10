@@ -36,7 +36,8 @@ The execution surface splits into three states:
   [review fix plan](docs/review-fix-plan.md) tracks the work that connects
   them. `oal serve --mode scenario` now serves a pack's scenario behavior
   through the shared environment owner: the same validation, transaction,
-  and shutdown path `oal run` uses.
+  and shutdown path `oal run` uses. A scenario serve also listens on a
+  private operator socket, and `oal world inspect` reads a world at rest.
 
 ## What the lab does
 

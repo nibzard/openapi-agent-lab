@@ -119,5 +119,9 @@ export const DiagnosticCode = {
   UnsupportedSchemaVersion: "OAL-SCHEMA-VERSION-UNSUPPORTED",
   CheckpointIncomplete: "OAL-CHECKPOINT-INCOMPLETE",
   CheckpointIntegrity: "OAL-CHECKPOINT-INTEGRITY",
-  CheckpointIncompatible: "OAL-CHECKPOINT-INCOMPATIBLE"
+  CheckpointIncompatible: "OAL-CHECKPOINT-INCOMPATIBLE",
+  WorldControlUnsupported: "OAL-WORLD-CONTROL-UNSUPPORTED",
+  WorldBusy: "OAL-WORLD-BUSY",
+  WorldGenerationMismatch: "OAL-WORLD-GENERATION-MISMATCH",
+  WorldControlConflict: "OAL-WORLD-CONTROL-CONFLICT"
 } as const;

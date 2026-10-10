@@ -396,11 +396,16 @@ describe("the environment owner", () => {
 });
 
 describe("environment controls", () => {
-  it("refuse with an explicit unavailable code before the milestone lands", async () => {
+  it("inspects the world and refuses unavailable controls", async () => {
     const environment = await openWebclipEnvironment();
     try {
+      // World inspection is live: the manifest projection plus the
+      // committed counters, with no private paths inside.
+      const inspection = environment.inspect();
+      expect(inspection["world_id"]).toBeDefined();
+      expect(inspection["control_count"]).toBe(0);
+      expect(JSON.stringify(inspection)).not.toContain("credential");
       for (const control of [
-        () => environment.inspect(),
         () => environment.checkpoint(),
         () => environment.reset(),
         () => environment.advanceTime()

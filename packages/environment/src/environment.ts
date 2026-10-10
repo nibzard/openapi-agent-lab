@@ -68,6 +68,15 @@ import {
   type BehaviorClosure,
   type LoadedPack
 } from "@oal/pack";
+import {
+  controlDiagnostic,
+  controlEnvelope,
+  runControl,
+  startWorldControl,
+  type ControlOutcome,
+  type ControlRoute,
+  type WorldControlServer
+} from "./control.ts";
 
 /** Stable failure codes of the environment owner. */
 export const EnvironmentCode = {
@@ -218,16 +227,25 @@ export interface Environment {
    */
   manifestDocument(): JsonObject;
   /**
-   * Operator world inspection. Controls arrive with the world
-   * lifecycle milestone; until then every control refuses.
+   * Operator world inspection: the manifest projection plus the
+   * committed counters, free of private paths and credentials.
    */
-  inspect(): never;
+  inspect(): JsonObject;
   /** Operator checkpoint control; unavailable in this milestone phase. */
   checkpoint(): never;
   /** Operator reset control; unavailable in this milestone phase. */
   reset(): never;
   /** Operator time control; unavailable in this milestone phase. */
   advanceTime(): never;
+  /**
+   * Start the private operator socket for this world. The socket
+   * serves protocol v1 over the returned Unix domain socket; its
+   * credential never enters participant inputs or evidence exports.
+   */
+  openControl(options: {
+    readonly operatorDirectory: string;
+    readonly queueLimit?: number;
+  }): Promise<WorldControlServer>;
   /** Stop the child and close the store. Idempotent. */
   close(): Promise<void>;
   /** Final domain state and revision, or null before initialize. */
@@ -563,6 +581,32 @@ function unavailable(name: string): never {
 }
 
 /**
+ * Serve one protocol route whose world effect lands with a later
+ * milestone: the control id stays durable and replayable, and the
+ * recorded result reports the capability honestly instead of
+ * pretending an effect ran.
+ */
+async function unavailableControl(
+  route: ControlRoute,
+  payload: JsonObject,
+  store: StateStore
+): Promise<ControlOutcome> {
+  return runControl(store, {
+    route,
+    payload,
+    effect: (): ControlOutcome => ({
+      httpStatus: 501,
+      envelope: controlEnvelope("unsupported", null, [
+        controlDiagnostic(
+          EnvironmentCode.ControlUnavailable,
+          `The ${route} world effect arrives with the world lifecycle milestone; the control id is recorded and replays this result.`
+        )
+      ])
+    })
+  });
+}
+
+/**
  * Open one environment: freeze the declared backend inputs, spawn the
  * child, verify the description, initialize the domain state, and open
  * the sealed store. The caller owns the lifetime and must close() it
@@ -833,10 +877,43 @@ export async function openEnvironment(
     description,
     manifest,
     manifestDocument: (): JsonObject => manifestDocumentOf(manifest()),
-    inspect: () => unavailable("world inspect"),
+    inspect: (): JsonObject => ({
+      ...manifestDocumentOf(manifest()),
+      request_count: store.countRequests(),
+      control_count: store.countControls()
+    }),
     checkpoint: () => unavailable("checkpoint"),
     reset: () => unavailable("reset"),
     advanceTime: () => unavailable("advance-time"),
+    openControl: (socketOptions) =>
+      startWorldControl({
+        operatorDirectory: socketOptions.operatorDirectory,
+        ...(socketOptions.queueLimit === undefined
+          ? {}
+          : { queueLimit: socketOptions.queueLimit }),
+        handlers: {
+          world: (): ControlOutcome => ({
+            httpStatus: 200,
+            envelope: {
+              schema_version: 1,
+              status: "ok",
+              result: {
+                ...manifestDocumentOf(manifest()),
+                request_count: store.countRequests(),
+                control_count: store.countControls()
+              },
+              diagnostics: [],
+              artifacts: []
+            }
+          }),
+          checkpoint: async (payload): Promise<ControlOutcome> =>
+            unavailableControl("/v1/checkpoints", payload, store),
+          reset: async (payload): Promise<ControlOutcome> =>
+            unavailableControl("/v1/reset", payload, store),
+          advanceTime: async (payload): Promise<ControlOutcome> =>
+            unavailableControl("/v1/advance-time", payload, store)
+        }
+      }),
     async close(): Promise<void> {
       if (closed) {
         return;
