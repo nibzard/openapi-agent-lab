@@ -57,13 +57,19 @@
       "id": "SE-P1-01",
       "phase": "P1",
       "requirement": "SPEC 48.2 \u00b7 plan P1",
-      "status": "pending",
-      "tests": [],
-      "evidence": null,
+      "status": "complete",
+      "tests": [
+        "packages/environment/src/environment.test.ts > starts the behavior child and validates the declared backend",
+        "packages/environment/src/environment.test.ts > closes idempotently and stops the behavior child",
+        "tests/ci-gates.test.ts > rejects an environment import of the runner"
+      ],
+      "evidence": {
+        "commit": "0c85d3d",
+        "command": "pnpm exec vitest run packages/environment tests/ci-gates.test.ts apps/cli/src/run.test.ts"
+      },
       "depends_on": [
         "SE-P0-03"
-      ],
-      "remaining": "Create @oal/environment with the frozen input interface and move ownership from scenario-runtime."
+      ]
     },
     {
       "id": "SE-P1-02",
