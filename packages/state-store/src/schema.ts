@@ -12,7 +12,7 @@ import { runInTransaction } from "./database.ts";
 import { schemaVersionUnsupported } from "./errors.ts";
 
 /** Highest schema version this build understands. */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export interface Migration {
   /** Schema version after this migration applies. */
@@ -150,11 +150,49 @@ CREATE TABLE export_status (
 `;
 
 /**
+ * Version 2 adds the world identity a checkpoint exports and the
+ * plaintext idempotency identities a fork re-tags under its own key
+ * (section 48.4). The sidecar cascades with its parent row. Databases
+ * written at version 1 gain both tables before any listener starts.
+ */
+const V2 = `
+CREATE TABLE world_state (
+  singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+  world_id TEXT NOT NULL,
+  generation INTEGER NOT NULL CHECK (generation >= 1),
+  origin_checkpoint_id TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE idempotency_identity (
+  operation_key TEXT NOT NULL,
+  principal_key TEXT NOT NULL,
+  normalized_path_sha256 TEXT NOT NULL,
+  idempotency_key_hmac TEXT NOT NULL,
+  normalized_path TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  request_fingerprint TEXT NOT NULL,
+  PRIMARY KEY (
+    operation_key,
+    principal_key,
+    normalized_path_sha256,
+    idempotency_key_hmac
+  ),
+  FOREIGN KEY (
+    operation_key, principal_key, normalized_path_sha256, idempotency_key_hmac
+  ) REFERENCES idempotency (
+    operation_key, principal_key, normalized_path_sha256, idempotency_key_hmac
+  ) ON DELETE CASCADE
+);
+`;
+
+/**
  * Ordered migrations. The `export_status` table is required by section 17.1
  * but has no column list in section 38.1; version 1 uses the shape below.
  */
 export const MIGRATIONS: readonly Migration[] = [
-  { version: 1, name: "state-store-v1", sql: V1 }
+  { version: 1, name: "state-store-v1", sql: V1 },
+  { version: 2, name: "world-state-v2", sql: V2 }
 ];
 
 export const SCHEMA_META_VERSION_KEY = "schema_version";
@@ -223,7 +261,7 @@ export function applyMigrations(db: DatabaseSync): number {
   });
 }
 
-/** Names of every table version 1 creates; used by integrity checks. */
+/** Names of every table the migrations create; used by integrity checks. */
 export const STATE_STORE_TABLES: readonly string[] = [
   "schema_meta",
   "run_meta",
@@ -235,5 +273,7 @@ export const STATE_STORE_TABLES: readonly string[] = [
   "documentation_exchanges",
   "idempotency",
   "blobs",
-  "export_status"
+  "export_status",
+  "world_state",
+  "idempotency_identity"
 ];

@@ -1,6 +1,28 @@
 export const packageName = "@oal/state-store";
 
 export {
+  buildCheckpointDocument,
+  CHECKPOINT_INCOMPATIBLE_CODE,
+  CHECKPOINT_INCOMPLETE_CODE,
+  CHECKPOINT_SCHEMA_VERSION,
+  CLOCK_ALGORITHM,
+  IDS_ALGORITHM,
+  parseCheckpointDocument
+} from "./checkpoint.ts";
+export type {
+  BuildCheckpointInput,
+  CheckpointBlobReference,
+  CheckpointClockComponent,
+  CheckpointDocument,
+  CheckpointFaultsComponent,
+  CheckpointIdempotencyEntry,
+  CheckpointIdsComponent,
+  CheckpointRandomStream,
+  CheckpointServices,
+  CheckpointStateComponent,
+  CheckpointWorldComponent
+} from "./checkpoint.ts";
+export {
   createRunSecrets,
   deriveDataEncryptionKey,
   generateDataEncryptionKey
@@ -20,6 +42,9 @@ export type {
   OpenedDatabase
 } from "./database.ts";
 export {
+  checkpointIncomplete,
+  checkpointIncompatible,
+  checkpointIntegrity,
   limitReached,
   runIdentityMismatch,
   RUN_IDENTITY_MISMATCH_CODE,
@@ -103,5 +128,6 @@ export type {
   StatePutInput,
   StateSnapshot,
   StateStoreOptions,
-  StoredResponse
+  StoredResponse,
+  WorldStateRecord
 } from "./store.ts";

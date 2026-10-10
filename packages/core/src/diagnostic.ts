@@ -116,5 +116,8 @@ export const DiagnosticCode = {
   CheckIndeterminate: "OAL-CHECK-INDETERMINATE",
   EvaluatorCrashed: "OAL-EVALUATOR-CRASHED",
   LimitReached: "OAL-LIMIT-REACHED",
-  UnsupportedSchemaVersion: "OAL-SCHEMA-VERSION-UNSUPPORTED"
+  UnsupportedSchemaVersion: "OAL-SCHEMA-VERSION-UNSUPPORTED",
+  CheckpointIncomplete: "OAL-CHECKPOINT-INCOMPLETE",
+  CheckpointIntegrity: "OAL-CHECKPOINT-INTEGRITY",
+  CheckpointIncompatible: "OAL-CHECKPOINT-INCOMPATIBLE"
 } as const;

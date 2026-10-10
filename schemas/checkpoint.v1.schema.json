@@ -1,0 +1,295 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/checkpoint.v1.json",
+  "title": "Checkpoint document",
+  "description": "The complete deterministic position of one world at a transaction boundary (SPEC section 48.4). Every component is required: an absent component is an error, never an empty default. The document is the payload a checkpoint directory encrypts under its own key.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "checkpoint_id",
+    "world",
+    "state",
+    "clock",
+    "ids",
+    "random",
+    "faults",
+    "idempotency",
+    "blobs"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "kind": { "const": "Checkpoint" },
+    "checkpoint_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identity of this checkpoint within its source world."
+    },
+    "world": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["world_id", "generation", "origin_checkpoint_id"],
+      "properties": {
+        "world_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "World the checkpoint captured."
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Generation of the source world at capture."
+        },
+        "origin_checkpoint_id": {
+          "type": ["string", "null"],
+          "description": "Checkpoint the source world forked from, or null."
+        }
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state_schema_version", "revision", "logical_time", "state"],
+      "properties": {
+        "state_schema_version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Behavior state schema version the state follows."
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Committed revision at the boundary."
+        },
+        "logical_time": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Virtual time at the boundary, RFC 3339."
+        },
+        "state": {
+          "type": "object",
+          "description": "The domain state itself."
+        }
+      }
+    },
+    "clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "now_ms", "tick_ms"],
+      "properties": {
+        "algorithm": {
+          "const": "virtual-clock-ms-v1",
+          "description": "Clock algorithm identity."
+        },
+        "now_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Virtual time in epoch milliseconds."
+        },
+        "tick_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Milliseconds one committed exchange advances."
+        }
+      }
+    },
+    "ids": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "positions"],
+      "properties": {
+        "algorithm": {
+          "const": "monotonic-counter-v1",
+          "description": "ID allocator algorithm identity."
+        },
+        "positions": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 },
+          "description": "Counter position per ID prefix; the next ID is the position plus one."
+        }
+      }
+    },
+    "random": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["streams"],
+      "properties": {
+        "streams": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Every pseudorandom stream with its full internal position.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["namespace", "algorithm", "state"],
+            "properties": {
+              "namespace": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Stream namespace, such as world:services."
+              },
+              "algorithm": {
+                "const": "splitmix64-v1",
+                "description": "Generator algorithm identity."
+              },
+              "state": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Exported full internal position."
+              }
+            }
+          }
+        }
+      }
+    },
+    "faults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["counters", "random"],
+      "properties": {
+        "counters": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 },
+          "description": "Occurrence counter per fault rule."
+        },
+        "random": {
+          "$ref": "#/$defs/randomStream",
+          "description": "Fault-scoped stream position."
+        }
+      }
+    },
+    "idempotency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entries"],
+      "properties": {
+        "entries": {
+          "type": "array",
+          "description": "Replay entries with plaintext identities the importing world re-tags.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "operation_key",
+              "principal_key",
+              "normalized_path",
+              "idempotency_key",
+              "request_fingerprint",
+              "created_sequence",
+              "response"
+            ],
+            "properties": {
+              "operation_key": { "type": "string", "minLength": 1 },
+              "principal_key": { "type": "string", "minLength": 1 },
+              "normalized_path": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Normalized request path of the cached exchange."
+              },
+              "idempotency_key": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Participant-chosen idempotency key."
+              },
+              "request_fingerprint": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Canonical request body fingerprint."
+              },
+              "created_sequence": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Commit sequence that stored the response."
+              },
+              "response": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["status", "headers", "body", "logical_time"],
+                "properties": {
+                  "status": {
+                    "type": "integer",
+                    "minimum": 100,
+                    "description": "Replayed response status."
+                  },
+                  "headers": {
+                    "type": "object",
+                    "description": "Replayed response headers."
+                  },
+                  "body": {
+                    "description": "Replayed response body; null for none."
+                  },
+                  "logical_time": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Virtual time the response was stored."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "blobs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["references"],
+      "properties": {
+        "references": {
+          "type": "array",
+          "description": "Referenced blobs with integrity metadata; bytes travel beside the document.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "blob_id",
+              "sha256",
+              "secret_hmac",
+              "bytes",
+              "media_type",
+              "relative_path"
+            ],
+            "properties": {
+              "blob_id": { "type": "string", "minLength": 1 },
+              "sha256": {
+                "type": ["string", "null"],
+                "description": "Public content digest, or null for secret blobs."
+              },
+              "secret_hmac": {
+                "type": ["string", "null"],
+                "description": "Keyed content tag, or null for public blobs."
+              },
+              "bytes": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Blob size in bytes."
+              },
+              "media_type": {
+                "type": ["string", "null"],
+                "description": "Recorded media type, or null when unknown."
+              },
+              "relative_path": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Path of the blob bytes inside the checkpoint."
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "randomStream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["namespace", "algorithm", "state"],
+      "properties": {
+        "namespace": { "type": "string", "minLength": 1 },
+        "algorithm": { "const": "splitmix64-v1" },
+        "state": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

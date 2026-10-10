@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "kind": "Checkpoint",
+  "checkpoint_id": "chk_00000001",
+  "world": {
+    "world_id": "webclip-serve-01",
+    "generation": 1,
+    "origin_checkpoint_id": null
+  },
+  "state": {
+    "state_schema_version": 1,
+    "revision": 7,
+    "logical_time": "2000-01-01T00:00:07.000Z",
+    "state": { "clips": {} }
+  },
+  "clock": {
+    "algorithm": "virtual-clock-ms-v1",
+    "now_ms": 946684807000,
+    "tick_ms": 1
+  },
+  "ids": {
+    "algorithm": "monotonic-counter-v1",
+    "positions": { "clip": 1 }
+  },
+  "random": {
+    "streams": [
+      {
+        "namespace": "world:services",
+        "algorithm": "splitmix64-v1",
+        "state": "1a2b3c4d5e6f7081"
+      }
+    ]
+  },
+  "faults": {
+    "counters": {},
+    "random": {
+      "namespace": "faults",
+      "algorithm": "splitmix64-v1",
+      "state": "0f1e2d3c4b5a6978"
+    }
+  },
+  "idempotency": { "entries": [] },
+  "blobs": { "references": [] },
+  "schedule": { "interval_ms": 1000 }
+}

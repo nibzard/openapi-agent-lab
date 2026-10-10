@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "kind": "Checkpoint",
+  "checkpoint_id": "chk_00000001",
+  "world": {
+    "world_id": "webclip-serve-01",
+    "generation": 1,
+    "origin_checkpoint_id": null
+  },
+  "state": {
+    "state_schema_version": 1,
+    "revision": 7,
+    "logical_time": "2000-01-01T00:00:07.000Z",
+    "state": {
+      "clips": {
+        "clip_00000001": {
+          "url": "https://example.com/essay",
+          "format": "markdown"
+        }
+      }
+    }
+  },
+  "clock": {
+    "algorithm": "virtual-clock-ms-v1",
+    "now_ms": 946684807000,
+    "tick_ms": 1
+  },
+  "ids": {
+    "algorithm": "monotonic-counter-v1",
+    "positions": {
+      "clip": 1
+    }
+  },
+  "random": {
+    "streams": [
+      {
+        "namespace": "world:services",
+        "algorithm": "splitmix64-v1",
+        "state": "1a2b3c4d5e6f7081"
+      }
+    ]
+  },
+  "faults": {
+    "counters": {
+      "flaky-render": 2
+    },
+    "random": {
+      "namespace": "faults",
+      "algorithm": "splitmix64-v1",
+      "state": "0f1e2d3c4b5a6978"
+    }
+  },
+  "idempotency": {
+    "entries": [
+      {
+        "operation_key": "path:POST /v1/clips",
+        "principal_key": "principal-1",
+        "normalized_path": "/v1/clips",
+        "idempotency_key": "create-once",
+        "request_fingerprint": "{\"url\":\"https://example.com/essay\"}",
+        "created_sequence": 3,
+        "response": {
+          "status": 201,
+          "headers": { "content-type": "application/json" },
+          "body": { "id": "clip_00000001" },
+          "logical_time": "2000-01-01T00:00:03.000Z"
+        }
+      }
+    ]
+  },
+  "blobs": {
+    "references": [
+      {
+        "blob_id": "blob_00000001",
+        "sha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+        "secret_hmac": null,
+        "bytes": 2048,
+        "media_type": "text/markdown",
+        "relative_path": "blobs/blob_00000001"
+      }
+    ]
+  }
+}

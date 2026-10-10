@@ -73,3 +73,40 @@ export function runIdentityMismatch(
     details: { field, expected, found }
   });
 }
+
+/** A required checkpoint component is absent or empty (section 48.4). */
+export function checkpointIncomplete(
+  message: string,
+  details?: Json
+): OalError {
+  return new OalError({
+    code: DiagnosticCode.CheckpointIncomplete,
+    message,
+    category: "startup",
+    exitCode: EXIT_INFRASTRUCTURE,
+    ...(details === undefined ? {} : { details })
+  });
+}
+
+/** A checkpoint component failed its integrity check (section 48.4). */
+export function checkpointIntegrity(message: string, details?: Json): OalError {
+  return new OalError({
+    code: DiagnosticCode.CheckpointIntegrity,
+    message,
+    category: "startup",
+    exitCode: EXIT_INFRASTRUCTURE,
+    ...(details === undefined ? {} : { details })
+  });
+}
+
+/** A checkpoint names a version this build cannot restore (section 48.4). */
+export function checkpointIncompatible(
+  message: string,
+  details?: Json
+): OalError {
+  return unsupported(
+    DiagnosticCode.CheckpointIncompatible,
+    message,
+    details ?? {}
+  );
+}

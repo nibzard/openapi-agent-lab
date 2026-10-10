@@ -673,6 +673,14 @@ export async function openEnvironment(
       stateSchemaVersion: declaration.stateSchemaVersion,
       createdAt: formatRfc3339(options.now())
     });
+    // The world identity rides the same transactional store so a
+    // checkpoint can export its lineage (section 48.4).
+    store.initializeWorld({
+      worldId,
+      generation: 1,
+      originCheckpointId: null,
+      createdAt: formatRfc3339(options.now())
+    });
 
     const initialized = await host.initialize({
       runId: worldId,

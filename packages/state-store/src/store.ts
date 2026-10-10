@@ -27,12 +27,21 @@ import {
 } from "./cipher.ts";
 import { VirtualClock, type VirtualClockOptions } from "./clock.ts";
 import {
+  buildCheckpointDocument,
+  parseCheckpointDocument,
+  type CheckpointBlobReference,
+  type CheckpointDocument,
+  type CheckpointIdempotencyEntry,
+  type CheckpointServices
+} from "./checkpoint.ts";
+import {
   closeDatabase,
   openDatabase,
   runInTransaction,
   type JournalMode
 } from "./database.ts";
 import {
+  checkpointIncomplete,
   limitReached,
   runIdentityMismatch,
   stateCommitFailed
@@ -78,6 +87,14 @@ export interface RunMetaInput {
 
 export interface RunMetaRecord extends RunMetaInput {
   readonly runId: string;
+}
+
+/** The world identity one database serves (section 48.4). */
+export interface WorldStateRecord {
+  readonly worldId: string;
+  readonly generation: number;
+  readonly originCheckpointId: string | null;
+  readonly createdAt: string;
 }
 
 export interface ParticipantIngressRecord {
@@ -1113,6 +1130,33 @@ export class StateStore {
           sealed.nonce,
           input.sequence
         );
+      // The plaintext identity feeds checkpoint exports: a fork
+      // re-tags it under its own key, so the replay survives the key
+      // change (section 48.4). The sidecar cascades on eviction.
+      this.db
+        .prepare(
+          `INSERT INTO idempotency_identity (
+             operation_key, principal_key, normalized_path_sha256,
+             idempotency_key_hmac, normalized_path, idempotency_key,
+             request_fingerprint
+           ) VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (
+             operation_key, principal_key, normalized_path_sha256,
+             idempotency_key_hmac
+           ) DO UPDATE SET
+             normalized_path = excluded.normalized_path,
+             idempotency_key = excluded.idempotency_key,
+             request_fingerprint = excluded.request_fingerprint`
+        )
+        .run(
+          key.operationKey,
+          key.principalKey,
+          key.normalizedPathSha256,
+          key.idempotencyKeyHmac,
+          input.identity.normalizedPath,
+          input.identity.idempotencyKey,
+          input.requestFingerprint
+        );
       this.evictIdempotency(policy, input.nowMs ?? this.clock.nowMs());
     });
   }
@@ -1218,6 +1262,304 @@ export class StateStore {
       },
       logicalTime
     };
+  }
+
+  // ------------------------------------------------------------- checkpoint
+
+  /**
+   * Record the world identity this database serves. A database that
+   * already serves another world refuses, so a checkpoint can never
+   * export a mixed lineage (section 48.4).
+   */
+  initializeWorld(input: {
+    readonly worldId: string;
+    readonly generation?: number;
+    readonly originCheckpointId?: string | null;
+    readonly createdAt: string;
+  }): WorldStateRecord {
+    return this.transaction(() => {
+      const existing = this.readWorld();
+      if (existing !== null) {
+        if (existing.worldId !== input.worldId) {
+          throw runIdentityMismatch(
+            "world_id",
+            input.worldId,
+            existing.worldId
+          );
+        }
+        return existing;
+      }
+      const record: WorldStateRecord = {
+        worldId: assertSafeId(input.worldId, "worldId"),
+        generation: input.generation ?? 1,
+        originCheckpointId: input.originCheckpointId ?? null,
+        createdAt: input.createdAt
+      };
+      this.db
+        .prepare(
+          `INSERT INTO world_state (
+             singleton, world_id, generation, origin_checkpoint_id, created_at
+           ) VALUES (1, ?, ?, ?, ?)`
+        )
+        .run(
+          record.worldId,
+          record.generation,
+          record.originCheckpointId,
+          record.createdAt
+        );
+      return record;
+    });
+  }
+
+  /** The recorded world identity, or null before initialization. */
+  readWorld(): WorldStateRecord | null {
+    const row = this.db
+      .prepare("SELECT * FROM world_state WHERE singleton = 1")
+      .get();
+    if (row === undefined) {
+      return null;
+    }
+    const origin = row["origin_checkpoint_id"];
+    return {
+      worldId: requiredText(row, "world_id"),
+      generation: requiredInteger(row, "generation"),
+      originCheckpointId:
+        origin === undefined || origin === null ? null : String(origin),
+      createdAt: requiredText(row, "created_at")
+    };
+  }
+
+  /**
+   * Export one checkpoint document at the current transaction
+   * boundary: the committed state, the world identity, the
+   * idempotency replay entries with their plaintext identities, and
+   * the blob references, joined with the service positions the caller
+   * supplies. Every component must exist; an absent one is an error
+   * (section 48.4).
+   */
+  exportCheckpoint(input: {
+    readonly checkpointId: string;
+    readonly services: CheckpointServices;
+  }): CheckpointDocument {
+    return this.transaction(() => {
+      const world = this.readWorld();
+      if (world === null) {
+        throw checkpointIncomplete(
+          "The database records no world identity to checkpoint.",
+          { component: "world" }
+        );
+      }
+      const state = this.getState();
+      if (state === null) {
+        throw checkpointIncomplete(
+          "The database holds no committed state to checkpoint.",
+          { component: "state" }
+        );
+      }
+      const run = this.getRunMeta();
+      const entries: CheckpointIdempotencyEntry[] = [];
+      for (const row of this.db
+        .prepare(
+          `SELECT i.operation_key AS operation_key,
+                  i.principal_key AS principal_key,
+                  i.created_sequence AS created_sequence,
+                  i.response_ciphertext AS response_ciphertext,
+                  i.response_nonce AS response_nonce,
+                  s.normalized_path AS normalized_path,
+                  s.idempotency_key AS idempotency_key,
+                  s.request_fingerprint AS request_fingerprint
+             FROM idempotency i
+             JOIN idempotency_identity s
+               ON s.operation_key = i.operation_key
+              AND s.principal_key = i.principal_key
+              AND s.normalized_path_sha256 = i.normalized_path_sha256
+              AND s.idempotency_key_hmac = i.idempotency_key_hmac`
+        )
+        .all()) {
+        // The keyed tags cannot cross a key change; the export carries
+        // the plaintext identity so the importing world re-tags it.
+        const record = this.readStoredResponse({
+          ciphertext: requiredBlob(row, "response_ciphertext"),
+          nonce: requiredBlob(row, "response_nonce")
+        });
+        entries.push({
+          operation_key: requiredText(row, "operation_key"),
+          principal_key: requiredText(row, "principal_key"),
+          normalized_path: requiredText(row, "normalized_path"),
+          idempotency_key: requiredText(row, "idempotency_key"),
+          request_fingerprint: requiredText(row, "request_fingerprint"),
+          created_sequence: requiredInteger(row, "created_sequence"),
+          response: {
+            status: record.response.status,
+            headers: record.response.headers,
+            body: record.response.body,
+            logical_time: record.logicalTime
+          }
+        });
+      }
+      const orphaned = this.scalarInteger(
+        `SELECT COUNT(*) AS n FROM idempotency i
+          WHERE NOT EXISTS (
+            SELECT 1 FROM idempotency_identity s
+             WHERE s.operation_key = i.operation_key
+               AND s.principal_key = i.principal_key
+               AND s.normalized_path_sha256 = i.normalized_path_sha256
+               AND s.idempotency_key_hmac = i.idempotency_key_hmac
+          )`
+      );
+      if (orphaned > 0) {
+        throw checkpointIncomplete(
+          `${String(orphaned)} idempotency entries carry no plaintext identity for export.`,
+          { component: "idempotency", count: orphaned }
+        );
+      }
+      const references: CheckpointBlobReference[] = [];
+      for (const row of this.db.prepare("SELECT * FROM blobs").all()) {
+        const sha256 = row["sha256"];
+        const secretHmac = row["secret_hmac"];
+        const mediaType = row["media_type"];
+        references.push({
+          blob_id: requiredText(row, "blob_id"),
+          sha256:
+            sha256 === undefined || sha256 === null ? null : String(sha256),
+          secret_hmac:
+            secretHmac === undefined || secretHmac === null
+              ? null
+              : String(secretHmac),
+          bytes: requiredInteger(row, "bytes"),
+          media_type:
+            mediaType === undefined || mediaType === null
+              ? null
+              : String(mediaType),
+          relative_path: requiredText(row, "relative_path")
+        });
+      }
+      return buildCheckpointDocument({
+        checkpoint_id: input.checkpointId,
+        world: {
+          world_id: world.worldId,
+          generation: world.generation,
+          origin_checkpoint_id: world.originCheckpointId
+        },
+        state: {
+          state_schema_version: run?.stateSchemaVersion ?? 1,
+          revision: state.revision,
+          logical_time: state.logicalTime,
+          state: state.state
+        },
+        services: input.services,
+        idempotency: entries,
+        blobs: references
+      });
+    });
+  }
+
+  /**
+   * Import one checkpoint document into this database: state, world
+   * identity, replay entries re-tagged under this world's key, and
+   * blob references. The document validates first; a database that
+   * already holds a state refuses, so an import never overwrites a
+   * live world.
+   */
+  importCheckpoint(
+    value: Json,
+    options: { readonly worldId?: string } = {}
+  ): CheckpointDocument {
+    const document = parseCheckpointDocument(value);
+    return this.transaction(() => {
+      if (this.readCurrentState() !== null) {
+        throw stateCommitFailed(
+          "The database already holds a committed state; import into a new world instead.",
+          { world_id: document.world.world_id }
+        );
+      }
+      const worldId = options.worldId ?? document.world.world_id;
+      const existing = this.readWorld();
+      if (existing !== null && existing.worldId !== worldId) {
+        throw runIdentityMismatch("world_id", worldId, existing.worldId);
+      }
+      if (existing === null) {
+        this.initializeWorld({
+          worldId,
+          generation: document.world.generation,
+          originCheckpointId: document.checkpoint_id,
+          createdAt: document.state.logical_time
+        });
+      }
+      // The state row keeps the checkpoint's revision and logical
+      // time so a fork continues the parent's positions exactly.
+      const canonical = canonicalJson(document.state.state);
+      this.writeStateRow(
+        this.secrets.sealText(canonical),
+        document.state.revision,
+        document.state.logical_time,
+        canonicalJsonSha256(document.state.state)
+      );
+      const insertIdempotency = this.db.prepare(
+        `INSERT INTO idempotency (
+           operation_key, principal_key, normalized_path_sha256,
+           idempotency_key_hmac, request_hmac, response_ciphertext,
+           response_nonce, created_sequence
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      const insertIdentity = this.db.prepare(
+        `INSERT INTO idempotency_identity (
+           operation_key, principal_key, normalized_path_sha256,
+           idempotency_key_hmac, normalized_path, idempotency_key,
+           request_fingerprint
+         ) VALUES (?, ?, ?, ?, ?, ?, ?)`
+      );
+      for (const entry of document.idempotency.entries) {
+        // The identity is re-tagged under this world's key: a replay
+        // after the key change still matches (section 48.4).
+        const record: JsonObject = {
+          schema_version: 1,
+          status: entry.response.status,
+          headers: entry.response.headers,
+          body: entry.response.body,
+          logical_time: entry.response.logical_time
+        };
+        const sealed = this.secrets.sealText(canonicalJson(record));
+        const pathSha = sha256Hex(entry.normalized_path);
+        const keyHmac = this.secrets.tag(entry.idempotency_key);
+        insertIdempotency.run(
+          entry.operation_key,
+          entry.principal_key,
+          pathSha,
+          keyHmac,
+          this.secrets.tag(entry.request_fingerprint),
+          sealed.ciphertext,
+          sealed.nonce,
+          entry.created_sequence
+        );
+        insertIdentity.run(
+          entry.operation_key,
+          entry.principal_key,
+          pathSha,
+          keyHmac,
+          entry.normalized_path,
+          entry.idempotency_key,
+          entry.request_fingerprint
+        );
+      }
+      const insertBlob = this.db.prepare(
+        `INSERT INTO blobs (
+           blob_id, sha256, secret_hmac, bytes, media_type, relative_path,
+           created_sequence
+         ) VALUES (?, ?, ?, ?, ?, ?, NULL)`
+      );
+      for (const reference of document.blobs.references) {
+        insertBlob.run(
+          reference.blob_id,
+          reference.sha256,
+          reference.secret_hmac,
+          reference.bytes,
+          reference.media_type,
+          reference.relative_path
+        );
+      }
+      return document;
+    });
   }
 
   // ---------------------------------------------------------------- blobs
