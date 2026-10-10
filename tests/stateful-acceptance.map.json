@@ -22,13 +22,16 @@
       "id": "SE-P0-02",
       "phase": "P0",
       "requirement": "SPEC 48.8 · plan P0",
-      "status": "partial",
+      "status": "complete",
       "tests": [
-        "tests/stateful-acceptance.test.ts > carries every stateful task with a valid record"
+        "tests/stateful-acceptance.test.ts > carries every stateful task with a valid record",
+        "tests/stateful-acceptance.test.ts > blocks while any task is pending or partial"
       ],
-      "evidence": null,
-      "depends_on": ["SE-P0-01"],
-      "remaining": "Record the completing commit and evidence for the map and gate."
+      "evidence": {
+        "commit": "7d6740a",
+        "command": "pnpm exec vitest run tests/stateful-acceptance.test.ts tests/schemas.test.ts"
+      },
+      "depends_on": ["SE-P0-01"]
     },
     {
       "id": "SE-P0-03",
