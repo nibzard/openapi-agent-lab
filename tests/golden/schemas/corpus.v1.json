@@ -1,0 +1,192 @@
+{
+  "api_version": 1,
+  "id": "issue-triage-core",
+  "version": "1.0.0",
+  "scenario": "default",
+  "inputs": [
+    {
+      "name": "owner",
+      "description": "Repository owner."
+    },
+    {
+      "name": "repository",
+      "description": "Repository name."
+    },
+    {
+      "name": "run_marker",
+      "description": "Unique marker that identifies this run's issues."
+    }
+  ],
+  "cases": [
+    {
+      "id": "create-read",
+      "claim_ids": ["issues-create", "issues-read"],
+      "scope": "black_box",
+      "description": "Create an issue, then read it back through the bound number.",
+      "setup": [
+        {
+          "id": "check-repository",
+          "request": {
+            "operation_id": "getRepository",
+            "parameters": {
+              "path": {
+                "owner": { "input": "owner" },
+                "repo": { "input": "repository" }
+              }
+            }
+          },
+          "assert": [{ "op": "status", "expected": 200 }]
+        }
+      ],
+      "steps": [
+        {
+          "id": "create",
+          "request": {
+            "operation_id": "createIssue",
+            "parameters": {
+              "path": {
+                "owner": { "input": "owner" },
+                "repo": { "input": "repository" }
+              }
+            },
+            "body": {
+              "title": "Corpus issue",
+              "body": { "input": "run_marker" }
+            }
+          },
+          "bind": {
+            "number": { "source": "body", "pointer": "/number" }
+          },
+          "assert": [
+            { "op": "status", "expected": 201 },
+            {
+              "op": "exists",
+              "actual": { "source": "body", "pointer": "/number" }
+            }
+          ]
+        },
+        {
+          "id": "read",
+          "request": {
+            "operation_id": "getIssue",
+            "parameters": {
+              "path": {
+                "owner": { "input": "owner" },
+                "repo": { "input": "repository" },
+                "issue_number": { "binding": "create.number" }
+              }
+            }
+          },
+          "assert": [
+            {
+              "op": "equals",
+              "actual": { "source": "body", "pointer": "/number" },
+              "expected": { "binding": "create.number" }
+            },
+            {
+              "op": "contains",
+              "actual": { "source": "body", "pointer": "" },
+              "expected": { "title": "Corpus issue" }
+            }
+          ]
+        }
+      ],
+      "cleanup": [
+        {
+          "id": "close",
+          "request": {
+            "operation_id": "updateIssue",
+            "parameters": {
+              "path": {
+                "owner": { "input": "owner" },
+                "repo": { "input": "repository" },
+                "issue_number": { "binding": "create.number" }
+              }
+            },
+            "body": { "state": "closed" }
+          },
+          "assert": [
+            {
+              "op": "status",
+              "expected": 200
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "list-after-advance",
+      "claim_ids": ["issues-list"],
+      "scope": "emulator_only",
+      "steps": [
+        {
+          "id": "create-marker",
+          "request": {
+            "operation_id": "createIssue",
+            "parameters": {
+              "path": {
+                "owner": { "input": "owner" },
+                "repo": { "input": "repository" }
+              }
+            },
+            "body": {
+              "title": "Corpus issue",
+              "body": { "input": "run_marker" }
+            }
+          },
+          "bind": {
+            "number": { "source": "body", "pointer": "/number" }
+          },
+          "assert": [{ "op": "status", "expected": 201 }]
+        },
+        {
+          "id": "advance",
+          "operator": { "kind": "advance_time", "by_ms": 60000 }
+        },
+        {
+          "id": "wait-list",
+          "poll": {
+            "operation_id": "listIssues",
+            "parameters": {
+              "query": {
+                "state": "all"
+              }
+            },
+            "attempts": 5,
+            "interval_ms": 100,
+            "deadline_ms": 2000
+          },
+          "assert": [
+            {
+              "op": "length",
+              "actual": { "source": "body", "pointer": "" },
+              "expected": 1
+            },
+            {
+              "op": "equals",
+              "actual": { "source": "body", "pointer": "/0/number" },
+              "expected": { "binding": "create-marker.number" },
+              "set_comparison": false
+            }
+          ]
+        }
+      ],
+      "cleanup": [
+        {
+          "id": "close-created",
+          "request": {
+            "operation_id": "updateIssue",
+            "parameters": {
+              "path": {
+                "owner": { "input": "owner" },
+                "repo": { "input": "repository" },
+                "issue_number": { "binding": "create-marker.number" }
+              }
+            },
+            "body": { "state": "closed" }
+          }
+        }
+      ]
+    }
+  ]
+}

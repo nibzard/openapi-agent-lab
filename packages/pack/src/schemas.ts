@@ -12,7 +12,8 @@ export const PACK_SCHEMA_FILES = {
   eval: "eval.v1.schema.json",
   "prompt-set": "prompt-set.v1.schema.json",
   "contract-response-fixture": "contract-response-fixture.v1.schema.json",
-  "semantic-event-registry": "semantic-event-registry.v1.schema.json"
+  "semantic-event-registry": "semantic-event-registry.v1.schema.json",
+  corpus: "corpus.v1.schema.json"
 } as const;
 
 export type PackSchemaName = keyof typeof PACK_SCHEMA_FILES;

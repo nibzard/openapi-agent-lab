@@ -49,7 +49,8 @@ export type PackReferenceRole =
   | "participant_file"
   | "rubric"
   | "behavior_entrypoint"
-  | "payload_schema";
+  | "payload_schema"
+  | "corpus";
 
 /** How the bytes behind a reference are interpreted. */
 export type PackReferenceParse = "document" | "text" | "none";
@@ -295,6 +296,7 @@ export async function loadPack(
     maxArtifactBytes,
     diagnostics
   );
+  await validateCorporaReferences(manifest, references, schemaSet, diagnostics);
   const semanticEventRegistry = await loadSemanticRegistry(
     root,
     manifest,
@@ -514,6 +516,20 @@ export function collectDeclaredReferences(
     }
   }
 
+  const corpora = arr(manifest["corpora"]);
+  for (let i = 0; i < corpora.length; i += 1) {
+    const corpus = obj(corpora[i]);
+    if (corpus === null) {
+      continue;
+    }
+    push(
+      "corpus",
+      `${atIndex("/corpora", i)}/source`,
+      corpus["source"],
+      "document"
+    );
+  }
+
   return declared;
 }
 
@@ -705,6 +721,64 @@ function checkSchemaDocument(
         json_pointer: reference.pointer
       })
     );
+  }
+}
+
+/**
+ * Schema-check every loaded corpus document and confirm the manifest id and
+ * the document id agree (section 48.5).
+ */
+async function validateCorporaReferences(
+  manifest: JsonObject,
+  references: readonly PackReference[],
+  schemaSet: PackSchemaSet,
+  diagnostics: Diagnostic[]
+): Promise<void> {
+  const corpora = arr(manifest["corpora"]);
+  for (const reference of references) {
+    if (reference.role !== "corpus") {
+      continue;
+    }
+    const document = obj(reference.document);
+    if (document === null) {
+      continue;
+    }
+    for (const violation of await validateSchemaInstance(
+      schemaSet.document("corpus"),
+      document
+    )) {
+      diagnostics.push(
+        error(DiagnosticCode.PackSchemaInvalid, violation.message, {
+          pointer: reference.pointer,
+          uri: reference.path,
+          details: { path: reference.path }
+        })
+      );
+    }
+    const entry = corpora.find(
+      (candidate) =>
+        obj(candidate) !== null &&
+        str(obj(candidate)?.["source"]) === reference.path
+    );
+    const declared = obj(entry) === null ? null : str(obj(entry)?.["id"]);
+    const documentId = str(document["id"]);
+    if (declared !== null && documentId !== null && declared !== documentId) {
+      diagnostics.push(
+        error(
+          PackCode.CorpusIdMismatch,
+          `Corpus document declares id ${documentId}, manifest declares ${declared}.`,
+          {
+            pointer: reference.pointer,
+            uri: reference.path,
+            details: {
+              path: reference.path,
+              document: documentId,
+              manifest: declared
+            }
+          }
+        )
+      );
+    }
   }
 }
 

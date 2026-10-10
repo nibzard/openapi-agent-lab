@@ -123,5 +123,6 @@ export const DiagnosticCode = {
   WorldControlUnsupported: "OAL-WORLD-CONTROL-UNSUPPORTED",
   WorldBusy: "OAL-WORLD-BUSY",
   WorldGenerationMismatch: "OAL-WORLD-GENERATION-MISMATCH",
-  WorldControlConflict: "OAL-WORLD-CONTROL-CONFLICT"
+  WorldControlConflict: "OAL-WORLD-CONTROL-CONFLICT",
+  CorpusInvalid: "OAL-CORPUS-INVALID"
 } as const;

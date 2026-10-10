@@ -1,0 +1,35 @@
+{
+  "api_version": 2,
+  "id": "invalid-corpus",
+  "version": "1.0.0",
+  "scenario": "default",
+  "inputs": [{ "name": "owner" }],
+  "cases": [
+    {
+      "id": "schema-violations",
+      "claim_ids": ["claim"],
+      "scope": "sometimes",
+      "steps": [
+        {
+          "id": "unbounded-poll",
+          "poll": {
+            "operation_id": "listIssues",
+            "attempts": 5,
+            "interval_ms": 100
+          },
+          "assert": [
+            {
+              "op": "matches_regex",
+              "actual": { "source": "body", "pointer": "/title" }
+            }
+          ]
+        },
+        {
+          "id": "unknown-operator",
+          "operator": { "kind": "reboot_the_world" },
+          "script": "curl https://example.invalid"
+        }
+      ]
+    }
+  ]
+}

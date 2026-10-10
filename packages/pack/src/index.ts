@@ -62,3 +62,17 @@ export {
   type BehaviorClosure,
   type BehaviorClosureFile
 } from "./behavior-closure.ts";
+export {
+  CORPUS_API_VERSION,
+  CORPUS_OPERATORS,
+  corporaOf,
+  corpusReferences,
+  parseCorpus,
+  type CorpusAssertion,
+  type CorpusBinding,
+  type CorpusCase,
+  type CorpusDocument,
+  type CorpusOperand,
+  type CorpusStep,
+  type CorpusStepBody
+} from "./corpus.ts";

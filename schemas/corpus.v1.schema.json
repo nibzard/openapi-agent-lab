@@ -1,0 +1,337 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/schemas/corpus.v1.json",
+  "title": "Behavioral corpus",
+  "description": "A portable behavioral corpus (SPEC section 48.5): typed inputs, ordered cases, and steps that request, poll, or operate a world. No scripts, shell commands, or expression languages execute here; values move through typed references and JSON Pointer bindings only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["api_version", "id", "version", "scenario", "inputs", "cases"],
+  "properties": {
+    "api_version": {
+      "const": 1
+    },
+    "id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Corpus version; independent of the pack version."
+    },
+    "scenario": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Scenario the cases target."
+    },
+    "inputs": {
+      "type": "array",
+      "description": "Typed values every case receives by name.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "$ref": "#/$defs/safeId"
+          },
+          "description": {
+            "type": "string",
+            "description": "What the input means; documentation only."
+          }
+        }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/case"
+      }
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "pattern": "^[^/].*$",
+      "description": "Pack-relative path; never absolute and never escapes."
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "claim_ids", "scope", "steps"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "claim_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Claims the case contributes evidence to."
+        },
+        "scope": {
+          "type": "string",
+          "enum": ["black_box", "emulator_only"],
+          "description": "Black-box cases run on every target; emulator-only cases may operate the world."
+        },
+        "description": {
+          "type": "string"
+        },
+        "setup": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/step"
+          }
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/step"
+          }
+        },
+        "cleanup": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/step"
+          },
+          "description": "Always attempted after setup begins, using established bindings."
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "request": {
+          "$ref": "#/$defs/request"
+        },
+        "poll": {
+          "$ref": "#/$defs/poll"
+        },
+        "operator": {
+          "$ref": "#/$defs/operator"
+        },
+        "bind": {
+          "type": "object",
+          "description": "Values captured from this step's response, by name.",
+          "additionalProperties": {
+            "$ref": "#/$defs/responsePointer"
+          }
+        },
+        "assert": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/assertion"
+          }
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation_id"],
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Local pack operation id; not a provider claim."
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "object",
+              "description": "Parameter values: literals or typed references."
+            },
+            "query": {
+              "type": "object",
+              "description": "Parameter values: literals or typed references."
+            },
+            "header": {
+              "type": "object",
+              "description": "Parameter values: literals or typed references."
+            }
+          }
+        },
+        "body": {
+          "description": "Request body: literals and typed references nest freely."
+        }
+      }
+    },
+    "poll": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation_id", "attempts", "interval_ms", "deadline_ms"],
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Read-only operation the poll repeats."
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "object",
+              "description": "Parameter values: literals or typed references."
+            },
+            "query": {
+              "type": "object",
+              "description": "Parameter values: literals or typed references."
+            },
+            "header": {
+              "type": "object",
+              "description": "Parameter values: literals or typed references."
+            }
+          }
+        },
+        "body": {
+          "description": "Read request body: literals and typed references nest freely."
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum poll attempts; defaults are forbidden."
+        },
+        "interval_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Wait between attempts in milliseconds."
+        },
+        "deadline_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Total polling deadline in milliseconds."
+        }
+      }
+    },
+    "operator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "inspect",
+            "reset",
+            "checkpoint",
+            "fork",
+            "advance_time",
+            "install_fault"
+          ],
+          "description": "World operation; emulator-only cases only."
+        },
+        "by_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "advance_time amount."
+        },
+        "expect_generation": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fixture": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Declared fault fixture id for install_fault."
+        },
+        "out": {
+          "$ref": "#/$defs/relativePath"
+        }
+      }
+    },
+    "responsePointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": ["status", "headers", "body"],
+          "description": "Response part the pointer reads."
+        },
+        "pointer": {
+          "type": "string",
+          "description": "JSON Pointer into the source; \"\" addresses the whole source; status needs none."
+        }
+      }
+    },
+    "operand": {
+      "description": "A literal, an input reference, a binding reference, or a response pointer of the current step.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["input"],
+          "properties": {
+            "input": {
+              "$ref": "#/$defs/safeId"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["binding"],
+          "properties": {
+            "binding": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "$ref": "#/$defs/responsePointer"
+        }
+      ]
+    },
+    "assertion": {
+      "type": "object",
+      "required": ["op"],
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "status",
+            "exists",
+            "equals",
+            "not_equals",
+            "contains",
+            "length",
+            "matches_schema"
+          ]
+        },
+        "expected": {
+          "description": "Literal, input, binding, or response pointer."
+        },
+        "actual": {
+          "description": "Response pointer, input, or binding."
+        },
+        "set_comparison": {
+          "type": "boolean",
+          "description": "Compare arrays as sets for equals and not_equals."
+        },
+        "schema": {
+          "$ref": "#/$defs/relativePath",
+          "description": "Frozen local schema path for matches_schema."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

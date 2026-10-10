@@ -23,6 +23,7 @@ export const PackCode = {
   SchemaDraft: "OAL-PACK-SCHEMA-DRAFT",
   RegistryPackMismatch: "OAL-PACK-REGISTRY-PACK-MISMATCH",
   RegistryDigestMismatch: "OAL-PACK-REGISTRY-DIGEST-MISMATCH",
+  CorpusIdMismatch: "OAL-PACK-CORPUS-ID-MISMATCH",
   CompletenessConflict: "OAL-PACK-COMPLETENESS-CONFLICT",
   IsolationAdvisory: "OAL-PACK-ISOLATION-ADVISORY",
   DigestUnstable: "OAL-PACK-DIGEST-UNSTABLE",

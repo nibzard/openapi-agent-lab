@@ -918,6 +918,7 @@ openapi-agent-lab/
     stateful-acceptance.v1.schema.json
     environment.v1.schema.json
     checkpoint.v1.schema.json
+    corpus.v1.schema.json
 
   packs/
     steel-computer/
