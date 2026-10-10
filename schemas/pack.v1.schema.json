@@ -371,7 +371,8 @@
                 "type": "array",
                 "items": {
                   "type": "string",
-                  "pattern": "^[1-5][0-9][0-9X]$"
+                  "pattern": "^[1-5][0-9X][0-9X]$",
+                  "description": "Cacheable response statuses as three-character selectors: a digit or X per trailing position, so \"2XX\" covers every success."
                 }
               },
               "cache_failures": {
@@ -532,7 +533,14 @@
       "pattern": "^[^/][^\\u0000]*$",
       "description": "POSIX path relative to the pack root without parent traversal.",
       "not": {
-        "anyOf": [{ "pattern": "\\.\\./" }, { "pattern": "^/" }]
+        "anyOf": [
+          {
+            "pattern": "\\.\\./"
+          },
+          {
+            "pattern": "^/"
+          }
+        ]
       }
     },
     "rfc3339": {

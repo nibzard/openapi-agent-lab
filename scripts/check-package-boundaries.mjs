@@ -30,8 +30,17 @@ const ENVIRONMENT_ALLOWED_IMPORTS = new Set([
 const ENVIRONMENT_FORBIDDEN_PATTERN =
   /^@oal\/(?:runner|agent-adapter|agent-codex|agent-generic|evaluator|mock-adapter|study|study-ir|scheduler|tools|report|statistics|cli)$/u;
 
-/** The packages allowed to import the environment owner. */
-const ENVIRONMENT_CONSUMERS = new Set(["packages/runner", "apps/cli"]);
+/**
+ * The packages allowed to import the environment owner. The runner
+ * and the CLI drive real worlds; the test kit verifies target
+ * behavior against the real engine (SPEC 48.5, 48.6), so it sits at
+ * the same trust level.
+ */
+const ENVIRONMENT_CONSUMERS = new Set([
+  "packages/runner",
+  "packages/testkit",
+  "apps/cli"
+]);
 
 /** Collect every workspace specifier imported by the files of one tree. */
 async function importedWorkspaceSpecifiers(sourceDir) {

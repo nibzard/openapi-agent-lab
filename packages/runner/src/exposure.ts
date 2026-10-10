@@ -819,7 +819,10 @@ async function startRawHttpExposure(
             : { backend: request.backend }),
           ...(request.scenarioFaults === undefined
             ? {}
-            : { faults: request.scenarioFaults })
+            : { faults: request.scenarioFaults }),
+          ...(request.scenarioIdempotency === undefined
+            ? {}
+            : { idempotency: request.scenarioIdempotency })
         },
         reserved.sequence,
         { method, target, headers, body: bytes }

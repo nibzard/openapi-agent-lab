@@ -667,7 +667,10 @@ export async function startServe(options: {
           scenarioState: environment.state,
           ...(environment.faults === null
             ? {}
-            : { scenarioFaults: environment.faults })
+            : { scenarioFaults: environment.faults }),
+          ...(environment.idempotency === null
+            ? {}
+            : { scenarioIdempotency: environment.idempotency })
         })
   });
   const credentials = buildManualCredentials(
@@ -833,7 +836,10 @@ export async function startForkServe(options: {
     scenarioState: environment.state,
     ...(environment.faults === null
       ? {}
-      : { scenarioFaults: environment.faults })
+      : { scenarioFaults: environment.faults }),
+    ...(environment.idempotency === null
+      ? {}
+      : { scenarioIdempotency: environment.idempotency })
   });
   const credentials = buildManualCredentials(
     options.contract,

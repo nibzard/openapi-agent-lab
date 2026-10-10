@@ -502,6 +502,9 @@ importers:
       '@oal/corpus':
         specifier: workspace:*
         version: link:../corpus
+      '@oal/environment':
+        specifier: workspace:*
+        version: link:../environment
       '@oal/evaluator':
         specifier: workspace:*
         version: link:../evaluator
@@ -532,6 +535,15 @@ importers:
       '@oal/core':
         specifier: workspace:*
         version: link:../core
+
+  packs/idem-runtime:
+    dependencies:
+      '@oal/behavior-api':
+        specifier: workspace:*
+        version: link:../../packages/behavior-api
+      '@oal/behavior-runtime':
+        specifier: workspace:*
+        version: link:../../packages/behavior-runtime
 
   packs/webclip:
     dependencies:

@@ -85,6 +85,11 @@ import {
   type ReadCheckpoint
 } from "./checkpoint-dir.ts";
 import { faultRuleProblem, WorldFaultInjector } from "./faults.ts";
+import {
+  idempotencyPoliciesOf,
+  WorldIdempotency,
+  type IdempotencyPolicyRecord
+} from "./idempotency.ts";
 
 /** Stable failure codes of the environment owner. */
 export const EnvironmentCode = {
@@ -241,6 +246,12 @@ export interface Environment {
    * declared no rules. Serves pass this to the gateway.
    */
   readonly faults: WorldFaultInjector | null;
+  /**
+   * The wired idempotency cache (sections 17.3 and 48.6), or null
+   * when the pack declared no policies. Serves pass this to the
+   * gateway.
+   */
+  readonly idempotency: WorldIdempotency | null;
   /** SHA-256 of the frozen behavior entrypoint bytes. */
   readonly backendSha256: string;
   /** Isolation level the report must label (section 16.5). */
@@ -455,6 +466,7 @@ function readClock(behavior: JsonObject | null): BehaviorDeclaration["clock"] {
 class StoreGatewayState implements GatewayState {
   private allocation: { sequence: number; requestId: string } | null = null;
   private stagedEffect: string | null = null;
+  private terminalOverride: "replayed" | "rejected" | null = null;
   private rollbackCount = 0;
   private lastCommitted: number | null = null;
   private readonly applied: string[] = [];
@@ -473,15 +485,18 @@ class StoreGatewayState implements GatewayState {
   private readonly services: {
     positions: ServicePositions;
   };
+  private readonly idempotency: WorldIdempotency | null;
 
   constructor(
     store: StateStore,
     commitHook: (events: readonly CommittedSemanticEvent[]) => void,
-    services: { positions: ServicePositions }
+    services: { positions: ServicePositions },
+    idempotency: WorldIdempotency | null = null
   ) {
     this.store = store;
     this.commitHook = commitHook;
     this.services = services;
+    this.idempotency = idempotency;
   }
 
   /** The committed service positions of the world. */
@@ -500,6 +515,10 @@ class StoreGatewayState implements GatewayState {
   /** The open request allocation, for the backend handle. */
   get request(): { sequence: number; requestId: string } | null {
     return this.allocation;
+  }
+
+  terminal(status: "replayed" | "rejected"): void {
+    this.terminalOverride = status;
   }
 
   stage(effect: string): void {
@@ -568,12 +587,17 @@ class StoreGatewayState implements GatewayState {
         }
       }
       this.store.completeRequest(allocation.sequence, {
-        terminalStatus: "committed",
+        terminalStatus: this.terminalOverride ?? "committed",
         ...(scenario === undefined
           ? {}
           : { responseStatus: scenario.exchange.status }),
         committed: transition !== undefined
       });
+      this.terminalOverride = null;
+      // The staged idempotency record joins this transaction: a
+      // failure above rolls the entry back with everything else
+      // (section 17.3).
+      this.idempotency?.flushPending(allocation.sequence);
     });
     if (transition !== undefined) {
       this.applied.push(...transition.effects);
@@ -592,6 +616,8 @@ class StoreGatewayState implements GatewayState {
       terminalStatus: "failed",
       committed: false
     });
+    this.idempotency?.discardPending();
+    this.terminalOverride = null;
     this.rollbackCount += 1;
     this.stagedEffect = null;
     this.stagedServices = null;
@@ -672,6 +698,8 @@ interface WorldEffects {
   readonly blobRoot: string;
   /** The fault engine, when the world declared rules (section 48.6). */
   readonly faults: WorldFaultInjector | null;
+  /** The idempotency cache, when the pack declared policies. */
+  readonly idempotency: WorldIdempotency | null;
 }
 
 /**
@@ -911,6 +939,14 @@ export async function openEnvironment(
       ? null
       : new WorldFaultInjector(store, options.faultRules, seed, null);
 
+  // Section 17.3: the pack's declared policies become the world's
+  // idempotency cache, served from the sealed store.
+  const idempotencyPolicies = idempotencyPoliciesOf(pack.manifest);
+  const idempotency =
+    idempotencyPolicies.length === 0
+      ? null
+      : new WorldIdempotency(store, idempotencyPolicies);
+
   const eventRegistry = new Map<string, RegisteredEvent>();
   for (const event of description.semanticEvents ?? []) {
     eventRegistry.set(event.name, {
@@ -938,7 +974,8 @@ export async function openEnvironment(
     (events) => {
       allEvents.push(...events);
     },
-    worldServices
+    worldServices,
+    idempotency
   );
 
   const backend: ScenarioBackend = {
@@ -1027,7 +1064,8 @@ export async function openEnvironment(
     fixtures: [...declaration.fixtures],
     services: worldServices,
     blobRoot,
-    faults
+    faults,
+    idempotency
   };
   const writeCheckpoint = async (out: string): Promise<CheckpointWritten> => {
     const checkpointId = `chk_${(store.countControls() + 1)
@@ -1099,6 +1137,7 @@ export async function openEnvironment(
     backend,
     state: gatewayState,
     faults,
+    idempotency,
     backendSha256: declaration.entrypoint.sha256,
     isolationLevel: host.isolationLevel,
     description,
@@ -1435,6 +1474,12 @@ export interface RestoreEnvironmentOptions {
    * checkpoint position.
    */
   readonly faultRules?: readonly FaultRule[];
+  /**
+   * Idempotency policies the restored world keeps wiring. The entries
+   * themselves import from the checkpoint; the policy declaration is
+   * pack-level, so the caller restates it (section 48.4).
+   */
+  readonly idempotencyPolicies?: readonly IdempotencyPolicyRecord[];
 }
 
 /**
@@ -1570,6 +1615,11 @@ export async function openRestoredEnvironment(
           counters: { ...document.faults.counters },
           prngState: document.faults.random.state
         });
+  const idempotency =
+    options.idempotencyPolicies === undefined ||
+    options.idempotencyPolicies.length === 0
+      ? null
+      : new WorldIdempotency(store, options.idempotencyPolicies);
 
   const eventRegistry = new Map<string, RegisteredEvent>();
   for (const event of description.semanticEvents ?? []) {
@@ -1606,7 +1656,8 @@ export async function openRestoredEnvironment(
     (events) => {
       allEvents.push(...events);
     },
-    worldServices
+    worldServices,
+    idempotency
   );
 
   const restoredState = document.state.state;
@@ -1687,6 +1738,7 @@ export async function openRestoredEnvironment(
     seed,
     fixtures: [],
     faults,
+    idempotency,
     services: worldServices,
     blobRoot: checkpoint.blobRoot
   };
@@ -1748,6 +1800,7 @@ export async function openRestoredEnvironment(
     backend,
     state: gatewayState,
     faults,
+    idempotency,
     backendSha256: document.frozen.behavior_sha256,
     isolationLevel: host.isolationLevel,
     description,

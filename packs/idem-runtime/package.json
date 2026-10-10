@@ -1,0 +1,11 @@
+{
+  "name": "idem-runtime-pack",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pack manifest dependencies of the idem-runtime behavior module.",
+  "type": "module",
+  "dependencies": {
+    "@oal/behavior-api": "workspace:*",
+    "@oal/behavior-runtime": "workspace:*"
+  }
+}

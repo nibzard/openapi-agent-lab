@@ -1,0 +1,193 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "idem-runtime",
+    "version": "1.0.0",
+    "description": "A labeled synthetic job API for idempotency keys and virtual expiry. Every create honors an Idempotency-Key header for one hour of virtual time, scoped to the authenticated principal. The lab serves a local emulator; no real service backs this contract.",
+    "license": { "name": "Apache-2.0", "identifier": "Apache-2.0" }
+  },
+  "servers": [
+    {
+      "url": "https://api.idem-runtime.example.com",
+      "description": "Synthetic endpoint. The lab serves a local emulator instead."
+    }
+  ],
+  "security": [{ "bearerAuth": [] }, { "basicAuth": [] }],
+  "paths": {
+    "/v1/jobs": {
+      "post": {
+        "operationId": "create_job",
+        "summary": "Create a job",
+        "description": "Creates one queued job from the input text. A repeated request with the same Idempotency-Key, body, and principal replays the stored response instead of creating a second job for one hour of virtual time. The same key with a different body answers 409.",
+        "security": [{ "bearerAuth": [] }, { "basicAuth": [] }],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "Caller-chosen replay key, unique per principal.",
+            "schema": { "type": "string", "minLength": 1, "maxLength": 128 }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/JobInput" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The job was created, or the stored create replayed.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Job" }
+              }
+            }
+          },
+          "409": {
+            "description": "The Idempotency-Key was reused with a different request body.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "422": {
+            "description": "The request body failed validation.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/jobs/{jobId}": {
+      "get": {
+        "operationId": "get_job",
+        "summary": "Read one job",
+        "description": "Returns the job with this identifier, or 404 when no live job has it.",
+        "security": [{ "bearerAuth": [] }, { "basicAuth": [] }],
+        "parameters": [
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": { "$ref": "#/components/schemas/JobId" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The job.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Job" }
+              }
+            }
+          },
+          "404": {
+            "description": "No job has this identifier.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Problem" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "The bearer token issued with the account."
+      },
+      "basicAuth": {
+        "type": "http",
+        "scheme": "basic",
+        "description": "The username and password issued with the account."
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "The presented credential did not verify.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Problem" }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "JobId": {
+        "type": "string",
+        "description": "Job identifier allocated by the ids service.",
+        "pattern": "^job_[0-9a-z]+$"
+      },
+      "JobInput": {
+        "type": "object",
+        "description": "The create request body.",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Free-form input text the job holds.",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": ["text"],
+        "additionalProperties": false
+      },
+      "Job": {
+        "type": "object",
+        "description": "One queued job.",
+        "properties": {
+          "id": { "$ref": "#/components/schemas/JobId" },
+          "text": {
+            "type": "string",
+            "description": "The input text, echoed from the create request."
+          },
+          "status": {
+            "type": "string",
+            "description": "Lifecycle status. The synthetic backend never advances it.",
+            "enum": ["queued"]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation time from the deterministic clock."
+          }
+        },
+        "required": ["id", "text", "status", "created_at"],
+        "additionalProperties": false
+      },
+      "Problem": {
+        "type": "object",
+        "description": "One error body.",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Machine-readable error code."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable error text."
+          },
+          "request_id": {
+            "type": "string",
+            "description": "The request the error answers, when known."
+          }
+        },
+        "required": ["code", "message"],
+        "additionalProperties": false
+      }
+    }
+  }
+}

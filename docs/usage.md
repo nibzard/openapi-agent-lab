@@ -204,6 +204,31 @@ with code 2; skipped cases do not fail the run. An emulator-only case on a
 target without operator controls is skipped before setup and never counts
 as a pass.
 
+## Idempotency keys
+
+A pack declares idempotency policies in its manifest under
+`idempotency.policies`. Each policy names the operations that honor a
+key, where the key rides, whose principal the cache belongs to, which
+statuses cache, whether failures cache, the virtual-time TTL, the entry
+limit, and the conflict status. See SPEC section 17.3.
+
+The served world wires the policy to its sealed store. A repeat with
+the same key, body, and principal replays the stored response without
+running the behavior again. The same key with a different body answers
+the declared conflict status. Two verified principals hold separate
+caches. An entry expires on virtual time, so `advance_time` moves it
+without sleeping. A response committed before a transport cut replays
+on retry, because the record joined the commit transaction.
+
+The `idem-runtime` pack is the labeled synthetic runtime pack for these
+behaviors. It models no real service. `packages/testkit` drives it for
+the runtime checks: replay, conflict, principal separation, expiry, and
+lost response, each continuing across checkpoints.
+
+```sh
+oal corpus run packs/idem-runtime --corpus idem-core
+```
+
 ## Packs
 
 A pack is a versioned bundle. It holds a contract plus optional behavior,

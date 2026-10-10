@@ -21,6 +21,12 @@ export {
 } from "./environment.ts";
 
 export {
+  idempotencyPoliciesOf,
+  WorldIdempotency,
+  type IdempotencyPolicyRecord
+} from "./idempotency.ts";
+
+export {
   CHECKPOINT_MANIFEST_NAME,
   readCheckpointDirectory,
   writeCheckpointDirectory,

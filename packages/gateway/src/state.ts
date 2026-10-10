@@ -19,6 +19,12 @@ export interface GatewayState {
    */
   deliver?(outcome: "delivered" | "lost"): void;
   /**
+   * Flag how the open transaction ends: a replay served a sealed
+   * response, a conflict refused a reused key (section 17.3). Absent
+   * implementations record both as ordinary commits.
+   */
+  terminal?(status: "replayed" | "rejected"): void;
+  /**
    * Apply the open transaction and bump the revision. A scenario
    * transaction carries the state transition and semantic events to
    * persist; the in-memory implementation ignores it. A persistent

@@ -35,6 +35,7 @@ import {
 import {
   mintRunCredentials,
   type GatewayFaults,
+  type GatewayIdempotency,
   type GatewayState,
   type RunCredentials,
   type ScenarioBackend
@@ -197,6 +198,11 @@ export interface ExposureRequest {
    * with scenario state that wired rules.
    */
   readonly scenarioFaults?: GatewayFaults;
+  /**
+   * Idempotency cache of the served world (section 17.3); present
+   * only with scenario state whose pack declared policies.
+   */
+  readonly scenarioIdempotency?: GatewayIdempotency;
 }
 
 /** Builds one exposure treatment per trial. Injected; never a socket. */

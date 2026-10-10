@@ -12,6 +12,7 @@ import type { LimitTable } from "@oal/config";
 import {
   evaluateSecurity,
   mintRunCredentials,
+  type Principal,
   type RunCredentials
 } from "./auth.ts";
 import { parseMultipart, type MultipartPart } from "./multipart.ts";
@@ -95,6 +96,51 @@ export interface GatewayFaultResponse {
   readonly body?: Json;
 }
 
+/** What one idempotency query knows about the request it rides on. */
+export interface GatewayIdempotencyQuery {
+  readonly sequence: number;
+  readonly operationKey: string;
+  readonly method: string;
+  /** Request target: path plus optional query string. */
+  readonly target: string;
+  /** Flat request headers, names lowercased. */
+  readonly headers: Readonly<Record<string, string>>;
+  readonly query: Readonly<Record<string, string | string[]>>;
+  readonly body: Json | undefined;
+  readonly principal: Principal | null;
+}
+
+/** A stored response to serve again, or a conflict to report. */
+export type GatewayIdempotencyDecision =
+  | {
+      readonly kind: "replay";
+      readonly status: number;
+      readonly headers: Record<string, string>;
+      readonly body: Json | null;
+    }
+  | { readonly kind: "conflict"; readonly status: number };
+
+/**
+ * Idempotency the world runtime backs with the sealed store (section
+ * 48.6). The pipeline asks before behavior runs and stages the
+ * committed response for recording.
+ */
+export interface GatewayIdempotency {
+  /** Replay or conflict decision; null runs the normal path. */
+  beforeBehavior(
+    query: GatewayIdempotencyQuery
+  ): GatewayIdempotencyDecision | null;
+  /** Stage the selected response for recording at commit. */
+  stage(
+    query: GatewayIdempotencyQuery,
+    response: {
+      readonly status: number;
+      readonly headers: Record<string, string>;
+      readonly body: Json | undefined;
+    }
+  ): void;
+}
+
 /**
  * Fault injection the world runtime backs with persisted counters and
  * streams (section 48.6). The pipeline consults it at the three
@@ -128,6 +174,12 @@ export interface GatewayOptions {
    * commits its own consumption; the pipeline only obeys the answer.
    */
   faults?: GatewayFaults;
+  /**
+   * Idempotency the world runtime wired from its sealed store
+   * (section 48.6). Replays serve without behavior; conflicts answer
+   * with the declared status.
+   */
+  idempotency?: GatewayIdempotency;
 }
 
 const HOP_BY_HOP = new Set([
@@ -481,6 +533,61 @@ async function pipeline(
       frameworkCode: null
     };
   }
+  const idempotencyQuery: GatewayIdempotencyQuery = {
+    sequence,
+    operationKey: operation.key,
+    method,
+    target: raw.target,
+    headers: flatHeaders,
+    query: parsed.query,
+    body: request.body,
+    principal: auth.principal
+  };
+  const replay = options.idempotency?.beforeBehavior(idempotencyQuery) ?? null;
+  if (replay !== null) {
+    // A replay serves the sealed response: no behavior, no state
+    // transition, and no new resource. A conflict answers with the
+    // status the policy declared. The request row records which one
+    // it was (section 17.3).
+    options.state?.terminal?.(
+      replay.kind === "conflict" ? "rejected" : "replayed"
+    );
+    options.state?.commit();
+    if (replay.kind === "conflict") {
+      return {
+        status: replay.status,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          code: "idempotency_conflict",
+          message:
+            "The Idempotency-Key was reused with a different request body.",
+          request_id: requestId
+        }),
+        requestId,
+        provenance: null,
+        approximation: null,
+        frameworkCode: null
+      };
+    }
+    const replayHeaders: Record<string, string> = { ...replay.headers };
+    const replayBody =
+      replay.body === null ? undefined : canonicalJson(replay.body);
+    if (
+      replayBody !== undefined &&
+      replayHeaders["content-type"] === undefined
+    ) {
+      replayHeaders["content-type"] = "application/json; charset=utf-8";
+    }
+    return {
+      status: replay.status,
+      headers: replayHeaders,
+      body: replayBody,
+      requestId,
+      provenance: null,
+      approximation: null,
+      frameworkCode: null
+    };
+  }
   let selected: SelectedResponse;
   let scenarioTransaction: ScenarioTransaction | undefined;
   if (options.backend !== undefined) {
@@ -652,6 +759,13 @@ async function pipeline(
   // commit fails, and the participant then receives a bounded 500
   // instead of a response whose state was never stored (section 17.1).
   try {
+    // Stage the sealed response before commit: the store records it in
+    // the same transaction, so a rollback discards the record too.
+    options.idempotency?.stage(idempotencyQuery, {
+      status: selected.status,
+      headers: safeHeaders,
+      body: selected.body
+    });
     options.state?.commit(scenarioTransaction);
   } catch {
     return framework(FRAMEWORK_ERRORS.stateCommitFailed, requestId);

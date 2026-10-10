@@ -10,6 +10,9 @@ export {
   type GatewayFaultQuery,
   type GatewayFaultResponse,
   type GatewayFaults,
+  type GatewayIdempotency,
+  type GatewayIdempotencyDecision,
+  type GatewayIdempotencyQuery,
   type GatewayOptions,
   type GatewayResponse,
   type RawRequest

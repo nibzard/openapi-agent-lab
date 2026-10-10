@@ -1,0 +1,112 @@
+apiVersion: agentlab.dev/v1
+kind: Pack
+
+metadata:
+  id: idem-runtime
+  name: idem-runtime
+  # 0.1.0 is the labeled synthetic runtime pack for idempotency keys
+  # and virtual expiry (SPEC 17.3, 48.6). The API and behavior are
+  # synthetic on purpose: the pack exists so the runtime's replay,
+  # conflict, principal separation, expiry, and lost-response paths
+  # have one small world to run against. No fidelity claim to any
+  # real service is made or implied.
+  version: 0.1.0
+  description: >-
+    A labeled synthetic runtime pack for idempotency keys and virtual
+    expiry. Not a model of any real API.
+
+requires:
+  agentlab: ">=0.1.0 <0.2.0"
+  backend_api: 1
+  rubric_api: 1
+
+contract:
+  entrypoint: contract/openapi.json
+  # Scenario mode owns the job lifecycle, so the idempotency policy
+  # below is the contract-level replay behavior the gateway serves
+  # from the sealed store (SPEC 17.3).
+
+server:
+  host: 127.0.0.1
+  port: 0
+  request_body_limit_bytes: 1048576
+  request_timeout_ms: 30000
+  response_validation: error
+  request_validation: error
+  concurrency: serial
+
+behavior:
+  mode: scenario
+  completeness: exact
+  fallback: none
+  backend:
+    kind: module
+    entrypoint: behavior/index.ts
+    export: backend
+  state_schema: schemas/scenario-state.schema.json
+  state_schema_version: 1
+  clock:
+    kind: virtual
+    initial: "2000-01-01T00:00:00.000Z"
+    tick_ms: 1
+
+# Two verified alternatives give one world two distinct principals:
+# the minted bearer and the minted basic credential. The idempotency
+# policy scopes entries per authenticated principal, so the same key
+# under two credentials addresses two caches (SPEC 15.9, 17.3).
+security:
+  enforce: false
+  credentials: []
+  base_url_environment: OAL_BASE_URL
+
+idempotency:
+  policies:
+    - id: create-job-replay
+      operations:
+        - "path:POST /v1/jobs"
+      key:
+        location: header
+        name: Idempotency-Key
+      principal_scope: authenticated_principal
+      cache_statuses:
+        - "2XX"
+      cache_failures: false
+      ttl:
+        kind: duration
+        ms: 3600000
+      max_entries: 128
+      conflict_status: 409
+
+redaction:
+  header_names:
+    - authorization
+    - idempotency-key
+  key_patterns:
+    - "(?i)api.?key"
+    - "(?i)token"
+    - "(?i)secret"
+  capture_binary_blobs: false
+  max_text_capture_bytes: 65536
+
+participant:
+  environment:
+    inherit: none
+    allow:
+      - PATH
+      - HOME
+      - TMPDIR
+      - OAL_BASE_URL
+      - OAL_AUTH_BEARER
+
+prompt_sets: []
+
+evals: []
+
+scenarios:
+  - id: baseline
+
+corpora:
+  - id: idem-core
+    source: corpora/core.yaml
+
+extensions: {}

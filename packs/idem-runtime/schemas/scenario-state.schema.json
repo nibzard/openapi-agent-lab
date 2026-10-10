@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/packs/idem-runtime/schemas/scenario-state.schema.json",
+  "title": "idem-runtime scenario state",
+  "description": "Domain state of the idem-runtime behavior backend. One live job per create; the idempotency cache that prevents duplicates lives in the sealed store, not here, so this document names what the domain holds after the gateway already honored replay.",
+  "type": "object",
+  "properties": {
+    "jobs": {
+      "type": "object",
+      "description": "Live jobs keyed by job identifier.",
+      "additionalProperties": { "$ref": "#/$defs/job" }
+    },
+    "order": {
+      "type": "array",
+      "description": "Identifiers of live jobs in insertion order.",
+      "items": { "$ref": "#/$defs/jobId" },
+      "uniqueItems": true
+    }
+  },
+  "required": ["jobs", "order"],
+  "additionalProperties": false,
+  "$defs": {
+    "jobId": {
+      "type": "string",
+      "description": "Job identifier allocated by the ids service.",
+      "pattern": "^job_[0-9a-z]+$"
+    },
+    "job": {
+      "type": "object",
+      "description": "One live job.",
+      "properties": {
+        "id": { "$ref": "#/$defs/jobId" },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Job text, echoed from the create request."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["queued"],
+          "description": "Lifecycle status. The synthetic backend never advances it."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation time from the deterministic clock."
+        }
+      },
+      "required": ["id", "text", "status", "created_at"],
+      "additionalProperties": false
+    }
+  }
+}

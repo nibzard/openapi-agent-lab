@@ -106,8 +106,9 @@ export const backend = {
           if (FAILURE_ON === "timeout") {
             // Longer than one deadline, shorter than two, so the
             // queued next request still meets its own deadline once
-            // the child drains.
-            await new Promise((resolve) => setTimeout(resolve, 350));
+            // the child drains. The margins stay wide because a full
+            // suite run shares four cores with other worlds.
+            await new Promise((resolve) => setTimeout(resolve, 700));
           }
           if (FAILURE_ON === "oversize") {
             return {
@@ -347,7 +348,7 @@ describe("environment transactions", () => {
   }, 30_000);
 
   it("restores state, identifiers, and draws after timeout", async () => {
-    await failureModeCase("timeout", { behaviorTimeoutMs: 200 }, 1);
+    await failureModeCase("timeout", { behaviorTimeoutMs: 400 }, 1);
   }, 30_000);
 
   it("restores state, identifiers, and draws after oversize", async () => {

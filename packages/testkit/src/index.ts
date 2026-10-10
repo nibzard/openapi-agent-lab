@@ -107,6 +107,20 @@ export function loadWebclipPack(root = findRepoRoot()): Promise<PackForTest> {
 }
 
 /**
+ * The labeled synthetic runtime pack for idempotency keys and virtual
+ * expiry (specification sections 17.3 and 48.6). It models no real
+ * service; the runtime checks drive it.
+ */
+export const IDEM_RUNTIME_PACK_ID = "idem-runtime";
+
+/** Load and validate the idem-runtime pack. */
+export function loadIdemRuntimePack(
+  root = findRepoRoot()
+): Promise<PackForTest> {
+  return loadPackFromRepo(IDEM_RUNTIME_PACK_ID, root);
+}
+
+/**
  * Compile the contract entrypoint of one loaded pack.
  *
  * The documents-plus-entrypoint call shape mirrors the `compile` helper

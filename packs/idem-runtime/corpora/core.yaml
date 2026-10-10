@@ -1,0 +1,104 @@
+# The idem-runtime behavioral corpus (SPEC section 48.5). The cases
+# pin the black-box half of the pack's reason to exist: a repeated
+# create replays, a reused key with a new body conflicts, and a job
+# reads back. Principal separation, virtual expiry, and lost-response
+# replay need operator controls or faults, so they live in the
+# runtime corpus checks instead (packages/testkit).
+api_version: 1
+id: idem-core
+version: 1.0.0
+description: >-
+  Black-box idempotency behaviors of the synthetic job API: replay,
+  conflict, and read-back.
+scenario: baseline
+inputs: []
+cases:
+  - id: replay-same-key
+    claim_ids: [idem-replay]
+    scope: black_box
+    steps:
+      - id: create
+        request:
+          operation_id: create_job
+          parameters:
+            header:
+              Idempotency-Key: case-replay-key
+          body:
+            text: first attempt
+        bind:
+          id: { source: body, pointer: /id }
+        assert:
+          - op: status
+            expected: 201
+      - id: retry
+        request:
+          operation_id: create_job
+          parameters:
+            header:
+              Idempotency-Key: case-replay-key
+          body:
+            text: first attempt
+        assert:
+          - op: status
+            expected: 201
+          - op: equals
+            actual: { source: body, pointer: /id }
+            expected: { binding: create.id }
+  - id: conflict-different-body
+    claim_ids: [idem-conflict]
+    scope: black_box
+    steps:
+      - id: create
+        request:
+          operation_id: create_job
+          parameters:
+            header:
+              Idempotency-Key: case-conflict-key
+          body:
+            text: original input
+        assert:
+          - op: status
+            expected: 201
+      - id: reuse
+        request:
+          operation_id: create_job
+          parameters:
+            header:
+              Idempotency-Key: case-conflict-key
+          body:
+            text: a different input
+        assert:
+          - op: status
+            expected: 409
+          - op: equals
+            actual: { source: body, pointer: /code }
+            expected: idempotency_conflict
+  - id: read-back
+    claim_ids: [idem-lifecycle]
+    scope: black_box
+    steps:
+      - id: create
+        request:
+          operation_id: create_job
+          parameters:
+            header:
+              Idempotency-Key: case-read-key
+          body:
+            text: read me back
+        bind:
+          id: { source: body, pointer: /id }
+        assert:
+          - op: status
+            expected: 201
+      - id: read
+        request:
+          operation_id: get_job
+          parameters:
+            path:
+              jobId: { binding: create.id }
+        assert:
+          - op: status
+            expected: 200
+          - op: equals
+            actual: { source: body, pointer: /id }
+            expected: { binding: create.id }
