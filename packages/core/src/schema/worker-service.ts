@@ -14,6 +14,8 @@
  * worker. There is no synchronous fallback path.
  */
 
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 
 import { EXIT_INFRASTRUCTURE, OalError } from "../errors.ts";
@@ -111,7 +113,20 @@ interface WorkerSlot {
   terminated: boolean;
 }
 
-const WORKER_ENTRY_URL = new URL("./worker-entry.ts", import.meta.url);
+/**
+ * The worker entry, resolved for both layouts: repository sources
+ * name the TypeScript file, installable archives the compiled
+ * JavaScript beside this module.
+ */
+function workerEntryUrl(): URL {
+  const compiled = new URL("./worker-entry.js", import.meta.url);
+  if (existsSync(fileURLToPath(compiled))) {
+    return compiled;
+  }
+  return new URL("./worker-entry.ts", import.meta.url);
+}
+
+const WORKER_ENTRY_URL = workerEntryUrl();
 
 /** Distinct bundles are few: one contract or one pack at a time. */
 const MAX_BUNDLES = 256;

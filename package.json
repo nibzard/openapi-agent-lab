@@ -11,6 +11,7 @@
   },
   "scripts": {
     "boundaries": "node scripts/check-package-boundaries.mjs",
+    "archives": "node scripts/build-archives.mjs",
     "build": "pnpm run typecheck",
     "ci": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run boundaries && pnpm run test",
     "format": "prettier --write .",

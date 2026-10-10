@@ -37,6 +37,7 @@ import {
 } from "./serve.ts";
 import {
   EnvironmentError,
+  openRestoredEnvironment,
   readCheckpoint,
   type Environment
 } from "@oal/environment";
@@ -366,7 +367,6 @@ export async function worldForkCommand(
     scenarioSha256: sha256Hex(checkpoint.document.frozen.scenario_id),
     backendSha256: checkpoint.document.frozen.behavior_sha256
   });
-  const { openRestoredEnvironment } = await import("@oal/environment");
   let environment: Environment;
   try {
     environment = await openRestoredEnvironment({

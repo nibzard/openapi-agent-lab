@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,11 +21,18 @@ export const PACK_SCHEMA_FILES = {
 export type PackSchemaName = keyof typeof PACK_SCHEMA_FILES;
 
 /**
- * The schema directory that ships with the repository, derived from this
- * module's location so callers do not have to know the layout.
+ * The schema directory that ships with the code, derived from this
+ * module's location so callers do not have to know the layout. Two
+ * layouts carry it: the repository, where `schemas/` sits at the
+ * root beside `packages/`, and the installable archive, where
+ * `schemas/` ships inside the package beside `dist/`.
  */
 export function defaultSchemaDir(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
+  const archive = path.resolve(here, "..", "schemas");
+  if (existsSync(path.join(archive, "pack.v1.schema.json"))) {
+    return archive;
+  }
   return path.resolve(here, "..", "..", "..", "schemas");
 }
 
