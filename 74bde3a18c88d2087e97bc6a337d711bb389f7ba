@@ -1,0 +1,14 @@
+# Context
+
+## Why This Way
+SE-P0-03 closed AC-125's last deferral: isolation, seed replay, and
+backend-failure rollback now run as durable tests through the public
+command, and each was re-verified through the oal executable on
+2026-10-10 before AC-125 moved to covered/live.
+
+## Gotchas
+- The rollback fixture must rewrite ../../../packages/ imports to
+  absolute file URLs; the repository root is two dirname calls above
+  the pack directory, not one.
+- The fixture's throw is counted on globalThis so the injected lines
+  stay erasable-syntax TypeScript under Node type stripping.
