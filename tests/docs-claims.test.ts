@@ -88,6 +88,27 @@ describe("the external pack tutorial", () => {
     expect(tutorial).toContain("assertion failure");
   });
 
+  it("keeps the authoring reference past its placeholder", async () => {
+    const authoring = await doc("authoring-packs.md");
+    expect(authoring).not.toBe(
+      "This document is a placeholder for pack authoring workflows.\n"
+    );
+    // The enforced authoring rules stay stated.
+    expect(authoring).toContain("erasable-syntax");
+    expect(authoring).toContain("@oal/behavior-api");
+    expect(authoring).toContain("frozen");
+    expect(authoring).toContain("emulator_only");
+    // Every fidelity classification keeps its meaning.
+    for (const classification of [
+      "documented",
+      "observed",
+      "synthetic",
+      "unsupported"
+    ]) {
+      expect(authoring).toContain(classification);
+    }
+  });
+
   it("keeps the limitations document explicit about the blockers", async () => {
     const limitations = await doc("stateful-limitations.md");
     expect(limitations).toContain("has not run");
