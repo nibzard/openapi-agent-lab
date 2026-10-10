@@ -17,6 +17,7 @@
  * Default output: dist/archives/*.tgz plus the staging tree.
  */
 import { execFile } from "node:child_process";
+import { builtinModules } from "node:module";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -95,27 +96,12 @@ export function dynamicCallsOf(source) {
   return found;
 }
 
-/** Node builtins the sources may import without a node: prefix. */
-const NODE_BUILTINS = new Set([
-  "assert",
-  "child_process",
-  "crypto",
-  "events",
-  "fs",
-  "http",
-  "https",
-  "module",
-  "net",
-  "os",
-  "path",
-  "process",
-  "stream",
-  "string_decoder",
-  "timers",
-  "url",
-  "util",
-  "worker_threads"
-]);
+/**
+ * Node builtins the sources may import without a node: prefix. The
+ * set comes from the runtime itself, so a new builtin cannot cause a
+ * false refusal.
+ */
+const NODE_BUILTINS = new Set(builtinModules);
 
 /**
  * Classify one import of one archived source. Relative imports must
