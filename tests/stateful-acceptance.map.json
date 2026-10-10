@@ -319,11 +319,18 @@
       "id": "SE-P5-01",
       "phase": "P5",
       "requirement": "SPEC 48.7 \u00b7 plan P5",
-      "status": "pending",
-      "tests": [],
-      "evidence": null,
-      "depends_on": ["SE-P3-03", "SE-P4-03"],
-      "remaining": "Build packs/github-issue-triage with the five operations, eight cases, capability limits, sources, and fidelity.v1 claims."
+      "status": "complete",
+      "tests": [
+        "packages/testkit/src/github-corpus.test.ts > passes all eight core cases against the faithful double",
+        "packages/testkit/src/github-corpus.test.ts > fails a wrong close transition at the read after the close",
+        "packages/testkit/src/github-corpus.test.ts > preserves the number and id as distinct identities",
+        "packages/testkit/src/github-corpus.test.ts > ignores pull-request entries in list assertions"
+      ],
+      "evidence": {
+        "commit": "904d926",
+        "command": "pnpm exec vitest run packages/testkit/src/github-corpus.test.ts tests/schemas.test.ts packages/pack/src/manifest.test.ts"
+      },
+      "depends_on": ["SE-P3-03", "SE-P4-03"]
     },
     {
       "id": "SE-P5-02",
