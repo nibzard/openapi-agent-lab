@@ -56,6 +56,15 @@ describe("documented commands match the CLI surface", () => {
     expect(usage).toContain("the final state stays empty");
   });
 
+  it("keeps the README serve claim current", async () => {
+    const text = await readme();
+    expect(text).toContain("oal serve --mode scenario");
+    expect(text).toContain("checkpoint, fork, reset, and virtual-time");
+    // The stale stateless claim must stay gone.
+    expect(text).not.toContain("stays in contract mode");
+    expect(text).not.toContain("placeholder; not written yet");
+  });
+
   it("documents the corpus verify skip semantics", async () => {
     const usage = await doc("usage.md");
     expect(usage).toContain("oal corpus verify");

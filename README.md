@@ -47,8 +47,8 @@ The execution surface splits into three states:
 - **Scenario fidelity.** An optional versioned pack adds response fixtures,
   tasks, result schemas, deterministic rubrics, and a behavior module with
   stateful operations. `oal run` executes such packs through the behavior
-  runtime; `oal serve` stays in contract mode and serves deterministic but
-  stateless responses.
+  runtime; `oal serve --mode scenario` serves a stateful world with
+  checkpoint, fork, reset, and virtual-time controls.
 - **Exposure treatments.** Raw HTTP is the one exposure the run engine
   serves today. Direct-tool and catalog-tool components exist in
   `@oal/tools`; the runner refuses runs that request them until the bridge
@@ -102,7 +102,10 @@ task on purpose. The guide explains the exit codes.
 
 - [Quickstart](docs/quickstart.md) — run the local product end to end.
 - [Usage](docs/usage.md) — a reference walkthrough of the local product.
-- [Authoring packs](docs/authoring-packs.md) — placeholder; not written yet.
+- [Authoring packs](docs/authoring-packs.md) — the manifest and behavior
+  reference for pack authors.
+- [External pack tutorial](docs/tutorial-external-pack.md) — author a
+  stateful pack outside the workspace with the installed executable.
 - [Authoring studies](docs/authoring-studies.md) — placeholder; not written
   yet.
 - [Research methods](docs/research-methods.md) — run a preregistered study.
