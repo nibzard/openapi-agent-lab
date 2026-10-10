@@ -1,0 +1,14 @@
+# Context
+
+## Why This Way
+SE-P0-01 of the stateful plan. The baseline pins observed behavior
+before any environment work so later phases can show what changed.
+Digests came from two fresh runs in a scratch workspace; the run and
+trial seeds are deterministic functions of the batch id, so the same
+invocations reproduce the domain outcome.
+
+## Gotchas
+- evaluation.json and session/events.redacted.jsonl digests vary per
+  run; only semantic events and final state repeat byte-identically.
+- behavior_entrypoint_sha256 is the repository file digest; the store
+  records the same loader hash at initializeRun.
