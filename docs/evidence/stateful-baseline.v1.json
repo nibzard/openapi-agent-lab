@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "kind": "StatefulBaseline",
+  "recorded_at": "2026-10-10T08:42:29Z",
+  "repository_commit": "717ea9d55501532b10476f7988dfda074e57a407",
+  "node_version": "24.18.0",
+  "pnpm_version": "10.33.0",
+  "executable": "node apps/cli/src/index.ts (workspace bin: oal)",
+  "pack": {
+    "id": "webclip",
+    "version": "0.3.0",
+    "pack_sha256": "1da397f6f2c20e7d4a3f6262236b572209f031a2dfa6ff51c3230ed081d48598",
+    "behavior_entrypoint": "behavior/index.ts",
+    "behavior_entrypoint_sha256": "a38e64b622fce75d4778a127cf11b7d0681820b78f83fa3678e261ecf315f975"
+  },
+  "eval": "site-errand",
+  "scenario": "baseline",
+  "complete_control": {
+    "cli": [
+      "oal run <pack-root> --eval site-errand --agent mock-agent --agent-script <pack-root>/evals/site-errand/mock-participant.json --batch stateful-baseline --format json"
+    ],
+    "exit_code": 0,
+    "disposition": "completed",
+    "evaluation_status": "passed",
+    "score": 1,
+    "run_seed": "a655c92e8925ff03549d1f57b32297a910ffd95ea26cb53694bc2e30876e1150",
+    "trial_seed_id": "c4be0507f399",
+    "state_revision": 6,
+    "api_requests": 9,
+    "semantic_event_names": [
+      "clip.created",
+      "clip.created",
+      "clip.rendered",
+      "clip.rendered",
+      "clip.extracted",
+      "clip.deleted"
+    ],
+    "remaining_clips": ["clip_00000002"],
+    "redacted_evidence_sha256": {
+      "semantic-events.redacted.jsonl": "64e6809118ccc35c616579464c4d0b9f96f3e66251ba252ab9210df99c56835e",
+      "session/events.redacted.jsonl": "115ded7a280d58cc03acf2ad6ca0703f5bedb656c586c94944804b8f566da99a",
+      "state.final.json": "97768c5239bb086663b6ee13e7dfad7b679c6f4ef23044b8479db52228350449",
+      "evaluation.json": "7b90f8cdf46be8a131a3c0a6c8c9dc1e6e9517774ba5cff605e259899fe2bc16"
+    },
+    "digest_notes": "semantic-events and state.final digests repeat across workspaces at this commit; session events and evaluation embed run-scoped observations, so their digests identify this recorded run only."
+  },
+  "failing_control": {
+    "cli": [
+      "oal run <pack-root> --eval site-errand --agent mock-agent --agent-script <pack-root>/evals/site-errand/mock-participant-failing.json --batch stateful-baseline-fail --format json"
+    ],
+    "exit_code": 5,
+    "disposition": "agent_failed",
+    "state_revision": 0,
+    "semantic_event_count": 0,
+    "trial_seed_id": "062171f2291b"
+  },
+  "primitive_inventory": {
+    "clock": {
+      "status": "wired",
+      "evidence": "VirtualClock owns all served timestamps; the store advances one tick per committed or replayed request.",
+      "references": [
+        "packages/state-store/src/clock.ts",
+        "packages/runner/src/scenario-runtime.ts:452",
+        "packages/behavior-runtime/src/adapters.ts:20",
+        "packages/state-store/src/store.ts:694"
+      ],
+      "gaps": "No operator advance-time control; virtual time moves only by committed ticks."
+    },
+    "ids": {
+      "status": "wired-per-request",
+      "evidence": "Each request receives a fresh prefix-counter adapter; durable cross-request identity is the behavior module's own state (webclip stores clip IDs in state).",
+      "references": [
+        "packages/runner/src/scenario-runtime.ts:504",
+        "packages/runner/src/scenario-runtime.ts:565",
+        "packages/behavior-runtime/src/adapters.ts:31"
+      ],
+      "gaps": "No persisted allocator positions; no export or import for checkpoints."
+    },
+    "randomness": {
+      "status": "wired",
+      "evidence": "Each request runs a namespace PRNG derived from the trial seed and request id, so identical seeds replay identical choices.",
+      "references": [
+        "packages/runner/src/scenario-runtime.ts:504-507",
+        "packages/runner/src/scenario-runtime.ts:563-567"
+      ],
+      "gaps": "Stream positions are per-request, not transaction-scoped; no export or import for checkpoints."
+    },
+    "faults": {
+      "status": "package-only",
+      "evidence": "Fault rule format and validation exist, but no execution path consumes them.",
+      "references": [
+        "packages/behavior-api/src/faults.ts"
+      ],
+      "gaps": "No scenario-execution wiring in execute.ts, gateway scenario.ts, or the scenario runtime; the three section 48.6 fixtures are unimplemented."
+    },
+    "idempotency": {
+      "status": "store-only",
+      "evidence": "The state store keeps an idempotency table with replay policy, TTL, and principal separation, but the scenario pipeline opens requests without an idempotency identity.",
+      "references": [
+        "packages/state-store/src/store.ts:1014",
+        "packages/state-store/src/schema.ts:111",
+        "packages/runner/src/scenario-runtime.ts:309"
+      ],
+      "gaps": "No participant-facing idempotency-key replay through the data plane."
+    }
+  },
+  "unsupported_paths": [
+    "oal serve --mode scenario is refused (apps/cli/src/handlers/serve.ts:677)",
+    "operator world controls (inspect, checkpoint, reset, advance-time, fork) do not exist",
+    "fault fixtures are never executed",
+    "idempotency-key replay is not served to participants",
+    "scheduled work is not modeled by the scenario runtime"
+  ]
+}
