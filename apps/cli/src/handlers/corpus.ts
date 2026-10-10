@@ -439,11 +439,27 @@ export class LocalCorpusTarget implements CorpusTarget {
     if (body !== undefined) {
       headers["content-type"] = "application/json";
     }
-    const response = await fetch(url, {
-      method: operation.method,
-      headers,
-      ...(body === undefined ? {} : { body })
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: operation.method,
+        headers,
+        ...(body === undefined ? {} : { body })
+      });
+    } catch {
+      // The transport never delivered a response. That is
+      // uncertainty, not a target crash and not evidence of a
+      // rollback: the step records the loss and the case reconciles
+      // (section 48.6).
+      return {
+        status: null,
+        outcome: "lost",
+        headers: {},
+        body: null,
+        method: operation.method,
+        url
+      };
+    }
     const contentType = response.headers.get("content-type") ?? "";
     const text = await response.text();
     let parsed: Json = null;

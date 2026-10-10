@@ -29,7 +29,21 @@ export interface CorpusTargetRequest {
 
 /** What came back for one request. */
 export interface CorpusTargetResponse {
-  readonly status: number;
+  /**
+   * Response status, or null when no response arrived. A null status
+   * is uncertainty, never evidence the target rolled back: the step
+   * records the loss and the case reconciles (section 48.6).
+   */
+  readonly status: number | null;
+  /**
+   * Why no response arrived, when status is null. `lost` marks an
+   * ambiguous transport failure the case may reconcile; the step
+   * stays without verdict. `provider_failure` marks a provider-side
+   * condition that ends the case, such as a rate-limit delay beyond
+   * the deadline (section 48.5). A null status without an outcome
+   * reads as `lost`.
+   */
+  readonly outcome?: "lost" | "provider_failure";
   /** Response headers; names may arrive in any case. */
   readonly headers: Readonly<Record<string, string>>;
   /** Decoded body when one came back. */

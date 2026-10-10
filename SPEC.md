@@ -8431,6 +8431,17 @@ redacted exchanges, and diagnostics. Case statuses are `passed`, `failed`,
 agent success as separate fields; an absent assessment is `not_evaluated`.
 Existing `probe` reports and historical scores MUST remain unchanged.
 
+Step statuses are `passed`, `failed`, `error`, and `lost`. A step whose
+transport never delivered a response is `lost`: it carries no verdict, no
+bindings, and no claim about target state, and the case continues so a later
+step can reconcile. A lost response is never evidence that the target rolled
+back. A provider-side condition that ends the case, such as a rate-limit delay
+beyond the deadline, fails the step as a provider failure instead. A case that
+did not pass carries a failure class: `assertion_failure`, `provider_failure`,
+or `runtime_error`. A step whose exchange answered a 4xx or 5xx records a
+service-error marker whether the case expected it or not, so an expected
+service error stays distinguishable from an unexpected one.
+
 For run/serve equivalence, compare canonical domain state, status, declared
 headers, bodies, and semantic event names/payloads after the same seeded sequence.
 Exclude only listed observational fields: world/run IDs, evidence IDs, wall-clock

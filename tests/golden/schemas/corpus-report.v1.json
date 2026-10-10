@@ -22,7 +22,7 @@
   },
   "summary": {
     "passed": 1,
-    "failed": 0,
+    "failed": 1,
     "skipped": 0,
     "error": 0
   },
@@ -129,6 +129,78 @@
         "status": "passed",
         "steps": 1
       }
+    },
+    {
+      "id": "lost-then-reconciled",
+      "claim_ids": ["issues-create"],
+      "scope": "black_box",
+      "status": "failed",
+      "failure_class": "provider_failure",
+      "contract_conformance": "not_evaluated",
+      "behavioral_conformance": "fail",
+      "agent_success": "not_evaluated",
+      "steps": [
+        {
+          "id": "create",
+          "phase": "steps",
+          "status": "lost",
+          "operation_id": "createIssue",
+          "exchange": {
+            "method": "POST",
+            "url": "https://api.example.invalid/repos/octocat/disposable-triage/issues",
+            "status": null,
+            "delivery": "lost",
+            "headers": {}
+          },
+          "bindings": [],
+          "assertions": [],
+          "diagnostic": {
+            "code": "OAL-CORPUS-RESPONSE-LOST",
+            "message": "The response of step \"create\" was lost in transport; the outcome stays unknown.",
+            "case_id": "lost-then-reconciled",
+            "step_id": "create"
+          }
+        },
+        {
+          "id": "check-rate-limit",
+          "phase": "steps",
+          "status": "failed",
+          "operation_id": "listIssues",
+          "service_error": true,
+          "exchange": {
+            "method": "GET",
+            "url": "https://api.example.invalid/repos/octocat/disposable-triage/issues",
+            "status": 403,
+            "headers": {
+              "content-type": "application/json"
+            },
+            "body": {
+              "message": "rate limit exceeded"
+            }
+          },
+          "bindings": [],
+          "assertions": [
+            {
+              "op": "status",
+              "passed": false,
+              "message": "Expected 200, found 403.",
+              "expected": 200,
+              "actual": 403
+            }
+          ],
+          "diagnostic": {
+            "code": "OAL-CORPUS-PROVIDER-FAILURE",
+            "message": "Step \"check-rate-limit\" ended as a provider failure: the request never received a response.",
+            "case_id": "lost-then-reconciled",
+            "step_id": "check-rate-limit"
+          }
+        }
+      ],
+      "cleanup": {
+        "status": "not_run",
+        "steps": 0
+      },
+      "diagnostics": []
     }
   ],
   "diagnostics": []

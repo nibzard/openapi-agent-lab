@@ -161,9 +161,17 @@
           "description": "Redacted request URL when the target exposes one."
         },
         "status": {
-          "type": "integer",
-          "minimum": 100,
-          "maximum": 599
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 599
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Response status, or null when the transport never delivered one."
         },
         "headers": {
           "type": "object",
@@ -174,6 +182,10 @@
         },
         "body": {
           "description": "Decoded response body, when one came back."
+        },
+        "delivery": {
+          "const": "lost",
+          "description": "Present when the response never arrived."
         }
       }
     },
@@ -272,7 +284,12 @@
         },
         "status": {
           "type": "string",
-          "enum": ["passed", "failed", "error", "skipped"]
+          "enum": ["passed", "failed", "error", "lost", "skipped"],
+          "description": "lost marks a response that never arrived: no verdict, no bindings, and no evidence about target state."
+        },
+        "service_error": {
+          "type": "boolean",
+          "description": "True when the exchange answered a 4xx or 5xx service error, expected or not."
         },
         "operation_id": {
           "type": "string",
@@ -386,6 +403,11 @@
           "items": {
             "$ref": "#/$defs/diagnostic"
           }
+        },
+        "failure_class": {
+          "type": "string",
+          "enum": ["assertion_failure", "provider_failure", "runtime_error"],
+          "description": "Why a case did not pass. Absent when it passed, was skipped, or only lost responses."
         }
       }
     }

@@ -43,7 +43,10 @@ export interface ReportDiagnostic {
 export interface ExchangeRecord {
   readonly method?: string;
   readonly url?: string;
-  readonly status: number;
+  /** Response status, or null when the transport never delivered one. */
+  readonly status: number | null;
+  /** Delivery outcome; present only when the response never arrived. */
+  readonly delivery?: "lost";
   readonly headers: Readonly<Record<string, string>>;
   readonly body?: Json;
 }
@@ -80,7 +83,14 @@ export interface AttemptRecord {
 export interface StepRecord {
   readonly id: string;
   readonly phase: "setup" | "steps" | "cleanup";
-  status: "passed" | "failed" | "error";
+  /**
+   * `lost` marks a step whose response never arrived: no verdict,
+   * no bindings, and no evidence about target state. The case
+   * continues so a later step can reconcile.
+   */
+  status: "passed" | "failed" | "error" | "lost";
+  /** True when the exchange answered a 4xx or 5xx service error. */
+  service_error?: boolean;
   operation_id?: string;
   operator?: Json;
   operator_result?: Json;
@@ -97,6 +107,12 @@ export interface CaseRecord {
   readonly claim_ids: readonly string[];
   readonly scope: "black_box" | "emulator_only";
   status: "passed" | "failed" | "skipped" | "error";
+  /**
+   * Why a case did not pass, when it did not: assertions failed, the
+   * provider ended the case, or the runtime errored. A case that
+   * passed, was skipped, or only lost responses carries no class.
+   */
+  failure_class?: "assertion_failure" | "provider_failure" | "runtime_error";
   readonly skip_reason?: string;
   readonly contract_conformance: "pass" | "fail" | "not_evaluated";
   behavioral_conformance: "pass" | "fail" | "not_evaluated";
@@ -157,6 +173,8 @@ const CODE_INPUT_MISSING = "OAL-CORPUS-INPUT-MISSING";
 const CODE_OPERATOR_UNSUPPORTED = "OAL-CORPUS-OPERATOR-UNSUPPORTED";
 const CODE_POLL_EXHAUSTED = "OAL-CORPUS-POLL-EXHAUSTED";
 const CODE_PREPARE_FAILED = "OAL-CORPUS-PREPARE-FAILED";
+const CODE_PROVIDER_FAILURE = "OAL-CORPUS-PROVIDER-FAILURE";
+const CODE_RESPONSE_LOST = "OAL-CORPUS-RESPONSE-LOST";
 const CODE_TARGET_FAILED = "OAL-CORPUS-TARGET-FAILED";
 const CODE_TEARDOWN_FAILED = "OAL-CORPUS-TEARDOWN-FAILED";
 
@@ -392,6 +410,7 @@ function exchangeOf(
     ...(response.method === undefined ? {} : { method: response.method }),
     ...(response.url === undefined ? {} : { url: response.url }),
     status: statusOverride ?? response.status,
+    ...(response.status === null ? { delivery: "lost" as const } : {}),
     headers,
     ...(response.body === null ? {} : { body: response.body })
   };
@@ -699,6 +718,35 @@ async function runStep(
         poll: false
       });
       record.exchange = exchangeOf(response);
+      if (response.status === null) {
+        // No response arrived. An ambiguous transport loss records
+        // uncertainty and moves on: the loss is never evidence that
+        // the target rolled back, and the case's later steps decide
+        // what happened. A provider failure ends the case instead.
+        if (response.outcome === "provider_failure") {
+          record.status = "failed";
+          record.diagnostic = {
+            code: CODE_PROVIDER_FAILURE,
+            message: `Step ${JSON.stringify(step.id)} ended as a provider failure: ${response.method ?? "the request"} never received a response.`,
+            case_id: caseId,
+            step_id: step.id
+          };
+          context.diagnostics.push(record.diagnostic);
+          return record;
+        }
+        record.status = "lost";
+        record.diagnostic = {
+          code: CODE_RESPONSE_LOST,
+          message: `The response of step ${JSON.stringify(step.id)} was lost in transport; the outcome stays unknown.`,
+          case_id: caseId,
+          step_id: step.id
+        };
+        context.diagnostics.push(record.diagnostic);
+        return record;
+      }
+      if (response.status >= 400) {
+        record.service_error = true;
+      }
       const view: ResponseView = {
         status: response.status,
         headers: response.headers,
@@ -747,6 +795,30 @@ async function runStep(
       body: requestBody?.value,
       poll: true
     });
+    if (response.status === null && response.outcome === "provider_failure") {
+      // A provider condition ends the case; polling cannot out-wait it.
+      record.status = "failed";
+      record.exchange = exchangeOf(response);
+      record.diagnostic = {
+        code: CODE_PROVIDER_FAILURE,
+        message: `Poll ${JSON.stringify(step.id)} ended as a provider failure before a response arrived.`,
+        case_id: caseId,
+        step_id: step.id
+      };
+      context.diagnostics.push(record.diagnostic);
+      return record;
+    }
+    if (response.status === null) {
+      // One lost attempt: no verdict, recorded, retried in bounds.
+      record.attempts.push({
+        ordinal,
+        waited_ms: waited,
+        exchange: exchangeOf(response),
+        assertions: [],
+        passed: false
+      });
+      continue;
+    }
     const view: ResponseView = {
       status: response.status,
       headers: response.headers,
@@ -773,6 +845,13 @@ async function runStep(
   }
   if (lastResponse !== null) {
     record.exchange = exchangeOf(lastResponse);
+  }
+  if (
+    record.exchange !== undefined &&
+    record.exchange.status !== null &&
+    record.exchange.status >= 400
+  ) {
+    record.service_error = true;
   }
   captureBindings(step, lastView, record, context);
   record.assertions = [
@@ -858,6 +937,8 @@ async function runCase(
           stopped = true;
         }
       }
+      // A lost step carries no verdict: the sequence continues so a
+      // later step can reconcile what the lost response left unknown.
     }
   }
 
@@ -894,12 +975,33 @@ async function runCase(
   }
 
   record.diagnostics = context.diagnostics;
+  // A case whose every step lost its transport verified nothing:
+  // behavioral conformance stays unevaluated rather than passing on
+  // the absence of failures.
+  const anyVerdict = record.steps.some(
+    (step) => step.status !== "lost" || step.assertions.length > 0
+  );
   record.behavioral_conformance =
     record.status === "passed"
-      ? "pass"
+      ? anyVerdict
+        ? "pass"
+        : "not_evaluated"
       : record.status === "failed"
         ? "fail"
         : "not_evaluated";
+  if (record.status === "failed" || record.status === "error") {
+    const providerEnded = record.diagnostics.some(
+      (entry) => entry.code === CODE_PROVIDER_FAILURE
+    );
+    const runtimeErrored =
+      record.status === "error" ||
+      record.steps.some((step) => step.status === "error");
+    record.failure_class = runtimeErrored
+      ? "runtime_error"
+      : providerEnded
+        ? "provider_failure"
+        : "assertion_failure";
+  }
   return record;
 }
 
