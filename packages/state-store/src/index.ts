@@ -15,6 +15,7 @@ export type {
   CheckpointClockComponent,
   CheckpointDocument,
   CheckpointFaultsComponent,
+  CheckpointFrozenComponent,
   CheckpointIdempotencyEntry,
   CheckpointIdsComponent,
   CheckpointRandomStream,

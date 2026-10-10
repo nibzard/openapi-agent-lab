@@ -31,6 +31,7 @@ import {
   parseCheckpointDocument,
   type CheckpointBlobReference,
   type CheckpointDocument,
+  type CheckpointFrozenComponent,
   type CheckpointIdempotencyEntry,
   type CheckpointServices
 } from "./checkpoint.ts";
@@ -1480,6 +1481,7 @@ export class StateStore {
   exportCheckpoint(input: {
     readonly checkpointId: string;
     readonly services: CheckpointServices;
+    readonly frozen: CheckpointFrozenComponent;
   }): CheckpointDocument {
     return this.transaction(() => {
       const world = this.readWorld();
@@ -1589,7 +1591,8 @@ export class StateStore {
         },
         services: input.services,
         idempotency: entries,
-        blobs: references
+        blobs: references,
+        frozen: input.frozen
       });
     });
   }
@@ -1603,7 +1606,7 @@ export class StateStore {
    */
   importCheckpoint(
     value: Json,
-    options: { readonly worldId?: string } = {}
+    options: { readonly worldId?: string; readonly generation?: number } = {}
   ): CheckpointDocument {
     const document = parseCheckpointDocument(value);
     return this.transaction(() => {
@@ -1621,7 +1624,9 @@ export class StateStore {
       if (existing === null) {
         this.initializeWorld({
           worldId,
-          generation: document.world.generation,
+          // A fork is a new world: its generation starts fresh while
+          // its domain positions continue from the checkpoint.
+          generation: options.generation ?? document.world.generation,
           originCheckpointId: document.checkpoint_id,
           createdAt: document.state.logical_time
         });

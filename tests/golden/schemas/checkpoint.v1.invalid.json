@@ -11,7 +11,9 @@
     "state_schema_version": 1,
     "revision": 7,
     "logical_time": "2000-01-01T00:00:07.000Z",
-    "state": { "clips": {} }
+    "state": {
+      "clips": {}
+    }
   },
   "clock": {
     "algorithm": "virtual-clock-ms-v1",
@@ -20,7 +22,9 @@
   },
   "ids": {
     "algorithm": "monotonic-counter-v1",
-    "positions": { "clip": 1 }
+    "positions": {
+      "clip": 1
+    }
   },
   "random": {
     "streams": [
@@ -39,7 +43,24 @@
       "state": "0f1e2d3c4b5a6978"
     }
   },
-  "idempotency": { "entries": [] },
-  "blobs": { "references": [] },
-  "schedule": { "interval_ms": 1000 }
+  "idempotency": {
+    "entries": []
+  },
+  "blobs": {
+    "references": []
+  },
+  "schedule": {
+    "interval_ms": 1000
+  },
+  "frozen": {
+    "pack_id": "webclip",
+    "pack_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "scenario_id": "baseline",
+    "seed": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "behavior_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "behavior_closure_identity": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "runtime_name": "node",
+    "contract_semantic_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "contract_execution_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  }
 }

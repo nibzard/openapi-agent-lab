@@ -16,11 +16,16 @@
     "random",
     "faults",
     "idempotency",
-    "blobs"
+    "blobs",
+    "frozen"
   ],
   "properties": {
-    "schema_version": { "const": 1 },
-    "kind": { "const": "Checkpoint" },
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "Checkpoint"
+    },
     "checkpoint_id": {
       "type": "string",
       "minLength": 1,
@@ -105,7 +110,10 @@
         },
         "positions": {
           "type": "object",
-          "additionalProperties": { "type": "integer", "minimum": 0 },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
           "description": "Counter position per ID prefix; the next ID is the position plus one."
         }
       }
@@ -150,7 +158,10 @@
       "properties": {
         "counters": {
           "type": "object",
-          "additionalProperties": { "type": "integer", "minimum": 0 },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
           "description": "Occurrence counter per fault rule."
         },
         "random": {
@@ -180,8 +191,14 @@
               "response"
             ],
             "properties": {
-              "operation_key": { "type": "string", "minLength": 1 },
-              "principal_key": { "type": "string", "minLength": 1 },
+              "operation_key": {
+                "type": "string",
+                "minLength": 1
+              },
+              "principal_key": {
+                "type": "string",
+                "minLength": 1
+              },
               "normalized_path": {
                 "type": "string",
                 "minLength": 1,
@@ -251,7 +268,10 @@
               "relative_path"
             ],
             "properties": {
-              "blob_id": { "type": "string", "minLength": 1 },
+              "blob_id": {
+                "type": "string",
+                "minLength": 1
+              },
               "sha256": {
                 "type": ["string", "null"],
                 "description": "Public content digest, or null for secret blobs."
@@ -278,6 +298,63 @@
           }
         }
       }
+    },
+    "frozen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pack_id",
+        "pack_sha256",
+        "scenario_id",
+        "seed",
+        "behavior_sha256",
+        "behavior_closure_identity",
+        "runtime_name",
+        "contract_semantic_sha256",
+        "contract_execution_sha256"
+      ],
+      "properties": {
+        "pack_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identity of the pack the world serves."
+        },
+        "pack_sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "Freeze digest of the pack inventory."
+        },
+        "scenario_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Scenario the world runs."
+        },
+        "seed": {
+          "$ref": "#/$defs/sha256",
+          "description": "World seed every deterministic service derives from."
+        },
+        "behavior_sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "Digest of the behavior entrypoint bytes."
+        },
+        "behavior_closure_identity": {
+          "$ref": "#/$defs/sha256",
+          "description": "Identity of the frozen behavior dependency closure."
+        },
+        "runtime_name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Runtime that executes the behavior child."
+        },
+        "contract_semantic_sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "Semantic digest of the compiled contract."
+        },
+        "contract_execution_sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "Execution digest of the compiled contract."
+        }
+      },
+      "description": "The frozen inputs a restore executes without the original checkout (section 48.4)."
     }
   },
   "$defs": {
@@ -286,10 +363,23 @@
       "additionalProperties": false,
       "required": ["namespace", "algorithm", "state"],
       "properties": {
-        "namespace": { "type": "string", "minLength": 1 },
-        "algorithm": { "const": "splitmix64-v1" },
-        "state": { "type": "string", "minLength": 1 }
+        "namespace": {
+          "type": "string",
+          "minLength": 1
+        },
+        "algorithm": {
+          "const": "splitmix64-v1"
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1
+        }
       }
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Lowercase SHA-256 digest."
     }
   }
 }

@@ -24,6 +24,7 @@ import {
   formatRfc3339,
   isJsonObject,
   isRfc3339,
+  OalError,
   parseRfc3339,
   sha256Hex,
   toOalError,
@@ -73,10 +74,16 @@ import {
   controlEnvelope,
   runControl,
   startWorldControl,
+  type ControlEffect,
   type ControlOutcome,
   type ControlRoute,
   type WorldControlServer
 } from "./control.ts";
+import {
+  readCheckpointDirectory,
+  writeCheckpointDirectory,
+  type ReadCheckpoint
+} from "./checkpoint-dir.ts";
 
 /** Stable failure codes of the environment owner. */
 export const EnvironmentCode = {
@@ -87,7 +94,10 @@ export const EnvironmentCode = {
   ClockUnsupported: "OAL-SCENARIO-CLOCK-UNSUPPORTED",
   InitializeFailed: "OAL-SCENARIO-INITIALIZE-FAILED",
   ClosureInvalid: "OAL-SCENARIO-BEHAVIOR-CLOSURE-INVALID",
-  ControlUnavailable: "OAL-ENVIRONMENT-CONTROL-UNAVAILABLE"
+  ControlUnavailable: "OAL-ENVIRONMENT-CONTROL-UNAVAILABLE",
+  CheckpointIncomplete: "OAL-CHECKPOINT-INCOMPLETE",
+  CheckpointIntegrity: "OAL-CHECKPOINT-INTEGRITY",
+  CheckpointIncompatible: "OAL-CHECKPOINT-INCOMPATIBLE"
 } as const;
 
 /** An environment defect from before or during the run. */
@@ -148,6 +158,12 @@ export interface EnvironmentOptions {
   readonly evidenceDirectory?: string;
   /** Private control directory of this world; reserved for controls. */
   readonly privateDirectory?: string;
+}
+
+/** One checkpoint the environment wrote. */
+export interface CheckpointWritten {
+  readonly directory: string;
+  readonly checkpointId: string;
 }
 
 /** One committed semantic event, in commit order. */
@@ -231,8 +247,12 @@ export interface Environment {
    * committed counters, free of private paths and credentials.
    */
   inspect(): JsonObject;
-  /** Operator checkpoint control; unavailable in this milestone phase. */
-  checkpoint(): never;
+  /**
+   * Write one checkpoint directory at `out` from the committed
+   * position: the sealed payload, the key, the blobs, the frozen
+   * tree, and the compiled contract (section 48.4).
+   */
+  checkpoint(out: string): Promise<CheckpointWritten>;
   /** Operator reset control; unavailable in this milestone phase. */
   reset(): never;
   /** Operator time control; unavailable in this milestone phase. */
@@ -573,6 +593,17 @@ class StoreGatewayState implements GatewayState {
   }
 }
 
+/** Runtime identity every environment manifest and checkpoint records. */
+export const RUNTIME_NAME = "@oal/environment";
+
+/** The declared pack id of a loaded pack, or the empty string. */
+function packIdOf(pack: LoadedPack): string {
+  const metadata = isJsonObject(pack.manifest["metadata"])
+    ? pack.manifest["metadata"]
+    : null;
+  return typeof metadata?.["id"] === "string" ? metadata["id"] : "";
+}
+
 function unavailable(name: string): never {
   throw new EnvironmentError(
     EnvironmentCode.ControlUnavailable,
@@ -847,7 +878,7 @@ export async function openEnvironment(
       },
       scenarioId: options.scenarioId,
       behaviorSha256: declaration.entrypoint.sha256,
-      runtimeName: "@oal/environment",
+      runtimeName: RUNTIME_NAME,
       behaviorClosure: {
         identity: closure.identity,
         entryPath: closure.entryPath,
@@ -858,13 +889,67 @@ export async function openEnvironment(
       virtualTime: store.clock.now(),
       isolationLevel: host.isolationLevel,
       capabilities: {
-        checkpoint: "unavailable",
+        checkpoint: "available",
         reset: "unavailable",
         advanceTime: "unavailable",
-        fork: "unavailable",
+        fork: "available",
         scheduledWork: "unsupported"
       }
     };
+  };
+
+  const writeCheckpoint = async (out: string): Promise<CheckpointWritten> => {
+    const checkpointId = `chk_${(store.countControls() + 1)
+      .toString(10)
+      .padStart(8, "0")}`;
+    const positions = gatewayState.servicePositions;
+    const clockSnapshot = store.clock.snapshot();
+    const document = store.exportCheckpoint({
+      checkpointId,
+      frozen: {
+        pack_id: packIdOf(pack),
+        pack_sha256: options.records.packSha256,
+        scenario_id: options.scenarioId,
+        seed,
+        behavior_sha256: declaration.entrypoint.sha256,
+        behavior_closure_identity: closure.identity,
+        runtime_name: RUNTIME_NAME,
+        contract_semantic_sha256: contract.semanticSha256,
+        contract_execution_sha256: contract.executionSha256
+      },
+      services: {
+        clock: {
+          now_ms: clockSnapshot.nowMs,
+          tick_ms: clockSnapshot.tickMs
+        },
+        ids: { positions: { ...positions.ids } },
+        random: [
+          {
+            namespace: "world:services",
+            algorithm: positions.random.algorithm,
+            state: positions.random.state
+          }
+        ],
+        faults: {
+          counters: {},
+          random: {
+            namespace: "faults",
+            algorithm: DeterministicPrng.ALGORITHM,
+            state: createNamespacePrng(seed, "faults").exportState()
+          }
+        }
+      }
+    });
+    const written = await writeCheckpointDirectory({
+      directory: out,
+      document,
+      contractIr: contract.ir as unknown as Json,
+      blobSourceRoot: blobRoot,
+      frozenSourceRoot: join(pack.root, ".oal", "frozen", closure.identity),
+      frozenEntryPath: closure.entryPath,
+      createdAt: formatRfc3339(options.now())
+    });
+    return { directory: out, checkpointId: written.checkpoint_id };
   };
 
   let closed = false;
@@ -882,7 +967,7 @@ export async function openEnvironment(
       request_count: store.countRequests(),
       control_count: store.countControls()
     }),
-    checkpoint: () => unavailable("checkpoint"),
+    checkpoint: writeCheckpoint,
     reset: () => unavailable("reset"),
     advanceTime: () => unavailable("advance-time"),
     openControl: (socketOptions) =>
@@ -906,8 +991,45 @@ export async function openEnvironment(
               artifacts: []
             }
           }),
-          checkpoint: async (payload): Promise<ControlOutcome> =>
-            unavailableControl("/v1/checkpoints", payload, store),
+          checkpoint: (payload): ControlEffect =>
+            runControl(store, {
+              route: "/v1/checkpoints",
+              payload,
+              effect: async (): Promise<ControlOutcome> => {
+                const out = payload["out"];
+                if (typeof out !== "string" || out.length === 0) {
+                  return {
+                    httpStatus: 400,
+                    envelope: controlEnvelope("invalid", null, [
+                      controlDiagnostic(
+                        "OAL-WORLD-CONTROL-BODY",
+                        "checkpoints requires out as a new local output path."
+                      )
+                    ])
+                  };
+                }
+                try {
+                  const written = await writeCheckpoint(out);
+                  return {
+                    httpStatus: 200,
+                    envelope: controlEnvelope("ok", {
+                      directory: written.directory,
+                      checkpoint_id: written.checkpointId
+                    })
+                  };
+                } catch (error) {
+                  return {
+                    httpStatus: error instanceof OalError ? 409 : 500,
+                    envelope: controlEnvelope("failed", null, [
+                      controlDiagnostic(
+                        "OAL-WORLD-CONTROL-FAILED",
+                        error instanceof Error ? error.message : String(error)
+                      )
+                    ])
+                  };
+                }
+              }
+            }),
           reset: async (payload): Promise<ControlOutcome> =>
             unavailableControl("/v1/reset", payload, store),
           advanceTime: async (payload): Promise<ControlOutcome> =>
@@ -1099,4 +1221,387 @@ export async function ensureStateDirectory(
       throw toOalError(cause);
     }
   );
+}
+
+/** Options of {@link openRestoredEnvironment}; a fork never takes a trial plan. */
+export interface RestoreEnvironmentOptions {
+  /** The validated checkpoint this world continues. */
+  readonly checkpoint: ReadCheckpoint;
+  /** New world identity; the checkpoint lineage records the parent. */
+  readonly worldId: string;
+  /** Absolute path of the new world's SQLite state store. */
+  readonly databasePath: string;
+  /** Batch identity the new run records. */
+  readonly batchId: string;
+  readonly limits?: EnvironmentLimits;
+  /** Injected observation clock in epoch milliseconds. */
+  readonly now: () => number;
+}
+
+/**
+ * Open one environment restored from a checkpoint: the new world
+ * imports the checkpoint's state, replay entries, and blobs under a
+ * fresh key, continues the domain identifiers and every stream from
+ * the checkpoint position, and executes the checkpoint's frozen
+ * behavior tree, so the original checkout is no longer needed
+ * (section 48.4). The fork is a new world: new identity, new
+ * generation count, new evidence namespace, and no parent events.
+ */
+export async function openRestoredEnvironment(
+  options: RestoreEnvironmentOptions
+): Promise<Environment> {
+  const { checkpoint, worldId } = options;
+  const document = checkpoint.document;
+  if (document.frozen.runtime_name !== RUNTIME_NAME) {
+    throw new EnvironmentError(
+      EnvironmentCode.CheckpointIncompatible,
+      `The checkpoint was written by ${JSON.stringify(document.frozen.runtime_name)}; this build restores ${RUNTIME_NAME} only.`
+    );
+  }
+  const timeoutMs =
+    options.limits?.behaviorTimeoutMs ?? DEFAULT_BEHAVIOR_TIMEOUT_MS;
+  const contract: EnvironmentContractInputs = {
+    ir: checkpoint.contractIr as unknown as ContractIR,
+    semanticSha256: document.frozen.contract_semantic_sha256,
+    executionSha256: document.frozen.contract_execution_sha256
+  };
+  const seed = document.frozen.seed;
+  const host = new BehaviorModuleHost({
+    entry: checkpoint.frozenEntry,
+    context: {
+      contract: contract.ir,
+      packRoot: checkpoint.frozenRoot,
+      config: {}
+    },
+    runSeed: seed,
+    timeoutMs,
+    cwd: checkpoint.frozenRoot
+  });
+  await host.start();
+
+  const store = StateStore.open({
+    path: options.databasePath,
+    runId: worldId,
+    // The clock continues from the checkpoint position: the fork's
+    // logical time does not restart (section 48.4).
+    clock: new VirtualClock({
+      initialMs: document.clock.now_ms,
+      tickMs: document.clock.tick_ms
+    })
+  });
+  let description: BackendDescription;
+  try {
+    store.importCheckpoint(JSON.parse(JSON.stringify(document)) as Json, {
+      worldId,
+      generation: 1
+    });
+    store.initializeRun({
+      batchId: options.batchId,
+      contractSemanticSha256: contract.semanticSha256,
+      contractExecutionSha256: contract.executionSha256,
+      sourceInventorySha256: document.frozen.pack_sha256,
+      packSha256: document.frozen.pack_sha256,
+      scenarioSha256: sha256Hex(document.frozen.scenario_id),
+      backendSha256: document.frozen.behavior_sha256,
+      implementationSha256: contract.executionSha256,
+      seed,
+      stateSchemaVersion: document.state.state_schema_version,
+      createdAt: formatRfc3339(options.now())
+    });
+
+    description = await host.describe();
+    const backendApiVersion: number = description.backendApiVersion;
+    if (backendApiVersion !== 1) {
+      throw new EnvironmentError(
+        EnvironmentCode.BackendApiUnsupported,
+        `The behavior backend speaks API version ${String(backendApiVersion)}; this environment serves version 1.`
+      );
+    }
+    if (
+      description.stateSchemaVersion !== document.state.state_schema_version
+    ) {
+      throw new EnvironmentError(
+        EnvironmentCode.StateSchemaInvalid,
+        `The frozen backend serves state schema version ${String(description.stateSchemaVersion)}, but the checkpoint pins ${String(document.state.state_schema_version)}.`
+      );
+    }
+    checkOperationCoverage(description, contract);
+
+    // The child initializes from the same seed namespace so its
+    // module invariants match the source's startup; the restored
+    // state stays authoritative and the returned initial state is
+    // discarded.
+    await host.initialize({
+      runId: worldId,
+      fixtures: [],
+      clock: clockAdapter(store.clock),
+      ids: idsAdapter({ ...document.ids.positions }),
+      random: randomAdapter(createNamespacePrng(seed, `initialize:${worldId}`)),
+      blobs: fileBlobStore(checkpoint.blobRoot)
+    });
+  } catch (cause) {
+    store.close();
+    await host.close().catch(() => undefined);
+    if (cause instanceof EnvironmentError) {
+      throw cause;
+    }
+    throw new EnvironmentError(
+      EnvironmentCode.InitializeFailed,
+      `The restored environment failed to bootstrap: ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`,
+      { cause }
+    );
+  }
+
+  const eventRegistry = new Map<string, RegisteredEvent>();
+  for (const event of description.semanticEvents ?? []) {
+    eventRegistry.set(event.name, {
+      eventVersion: event.eventVersion,
+      payloadSchema: event.payloadSchema
+    });
+  }
+
+  // A fork's evidence starts empty: the parent's events do not
+  // duplicate, and an origin record names the checkpoint lineage.
+  const allEvents: CommittedSemanticEvent[] = [];
+  const servicesStream =
+    document.random.streams.find(
+      (stream) => stream.namespace === "world:services"
+    ) ?? document.random.streams[0];
+  if (servicesStream === undefined) {
+    throw new EnvironmentError(
+      EnvironmentCode.CheckpointIncomplete,
+      "The checkpoint carries no world services stream."
+    );
+  }
+  const worldServices: { positions: ServicePositions } = {
+    positions: {
+      ids: { ...document.ids.positions },
+      random: {
+        algorithm: "splitmix64-v1",
+        state: servicesStream.state
+      }
+    }
+  };
+  const gatewayState = new StoreGatewayState(
+    store,
+    (events) => {
+      allEvents.push(...events);
+    },
+    worldServices
+  );
+
+  const restoredState = document.state.state;
+  const backend: ScenarioBackend = {
+    name: document.frozen.pack_id || "restored-world",
+    handle: async (
+      request: BehaviorRequest,
+      gatewayRequestId: string
+    ): Promise<ScenarioOutcome> => {
+      const allocation = gatewayState.request;
+      const requestId = allocation?.requestId ?? gatewayRequestId;
+      const snapshot = store.getState();
+      const services = gatewayState.servicePositions;
+      const outcome = await executeBehaviorRequest({
+        backend: host,
+        request,
+        runId: worldId,
+        requestId,
+        state: snapshot?.state ?? restoredState,
+        clock: clockAdapter(store.clock),
+        ids: idsAdapter(services.ids),
+        random: randomAdapter(
+          DeterministicPrng.fromState(services.random.state)
+        ),
+        blobs: fileBlobStore(checkpoint.blobRoot),
+        stateSchema: null,
+        maxStateBytes:
+          options.limits?.maxStateBytes ?? store.limits.maxPersistedStateBytes,
+        eventRegistry,
+        timeoutMs,
+        services
+      });
+      if (outcome.ok) {
+        gatewayState.stageServices(outcome.result.services ?? services);
+      }
+      return scenarioOutcomeOf(outcome);
+    }
+  };
+
+  const manifest = (): EnvironmentManifest => {
+    const snapshot = store.getState();
+    return {
+      kind: "EnvironmentManifest",
+      worldId,
+      generation: 1,
+      parentCheckpointId: document.checkpoint_id,
+      pack: {
+        id: document.frozen.pack_id,
+        version: "",
+        packSha256: document.frozen.pack_sha256
+      },
+      scenarioId: document.frozen.scenario_id,
+      behaviorSha256: document.frozen.behavior_sha256,
+      runtimeName: RUNTIME_NAME,
+      behaviorClosure: {
+        identity: document.frozen.behavior_closure_identity,
+        entryPath: checkpoint.manifest.frozen_entry_path,
+        fileCount: checkpoint.manifest.frozen_file_count
+      },
+      seed,
+      revision: snapshot?.revision ?? 0,
+      virtualTime: store.clock.now(),
+      isolationLevel: host.isolationLevel,
+      capabilities: {
+        checkpoint: "available",
+        reset: "unavailable",
+        advanceTime: "unavailable",
+        fork: "available",
+        scheduledWork: "unsupported"
+      }
+    };
+  };
+
+  const writeRestoredCheckpoint = async (
+    out: string
+  ): Promise<CheckpointWritten> => {
+    const checkpointId = `chk_${(store.countControls() + 1)
+      .toString(10)
+      .padStart(8, "0")}`;
+    const positions = gatewayState.servicePositions;
+    const clockSnapshot = store.clock.snapshot();
+    const exported = store.exportCheckpoint({
+      checkpointId,
+      frozen: { ...document.frozen },
+      services: {
+        clock: {
+          now_ms: clockSnapshot.nowMs,
+          tick_ms: clockSnapshot.tickMs
+        },
+        ids: { positions: { ...positions.ids } },
+        random: [
+          {
+            namespace: "world:services",
+            algorithm: positions.random.algorithm,
+            state: positions.random.state
+          }
+        ],
+        faults: {
+          counters: { ...document.faults.counters },
+          random: { ...document.faults.random }
+        }
+      }
+    });
+    const written = await writeCheckpointDirectory({
+      directory: out,
+      document: exported,
+      contractIr: contract.ir as unknown as Json,
+      blobSourceRoot: checkpoint.blobRoot,
+      frozenSourceRoot: checkpoint.frozenRoot,
+      frozenEntryPath: checkpoint.manifest.frozen_entry_path,
+      createdAt: formatRfc3339(options.now())
+    });
+    return { directory: out, checkpointId: written.checkpoint_id };
+  };
+
+  let closed = false;
+  return {
+    contract,
+    backend,
+    state: gatewayState,
+    backendSha256: document.frozen.behavior_sha256,
+    isolationLevel: host.isolationLevel,
+    description,
+    manifest,
+    manifestDocument: (): JsonObject => manifestDocumentOf(manifest()),
+    inspect: (): JsonObject => ({
+      ...manifestDocumentOf(manifest()),
+      request_count: store.countRequests(),
+      control_count: store.countControls()
+    }),
+    checkpoint: writeRestoredCheckpoint,
+    reset: () => unavailable("reset"),
+    advanceTime: () => unavailable("advance-time"),
+    openControl: (socketOptions) =>
+      startWorldControl({
+        operatorDirectory: socketOptions.operatorDirectory,
+        ...(socketOptions.queueLimit === undefined
+          ? {}
+          : { queueLimit: socketOptions.queueLimit }),
+        handlers: {
+          world: (): ControlOutcome => ({
+            httpStatus: 200,
+            envelope: {
+              schema_version: 1,
+              status: "ok",
+              result: {
+                ...manifestDocumentOf(manifest()),
+                request_count: store.countRequests(),
+                control_count: store.countControls()
+              },
+              diagnostics: [],
+              artifacts: []
+            }
+          }),
+          checkpoint: (payload): ControlEffect =>
+            runControl(store, {
+              route: "/v1/checkpoints",
+              payload,
+              effect: async (): Promise<ControlOutcome> => {
+                const out = payload["out"];
+                if (typeof out !== "string" || out.length === 0) {
+                  return {
+                    httpStatus: 400,
+                    envelope: controlEnvelope("invalid", null, [
+                      controlDiagnostic(
+                        "OAL-WORLD-CONTROL-BODY",
+                        "checkpoints requires out as a new local output path."
+                      )
+                    ])
+                  };
+                }
+                const written = await writeRestoredCheckpoint(out);
+                return {
+                  httpStatus: 200,
+                  envelope: controlEnvelope("ok", {
+                    directory: written.directory,
+                    checkpoint_id: written.checkpointId
+                  })
+                };
+              }
+            }),
+          reset: (payload): ControlEffect =>
+            unavailableControl("/v1/reset", payload, store),
+          advanceTime: (payload): ControlEffect =>
+            unavailableControl("/v1/advance-time", payload, store)
+        }
+      }),
+    async close(): Promise<void> {
+      if (closed) {
+        return;
+      }
+      closed = true;
+      await host.close().catch(() => undefined);
+      store.close();
+    },
+    finalState: () => {
+      const snapshot = store.getState();
+      return snapshot === null
+        ? null
+        : { state: snapshot.state, revision: snapshot.revision };
+    },
+    semanticEvents: () => [...allEvents],
+    projection: (): Promise<JsonObject | null> => Promise.resolve(null)
+  };
+}
+
+/**
+ * Read and validate one checkpoint directory for a restore. Every
+ * failure throws before any listener or world opens (section 48.4).
+ */
+export async function readCheckpoint(
+  directory: string
+): Promise<ReadCheckpoint> {
+  return readCheckpointDirectory(directory);
 }

@@ -5,6 +5,10 @@ export {
   EnvironmentError,
   ensureStateDirectory,
   openEnvironment,
+  openRestoredEnvironment,
+  readCheckpoint,
+  RUNTIME_NAME,
+  type CheckpointWritten,
   type CommittedSemanticEvent,
   type Environment,
   type EnvironmentCapabilities,
@@ -12,8 +16,17 @@ export {
   type EnvironmentLimits,
   type EnvironmentManifest,
   type EnvironmentOptions,
-  type EnvironmentRecords
+  type EnvironmentRecords,
+  type RestoreEnvironmentOptions
 } from "./environment.ts";
+
+export {
+  CHECKPOINT_MANIFEST_NAME,
+  readCheckpointDirectory,
+  writeCheckpointDirectory,
+  type CheckpointManifest,
+  type ReadCheckpoint
+} from "./checkpoint-dir.ts";
 
 export {
   controlAddress,

@@ -748,6 +748,148 @@ export async function startServe(options: {
 }
 
 /**
+ * Bring one restored fork up on loopback HTTP. The world continues a
+ * validated checkpoint: new identity, new credentials, the data
+ * listener wired to the restored environment, and the operator socket
+ * beside it. The caller owns the foreground lifetime (section 48.4).
+ */
+export async function startForkServe(options: {
+  readonly environment: Environment;
+  readonly contract: ContractIR;
+  readonly worldDir: string;
+  readonly evidenceDir: string;
+  readonly runId: string;
+  readonly runSeed: string;
+  readonly host: string;
+  readonly port: number;
+  readonly limits?: LimitTable;
+}): Promise<ServeSession> {
+  const { environment } = options;
+  await mkdir(options.evidenceDir, { recursive: true });
+  const store = StateStore.open({
+    path: path.join(options.worldDir, "world.sqlite"),
+    runId: options.runId
+  });
+  const tracePath = path.join(options.evidenceDir, "trace.jsonl");
+  const documentationPath = path.join(
+    options.evidenceDir,
+    "documentation.jsonl"
+  );
+  const traceStream = EventStream.open(
+    await JsonlSink.open(tracePath),
+    "req",
+    1
+  );
+  const documentationStream = EventStream.open(
+    await JsonlSink.open(documentationPath),
+    "doc",
+    1
+  );
+  // The fork's origin record: its evidence starts here, not with the
+  // parent's events (section 48.4).
+  await writeFile(
+    path.join(options.evidenceDir, "origin.json"),
+    `${stableJsonStringify(environment.manifestDocument())}\n`
+  );
+  const control = await environment.openControl({
+    operatorDirectory: path.join(options.worldDir, "operator")
+  });
+  const minted = mintRunCredentials(options.contract, options.runSeed);
+  const limits = options.limits ?? LIMIT_DEFAULTS;
+  const handle = await createRawHttpExposure()({
+    batchId: "fork",
+    runId: options.runId,
+    evalId: "fork",
+    trialSeed: options.runSeed,
+    contract: options.contract,
+    limits,
+    host: options.host,
+    port: options.port,
+    now: (): number => Date.now(),
+    trace: {
+      reserve: () => traceStream.reserve(),
+      complete: (event: TraceEvent) =>
+        traceStream.complete(event as unknown as Json & { sequence: number })
+    },
+    documentationTrace: {
+      reserve: () => documentationStream.reserve(),
+      complete: (event: DocumentationExchange) =>
+        documentationStream.complete(
+          event as unknown as Json & { sequence: number }
+        )
+    },
+    secrets: [
+      ...Object.values(minted.apiKeys),
+      minted.basic.username,
+      minted.basic.password,
+      minted.bearer
+    ],
+    sensitiveHeaderNames: ["authorization"],
+    sensitiveKeyPatterns: [],
+    backend: environment.backend,
+    scenarioState: environment.state
+  });
+  const credentials = buildManualCredentials(
+    options.contract,
+    options.runId,
+    handle.baseUrl,
+    options.runSeed
+  );
+  const credentialsPath = path.join(options.worldDir, "credentials.json");
+  if (credentials.alternatives.length > 0) {
+    await writePrivateFile(
+      credentialsPath,
+      `${stableJsonStringify(credentials as unknown as Json)}\n`
+    );
+  }
+  const record: ServeRunRecord = {
+    schema_version: 1,
+    run_id: options.runId,
+    run_seed: options.runSeed,
+    created_at: new Date().toISOString()
+  };
+  await writeMarker(
+    path.join(options.worldDir, RUN_ID_FILE),
+    `${stableJsonStringify(record as unknown as Json)}\n`
+  );
+  await writeMarker(
+    path.join(options.worldDir, SERVER_PID_FILE),
+    `${process.pid.toString(10)}\n`
+  );
+  const supported = options.contract.operations.filter(
+    (operation) => operation.support.level === "supported"
+  ).length;
+  const readiness: JsonObject = {
+    schema_version: 1,
+    status: "ready",
+    mode: "fork",
+    baseUrl: handle.baseUrl,
+    runId: options.runId,
+    contractSha256: options.contract.source.semantic_sha256,
+    operationCount: options.contract.operations.length,
+    supportedOperationCount: supported,
+    credentialsPath:
+      credentials.alternatives.length > 0 ? credentialsPath : null,
+    parentCheckpointId: environment.manifest().parentCheckpointId,
+    environmentPath: path.join(options.evidenceDir, "origin.json"),
+    controlSocket: control.socketPath
+  };
+  return {
+    handle,
+    credentials,
+    credentialsPath:
+      credentials.alternatives.length > 0 ? credentialsPath : null,
+    capabilitiesPath: path.join(options.evidenceDir, "origin.json"),
+    readiness,
+    store,
+    controlDir: options.worldDir,
+    evidenceDir: options.evidenceDir,
+    environment,
+    control
+  };
+}
+
+/**
  * Export the terminal evidence of one scenario serve: the final domain
  * state and every committed semantic event, in the forms the trial
  * runner exports, so a served world leaves the same inspectable trail

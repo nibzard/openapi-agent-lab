@@ -170,10 +170,10 @@ describe("the environment owner", () => {
       );
       expect(violations).toEqual([]);
       expect(manifest.capabilities).toEqual({
-        checkpoint: "unavailable",
+        checkpoint: "available",
         reset: "unavailable",
         advanceTime: "unavailable",
-        fork: "unavailable",
+        fork: "available",
         scheduledWork: "unsupported"
       });
     } finally {
@@ -406,7 +406,6 @@ describe("environment controls", () => {
       expect(inspection["control_count"]).toBe(0);
       expect(JSON.stringify(inspection)).not.toContain("credential");
       for (const control of [
-        () => environment.checkpoint(),
         () => environment.reset(),
         () => environment.advanceTime()
       ]) {

@@ -19,7 +19,11 @@ import { replayCommand } from "./handlers/replay.ts";
 import { reportCommand } from "./handlers/report.ts";
 import { runCommand } from "./handlers/run.ts";
 import { serveCommand } from "./handlers/serve.ts";
-import { worldInspectCommand } from "./handlers/world.ts";
+import {
+  worldCheckpointCommand,
+  worldForkCommand,
+  worldInspectCommand
+} from "./handlers/world.ts";
 import { traceImportCommand } from "./handlers/trace-import.ts";
 import { studyAnalyzeCommand } from "./handlers/study-analyze.ts";
 import { studyInitCommand } from "./handlers/study-init.ts";
@@ -166,6 +170,24 @@ export const COMMANDS: readonly CommandSpec[] = [
     arguments: [],
     options: [value("world", "Control directory of the served world.")],
     handler: worldInspectCommand
+  },
+  {
+    name: "world checkpoint",
+    summary: "Checkpoint one running world through its operator socket.",
+    arguments: [],
+    options: [value("world", "Control directory of the running world.")],
+    handler: worldCheckpointCommand
+  },
+  {
+    name: "world fork",
+    summary: "Restore a checkpoint into a new foreground world.",
+    arguments: [
+      { name: "checkpoint", description: "Checkpoint directory to restore." }
+    ],
+    options: [
+      value("port", "Loopback TCP port; 0 picks a free port. Default 0.")
+    ],
+    handler: worldForkCommand
   },
   {
     name: "pack init",

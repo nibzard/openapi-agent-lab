@@ -6,21 +6,42 @@
  * listener (specification section 48.3).
  */
 
-import { stat } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { mkdir, readFile, stat } from "node:fs/promises";
 import { DatabaseSync } from "node:sqlite";
+import { request } from "node:http";
 import path from "node:path";
 
 import {
+  diagnostic,
+  EXIT_INVALID,
   EXIT_OK,
+  EXIT_UNSUPPORTED,
+  isJsonObject,
+  sha256Hex,
   stableJsonStringify,
   type ExitCode,
   type Json,
   type JsonObject
 } from "@oal/core";
 
+import { emitDiagnostics } from "../diagnostics.ts";
 import { invalidOptionValue, missingArgument } from "../usage.ts";
 import type { CommandArgs } from "../commands.ts";
 import type { Io } from "../io.ts";
+import {
+  awaitInterruption,
+  exportScenarioEvidence,
+  finalizeServeControl,
+  startForkServe
+} from "./serve.ts";
+import {
+  EnvironmentError,
+  readCheckpoint,
+  type Environment
+} from "@oal/environment";
+import { deriveManualRunSeed } from "@oal/state-store";
+import { closeSchemaWorker } from "@oal/core";
 
 /** One row of the world projection. */
 function textOf(row: Record<string, unknown>, key: string): string {
@@ -170,4 +191,238 @@ function label(row: Record<string, unknown>, key: string): string {
 function countOf(db: DatabaseSync, sql: string): number {
   const value = rowOf(db.prepare(sql).get())["n"];
   return typeof value === "number" ? value : 0;
+}
+
+/** One request against a world's operator socket. */
+function controlRequest(
+  socketPath: string,
+  method: string,
+  target: string,
+  options: { readonly body?: Json; readonly credential: string }
+): Promise<{ status: number; body: JsonObject }> {
+  return new Promise((resolve, reject) => {
+    const text = options.body === undefined ? "" : JSON.stringify(options.body);
+    const outgoing = request(
+      {
+        socketPath,
+        path: target,
+        method,
+        headers: {
+          authorization: `Bearer ${options.credential}`,
+          ...(text.length === 0
+            ? {}
+            : {
+                "content-type": "application/json",
+                "content-length": Buffer.byteLength(text).toString(10)
+              })
+        }
+      },
+      (incoming) => {
+        const chunks: Buffer[] = [];
+        incoming.on("data", (chunk: Buffer) => {
+          chunks.push(chunk);
+        });
+        incoming.on("end", () => {
+          const parsed = JSON.parse(
+            Buffer.concat(chunks).toString("utf8")
+          ) as JsonObject;
+          resolve({ status: incoming.statusCode ?? 0, body: parsed });
+        });
+      }
+    );
+    outgoing.on("error", reject);
+    if (text.length > 0) {
+      outgoing.write(text);
+    }
+    outgoing.end();
+  });
+}
+
+/** The first diagnostic code of one control envelope. */
+function envelopeCode(body: JsonObject): string {
+  const diagnostics = body["diagnostics"];
+  if (!Array.isArray(diagnostics) || diagnostics.length === 0) {
+    return "";
+  }
+  const first = diagnostics[0];
+  if (isJsonObject(first) && typeof first["code"] === "string") {
+    return first["code"];
+  }
+  return "";
+}
+
+/** `oal world checkpoint --world DIR --out DIR`: drive the live socket. */
+export async function worldCheckpointCommand(
+  args: CommandArgs,
+  io: Io
+): Promise<ExitCode> {
+  const worldFlag = args.flags.string("world");
+  if (typeof worldFlag !== "string" || worldFlag.length === 0) {
+    throw missingArgument(args.command.name, "--world");
+  }
+  const outFlag = args.flags.string("out");
+  if (typeof outFlag !== "string" || outFlag.length === 0) {
+    throw missingArgument(args.command.name, "--out");
+  }
+  const worldDir = path.resolve(args.context.cwd, worldFlag);
+  const operatorDir = path.join(worldDir, "operator");
+  const credential = (
+    await readFile(path.join(operatorDir, "operator-credential"), "utf8").catch(
+      () => null
+    )
+  )?.trim();
+  if (credential === undefined) {
+    io.stderr(
+      `No operator credential under ${operatorDir}; only a running world accepts checkpoints.`
+    );
+    return EXIT_UNSUPPORTED;
+  }
+  const answer = await controlRequest(
+    path.join(operatorDir, "control.sock"),
+    "POST",
+    "/v1/checkpoints",
+    {
+      credential,
+      body: {
+        control_id: `cli-${randomBytes(8).toString("hex")}`,
+        out: path.resolve(args.context.cwd, outFlag)
+      }
+    }
+  );
+  io.stdout(stableJsonStringify(answer.body as unknown as Json));
+  if (answer.status === 200) {
+    return EXIT_OK;
+  }
+  emitDiagnostics(io, args.context, [
+    diagnostic({
+      severity: "error",
+      phase: "preflight",
+      code: envelopeCode(answer.body) || "OAL-WORLD-CONTROL-FAILED",
+      message: `The checkpoint control answered HTTP ${answer.status.toString(10)}.`
+    })
+  ]);
+  return answer.status >= 500 ? EXIT_UNSUPPORTED : EXIT_INVALID;
+}
+
+/** `oal world fork CHECKPOINT_DIR --out NEW_DIR --port N`. */
+export async function worldForkCommand(
+  args: CommandArgs,
+  io: Io
+): Promise<ExitCode> {
+  const source = args.positionals[0];
+  if (source === undefined) {
+    throw missingArgument(args.command.name, "checkpoint");
+  }
+  const outFlag = args.flags.string("out");
+  if (typeof outFlag !== "string" || outFlag.length === 0) {
+    throw missingArgument(args.command.name, "--out");
+  }
+  const portFlag = args.flags.string("port");
+  const port = portFlag === undefined ? 0 : Number.parseInt(portFlag, 10);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    throw invalidOptionValue("--port", portFlag ?? "", "a TCP port number");
+  }
+  const checkpointDir = path.resolve(args.context.cwd, source);
+  const worldDir = path.resolve(args.context.cwd, outFlag);
+  const checkpoint = await readCheckpoint(checkpointDir).catch(
+    (cause: unknown) => {
+      if (cause instanceof EnvironmentError) {
+        emitDiagnostics(io, args.context, [
+          diagnostic({
+            severity: "error",
+            phase: "preflight",
+            code: cause.code,
+            message: cause.message
+          })
+        ]);
+        return null;
+      }
+      throw cause;
+    }
+  );
+  if (checkpoint === null) {
+    return EXIT_UNSUPPORTED;
+  }
+  const existing = await stat(worldDir).catch(() => null);
+  if (existing !== null) {
+    emitDiagnostics(io, args.context, [
+      diagnostic({
+        severity: "error",
+        phase: "preflight",
+        code: "OAL-ARTIFACT-EXISTS",
+        message: `Fork output directory ${worldDir} already exists; a fork never replaces a world.`
+      })
+    ]);
+    return EXIT_INVALID;
+  }
+  await mkdir(worldDir, { recursive: true });
+  const evidenceDir = path.join(worldDir, "evidence");
+  const runId = `fork-${defaultForkId(new Date())}`;
+  const runSeed = deriveManualRunSeed({
+    runId,
+    contractExecutionSha256:
+      checkpoint.document.frozen.contract_execution_sha256,
+    packSha256: checkpoint.document.frozen.pack_sha256,
+    scenarioSha256: sha256Hex(checkpoint.document.frozen.scenario_id),
+    backendSha256: checkpoint.document.frozen.behavior_sha256
+  });
+  const { openRestoredEnvironment } = await import("@oal/environment");
+  let environment: Environment;
+  try {
+    environment = await openRestoredEnvironment({
+      checkpoint,
+      worldId: runId,
+      databasePath: path.join(worldDir, "world.sqlite"),
+      batchId: "fork",
+      now: (): number => Date.now()
+    });
+  } catch (cause) {
+    const code =
+      cause instanceof EnvironmentError
+        ? cause.code
+        : "OAL-SCENARIO-INITIALIZE-FAILED";
+    emitDiagnostics(io, args.context, [
+      diagnostic({
+        severity: "error",
+        phase: "preflight",
+        code,
+        message: cause instanceof Error ? cause.message : String(cause)
+      })
+    ]);
+    return EXIT_UNSUPPORTED;
+  }
+  const session = await startForkServe({
+    environment,
+    contract: checkpoint.contractIr as never,
+    worldDir,
+    evidenceDir,
+    runId,
+    runSeed,
+    host: "127.0.0.1",
+    port
+  });
+  io.stdout(stableJsonStringify(session.readiness));
+  await awaitInterruption(args.context.abortSignal);
+  await exportScenarioEvidence(environment, evidenceDir);
+  await finalizeServeControl(worldDir);
+  await session.handle.close();
+  await session.control?.close();
+  await environment.close();
+  session.store.close();
+  closeSchemaWorker();
+  return EXIT_OK;
+}
+
+/** Timestamped fork identity, in the manual run id style. */
+function defaultForkId(at: Date): string {
+  const pad = (value: number, width = 2): string =>
+    value.toString(10).padStart(width, "0");
+  return [
+    at.getUTCFullYear().toString(10),
+    pad(at.getUTCMonth() + 1),
+    pad(at.getUTCDate()),
+    `${pad(at.getUTCHours())}${pad(at.getUTCMinutes())}${pad(
+      at.getUTCSeconds()
+    )}`
+  ].join("");
 }

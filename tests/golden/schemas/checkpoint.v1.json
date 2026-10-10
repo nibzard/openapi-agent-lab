@@ -61,8 +61,12 @@
         "created_sequence": 3,
         "response": {
           "status": 201,
-          "headers": { "content-type": "application/json" },
-          "body": { "id": "clip_00000001" },
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": {
+            "id": "clip_00000001"
+          },
           "logical_time": "2000-01-01T00:00:03.000Z"
         }
       }
@@ -79,5 +83,16 @@
         "relative_path": "blobs/blob_00000001"
       }
     ]
+  },
+  "frozen": {
+    "pack_id": "webclip",
+    "pack_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "scenario_id": "baseline",
+    "seed": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "behavior_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "behavior_closure_identity": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "runtime_name": "node",
+    "contract_semantic_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "contract_execution_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
   }
 }

@@ -99,6 +99,24 @@ export interface CheckpointIdempotencyEntry {
   };
 }
 
+/**
+ * The frozen inputs a restore executes without the original
+ * checkout: pack, scenario, contract, runtime, and behavior
+ * identities, plus the world seed every service derives from
+ * (section 48.4).
+ */
+export interface CheckpointFrozenComponent {
+  readonly pack_id: string;
+  readonly pack_sha256: string;
+  readonly scenario_id: string;
+  readonly seed: string;
+  readonly behavior_sha256: string;
+  readonly behavior_closure_identity: string;
+  readonly runtime_name: string;
+  readonly contract_semantic_sha256: string;
+  readonly contract_execution_sha256: string;
+}
+
 /** One referenced blob and its integrity metadata. */
 export interface CheckpointBlobReference {
   readonly blob_id: string;
@@ -132,6 +150,7 @@ export interface CheckpointDocument {
   readonly faults: CheckpointFaultsComponent;
   readonly idempotency: { entries: readonly CheckpointIdempotencyEntry[] };
   readonly blobs: { references: readonly CheckpointBlobReference[] };
+  readonly frozen: CheckpointFrozenComponent;
 }
 
 /** Input of {@link buildCheckpointDocument}. */
@@ -142,6 +161,7 @@ export interface BuildCheckpointInput {
   readonly services: CheckpointServices;
   readonly idempotency: readonly CheckpointIdempotencyEntry[];
   readonly blobs: readonly CheckpointBlobReference[];
+  readonly frozen: CheckpointFrozenComponent;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -217,6 +237,38 @@ function validateStream(value: unknown, what: string): CheckpointRandomStream {
   DeterministicPrng.fromState(state);
   const namespace = requireLabel(value["namespace"], `${what}.namespace`);
   return { namespace, algorithm, state };
+}
+
+/** Validate the frozen identity component. */
+function validateFrozen(value: unknown): CheckpointFrozenComponent {
+  if (!isRecord(value)) {
+    throw checkpointIncomplete("The frozen component is absent.", {
+      component: "frozen"
+    });
+  }
+  return {
+    pack_id: requireLabel(value["pack_id"], "frozen.pack_id"),
+    pack_sha256: requireLabel(value["pack_sha256"], "frozen.pack_sha256"),
+    scenario_id: requireLabel(value["scenario_id"], "frozen.scenario_id"),
+    seed: requireLabel(value["seed"], "frozen.seed"),
+    behavior_sha256: requireLabel(
+      value["behavior_sha256"],
+      "frozen.behavior_sha256"
+    ),
+    behavior_closure_identity: requireLabel(
+      value["behavior_closure_identity"],
+      "frozen.behavior_closure_identity"
+    ),
+    runtime_name: requireLabel(value["runtime_name"], "frozen.runtime_name"),
+    contract_semantic_sha256: requireLabel(
+      value["contract_semantic_sha256"],
+      "frozen.contract_semantic_sha256"
+    ),
+    contract_execution_sha256: requireLabel(
+      value["contract_execution_sha256"],
+      "frozen.contract_execution_sha256"
+    )
+  };
 }
 
 /** Validate the header every document carries. */
@@ -540,6 +592,7 @@ export function buildCheckpointDocument(
   const faults = validateFaults(input.services.faults);
   const idempotency = validateIdempotency({ entries: input.idempotency });
   const blobs = validateBlobs({ references: input.blobs });
+  const frozen = validateFrozen(input.frozen);
   if (streams.length === 0) {
     throw checkpointIncomplete(
       "A checkpoint must carry at least one random stream position.",
@@ -557,7 +610,8 @@ export function buildCheckpointDocument(
     random: { streams },
     faults,
     idempotency: { entries: idempotency },
-    blobs: { references: blobs }
+    blobs: { references: blobs },
+    frozen
   };
 }
 
@@ -603,7 +657,8 @@ export function parseCheckpointDocument(value: Json): CheckpointDocument {
     random: { streams },
     faults,
     idempotency: { entries: validateIdempotency(value["idempotency"]) },
-    blobs: { references: validateBlobs(value["blobs"]) }
+    blobs: { references: validateBlobs(value["blobs"]) },
+    frozen: validateFrozen(value["frozen"])
   };
 }
 

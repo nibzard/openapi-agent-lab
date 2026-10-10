@@ -141,6 +141,29 @@ no credentials:
 oal world inspect --world .oal/control/serve/RUN_ID --format json
 ```
 
+Take a checkpoint of a running world through its operator socket:
+
+```sh
+oal world checkpoint --world .oal/control/serve/RUN_ID --out checkpoints/chk-1
+```
+
+The checkpoint is a private directory: an encrypted payload under the
+checkpoint's own key, the key in `private/key`, the referenced blob bytes,
+the frozen behavior tree, and the compiled contract. A partial write never
+becomes a valid checkpoint, and the output directory must be new.
+
+Restore a checkpoint into a new world that serves in the foreground:
+
+```sh
+oal world fork checkpoints/chk-1 --out worlds/fork-1 --port 4011
+```
+
+The fork keeps the checkpoint's domain identifiers, random streams, logical
+time, and replay entries, and needs neither the source process nor its pack
+directory. It is a new world: a new identity, new credentials, and evidence
+that starts with an origin record instead of the parent's events. Sibling
+forks of one checkpoint stay isolated.
+
 Identical inputs and seed produce identical response bytes. `oal replay`
 depends on this property. See [the quickstart](quickstart.md) for a served
 request example.

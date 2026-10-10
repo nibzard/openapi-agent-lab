@@ -38,6 +38,18 @@ afterEach(async () => {
 const SEED = "a".repeat(64);
 const WORLD_ID = "webclip-serve-01";
 
+const FROZEN = {
+  pack_id: "webclip",
+  pack_sha256: "1".repeat(64),
+  scenario_id: "baseline",
+  seed: SEED,
+  behavior_sha256: "2".repeat(64),
+  behavior_closure_identity: "3".repeat(64),
+  runtime_name: "node",
+  contract_semantic_sha256: "4".repeat(64),
+  contract_execution_sha256: "5".repeat(64)
+};
+
 /** Assert that `fn` throws the stable code, not just any error. */
 function expectCode(fn: () => unknown, code: string): void {
   try {
@@ -114,6 +126,7 @@ describe("checkpoint documents", () => {
 
     const document = source.exportCheckpoint({
       checkpointId: "chk_00000001",
+      frozen: FROZEN,
       services: {
         clock: { now_ms: 946684800_007, tick_ms: 1 },
         ids: { positions: { clip: 3 } },
@@ -207,6 +220,7 @@ describe("checkpoint documents", () => {
       expect(world?.originCheckpointId).toBe("chk_00000001");
       const reexported = target.exportCheckpoint({
         checkpointId: "chk_00000002",
+        frozen: FROZEN,
         services: {
           clock: { now_ms: parsed.clock.now_ms, tick_ms: parsed.clock.tick_ms },
           ids: { positions: { ...parsed.ids.positions } },
@@ -232,6 +246,7 @@ describe("checkpoint documents", () => {
       schema_version: 1,
       kind: "Checkpoint",
       checkpoint_id: "chk_00000001",
+      frozen: FROZEN,
       world: {
         world_id: WORLD_ID,
         generation: 1,
@@ -280,7 +295,8 @@ describe("checkpoint documents", () => {
         }
       },
       idempotency: [],
-      blobs: []
+      blobs: [],
+      frozen: FROZEN
     };
     expectCode(
       () =>
@@ -308,6 +324,7 @@ describe("checkpoint documents", () => {
     const store = openSourceWorld();
     const document = store.exportCheckpoint({
       checkpointId: "chk_00000001",
+      frozen: FROZEN,
       services: {
         clock: { now_ms: 1, tick_ms: 1 },
         ids: { positions: {} },
@@ -366,6 +383,7 @@ describe("checkpoint documents", () => {
     const source = openSourceWorld();
     const document = source.exportCheckpoint({
       checkpointId: "chk_00000001",
+      frozen: FROZEN,
       services: {
         clock: { now_ms: 1, tick_ms: 1 },
         ids: { positions: {} },
