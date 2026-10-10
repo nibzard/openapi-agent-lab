@@ -11,7 +11,7 @@
 
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -190,4 +190,64 @@ describe("the installable archives", () => {
     );
     expect(manifest).toContain("id: demo-pack");
   }, 240_000);
+
+  it("runs the external template end to end through the installed executable", async () => {
+    const out = await mkdtemp(path.join(tmpdir(), "oal-archives-"));
+    scratch.push(out);
+    const { tarballs } = await buildArchives(out);
+    const app = await mkdtemp(path.join(tmpdir(), "oal-archive-app-"));
+    scratch.push(app);
+    await writeFile(
+      path.join(app, "package.json"),
+      `${JSON.stringify(
+        { name: "archive-template-app", private: true, type: "module" },
+        null,
+        2
+      )}\n`
+    );
+    await run(
+      "npm",
+      [
+        "install",
+        "--offline",
+        "--no-audit",
+        "--no-fund",
+        "--loglevel=error",
+        ...tarballs
+      ],
+      { cwd: app }
+    );
+    const bin = path.join(app, "node_modules", ".bin", "oal");
+    // The tutorial's first step: copy the template beside the
+    // install. Its behavior resolves the public packages through the
+    // installed node_modules, never through this workspace.
+    const packDir = path.join(app, "external-demo");
+    await cp(
+      path.resolve(import.meta.dirname, "fixtures/external-demo"),
+      packDir,
+      { recursive: true }
+    );
+
+    const validate = await run(bin, ["pack", "validate", packDir], {
+      cwd: app
+    });
+    expect(validate.stdout).toContain("pack: external-demo");
+
+    const reportPath = path.join(app, "corpus-report.json");
+    const corpus = await run(
+      bin,
+      ["corpus", "run", packDir, "--corpus", "demo-core", "--out", reportPath],
+      { cwd: app }
+    );
+    expect(corpus.stdout).toContain("Corpus report written");
+    const report = JSON.parse(await readFile(reportPath, "utf8")) as {
+      summary: Record<string, number>;
+    };
+    expect(report.summary).toEqual({
+      passed: 4,
+      failed: 0,
+      skipped: 0,
+      error: 0
+    });
+  }, 300_000);
 });

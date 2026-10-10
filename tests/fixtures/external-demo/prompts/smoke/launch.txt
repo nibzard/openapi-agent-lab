@@ -1,0 +1,1 @@
+Read the contract document in this workspace, then complete the task in TASK.md.

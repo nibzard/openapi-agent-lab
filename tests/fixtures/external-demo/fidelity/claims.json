@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "kind": "FidelityClaims",
+  "pack_id": "external-demo",
+  "provider": {
+    "name": "none",
+    "api_version": "1",
+    "base_url": "local://external-demo"
+  },
+  "claims": [
+    {
+      "id": "counter-create",
+      "classification": "synthetic",
+      "operations": ["path:POST /counters"],
+      "references": ["case:create-read", "case:reset-clears-the-world"],
+      "source_url": "local://external-demo/contract/openapi.json",
+      "retrieved_at": "2026-10-10",
+      "limitations": "The template is synthetic: it models no real service, so no provider observation can upgrade this claim."
+    },
+    {
+      "id": "counter-read",
+      "classification": "synthetic",
+      "operations": ["path:GET /counters/{name}"],
+      "references": ["case:create-read"],
+      "source_url": "local://external-demo/contract/openapi.json",
+      "retrieved_at": "2026-10-10",
+      "limitations": "Synthetic template surface; the 404 boundary is pinned by the corpus, not by provider behavior."
+    },
+    {
+      "id": "counter-increment",
+      "classification": "synthetic",
+      "operations": ["path:POST /counters/{name}/increment"],
+      "references": ["case:increment-transition", "case:increment-missing"],
+      "source_url": "local://external-demo/contract/openapi.json",
+      "retrieved_at": "2026-10-10",
+      "limitations": "The one transition moves value by exactly one; the event counter.incremented rides every transition."
+    }
+  ]
+}

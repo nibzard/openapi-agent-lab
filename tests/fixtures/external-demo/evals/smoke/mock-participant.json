@@ -1,0 +1,40 @@
+{
+  "requests": [
+    {
+      "path": "/counters",
+      "method": "POST",
+      "body": {
+        "name": "alpha"
+      },
+      "expectStatus": 201,
+      "credentialName": "OAL_AUTH_BEARER"
+    },
+    {
+      "path": "/counters/alpha/increment",
+      "method": "POST",
+      "expectStatus": 200,
+      "credentialName": "OAL_AUTH_BEARER"
+    },
+    {
+      "path": "/counters/alpha/increment",
+      "method": "POST",
+      "expectStatus": 200,
+      "credentialName": "OAL_AUTH_BEARER"
+    },
+    {
+      "path": "/counters/alpha",
+      "method": "GET",
+      "expectStatus": 200,
+      "credentialName": "OAL_AUTH_BEARER"
+    }
+  ],
+  "finalReport": {
+    "value": 2,
+    "statuses": [
+      201,
+      200,
+      200,
+      200
+    ]
+  }
+}

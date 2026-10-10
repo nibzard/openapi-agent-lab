@@ -352,6 +352,14 @@ Pass a selector to probe a specific adapter:
 oal doctor --agent codex-cli
 ```
 
+## Author a stateful pack outside the workspace
+
+Install the archives built by `pnpm run archives`, copy the template
+from `tests/fixtures/external-demo`, and walk the full loop in the
+[external pack tutorial](tutorial-external-pack.md): validate, run
+the corpus, checkpoint and fork the world, and run a scripted
+participant through the installed executable.
+
 ## Where to go next
 
 - [Usage](usage.md): a reference walkthrough of the local product.

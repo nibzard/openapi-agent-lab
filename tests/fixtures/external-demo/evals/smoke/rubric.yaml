@@ -1,0 +1,33 @@
+rubric_version: 1
+id: smoke
+description: >-
+  Template rubric. It asserts the final report matches the pack result
+  schema and that the participant actually drove the one transition.
+scoring:
+  method: weighted_binary
+  pass_threshold: 1
+checks:
+  - id: structured-result
+    kind: json_schema
+    value: report
+    schema: schemas/result.schema.json
+    weight: 1
+    required: true
+    evidence_class: participant_observable
+    description: The final report matches the pack result schema.
+  - id: transition-exercised
+    kind: event
+    match: counted
+    where: >-
+      event.request.method == "POST" &&
+      event.request.path_parameters.name == "alpha" &&
+      event.operation.key == "path:POST /counters/{name}/increment"
+    min_count: 2
+    max_count: 2
+    weight: 1
+    required: true
+    evidence_class: participant_observable
+    description: >-
+      The participant drove the one transition exactly twice, so the
+      read after it must observe the value two.
+signals: []

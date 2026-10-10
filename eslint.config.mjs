@@ -12,7 +12,10 @@ export default tseslint.config(
       ".claude/**",
       // Pack behavior modules sit outside every tsconfig project; the
       // typecheck still covers them through the tests that import them.
-      "packs/**"
+      "packs/**",
+      // The external authoring template is pack content, not workspace
+      // code: its behavior module follows the same rule as packs.
+      "tests/fixtures/**"
     ]
   },
   js.configs.recommended,

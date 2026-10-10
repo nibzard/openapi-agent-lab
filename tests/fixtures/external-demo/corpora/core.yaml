@@ -1,0 +1,111 @@
+# The external-demo behavioral corpus: the smallest set that pins
+# the template's one transition, its events' precondition, the reset
+# control, and the missing-resource boundary.
+api_version: 1
+id: demo-core
+version: 1.0.0
+scenario: baseline
+inputs: []
+cases:
+  - id: create-read
+    claim_ids: [counter-create, counter-read]
+    scope: black_box
+    steps:
+      - id: create
+        request:
+          operation_id: create_counter
+          body:
+            name: alpha
+        assert:
+          - op: status
+            expected: 201
+          - op: equals
+            actual: { source: body, pointer: /value }
+            expected: 0
+      - id: read
+        request:
+          operation_id: get_counter
+          parameters:
+            path:
+              name: alpha
+        assert:
+          - op: status
+            expected: 200
+          - op: equals
+            actual: { source: body, pointer: /value }
+            expected: 0
+  - id: increment-transition
+    claim_ids: [counter-increment]
+    scope: black_box
+    steps:
+      - id: create
+        request:
+          operation_id: create_counter
+          body:
+            name: beta
+        assert:
+          - op: status
+            expected: 201
+      - id: increment
+        request:
+          operation_id: increment_counter
+          parameters:
+            path:
+              name: beta
+        assert:
+          - op: status
+            expected: 200
+          - op: equals
+            actual: { source: body, pointer: /value }
+            expected: 1
+      - id: read-after
+        request:
+          operation_id: get_counter
+          parameters:
+            path:
+              name: beta
+        assert:
+          - op: status
+            expected: 200
+          - op: equals
+            actual: { source: body, pointer: /value }
+            expected: 1
+  - id: reset-clears-the-world
+    claim_ids: [counter-create]
+    # The reset control belongs to the world, not the contract, so
+    # only the emulator can run this case.
+    scope: emulator_only
+    steps:
+      - id: create
+        request:
+          operation_id: create_counter
+          body:
+            name: gamma
+        assert:
+          - op: status
+            expected: 201
+      - id: reset
+        operator:
+          kind: reset
+      - id: read-after-reset
+        request:
+          operation_id: get_counter
+          parameters:
+            path:
+              name: gamma
+        assert:
+          - op: status
+            expected: 404
+  - id: increment-missing
+    claim_ids: [counter-increment]
+    scope: black_box
+    steps:
+      - id: increment-unknown
+        request:
+          operation_id: increment_counter
+          parameters:
+            path:
+              name: nobody
+        assert:
+          - op: status
+            expected: 404

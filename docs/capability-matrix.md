@@ -41,6 +41,8 @@ that owns the behavior.
 | ParticipantSurfaceManifest | Required MVP | Runner preflight and verification |
 | Semantic event stream | Required for stateful packs | `@oal/evidence` semantic stream |
 | Deterministic rubric | Required MVP | `@oal/evaluator` |
+| Behavioral corpus on local and provider targets | Required for stateful packs | `@oal/corpus`; `oal corpus run --target local\|github` and `oal corpus verify`, covered end to end without credentials |
+| External authoring template | Required for stateful packs | `tests/fixtures/external-demo` serves, forks, runs its corpus and scripted participant through the installed archives |
 | Model judge | Optional later | Not implemented |
 | Trusted custom evaluator | Optional later | Disabled in safe mode |
 | Direct tools | Post-MVP reserved | `@oal/tools` naming and envelope; `oal run --exposure direct-tools` refuses (plan F6) |

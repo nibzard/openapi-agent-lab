@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlab.dev/packs/external-demo/result.v1.json",
+  "title": "Smoke result",
+  "type": "object",
+  "required": ["value", "statuses"],
+  "properties": {
+    "value": { "type": "integer", "minimum": 0 },
+    "statuses": {
+      "type": "array",
+      "minItems": 3,
+      "items": { "type": "integer" }
+    }
+  },
+  "additionalProperties": false
+}
