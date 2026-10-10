@@ -239,11 +239,21 @@
       "id": "SE-P3-03",
       "phase": "P3",
       "requirement": "SPEC 48.5 \u00b7 SPEC 48.6 \u00b7 plan P3",
-      "status": "pending",
-      "tests": [],
-      "evidence": null,
-      "depends_on": ["SE-P3-02"],
-      "remaining": "Add Webclip corpus cases for lifecycle, ordering, distinct resources, deletion, quota, and representation, with negative doubles."
+      "status": "complete",
+      "tests": [
+        "packages/testkit/src/webclip-corpus.test.ts > passes every case against the stateful backend",
+        "packages/testkit/src/webclip-corpus.test.ts > fails a stateless double at the first persisted read",
+        "packages/testkit/src/webclip-corpus.test.ts > fails a repeated-id double at the distinctness assertion",
+        "packages/testkit/src/webclip-corpus.test.ts > fails a swapped-resource double at the linked read",
+        "packages/testkit/src/webclip-corpus.test.ts > fails an ignored-deletion double at the read-after-delete",
+        "packages/testkit/src/webclip-corpus.test.ts > fails a wrong-representation double at the media type",
+        "packages/testkit/src/webclip-corpus.test.ts > fails a faithful-free double nowhere"
+      ],
+      "evidence": {
+        "commit": "f6f4d1d",
+        "command": "pnpm exec vitest run packages/testkit/src/webclip-corpus.test.ts"
+      },
+      "depends_on": ["SE-P3-02"]
     },
     {
       "id": "SE-P4-01",
