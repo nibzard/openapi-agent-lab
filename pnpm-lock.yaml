@@ -499,6 +499,9 @@ importers:
       '@oal/core':
         specifier: workspace:*
         version: link:../core
+      '@oal/corpus':
+        specifier: workspace:*
+        version: link:../corpus
       '@oal/evaluator':
         specifier: workspace:*
         version: link:../evaluator

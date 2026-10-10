@@ -13,6 +13,7 @@
     "@oal/config": "workspace:*",
     "@oal/contract-ir": "workspace:*",
     "@oal/core": "workspace:*",
+    "@oal/corpus": "workspace:*",
     "@oal/evaluator": "workspace:*",
     "@oal/evidence": "workspace:*",
     "@oal/gateway": "workspace:*",

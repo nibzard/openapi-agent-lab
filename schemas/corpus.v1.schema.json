@@ -23,6 +23,10 @@
       "minLength": 1,
       "description": "Scenario the cases target."
     },
+    "description": {
+      "type": "string",
+      "description": "What the corpus covers; documentation only."
+    },
     "inputs": {
       "type": "array",
       "description": "Typed values every case receives by name.",

@@ -4,6 +4,12 @@ kind: Pack
 metadata:
   id: webclip
   name: webclip
+  # 0.5.0 adds the pack's first behavioral corpus under corpora/.
+  # The cases are portable data: lifecycle, ordering, distinct
+  # resources, deletion, quota, and content negotiation, with no
+  # scripts and no emulator-only steps. Behavior bytes are unchanged;
+  # the pack digest moves with the new manifest reference.
+  #
   # 0.4.0 moves the behavior module's imports to the declared public
   # packages @oal/behavior-api and @oal/behavior-runtime through the
   # pack's package manifest. Domain semantics are unchanged from
@@ -22,7 +28,7 @@ metadata:
   # full report cross-checks, and a non-scoring comprehension probe.
   # Evidence and scores recorded under 0.1.0 stay under 0.1.0; any
   # regrading of them is labeled derived.
-  version: 0.4.0
+  version: 0.5.0
   description: >-
     A greenfield pack that demonstrates the friction-measurement loop
     on a new API.
@@ -139,5 +145,9 @@ evals:
 
 scenarios:
   - id: baseline
+
+corpora:
+  - id: webclip-core
+    source: corpora/core.yaml
 
 extensions: {}

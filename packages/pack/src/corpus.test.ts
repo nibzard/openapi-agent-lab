@@ -313,6 +313,26 @@ describe("parseCorpus accepts", () => {
     expect(parsed.cases[0]?.steps[2]?.body.kind).toBe("operator");
   });
 
+  it("lets an assertion use the binding its own step captured", () => {
+    const corpus = baseCorpus();
+    const first = firstCase(corpus);
+    const create = (first["steps"] as JsonObject[])[0] as JsonObject;
+    create["assert"] = [
+      { op: "status", expected: 201 },
+      {
+        op: "not_equals",
+        actual: { binding: "create.number" },
+        expected: "clip_00000002"
+      }
+    ];
+    const parsed = parseCorpus(corpus);
+    expect(parsed.cases[0]?.steps[0]?.assertions[1]?.actual).toEqual({
+      kind: "binding",
+      step: "create",
+      name: "number"
+    });
+  });
+
   it("keeps typed references inside nested body values", () => {
     const corpus = baseCorpus();
     const first = firstCase(corpus);

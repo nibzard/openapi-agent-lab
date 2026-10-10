@@ -44,7 +44,7 @@ afterAll(async () => {
 
 /** The corpus the test pack declares: every engine behavior at once. */
 const CORPUS_YAML = `api_version: 1
-id: webclip-core
+id: engine-checks
 version: 1.0.0
 scenario: baseline
 inputs:
@@ -221,12 +221,18 @@ async function corpusPack(): Promise<{ cwd: string; packDir: string }> {
     "dir"
   );
   await mkdir(path.join(packDir, "corpora"), { recursive: true });
-  await writeFile(path.join(packDir, "corpora", "core.yaml"), CORPUS_YAML);
+  await writeFile(path.join(packDir, "corpora", "engine.yaml"), CORPUS_YAML);
+  // The pack ships webclip-core already; the fixture swaps in the
+  // engine-checks corpus that exercises poll and operator paths.
   const manifest = await readFile(path.join(packDir, "pack.yaml"), "utf8");
-  await writeFile(
-    path.join(packDir, "pack.yaml"),
-    `${manifest}\ncorpora:\n  - id: webclip-core\n    source: corpora/core.yaml\n`
+  const swapped = manifest.replace(
+    "corpora:\n  - id: webclip-core\n    source: corpora/core.yaml",
+    "corpora:\n  - id: engine-checks\n    source: corpora/engine.yaml"
   );
+  if (swapped === manifest) {
+    throw new Error("The webclip manifest no longer declares its corpus.");
+  }
+  await writeFile(path.join(packDir, "pack.yaml"), swapped);
   return { cwd, packDir };
 }
 
@@ -258,7 +264,7 @@ describe("oal corpus", () => {
     const summary = JSON.parse(io.stdoutText()) as JsonObject;
     expect(summary["validated"]).toBe(1);
     expect(summary["corpora"]).toEqual([
-      { id: "webclip-core", cases: 5, source: "corpora/core.yaml" }
+      { id: "engine-checks", cases: 5, source: "corpora/engine.yaml" }
     ]);
   });
 
@@ -270,7 +276,7 @@ describe("oal corpus", () => {
         "run",
         packDir,
         "--corpus",
-        "webclip-core",
+        "engine-checks",
         "--input",
         "clip_url=https://example.com/essay"
       ],
@@ -388,7 +394,7 @@ describe("oal corpus", () => {
   it("refuses to run when an input value is missing", async () => {
     const { cwd, packDir } = await corpusPack();
     const { code, io } = await run(
-      ["corpus", "run", packDir, "--corpus", "webclip-core"],
+      ["corpus", "run", packDir, "--corpus", "engine-checks"],
       cwd
     );
     expect(code).toBe(2);
@@ -404,7 +410,7 @@ describe("oal corpus", () => {
         "run",
         packDir,
         "--corpus",
-        "webclip-core",
+        "engine-checks",
         "--input",
         "clip_url=https://example.com/essay",
         "--out",

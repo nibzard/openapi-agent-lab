@@ -469,10 +469,34 @@ function caseOf(
   );
 
   // Identifiers are unique across the whole case, and bindings only
-  // point backwards: a reference may use what setup or an earlier
-  // step established, never a later one (section 48.5).
+  // point backwards: a value reference may use what setup or an
+  // earlier step established, never a later one. An assertion may
+  // also use the bindings its own step captured, because bindings
+  // exist before assertions run (section 48.5). Cleanup steps never
+  // establish bindings.
   const seenSteps = new Set<string>();
   const established = new Set<string>();
+  const check = (
+    step: CorpusStep,
+    references: readonly CorpusOperand[],
+    phase: "steps" | "cleanup"
+  ): void => {
+    for (const reference of references) {
+      if (reference.kind === "input" && !inputs.includes(reference.name)) {
+        fail(
+          `Step ${JSON.stringify(step.id)} uses input ${JSON.stringify(reference.name)}, which the corpus does not declare.`
+        );
+      }
+      if (
+        reference.kind === "binding" &&
+        !established.has(`${reference.step}.${reference.name}`)
+      ) {
+        fail(
+          `${phase === "cleanup" ? "Cleanup step" : "Step"} ${JSON.stringify(step.id)} binds ${JSON.stringify(`${reference.step}.${reference.name}`)}, which no earlier step established.`
+        );
+      }
+    }
+  };
   for (const step of [...setup, ...steps]) {
     if (seenSteps.has(step.id)) {
       fail(
@@ -485,24 +509,11 @@ function caseOf(
         `Step ${JSON.stringify(step.id)} operates the world; only emulator_only cases may (section 48.5).`
       );
     }
-    for (const reference of referencesOf(step)) {
-      if (reference.kind === "input" && !inputs.includes(reference.name)) {
-        fail(
-          `Step ${JSON.stringify(step.id)} uses input ${JSON.stringify(reference.name)}, which the corpus does not declare.`
-        );
-      }
-      if (
-        reference.kind === "binding" &&
-        !established.has(`${reference.step}.${reference.name}`)
-      ) {
-        fail(
-          `Step ${JSON.stringify(step.id)} binds ${JSON.stringify(`${reference.step}.${reference.name}`)}, which no earlier step established.`
-        );
-      }
-    }
+    check(step, valueReferencesOf(step), "steps");
     for (const name of Object.keys(step.bind)) {
       established.add(`${step.id}.${name}`);
     }
+    check(step, assertionReferencesOf(step), "steps");
   }
   for (const step of cleanup) {
     if (seenSteps.has(step.id)) {
@@ -516,21 +527,8 @@ function caseOf(
         `Step ${JSON.stringify(step.id)} operates the world; only emulator_only cases may (section 48.5).`
       );
     }
-    for (const reference of referencesOf(step)) {
-      if (reference.kind === "input" && !inputs.includes(reference.name)) {
-        fail(
-          `Step ${JSON.stringify(step.id)} uses input ${JSON.stringify(reference.name)}, which the corpus does not declare.`
-        );
-      }
-      if (
-        reference.kind === "binding" &&
-        !established.has(`${reference.step}.${reference.name}`)
-      ) {
-        fail(
-          `Cleanup step ${JSON.stringify(step.id)} binds ${JSON.stringify(`${reference.step}.${reference.name}`)}, which no earlier step established.`
-        );
-      }
-    }
+    check(step, valueReferencesOf(step), "cleanup");
+    check(step, assertionReferencesOf(step), "cleanup");
   }
 
   return {
@@ -543,8 +541,8 @@ function caseOf(
   };
 }
 
-/** Every operand reference one step makes. */
-function referencesOf(step: CorpusStep): CorpusOperand[] {
+/** The references inside request values: parameters and body. */
+function valueReferencesOf(step: CorpusStep): CorpusOperand[] {
   const references: CorpusOperand[] = [];
   const walk = (value: Json): void => {
     if (Array.isArray(value)) {
@@ -577,6 +575,12 @@ function referencesOf(step: CorpusStep): CorpusOperand[] {
   if (step.body.kind !== "operator" && step.body.body !== undefined) {
     walk(step.body.body);
   }
+  return references;
+}
+
+/** The input and binding references inside assertions. */
+function assertionReferencesOf(step: CorpusStep): CorpusOperand[] {
+  const references: CorpusOperand[] = [];
   for (const assertion of step.assertions) {
     for (const operand of [assertion.expected, assertion.actual]) {
       if (

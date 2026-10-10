@@ -1,0 +1,429 @@
+api_version: 1
+id: webclip-core
+version: "1.0.0"
+scenario: baseline
+description: >-
+  Portable behavioral cases for the webclip scenario (SPEC section
+  48.5). Every case is black box: it drives the public operations and
+  asserts what any faithful stateful backend must show. Negative
+  doubles fail these cases at the named assertions.
+inputs:
+  - name: essay_url
+    description: Page the markdown clip stores.
+  - name: dashboard_url
+    description: Page the image clip stores.
+cases:
+  - id: clip-lifecycle
+    claim_ids: [webclip-lifecycle]
+    scope: black_box
+    description: A clip answers reads through its whole lifecycle.
+    steps:
+      - id: create
+        request:
+          operation_id: create_clip
+          body:
+            url: { input: essay_url }
+            format: markdown
+        bind:
+          id: { source: body, pointer: /id }
+        assert:
+          - op: status
+            expected: 201
+      - id: read-pending
+        request:
+          operation_id: get_clip
+          parameters:
+            path:
+              clipId: { binding: create.id }
+        assert:
+          - op: status
+            expected: 200
+          - op: equals
+            actual: { source: body, pointer: /status }
+            expected: pending
+      - id: render
+        request:
+          operation_id: render_clip
+          parameters:
+            path:
+              clipId: { binding: create.id }
+        assert:
+          - op: status
+            expected: 200
+          - op: equals
+            actual: { source: body, pointer: /clipId }
+            expected: { binding: create.id }
+          - op: equals
+            actual: { source: body, pointer: /status }
+            expected: rendered
+      - id: read-rendered
+        request:
+          operation_id: get_clip
+          parameters:
+            path:
+              clipId: { binding: create.id }
+        assert:
+          - op: status
+            expected: 200
+          - op: equals
+            actual: { source: body, pointer: /status }
+            expected: rendered
+    cleanup:
+      - id: remove
+        request:
+          operation_id: delete_clip
+          parameters:
+            path:
+              clipId: { binding: create.id }
+        assert:
+          - op: status
+            expected: 204
+
+  - id: distinct-clips
+    claim_ids: [webclip-distinct-resources]
+    scope: black_box
+    description: Two creations return two clips, each reading its own page.
+    steps:
+      - id: create-essay
+        request:
+          operation_id: create_clip
+          body:
+            url: { input: essay_url }
+            format: markdown
+        bind:
+          id: { source: body, pointer: /id }
+        assert:
+          - op: status
+            expected: 201
+      - id: create-dashboard
+        request:
+          operation_id: create_clip
+          body:
+            url: { input: dashboard_url }
+            format: image
+        bind:
+          id: { source: body, pointer: /id }
+        assert:
+          - op: status
+            expected: 201
+          - op: not_equals
+            actual: { binding: create-dashboard.id }
+            expected: { binding: create-essay.id }
+      - id: read-essay
+        request:
+          operation_id: get_clip
+          parameters:
+            path:
+              clipId: { binding: create-essay.id }
+        assert:
+          - op: status
+            expected: 200
+          - op: equals
+            actual: { source: body, pointer: /url }
+            expected: { input: essay_url }
+      - id: read-dashboard
+        request:
+          operation_id: get_clip
+          parameters:
+            path:
+              clipId: { binding: create-dashboard.id }
+        assert:
+          - op: status
+            expected: 200
+          - op: equals
+            actual: { source: body, pointer: /url }
+            expected: { input: dashboard_url }
+    cleanup:
+      - id: remove-essay
+        request:
+          operation_id: delete_clip
+          parameters:
+            path:
+              clipId: { binding: create-essay.id }
+        assert:
+          - op: status
+            expected: 204
+      - id: remove-dashboard
+        request:
+          operation_id: delete_clip
+          parameters:
+            path:
+              clipId: { binding: create-dashboard.id }
+        assert:
+          - op: status
+            expected: 204
+
+  - id: list-order
+    claim_ids: [webclip-ordering]
+    scope: black_box
+    description: The list serves live clips newest first.
+    steps:
+      - id: create-first
+        request:
+          operation_id: create_clip
+          body:
+            url: { input: essay_url }
+            format: markdown
+        bind:
+          id: { source: body, pointer: /id }
+        assert:
+          - op: status
+            expected: 201
+      - id: create-second
+        request:
+          operation_id: create_clip
+          body:
+            url: { input: dashboard_url }
+            format: image
+        bind:
+          id: { source: body, pointer: /id }
+        assert:
+          - op: status
+            expected: 201
+      - id: list
+        request:
+          operation_id: list_clips
+          parameters:
+            query:
+              limit: 10
+        assert:
+          - op: status
+            expected: 200
+          - op: length
+            actual: { source: body, pointer: /items }
+            expected: 2
+          - op: equals
+            actual: { source: body, pointer: /items/0/id }
+            expected: { binding: create-second.id }
+          - op: equals
+            actual: { source: body, pointer: /items/1/id }
+            expected: { binding: create-first.id }
+    cleanup:
+      - id: remove-first
+        request:
+          operation_id: delete_clip
+          parameters:
+            path:
+              clipId: { binding: create-first.id }
+        assert:
+          - op: status
+            expected: 204
+      - id: remove-second
+        request:
+          operation_id: delete_clip
+          parameters:
+            path:
+              clipId: { binding: create-second.id }
+        assert:
+          - op: status
+            expected: 204
+
+  - id: delete-then-gone
+    claim_ids: [webclip-deletion]
+    scope: black_box
+    description: A deleted clip answers 404 on every later read.
+    steps:
+      - id: create
+        request:
+          operation_id: create_clip
+          body:
+            url: { input: essay_url }
+            format: markdown
+        bind:
+          id: { source: body, pointer: /id }
+        assert:
+          - op: status
+            expected: 201
+      - id: remove
+        request:
+          operation_id: delete_clip
+          parameters:
+            path:
+              clipId: { binding: create.id }
+        assert:
+          - op: status
+            expected: 204
+      - id: read-deleted
+        request:
+          operation_id: get_clip
+          parameters:
+            path:
+              clipId: { binding: create.id }
+        assert:
+          - op: status
+            expected: 404
+
+  - id: quota-counts-live-clips
+    claim_ids: [webclip-quota]
+    scope: black_box
+    description: The account counts live clips and drops the deleted one.
+    steps:
+      - id: account-empty
+        request:
+          operation_id: get_account
+        assert:
+          - op: status
+            expected: 200
+          - op: equals
+            actual: { source: body, pointer: /clips_used }
+            expected: 0
+      - id: create
+        request:
+          operation_id: create_clip
+          body:
+            url: { input: essay_url }
+            format: markdown
+        bind:
+          id: { source: body, pointer: /id }
+        assert:
+          - op: status
+            expected: 201
+      - id: account-one
+        request:
+          operation_id: get_account
+        assert:
+          - op: status
+            expected: 200
+          - op: equals
+            actual: { source: body, pointer: /clips_used }
+            expected: 1
+      - id: remove
+        request:
+          operation_id: delete_clip
+          parameters:
+            path:
+              clipId: { binding: create.id }
+        assert:
+          - op: status
+            expected: 204
+      - id: account-empty-again
+        request:
+          operation_id: get_account
+        assert:
+          - op: status
+            expected: 200
+          - op: equals
+            actual: { source: body, pointer: /clips_used }
+            expected: 0
+
+  - id: content-negotiation
+    claim_ids: [webclip-representation]
+    scope: black_box
+    description: The stored page serves its own representation, never a refused one.
+    steps:
+      - id: create
+        request:
+          operation_id: create_clip
+          body:
+            url: { input: essay_url }
+            format: markdown
+        bind:
+          id: { source: body, pointer: /id }
+        assert:
+          - op: status
+            expected: 201
+      - id: render
+        request:
+          operation_id: render_clip
+          parameters:
+            path:
+              clipId: { binding: create.id }
+        assert:
+          - op: status
+            expected: 200
+      - id: refuse-svg
+        request:
+          operation_id: get_clip_content
+          parameters:
+            path:
+              clipId: { binding: create.id }
+            header:
+              Accept: image/svg+xml
+        assert:
+          - op: status
+            expected: 406
+      - id: read-markdown
+        request:
+          operation_id: get_clip_content
+          parameters:
+            path:
+              clipId: { binding: create.id }
+        bind:
+          media_type: { source: headers, pointer: /content-type }
+        assert:
+          - op: status
+            expected: 200
+          - op: equals
+            actual: { binding: read-markdown.media_type }
+            expected: text/markdown
+          - op: exists
+            actual: { source: body, pointer: /text }
+    cleanup:
+      - id: remove
+        request:
+          operation_id: delete_clip
+          parameters:
+            path:
+              clipId: { binding: create.id }
+        assert:
+          - op: status
+            expected: 204
+
+  - id: extract-after-render
+    claim_ids: [webclip-lifecycle]
+    scope: black_box
+    description: Extraction refuses a pending clip and serves a rendered one.
+    steps:
+      - id: create
+        request:
+          operation_id: create_clip
+          body:
+            url: { input: essay_url }
+            format: markdown
+        bind:
+          id: { source: body, pointer: /id }
+        assert:
+          - op: status
+            expected: 201
+      - id: extract-early
+        request:
+          operation_id: extract_text
+          parameters:
+            path:
+              clipId: { binding: create.id }
+        assert:
+          - op: status
+            expected: 409
+      - id: render
+        request:
+          operation_id: render_clip
+          parameters:
+            path:
+              clipId: { binding: create.id }
+        assert:
+          - op: status
+            expected: 200
+      - id: extract-late
+        request:
+          operation_id: extract_text
+          parameters:
+            path:
+              clipId: { binding: create.id }
+        assert:
+          - op: status
+            expected: 200
+          - op: equals
+            actual: { source: body, pointer: /clipId }
+            expected: { binding: create.id }
+          - op: exists
+            actual: { source: body, pointer: /text }
+    cleanup:
+      - id: remove
+        request:
+          operation_id: delete_clip
+          parameters:
+            path:
+              clipId: { binding: create.id }
+        assert:
+          - op: status
+            expected: 204
