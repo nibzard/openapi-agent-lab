@@ -105,11 +105,17 @@
       "id": "SE-P1-04",
       "phase": "P1",
       "requirement": "SPEC 48.2 \u00b7 plan P1",
-      "status": "pending",
-      "tests": [],
-      "evidence": null,
-      "depends_on": ["SE-P1-03"],
-      "remaining": "Implement pack-based scenario serving through the shared environment with lifecycle evidence and shutdown handling."
+      "status": "complete",
+      "tests": [
+        "apps/cli/src/serve-scenario.test.ts > serves the clip lifecycle to a normal HTTP client",
+        "apps/cli/src/serve-scenario.test.ts > matches the run path on the same seeded sequence",
+        "apps/cli/src/serve-scenario.test.ts > releases the port and the child on shutdown"
+      ],
+      "evidence": {
+        "commit": "675fbed",
+        "command": "pnpm exec vitest run apps/cli/src/serve-scenario.test.ts apps/cli/src/serve.test.ts"
+      },
+      "depends_on": ["SE-P1-03"]
     },
     {
       "id": "SE-P2-01",
