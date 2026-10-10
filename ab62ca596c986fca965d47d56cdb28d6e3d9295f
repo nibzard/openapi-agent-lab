@@ -1,0 +1,13 @@
+# Context
+
+## Why This Way
+Self-referential tasks cannot name their own commit inside their own
+change, so the map lands first (7d6740a) and the follow-up records
+the completing commit. Every later SE task follows the same pattern.
+
+## Gotchas
+- tests/schemas.test.ts pins the schema count (now 58); new schemas
+  must also enter the SPEC 10.4 tree and get a golden plus at least
+  one invalid golden.
+- eslint allowDefaultProject needed scripts/*.d.mts for the gate's
+  type declaration next to the .mjs.
