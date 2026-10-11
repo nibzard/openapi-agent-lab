@@ -47,8 +47,13 @@ describe("documented commands match the CLI surface", () => {
 
   it("keeps the README execution states explicit", async () => {
     const text = await readme();
-    expect(text).toContain("Refused by the command-line interface");
-    expect(text).toContain("Implemented components, not connected");
+    expect(text).toMatch(
+      /Direct-tool and catalog-tool execution[^\n]*runner refuses/
+    );
+    expect(text).toMatch(
+      /Study tooling[^\n]*participant launch is unavailable/
+    );
+    expect(text).toContain("live provider verification remains pending");
   });
 
   it("keeps the final-state claim honest", async () => {
@@ -58,8 +63,12 @@ describe("documented commands match the CLI surface", () => {
 
   it("keeps the README serve claim current", async () => {
     const text = await readme();
-    expect(text).toContain("oal serve --mode scenario");
-    expect(text).toContain("checkpoint, fork, reset, and virtual-time");
+    expect(text).toMatch(/oal serve packs\/webclip --mode scenario/);
+    expect(text).toContain("oal world checkpoint");
+    expect(text).toContain("oal world fork");
+    expect(text).toMatch(
+      /Reset and virtual-time controls use a separate private operator socket/
+    );
     // The stale stateless claim must stay gone.
     expect(text).not.toContain("stays in contract mode");
     expect(text).not.toContain("placeholder; not written yet");

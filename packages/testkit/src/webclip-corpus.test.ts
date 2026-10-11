@@ -245,7 +245,7 @@ class WebclipDouble implements CorpusTarget {
           return {
             status: 200,
             headers: { "content-type": "image/svg+xml" },
-            body: { text: `<svg>${clip.id}</svg>`, sha256: "" },
+            body: `<svg>${clip.id}</svg>`,
             method: "GET",
             url: "/v1/clips/x/content"
           };
@@ -259,10 +259,7 @@ class WebclipDouble implements CorpusTarget {
                 ? "application/json"
                 : "text/markdown"
           },
-          body: {
-            text,
-            sha256: createHash("sha256").update(text, "utf8").digest("hex")
-          },
+          body: text,
           method: "GET",
           url: "/v1/clips/x/content"
         };
@@ -365,7 +362,7 @@ function bodyJsonOf(body: Body): Json {
     return body.value;
   }
   if (body.kind === "text") {
-    return { text: body.text, sha256: body.sha256 };
+    return body.text;
   }
   if (body.kind === "binary") {
     return { sha256: body.sha256 };

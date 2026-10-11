@@ -36,3 +36,9 @@ boundaries before the evidence.
 - **The fidelity upgrade is manual by design.** `oal corpus verify`
   stamps observed claims into a review artifact; a human review
   promotes them into the pack.
+
+Checkpoint directory version 2 verifies every file in the frozen behavior tree.
+It rejects changed, missing, or added files and symbolic links before restore.
+Version 1 directories lack this digest and are incompatible with this runtime.
+Create a new checkpoint from the source world. The encrypted checkpoint document
+remains at version 1.

@@ -508,13 +508,14 @@ export class LocalCorpusTarget implements CorpusTarget {
     }
     // The run id must bound the Unix socket path of the operator
     // control: long case ids would push control.sock past the path
-    // limit, so the id keeps a short slug plus a hash of the case id.
+    // limit. A short slug and fresh suffix also keep repeated corpus
+    // runs independent without replacing their evidence.
     const slug = corpusCase.id
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
-      .slice(0, 16);
-    const runId = `corpus-${slug}-${sha256Hex(corpusCase.id).slice(0, 8)}`;
+      .slice(0, 12);
+    const runId = `corpus-${slug}-${randomBytes(6).toString("hex")}`;
     const runSeed = sha256Hex(`oal-corpus:${corpusCase.id}`);
     const io = new MemoryIo();
     const guard = new TerminationGuard();

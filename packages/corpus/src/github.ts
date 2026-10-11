@@ -207,6 +207,16 @@ export class GithubTarget implements CorpusTarget {
   private async serve(
     instruction: CorpusTargetRequest
   ): Promise<CorpusTargetResponse> {
+    if (
+      instruction.poll &&
+      instruction.operationId !== "get_issue" &&
+      instruction.operationId !== "list_issues"
+    ) {
+      invalid(
+        "POLL-MUTATION",
+        `Poll repeats read operations only; ${JSON.stringify(instruction.operationId)} is not a supported read.`
+      );
+    }
     switch (instruction.operationId) {
       case "create_issue":
         return this.createIssue(instruction);

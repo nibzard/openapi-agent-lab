@@ -711,11 +711,11 @@ interface WorldEffects {
 async function resetWorldEffect(
   world: WorldEffects
 ): Promise<{ generation: number; virtualTime: string }> {
-  const generation = world.store.bumpGeneration();
+  const baselineClock = new VirtualClock({ tickMs: world.store.clock.tickMs });
   const initialized = await world.host.initialize({
     runId: world.worldId,
     fixtures: [...world.fixtures],
-    clock: clockAdapter(world.store.clock),
+    clock: clockAdapter(baselineClock),
     ids: idsAdapter(),
     random: randomAdapter(
       createNamespacePrng(world.seed, `initialize:${world.worldId}`)
@@ -729,27 +729,41 @@ async function resetWorldEffect(
     );
   }
   const baseline = initialized.state;
-  return world.store.transaction(() => {
-    // The declared baseline: clock, counters, streams, replay store.
-    world.store.clock.resetTo(VIRTUAL_EPOCH_MS);
-    world.store.clearIdempotency();
-    world.services.positions.ids = {};
-    world.services.positions.random = {
+  const previousClock = world.store.clock.nowMs();
+  const faultPosition = {
+    counters: {},
+    prngState: createNamespacePrng(world.seed, "faults").exportState()
+  };
+  let result: { generation: number; virtualTime: string };
+  try {
+    result = world.store.transaction(() => {
+      const generation = world.store.bumpGeneration();
+      world.store.clock.resetTo(VIRTUAL_EPOCH_MS);
+      world.store.clearIdempotency();
+      if (world.faults !== null) {
+        world.store.writeFaultState(faultPosition);
+      }
+      const snapshot = world.store.getState();
+      world.store.putState({
+        state: baseline,
+        expectedRevision: snapshot?.revision ?? null
+      });
+      return { generation, virtualTime: world.store.clock.now() };
+    });
+  } catch (cause) {
+    world.store.clock.resetTo(previousClock);
+    throw cause;
+  }
+  // Publish in-memory positions only after the database commits.
+  world.services.positions = {
+    ids: {},
+    random: {
       algorithm: "splitmix64-v1",
       state: createNamespacePrng(world.seed, "world:services").exportState()
-    };
-    if (world.faults !== null) {
-      world.faults.reset(
-        createNamespacePrng(world.seed, "faults").exportState()
-      );
     }
-    const snapshot = world.store.getState();
-    world.store.putState({
-      state: baseline,
-      expectedRevision: snapshot?.revision ?? null
-    });
-    return { generation, virtualTime: world.store.clock.now() };
-  });
+  };
+  world.faults?.restorePosition(faultPosition);
+  return result;
 }
 
 /**

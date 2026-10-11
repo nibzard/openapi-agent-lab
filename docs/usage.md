@@ -192,7 +192,8 @@ for waits and operator steps:
 
 ```sh
 oal corpus run PACK --corpus webclip-core \
-  --input clip_url=https://example.com/essay --out corpus-report.json
+  --input essay_url=https://example.com/essay \
+  --input dashboard_url=https://example.com/dashboard --out corpus-report.json
 ```
 
 The default target is the local emulator. The provider target drives

@@ -85,6 +85,16 @@ export class WorldFaultInjector implements GatewayFaults {
     this.persist(-1, null);
   }
 
+  /** Adopt a position after its database transaction commits. */
+  restorePosition(position: FaultEngineState): void {
+    this.counters.clear();
+    for (const [ruleId, count] of Object.entries(position.counters)) {
+      this.counters.set(ruleId, count);
+    }
+    this.prng = DeterministicPrng.fromState(position.prngState);
+    this.advanced = false;
+  }
+
   /** Every consumption this world recorded, in order. */
   consumptions(): readonly FaultConsumptionRecord[] {
     return this.store.listFaultConsumptions();

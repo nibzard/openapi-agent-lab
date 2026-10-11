@@ -183,6 +183,26 @@ describe("the github target", () => {
     expect(transport.calls).toHaveLength(0);
   });
 
+  it.each(["create_issue", "add_labels", "update_issue"])(
+    "refuses polling %s before sending a write",
+    async (operationId) => {
+      const transport = new TransportDouble(() => ({ status: 200 }));
+      const adapter = target(transport);
+      await adapter.prepare();
+      await expect(
+        adapter.request({
+          ...createRequest(),
+          operationId,
+          poll: true
+        })
+      ).rejects.toMatchObject({ code: "OAL-GITHUB-POLL-MUTATION" });
+      expect(transport.calls).toEqual([]);
+      // A refused write does not poison the serial queue.
+      await adapter.request({ ...readRequest(7), poll: true });
+      expect(transport.calls.map((call) => call.method)).toEqual(["GET"]);
+    }
+  );
+
   it("stamps the run marker into every create", async () => {
     const transport = new TransportDouble(() => ({
       status: 201,

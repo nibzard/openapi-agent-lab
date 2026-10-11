@@ -20,7 +20,9 @@ import {
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
+
+import { StateStore } from "@oal/state-store";
 
 import { loadPack, type LoadedPack } from "@oal/pack";
 import type { ContractIR } from "@oal/contract-ir";
@@ -179,6 +181,87 @@ describe("the environment owner", () => {
       await environment.close();
     }
   }, 20_000);
+
+  it("resets clock-derived initial state to the baseline", async () => {
+    const root = await webclipCopy();
+    const entry = path.join(root, "behavior/index.ts");
+    await writeFile(
+      entry,
+      (await readFile(entry, "utf8")).replace(
+        "clips_limit: CLIPS_LIMIT",
+        "clips_limit: Math.floor(Date.parse(context.clock.now()) / 1000)"
+      )
+    );
+    const environment = await openWebclipEnvironment({
+      pack: await loadPack(root)
+    });
+    try {
+      const baseline = environment.finalState()?.state;
+      await environment.advanceTime(10_000);
+      await environment.reset();
+      expect(environment.finalState()?.state).toEqual(baseline);
+      expect(environment.manifest().generation).toBe(2);
+    } finally {
+      await environment.close();
+    }
+  });
+
+  it("keeps the generation and state when reset initialization fails", async () => {
+    const root = await webclipCopy();
+    const entry = path.join(root, "behavior/index.ts");
+    await writeFile(
+      entry,
+      (await readFile(entry, "utf8"))
+        .replace(
+          "const CLIPS_LIMIT = 100;",
+          "const CLIPS_LIMIT = 100; let initializations = 0;"
+        )
+        .replace(
+          "initialize(context: InitializeContext): Promise<InitializeResult> {",
+          "initialize(context: InitializeContext): Promise<InitializeResult> { if (++initializations > 1) throw new Error('reset failed');"
+        )
+    );
+    const environment = await openWebclipEnvironment({
+      pack: await loadPack(root)
+    });
+    try {
+      await environment.advanceTime(10_000);
+      const before = environment.manifest();
+      const state = environment.finalState();
+      await expect(environment.reset()).rejects.toThrow("reset failed");
+      expect(environment.manifest()).toEqual(before);
+      expect(environment.finalState()).toEqual(state);
+    } finally {
+      await environment.close();
+    }
+  });
+
+  it("rolls back the generation and clock when reset storage fails", async () => {
+    const environment = await openWebclipEnvironment();
+    try {
+      await environment.advanceTime(10_000);
+      const before = environment.manifest();
+      const state = environment.finalState();
+      const write = vi
+        .spyOn(StateStore.prototype, "putState")
+        .mockImplementationOnce(() => {
+          throw new Error("reset storage failed");
+        });
+      try {
+        await expect(environment.reset()).rejects.toThrow(
+          "reset storage failed"
+        );
+      } finally {
+        write.mockRestore();
+      }
+      expect(environment.manifest()).toEqual(before);
+      expect(environment.finalState()).toEqual(state);
+      await environment.reset();
+      expect(environment.manifest().generation).toBe(2);
+    } finally {
+      await environment.close();
+    }
+  });
 
   it("refuses a pack that declares a wall clock", async () => {
     const root = await webclipCopy();

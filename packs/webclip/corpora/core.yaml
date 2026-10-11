@@ -1,6 +1,6 @@
 api_version: 1
 id: webclip-core
-version: "1.0.0"
+version: "1.0.1"
 scenario: baseline
 description: >-
   Portable behavioral cases for the webclip scenario (SPEC section
@@ -357,7 +357,7 @@ cases:
             actual: { binding: read-markdown.media_type }
             expected: text/markdown
           - op: exists
-            actual: { source: body, pointer: /text }
+            actual: { source: body, pointer: "" }
     cleanup:
       - id: remove
         request:

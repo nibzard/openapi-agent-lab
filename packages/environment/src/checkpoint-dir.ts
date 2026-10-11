@@ -20,6 +20,7 @@ import {
   chmod,
   cp,
   mkdir,
+  lstat,
   readFile,
   readdir,
   rename,
@@ -33,6 +34,7 @@ import {
   DiagnosticCode,
   invalidInput,
   isJsonObject,
+  isWithin,
   type Json,
   type JsonObject
 } from "@oal/core";
@@ -95,7 +97,7 @@ function openPayload(ciphertext: Buffer, nonce: Buffer, key: Buffer): string {
 
 /** The public manifest of one checkpoint directory. */
 export interface CheckpointManifest {
-  readonly schema_version: 1;
+  readonly schema_version: 2;
   readonly kind: "CheckpointDirectory";
   readonly checkpoint_id: string;
   readonly world_id: string;
@@ -108,6 +110,7 @@ export interface CheckpointManifest {
   readonly frozen_entry_path: string;
   readonly frozen_entry_sha256: string;
   readonly frozen_file_count: number;
+  readonly frozen_tree_sha256: string;
   readonly blob_count: number;
 }
 
@@ -122,22 +125,44 @@ export interface ReadCheckpoint {
   readonly contractIr: JsonObject;
 }
 
-async function countFiles(root: string): Promise<number> {
-  let total = 0;
-  const entries = await readdir(root, { withFileTypes: true }).catch(
-    () => null
-  );
-  if (entries === null) {
-    return 0;
-  }
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      total += await countFiles(path.join(root, entry.name));
-    } else if (entry.isFile()) {
-      total += 1;
+/** Hash every path and file in the executable tree; refuse links. */
+async function frozenTreeDigest(root: string): Promise<{
+  sha256: string;
+  fileCount: number;
+}> {
+  const files: [string, string][] = [];
+  const walk = async (directory: string): Promise<void> => {
+    const metadata = await lstat(directory).catch(() => null);
+    if (metadata === null) {
+      throw incomplete("The frozen behavior tree is incomplete.");
     }
-  }
-  return total;
+    if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+      throw integrity(
+        "The frozen behavior tree must contain only directories and files."
+      );
+    }
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const file = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        await walk(file);
+      } else if (entry.isFile()) {
+        files.push([
+          path.relative(root, file).split(path.sep).join("/"),
+          sha256Bytes(await readFile(file))
+        ]);
+      } else {
+        throw integrity(
+          "The frozen behavior tree must contain only directories and files."
+        );
+      }
+    }
+  };
+  await walk(root);
+  files.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+  return {
+    sha256: sha256Bytes(Buffer.from(JSON.stringify(files))),
+    fileCount: files.length
+  };
 }
 
 /**
@@ -179,7 +204,7 @@ export async function writeCheckpointDirectory(options: {
     `${JSON.stringify(options.contractIr)}\n`,
     "utf8"
   );
-  const frozenFileCount = await countFiles(options.frozenSourceRoot);
+  const frozenTree = await frozenTreeDigest(options.frozenSourceRoot);
   // The frozen entry differs from the pack source by the import
   // rewrite, so its digest is recorded as frozen, not as source.
   const frozenEntryBytes = await readFile(
@@ -207,7 +232,7 @@ export async function writeCheckpointDirectory(options: {
     await writeFile(
       path.join(staging, CHECKPOINT_MANIFEST_NAME),
       `${JSON.stringify({
-        schema_version: 1,
+        schema_version: 2,
         kind: "CheckpointDirectory",
         checkpoint_id: options.document.checkpoint_id,
         world_id: options.document.world.world_id,
@@ -219,7 +244,8 @@ export async function writeCheckpointDirectory(options: {
         frozen_identity: options.document.frozen.behavior_closure_identity,
         frozen_entry_path: options.frozenEntryPath,
         frozen_entry_sha256: sha256Bytes(frozenEntryBytes),
-        frozen_file_count: frozenFileCount,
+        frozen_file_count: frozenTree.fileCount,
+        frozen_tree_sha256: frozenTree.sha256,
         blob_count: options.document.blobs.references.length
       } as CheckpointManifest)}\n`
     );
@@ -247,13 +273,19 @@ export async function writeCheckpointDirectory(options: {
     await cp(options.frozenSourceRoot, path.join(staging, "frozen"), {
       recursive: true
     });
+    const copiedTree = await frozenTreeDigest(path.join(staging, "frozen"));
+    if (copiedTree.sha256 !== frozenTree.sha256) {
+      throw integrity(
+        "The frozen behavior tree changed while the checkpoint was copied."
+      );
+    }
     await rename(staging, options.directory);
   } catch (error) {
     await rm(staging, { recursive: true, force: true }).catch(() => undefined);
     throw error;
   }
   return {
-    schema_version: 1,
+    schema_version: 2,
     kind: "CheckpointDirectory",
     checkpoint_id: options.document.checkpoint_id,
     world_id: options.document.world.world_id,
@@ -265,7 +297,8 @@ export async function writeCheckpointDirectory(options: {
     frozen_identity: options.document.frozen.behavior_closure_identity,
     frozen_entry_path: options.frozenEntryPath,
     frozen_entry_sha256: sha256Bytes(frozenEntryBytes),
-    frozen_file_count: frozenFileCount,
+    frozen_file_count: frozenTree.fileCount,
+    frozen_tree_sha256: frozenTree.sha256,
     blob_count: options.document.blobs.references.length
   };
 }
@@ -293,6 +326,15 @@ export async function readCheckpointDirectory(
   }
   if (!isJsonObject(manifestJson)) {
     throw integrity("The checkpoint manifest is not a JSON object.");
+  }
+  if (
+    manifestJson["schema_version"] !== 2 ||
+    manifestJson["kind"] !== "CheckpointDirectory"
+  ) {
+    throw new EnvironmentError(
+      EnvironmentCode.CheckpointIncompatible,
+      "This runtime requires checkpoint directory version 2 with a complete frozen tree digest."
+    );
   }
   const keyText = await readFile(
     path.join(directory, "private", "key"),
@@ -362,11 +404,23 @@ export async function readCheckpointDirectory(
   if (frozenStats === null || !frozenStats.isDirectory()) {
     throw incomplete("The frozen behavior tree is absent.");
   }
+  const frozenTree = await frozenTreeDigest(frozenRoot);
+  if (
+    manifestJson["frozen_tree_sha256"] !== frozenTree.sha256 ||
+    manifestJson["frozen_file_count"] !== frozenTree.fileCount
+  ) {
+    throw integrity(
+      "The frozen behavior tree does not match its recorded digest and file count."
+    );
+  }
   const entryPath = manifestJson["frozen_entry_path"];
   if (typeof entryPath !== "string" || entryPath.length === 0) {
     throw integrity("The manifest names no frozen entry path.");
   }
-  const frozenEntry = path.join(frozenRoot, entryPath);
+  const frozenEntry = path.resolve(frozenRoot, entryPath);
+  if (!isWithin(frozenRoot, frozenEntry)) {
+    throw integrity("The frozen behavior entry leaves the checkpoint tree.");
+  }
   const entryBytes = await readFile(frozenEntry).catch(() => {
     throw incomplete(
       `The frozen behavior entry ${entryPath} is absent from the checkpoint.`
@@ -410,7 +464,7 @@ export async function readCheckpointDirectory(
   }
 
   const manifest: CheckpointManifest = {
-    schema_version: 1,
+    schema_version: 2,
     kind: "CheckpointDirectory",
     checkpoint_id: document.checkpoint_id,
     world_id: document.world.world_id,
@@ -425,10 +479,8 @@ export async function readCheckpointDirectory(
     frozen_identity: document.frozen.behavior_closure_identity,
     frozen_entry_path: entryPath,
     frozen_entry_sha256: recordedDigest,
-    frozen_file_count:
-      typeof manifestJson["frozen_file_count"] === "number"
-        ? manifestJson["frozen_file_count"]
-        : await countFiles(frozenRoot),
+    frozen_file_count: frozenTree.fileCount,
+    frozen_tree_sha256: frozenTree.sha256,
     blob_count: document.blobs.references.length
   };
   return {

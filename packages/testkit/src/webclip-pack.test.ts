@@ -64,7 +64,7 @@ describe("the webclip pack", () => {
     expect(pack.loaded.manifest.evals).toHaveLength(1);
     expect(pack.loaded.manifest.scenarios).toHaveLength(1);
     const metadata = pack.loaded.manifest.metadata as JsonObject;
-    expect(metadata.version).toBe("0.5.0");
+    expect(metadata.version).toBe("0.5.1");
     // The scenario state: the module owns every operation, the state
     // schema gates every commit, and no contract fixture remains.
     expect(

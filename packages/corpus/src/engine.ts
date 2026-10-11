@@ -653,6 +653,29 @@ async function runStep(
     attempts: [],
     assertions: []
   };
+  try {
+    return await executeStep(step, target, context, caseId, record);
+  } catch (cause) {
+    record.status = "error";
+    record.diagnostic = {
+      code: CODE_TARGET_FAILED,
+      message: describe(cause),
+      case_id: caseId,
+      step_id: step.id
+    };
+    context.diagnostics.push(record.diagnostic);
+    return record;
+  }
+}
+
+/** Keep completed attempts when a request, wait, or assertion throws. */
+async function executeStep(
+  step: CorpusStep,
+  target: CorpusTarget,
+  context: CaseContext,
+  caseId: string,
+  record: StepRecord
+): Promise<StepRecord> {
   const body = step.body;
 
   if (body.kind === "operator") {
@@ -972,6 +995,9 @@ async function runCase(
     record.cleanup.steps += 1;
     if (stepRecord.status === "error") {
       cleanupOutcome = "error";
+      if (record.status === "passed") {
+        record.status = "error";
+      }
     } else if (stepRecord.status === "failed" && cleanupOutcome !== "error") {
       cleanupOutcome = "failed";
     }

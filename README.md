@@ -1,132 +1,146 @@
 # OpenAPI Agent Lab
 
-OpenAPI Agent Lab turns an OpenAPI document into a deterministic environment. An
-AI agent can discover, call, and be evaluated against an API. The default
-commands are offline: the production service is not contacted. The one
-exception is `oal probe`, which replays recorded requests against a live base
-URL that you name.
+Build reproducible environments for testing agents against application
+programming interfaces (APIs). Run a stateful workflow, inspect its effects,
+and fork the world to test another approach.
 
-> Supply a local OpenAPI 3.0 or 3.1 document. Get a safe deterministic mock that
-> an agent can use. Optionally attach a pack that turns interactions into a
-> reproducible evaluation.
+An OpenAPI document gives you a generated mock. A pack adds domain behavior
+and task grading. Stateful packs keep changes between requests: later calls
+can read, change, or delete resources you created. You define that behavior
+in the pack.
 
-## Status
+## Try a successful run
 
-This repository holds the local implementation and the normative
-specification. See [SPEC.md](SPEC.md) for the full specification (version
-0.2). The hosted service that the specification describes is not built.
-
-The execution surface splits into three states:
-
-- **Working end to end.** Raw HTTP execution: `oal inspect`, `oal serve` in
-  contract mode, `oal run --exposure raw-http` with the mock, generic, or
-  Codex adapter, plus `oal evaluate`, `oal report`, `oal compare`,
-  `oal replay`, `oal friction`, `oal probe`, and `oal doctor`. Scenario
-  execution works through `oal run` for packs with a behavior module: the
-  runner drives the stateful backend, records committed state and semantic
-  events, and grades the errand. Study authoring works through
-  `oal study init`, `validate`, and `schedule`, and `oal study analyze` runs
-  the frozen analysis on an assembled study-run directory.
-- **Implemented components, not connected.** The direct-tool and
-  catalog-tool surfaces and the study scheduler exist as tested packages.
-  The run commands do not drive them yet.
-- **Refused by the command-line interface.** `oal run --exposure
-  direct-tools|catalog-tools` and participant launch in `oal study run` exit
-  with code `4` and a diagnostic. The
-  [review fix plan](docs/review-fix-plan.md) tracks the work that connects
-  them. `oal serve --mode scenario` now serves a pack's scenario behavior
-  through the shared environment owner: the same validation, transaction,
-  and shutdown path `oal run` uses. A scenario serve also listens on a
-  private operator socket, and `oal world inspect` reads a world at rest.
-
-## What the lab does
-
-- **Contract fidelity.** The lab compiles an OpenAPI document into routes,
-  authentication rules, validators, examples, and response generators. This
-  gives you a mock server with no handwritten handlers.
-- **Scenario fidelity.** An optional versioned pack adds response fixtures,
-  tasks, result schemas, deterministic rubrics, and a behavior module with
-  stateful operations. `oal run` executes such packs through the behavior
-  runtime; `oal serve --mode scenario` serves a stateful world with
-  checkpoint, fork, reset, and virtual-time controls.
-- **Exposure treatments.** Raw HTTP is the one exposure the run engine
-  serves today. Direct-tool and catalog-tool components exist in
-  `@oal/tools`; the runner refuses runs that request them until the bridge
-  lands.
-- **Run engine.** Run one trial or a cohort. Every run freezes its inputs,
-  isolates the participant workspace, captures every request, and grades the
-  trace and the participant report. Study runs stop at validation and
-  scheduling; no command launches study participants yet.
-
-## Install
-
-You need Node.js 24 and pnpm 10.
-
-1. Enable corepack:
-
-   ```sh
-   corepack enable
-   ```
-
-2. Install the workspace from the repository root:
-
-   ```sh
-   pnpm install
-   ```
-
-3. Make the `oal` command available in your shell:
-
-   ```sh
-   alias oal="node --experimental-transform-types apps/cli/src/index.ts"
-   ```
-
-   Run every `oal` command from the repository root.
-
-## Quickstart
-
-Run these five commands for a free end-to-end tour. The
-[quickstart guide](docs/quickstart.md) explains each step.
+You need Node.js 24, pnpm 10, and Bash or Zsh. Run these commands from the
+repository root. World controls require Unix domain sockets.
 
 ```sh
-oal inspect examples/quickstart.json
-oal serve examples/quickstart.json --port 4010 --run-seed 42
-oal pack validate packs/steel-computer --strict
-oal run packs/steel-computer --eval basic-lifecycle --agent mock-agent
-oal doctor
+corepack enable
+pnpm install
+
+oal() { node --experimental-transform-types apps/cli/src/index.ts "$@"; }
 ```
 
-The `oal run` line exits with status `5` because the mock agent fails the
-task on purpose. The guide explains the exit codes.
+Run the included Webclip task with a scripted participant:
+
+```sh
+oal run packs/webclip \
+  --eval site-errand \
+  --agent mock-agent \
+  --agent-script packs/webclip/evals/site-errand/mock-participant.json
+```
+
+The participant creates clips, renders and extracts content, then deletes one clip.
+It uses no model or live service. Expect `completed` and exit code `0`.
+
+The command prints the batch directory under `.oal/runs/`. In its
+`trials/<run-id>/` directory, inspect:
+
+- `state.final.json`: six committed changes and the remaining clip.
+- `semantic-events.redacted.jsonl`: the six lifecycle events.
+- `evaluation.json`: the task score, which is `1` for this script.
+
+See the [quickstart](docs/quickstart.md) for requests and agent configuration.
+
+## Check the behavior
+
+A behavioral corpus tests requests and their effects. Each case gets a fresh local world:
+
+```sh
+oal corpus run packs/webclip --corpus webclip-core \
+  --input essay_url=https://example.com/essay \
+  --input dashboard_url=https://example.com/dashboard \
+  --out .oal/webclip-corpus.json
+```
+
+All seven cases should pass. They check resource relationships, deletion, quota,
+operation ordering, and content representations. The
+[external pack tutorial](docs/tutorial-external-pack.md) demonstrates a detected defect.
+
+The lab keeps these results separate:
+
+| Result | What it establishes |
+| --- | --- |
+| Contract conformance | Requests and responses match the declared interface. |
+| Behavioral conformance | The target passes the corpus assertions. |
+| Agent task success | The participant meets the task's grading rules. |
+
+Service fidelity requires checking the modeled behavior against a real service.
+
+## Serve and fork a world
+
+Start Webclip as a local server in one terminal:
+
+```sh
+oal serve packs/webclip --mode scenario --run-id webclip-world --port 4010
+```
+
+The server prints a readiness record and stays in the foreground.
+In a second terminal, open the repository root and define `oal` again.
+Take a checkpoint, then start a fork:
+
+```sh
+oal world checkpoint --world .oal/control/serve/webclip-world \
+  --out .oal/checkpoints/webclip-start
+
+oal world fork .oal/checkpoints/webclip-start \
+  --out .oal/worlds/webclip-fork --port 4011
+```
+
+The fork continues the checkpoint's state, identifiers, random streams, and virtual time.
+Each world has separate credentials, listed in its readiness record.
+Stop each server with `Ctrl+C`. Use new run identifiers and directories for repeat runs.
+
+Reset and virtual-time controls use a separate private operator socket.
+See [operator controls](docs/usage.md#operator-controls) for the protocol.
+
+## What works today
+
+| Capability | Status |
+| --- | --- |
+| Generated mocks from OpenAPI 3.0 and 3.1 | Available through `oal serve`. |
+| Stateful worlds and checkpoint forks | Available through scenario serving and world commands. |
+| Behavioral corpora | Local execution works; the GitHub target requires explicit permission for live writes. |
+| Agent evaluation | Mock, generic command, and Codex adapters are connected to the runner. |
+| Study tooling | Authoring, validation, scheduling, and analysis work; participant launch is unavailable. |
+| Direct-tool and catalog-tool execution | Components exist; the runner refuses these exposure modes. |
+
+`oal probe` contacts the live URL you provide. GitHub corpus runs and verification
+can also contact a live service. Model adapters can incur charges.
+
+## Current limits
+
+Webclip is a synthetic reference pack. The GitHub issue-triage pack has eight
+core cases that pass locally, but live provider verification remains pending.
+Practitioner trials also remain pending, so the stateful milestone is incomplete.
+
+Behavior modules run as trusted local code. The behavior child is not sandboxed;
+use packs you trust. The hosted service is not built.
+
+See [stateful limitations](docs/stateful-limitations.md) for compatibility and
+remaining work, and [security](docs/security.md) for isolation and credentials.
 
 ## Documentation
 
-- [Quickstart](docs/quickstart.md) — run the local product end to end.
-- [Usage](docs/usage.md) — a reference walkthrough of the local product.
-- [Authoring packs](docs/authoring-packs.md) — the manifest and behavior
-  reference for pack authors.
-- [External pack tutorial](docs/tutorial-external-pack.md) — author a
-  stateful pack outside the workspace with the installed executable.
-- [Authoring studies](docs/authoring-studies.md) — placeholder; not written
-  yet.
-- [Research methods](docs/research-methods.md) — run a preregistered study.
-- [Security](docs/security.md) — isolation, credentials, and redaction.
-- [Adapter API](docs/adapter-api.md) — implement an agent adapter.
-- [External components](docs/external-components.md) — dependency decisions.
-- [Capability matrix](docs/capability-matrix.md) — supported OpenAPI
-  features.
-- [SPEC.md](SPEC.md) — the complete implementation specification.
+- [Usage](docs/usage.md): commands and world controls.
+- [Authoring packs](docs/authoring-packs.md): behavior modules, tasks, and rubrics.
+- [External pack tutorial](docs/tutorial-external-pack.md): build and test a pack outside this repository.
+- [Adapter API](docs/adapter-api.md): connect an agent.
+- [Capability matrix](docs/capability-matrix.md): supported OpenAPI features.
+- [Research methods](docs/research-methods.md): study design and analysis.
+- [SPEC.md](SPEC.md): the normative implementation specification.
 
 ## Development
 
-Run all gates before you propose a change:
+Run all checks before proposing a change:
 
 ```sh
 pnpm run ci
 ```
 
-The gate runs format checks, lint, type checks, package boundary checks, and
-the test suite.
+This runs formatting, lint, type checks, package boundary checks, and tests.
+`pnpm run readiness:stateful` reports the remaining milestone requirements.
 
 ## License
 
-This project is licensed under the [Apache License 2.0](LICENSE).
+[Apache License 2.0](LICENSE).

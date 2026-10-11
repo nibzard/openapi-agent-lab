@@ -12,6 +12,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   rm,
   symlink,
   writeFile
@@ -257,6 +258,56 @@ function caseOf(report: JsonObject, id: string): JsonObject {
 }
 
 describe("oal corpus", () => {
+  it("passes the shipped Webclip corpus twice without replacing evidence", async () => {
+    const { cwd, packDir } = await corpusPack();
+    await writeFile(
+      path.join(packDir, "pack.yaml"),
+      await readFile(path.join(webclipRoot, "pack.yaml"))
+    );
+    const bodies: unknown[] = [];
+    for (const ordinal of [1, 2]) {
+      const { code, io } = await run(
+        [
+          "corpus",
+          "run",
+          packDir,
+          "--corpus",
+          "webclip-core",
+          "--input",
+          "essay_url=https://example.com/essay",
+          "--input",
+          "dashboard_url=https://example.com/dashboard"
+        ],
+        cwd
+      );
+      const report = JSON.parse(io.stdoutText()) as JsonObject;
+      expect(report["summary"]).toEqual({
+        passed: 7,
+        failed: 0,
+        skipped: 0,
+        error: 0
+      });
+      expect(code).toBe(0);
+      const content = caseOf(report, "content-negotiation");
+      const read = (content["steps"] as JsonObject[]).find(
+        (step) => step["id"] === "read-markdown"
+      );
+      expect(typeof (read?.["exchange"] as JsonObject)["body"]).toBe("string");
+      expect(read?.["status"]).toBe("passed");
+      expect(
+        await readdir(path.join(cwd, ".oal", "control", "serve"))
+      ).toHaveLength(7 * ordinal);
+      bodies.push(
+        (report["cases"] as JsonObject[]).map((entry) =>
+          (entry["steps"] as JsonObject[]).map(
+            (step) => (step["exchange"] as JsonObject | undefined)?.["body"]
+          )
+        )
+      );
+    }
+    expect(bodies[0]).toEqual(bodies[1]);
+  });
+
   it("validates a pack with a declared corpus", async () => {
     const { cwd, packDir } = await corpusPack();
     const { code, io } = await run(["corpus", "validate", packDir], cwd);

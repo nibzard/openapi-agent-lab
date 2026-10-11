@@ -10,7 +10,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { validateSchemaInstance, type Json, type JsonObject } from "@oal/core";
 import { parseCorpus } from "@oal/pack";
@@ -452,6 +452,102 @@ describe("runCorpus", () => {
     expect(failed?.cleanup.steps).toBe(1);
     expect(target.cleanupCalls).toEqual(["pointer-misses"]);
   });
+
+  it.each(["request", "wait", "cleanup"])(
+    "records a poll %s exception and still attempts every cleanup",
+    async (failure) => {
+      const target = new FakeIssueTarget();
+      target.hideListUntilCall = 100;
+      const request = target.request.bind(target);
+      vi.spyOn(target, "request").mockImplementation(async (instruction) => {
+        if (
+          instruction.operationId === "brokenRead" ||
+          (failure === "request" && instruction.poll)
+        ) {
+          throw new Error("poll request failed");
+        }
+        return request(instruction);
+      });
+      if (failure === "wait") {
+        vi.spyOn(target, "wait").mockRejectedValue(
+          new Error("poll wait failed")
+        );
+      }
+      const poll = (id: string, operationId: string): JsonObject => ({
+        id,
+        poll: {
+          operation_id: operationId,
+          parameters: {},
+          attempts: 2,
+          interval_ms: 1,
+          deadline_ms: 100
+        },
+        assert: [
+          { op: "length", actual: { source: "body", pointer: "" }, expected: 1 }
+        ]
+      });
+      const report = await runCorpus(
+        corpusOf({
+          api_version: 1,
+          id: "poll-errors",
+          version: "1.0.0",
+          scenario: "baseline",
+          inputs: [],
+          cases: [
+            {
+              id: "cleanup-after-poll",
+              claim_ids: ["cleanup"],
+              scope: "black_box",
+              steps: [
+                {
+                  id: "create",
+                  request: {
+                    operation_id: "createIssue",
+                    parameters: {},
+                    body: { title: "test" }
+                  },
+                  bind: { number: { source: "body", pointer: "/number" } },
+                  assert: [{ op: "status", expected: 201 }]
+                },
+                ...(failure === "cleanup" ? [] : [poll("read", "listIssues")])
+              ],
+              cleanup: [
+                poll("broken-cleanup", "brokenRead"),
+                {
+                  id: "close",
+                  request: {
+                    operation_id: "updateIssue",
+                    parameters: {
+                      path: { issue_number: { binding: "create.number" } }
+                    },
+                    body: { state: "closed" }
+                  },
+                  assert: [{ op: "status", expected: 200 }]
+                }
+              ]
+            }
+          ]
+        }),
+        target
+      );
+      const result = report.cases[0];
+      expect(result?.cleanup).toEqual({ status: "error", steps: 2 });
+      expect(result?.steps.at(-1)?.status).toBe("passed");
+      expect(target.cleanupCalls).toEqual(["cleanup-after-poll"]);
+      expect(
+        report.diagnostics.some(
+          (entry) => entry.message === "poll request failed"
+        )
+      ).toBe(true);
+      expect(result?.status).toBe("error");
+      expect(result?.failure_class).toBe("runtime_error");
+      if (failure !== "cleanup") {
+        expect(result?.steps[1]?.attempts).toHaveLength(
+          failure === "wait" ? 1 : 0
+        );
+      }
+    }
+  );
 
   it("records every poll attempt and fails exhaustion", async () => {
     const target = new FakeIssueTarget();

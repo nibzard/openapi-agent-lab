@@ -4,6 +4,9 @@ kind: Pack
 metadata:
   id: webclip
   name: webclip
+  # 0.5.1 checks the raw markdown response in corpus 1.0.1.
+  # Behavior and agent grading are unchanged.
+  #
   # 0.5.0 adds the pack's first behavioral corpus under corpora/.
   # The cases are portable data: lifecycle, ordering, distinct
   # resources, deletion, quota, and content negotiation, with no
@@ -28,7 +31,7 @@ metadata:
   # full report cross-checks, and a non-scoring comprehension probe.
   # Evidence and scores recorded under 0.1.0 stay under 0.1.0; any
   # regrading of them is labeled derived.
-  version: 0.5.0
+  version: 0.5.1
   description: >-
     A greenfield pack that demonstrates the friction-measurement loop
     on a new API.

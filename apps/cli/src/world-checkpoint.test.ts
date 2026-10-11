@@ -13,6 +13,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   rm,
   symlink,
   writeFile
@@ -457,6 +458,85 @@ describe("oal world checkpoint and fork", () => {
     expect(forkIo.stderrText()).toContain("OAL-CHECKPOINT-INTEGRITY");
   }, 120_000);
 
+  it.each(["modified", "missing", "added", "symlink", "legacy"])(
+    "refuses frozen tree damage (%s) before the listener starts",
+    async (change) => {
+      const cwd = await newWorkspace("oal-world-tree-");
+      const source = await startSourceWorld(cwd, SEED);
+      const checkpointDir = path.join(cwd, "checkpoint");
+      try {
+        expect(
+          await main(
+            [
+              "world",
+              "checkpoint",
+              "--world",
+              source.worldDir,
+              "--out",
+              checkpointDir
+            ],
+            new MemoryIo(),
+            { cwd }
+          )
+        ).toBe(0);
+      } finally {
+        await source.stop();
+      }
+      const frozenRoot = path.join(checkpointDir, "frozen");
+      const files = await readdir(path.join(frozenRoot, "packages"), {
+        recursive: true
+      });
+      const helper = files.find((file) => file.endsWith(".ts"));
+      expect(helper).toBeDefined();
+      const dependency = path.join(frozenRoot, "packages", helper as string);
+      if (change === "modified") {
+        await writeFile(dependency, "throw new Error('changed dependency');\n");
+      } else if (change === "missing") {
+        await rm(dependency);
+      } else if (change === "added") {
+        await writeFile(
+          path.join(frozenRoot, "extra.ts"),
+          "export const changed = true;"
+        );
+      } else if (change === "symlink") {
+        const replacement = path.join(cwd, "replacement.ts");
+        await cp(dependency, replacement);
+        await rm(dependency);
+        await symlink(replacement, dependency);
+      } else {
+        const manifestPath = path.join(checkpointDir, "manifest.json");
+        const manifest = JSON.parse(
+          await readFile(manifestPath, "utf8")
+        ) as JsonObject;
+        manifest["schema_version"] = 1;
+        delete manifest["frozen_tree_sha256"];
+        await writeFile(manifestPath, JSON.stringify(manifest));
+      }
+      const forkIo = new MemoryIo();
+      expect(
+        await main(
+          [
+            "world",
+            "fork",
+            checkpointDir,
+            "--out",
+            path.join(cwd, "fork"),
+            "--port",
+            "0"
+          ],
+          forkIo,
+          { cwd }
+        )
+      ).toBe(4);
+      expect(forkIo.stderrText()).toContain(
+        change === "legacy"
+          ? "OAL-CHECKPOINT-INCOMPATIBLE"
+          : "OAL-CHECKPOINT-INTEGRITY"
+      );
+      expect(forkIo.stdoutChunks).toEqual([]);
+    }
+  );
+
   it("refuses a checkpoint without its private key", async () => {
     const cwd = await newWorkspace("oal-world-key-");
     const source = await startSourceWorld(cwd, SEED);
@@ -561,13 +641,19 @@ describe("oal world checkpoint and fork", () => {
     const blobSource = path.join(cwd, "blob-source");
     await mkdir(blobSource, { recursive: true });
     await writeFile(path.join(blobSource, "blob_missing"), "abcd");
+    const frozenRoot = path.join(cwd, "frozen-fixture");
+    await mkdir(path.join(frozenRoot, "behavior"), { recursive: true });
+    await cp(
+      path.join(webclipRoot, "behavior/index.ts"),
+      path.join(frozenRoot, "behavior/index.ts")
+    );
     const { writeCheckpointDirectory } = await import("@oal/environment");
     await writeCheckpointDirectory({
       directory: checkpointDir,
       document,
       contractIr: { schema_version: 1 } as Json,
       blobSourceRoot: blobSource,
-      frozenSourceRoot: webclipRoot,
+      frozenSourceRoot: frozenRoot,
       frozenEntryPath: "behavior/index.ts",
       createdAt: "2026-10-10T00:00:00.000Z"
     });
