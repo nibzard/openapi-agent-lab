@@ -1,0 +1,22 @@
+Review of docs/stateful-environments-plan.md found gaps in checkpoint
+integrity, reset timing, mutating GitHub polls, and cleanup after poll
+exceptions. Focused reproductions confirmed each gap before the fixes.
+
+Checkpoint directory version 2 hashes the complete frozen tree because
+checking the entry file alone cannot detect changed dependencies. The
+encrypted checkpoint document stays at version 1. Older directories must
+be recreated from the source world.
+
+Running the rewritten README examples exposed two additional defects:
+Webclip's corpus expected an object around a text response, and repeated
+corpus runs collided with existing world directories. Webclip pack 0.5.1
+and corpus 1.0.1 record the assertion correction. Fresh world identifiers
+preserve earlier evidence without changing the deterministic case seed.
+
+Validation: pnpm run ci passed across 184 test files, with 4,100 tests
+passed and 55 skipped. The scripted Webclip run scored 1 with six state
+changes. All seven corpus cases passed through the command line. Serve,
+checkpoint, and fork examples were also checked locally.
+
+Live provider verification and practitioner trials remain pending, as
+recorded in docs/stateful-limitations.md. No live provider run was made.
